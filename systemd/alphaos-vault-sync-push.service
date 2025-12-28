@@ -1,0 +1,18 @@
+[Unit]
+Description=AlphaOS Vault push on shutdown (local -> remote) with backups
+DefaultDependencies=no
+Before=poweroff.target shutdown.target reboot.target halt.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+Environment="VAULT_REMOTE=fabian:AlphaOS-Vault"
+Environment="VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups"
+ExecStop=/home/alpha/aos-hub/index-node/scripts/vault-sync.sh push
+User=alpha
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

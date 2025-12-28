@@ -1,0 +1,14 @@
+[Unit]
+Description=AlphaOS Vault pull on boot (remote -> local)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment="VAULT_REMOTE=fabian:AlphaOS-Vault"
+Environment="VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups"
+ExecStart=/home/alpha/aos-hub/index-node/scripts/vault-sync.sh pull
+User=alpha
+
+[Install]
+WantedBy=multi-user.target

@@ -44,39 +44,65 @@
       pointer-events: none;
     }
 
-    header {
-      background: #000;
-      padding: 40px 20px 28px;
-      text-align: center;
-      border-bottom: 6px solid var(--accent);
-      box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+    .game-layout {
+      max-width: 1400px;
+      margin: 30px auto 60px;
+      padding: 0 20px 40px;
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) minmax(540px, 1fr);
+      gap: 28px;
+      align-items: start;
     }
 
-    h1 {
-      font-size: clamp(32px, 5vw, 52px);
+    .reader {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px 22px 28px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      position: sticky;
+      top: 20px;
+    }
+
+    .reader-head h1 {
+      font-size: clamp(30px, 4.4vw, 46px);
       font-weight: 900;
-      margin: 0;
+      margin: 6px 0 4px;
       background: linear-gradient(90deg, #ffd700, #ffcc00);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       text-shadow: 0 0 30px var(--glow);
     }
 
+    .pill {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 215, 0, 0.12);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
     .subtitle {
-      font-size: 18px;
-      margin: 16px 0 0;
+      font-size: 16px;
+      margin: 8px 0 0;
       color: var(--muted);
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 40px auto;
-      padding: 0 20px;
+    .cards-panel {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 24px;
+      gap: 18px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
     }
 
     .card {
@@ -111,56 +137,72 @@
       margin: 0;
     }
 
-.icon {
-  font-size: 52px;
-  margin-bottom: 14px;
-  text-shadow: 0 0 18px rgba(255,215,0,0.35);
-}
+    .icon {
+      font-size: 52px;
+      margin-bottom: 14px;
+      text-shadow: 0 0 18px rgba(255,215,0,0.35);
+    }
 
-.game-docs {
-  max-width: 1200px;
-  margin: 10px auto 40px;
-  padding: 0 20px;
-}
+    .game-docs {
+      margin-top: 18px;
+    }
 
-.game-docs h2 {
-  font-size: 28px;
-  color: var(--accent);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin: 0 0 10px;
-}
+    .game-docs h2 {
+      font-size: 28px;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+    }
 
-.game-docs article {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 22px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-  color: var(--text);
-}
+    .game-docs article {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      color: var(--text);
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+    }
 
-.game-docs .toc {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 12px 0 16px;
-}
+    /* Reader scrollbar styling */
+    .game-docs article::-webkit-scrollbar {
+      width: 10px;
+    }
+    .game-docs article::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+    }
+    .game-docs article::-webkit-scrollbar-thumb {
+      background: rgba(0, 255, 0, 0.35);
+      border-radius: 12px;
+    }
+    .game-docs article::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 255, 0, 0.6);
+    }
 
-.game-docs .toc a {
-  color: var(--text);
-  text-decoration: none;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  transition: all 0.2s ease;
-}
+    .game-docs .toc {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0 16px;
+    }
 
-.game-docs .toc a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
+    .game-docs .toc a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+
+    .game-docs .toc a:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
     footer {
       text-align: center;
@@ -220,6 +262,19 @@
       text-transform: uppercase;
     }
 
+    @media (max-width: 900px) {
+      .game-layout {
+        grid-template-columns: 1fr;
+      }
+      .reader {
+        position: static;
+        order: 2;
+      }
+      .cards-panel {
+        order: 1;
+      }
+    }
+
     @media (max-width: 768px) {
       .card { padding: 20px; }
       .icon { font-size: 46px; }
@@ -229,72 +284,77 @@
 <body class="theme-matrix">
 <canvas id="matrix-rain" aria-hidden="true"></canvas>
 
-<header>
-  <h1>αOS Game Centre</h1>
-  <div class="subtitle">Frame → Freedom → Focus → Fire → Game</div>
-</header>
+<main class="game-layout">
+  <section class="cards-panel">
+    <div class="cards-grid">
+      <div class="card" onclick="openCentre('FRAME MAP', 'frame')">
+        <div class="icon">🗺️</div>
+        <h2>Frame Map</h2>
+        <p>Start point. Truth with no illusion.</p>
+      </div>
 
-<div class="container">
-  <div class="card" onclick="openCentre('FRAME MAP', 'frame')">
-    <div class="icon">🗺️</div>
-    <h2>Frame Map</h2>
-    <p>Start point. Truth with no illusion.</p>
-  </div>
+      <div class="card" onclick="openCentre('FREEDOM', 'freedom')">
+        <div class="icon">🌅</div>
+        <h2>Freedom Map</h2>
+        <p>Ideal parallel world. Your 10-year peak.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('FREEDOM', 'freedom')">
-    <div class="icon">🌅</div>
-    <h2>Freedom Map</h2>
-    <p>Ideal parallel world. Your 10-year peak.</p>
-  </div>
+      <div class="card" onclick="openCentre('FOCUS', 'focus')">
+        <div class="icon">🎯</div>
+        <h2>Focus Map</h2>
+        <p>Monthly mission. The path of power.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('FOCUS', 'focus')">
-    <div class="icon">🎯</div>
-    <h2>Focus Map</h2>
-    <p>Monthly mission. The path of power.</p>
-  </div>
+      <div class="card" onclick="openCentre('FIRE', 'fire')">
+        <div class="icon">🔥</div>
+        <h2>Fire Map</h2>
+        <p>Weekly war. Tactical precision in motion.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('FIRE', 'fire')">
-    <div class="icon">🔥</div>
-    <h2>Fire Map</h2>
-    <p>Weekly war. Tactical precision in motion.</p>
-  </div>
+      <div class="card" onclick="openCentre('GENERAL\'S TENT', 'tent')">
+        <div class="icon">⛺</div>
+        <h2>General's Tent</h2>
+        <p>Weekly review. Return, report, course correct.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('GENERAL\'S TENT', 'tent')">
-    <div class="icon">⛺</div>
-    <h2>General's Tent</h2>
-    <p>Weekly review. Return, report, course correct.</p>
-  </div>
+      <div class="card" onclick="openCentre('DOOR CENTRE', 'door')">
+        <div class="icon">🚪</div>
+        <h2>Door Centre</h2>
+        <p>Potential • Plan • Production • Profit</p>
+      </div>
 
-  <div class="card" onclick="openCentre('DOOR CENTRE', 'door')">
-    <div class="icon">🚪</div>
-    <h2>Door Centre</h2>
-    <p>Potential • Plan • Production • Profit</p>
-  </div>
+      <div class="card" onclick="openCentre('Fact Maps', 'facts')">
+        <div class="icon">🍎</div>
+        <h2>Fruit Fact Maps</h2>
+        <p>Facing the facts. Raw answers.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('THE GAME', 'game')">
-    <div class="icon">🎮</div>
-    <h2>The Game</h2>
-    <p>Fact Maps aligned. Cadence and consistency.</p>
-  </div>
+      <div class="card" onclick="openCentre('Creator King', 'king')">
+        <div class="icon">👑</div>
+        <h2>Creator King Assets</h2>
+        <p>Craft your message. Build the kingdom.</p>
+      </div>
 
-  <div class="card" onclick="openCentre('Fact Maps', 'facts')">
-    <div class="icon">🍎</div>
-    <h2>Fruit Fact Maps</h2>
-    <p>Facing the facts. Raw answers.</p>
-  </div>
+      <div class="card" onclick="openCentre('VOICE CENTRE', 'voice')">
+        <div class="icon">🎙️</div>
+        <h2>Voice Centre</h2>
+        <p>Coming soon: Calls, transcripts, voice routines.</p>
+      </div>
+    </div>
+  </section>
 
-  <div class="card" onclick="openCentre('Creator King', 'king')">
-    <div class="icon">👑</div>
-    <h2>Creator King Assets</h2>
-    <p>Craft your message. Build the kingdom.</p>
-  </div>
-</div>
-
-<section class="game-docs">
-  <h2>The Game — Doctrine</h2>
-  <div class="toc" id="gameToc"></div>
-  <article id="gameChapters"></article>
-</section>
+  <section class="reader">
+    <div class="reader-head">
+      <div class="pill">Doctrine</div>
+      <h1>αOS Game Centre</h1>
+      <p class="subtitle">Frame → Freedom → Focus → Fire → Game</p>
+    </div>
+    <div class="game-docs">
+      <div class="toc" id="gameToc"></div>
+      <article id="gameChapters"></article>
+    </div>
+  </section>
+</main>
 
 <footer>
   αOS • Game Centre • Built for Your Odyssey
@@ -309,17 +369,18 @@
 <script src="/vendor/marked/marked.min.js"></script>
 <script src="/matrix.js"></script>
 <script>
-  const CENTRES = {
-    door: "/door",
-    facts: "/facts",
-    king: "/king",
-    frame: "/game/frame",
+const CENTRES = {
+  door: "/door",
+  facts: "/facts",
+  king: "/king",
+  frame: "/game/frame",
     freedom: "/game/freedom",
     focus: "/game/focus",
-    fire: "/game/fire",
-    tent: "/game/tent",
-    game: "/game"
-  };
+  fire: "/game/fire",
+  tent: "/game/tent",
+  game: "/game",
+  voice: "/voice"
+};
 
   function openCentre(title, key) {
     const overlay = document.getElementById('loading-overlay');
@@ -331,7 +392,7 @@
     const url = CENTRES[key] || "#";
     setTimeout(() => {
       if (url && url !== "#") {
-        window.open(url, '_blank');
+        window.location.href = url;
       } else {
         alert('Map URL not configured.');
       }

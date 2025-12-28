@@ -1,0 +1,6 @@
+{
+  "watch": ["server.js", "menu.yaml", "public/**/*"],
+  "ext": "js,json,yaml,html,css",
+  "ignore": ["node_modules/**"],
+  "exec": "node server.js"
+}

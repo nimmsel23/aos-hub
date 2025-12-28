@@ -833,9 +833,6 @@
   }
 
   loadDoorChapters();
-  function slugify(text) {
-    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  }
 
   function renderMarkdown(markdown, container) {
     if (window.marked) {
@@ -844,46 +841,6 @@
       container.textContent = markdown;
     }
   }
-
-  function buildToc(container, toc) {
-    toc.innerHTML = '';
-    const headings = container.querySelectorAll('h1, h2, h3');
-    headings.forEach((heading) => {
-      const text = heading.textContent.trim();
-      if (!text) return;
-      if (!heading.id) heading.id = slugify(text);
-      const link = document.createElement('a');
-      link.href = `#${heading.id}`;
-      link.textContent = text;
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
-      });
-      toc.appendChild(link);
-    });
-  }
-
-  async function loadDoorChapters() {
-    const container = document.getElementById('doorChaptersHome');
-    const toc = document.getElementById('doorTocHome');
-    if (!container || !toc) return;
-
-    try {
-      const res = await fetch('/api/door/chapters?source=blueprints', { cache: 'no-store' });
-      const data = await res.json();
-      if (!data || !data.ok || !data.chapters) {
-        container.innerHTML = '<p>Kapitel nicht gefunden.</p>';
-        return;
-      }
-      const combined = data.chapters.map((ch) => ch.content || '').join('\n\n');
-      renderMarkdown(combined, container);
-      buildToc(container, toc);
-    } catch (_) {
-      container.innerHTML = '<p>Kapitel nicht verfügbar.</p>';
-    }
-  }
-
-  loadDoorChapters();
 
 </script>
 </body>

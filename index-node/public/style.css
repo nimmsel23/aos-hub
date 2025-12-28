@@ -270,7 +270,7 @@ box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
 }
 
 /* ---------- GLITCH STATE ---------- */
-.glitching #menuGrid a {
+#menuGrid.glitching a {
   border-image: linear-gradient(45deg, #0f0, #0ff, #f0f, #0f0) 1;
   border-image-slice: 1;
   position: relative;
@@ -280,7 +280,7 @@ box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
   neonFlicker 0.8s ease-in-out;
 }
 
-.glitching #menuGrid a::after {
+#menuGrid.glitching a::after {
   content: '';
   position: absolute;
   top: 0;

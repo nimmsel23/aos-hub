@@ -38,6 +38,9 @@ const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4")
 const SYNC_MAP_PATH =
   process.env.SYNC_MAP ||
   path.join(os.homedir(), ".local", "share", "alphaos", "task_sync_map.json");
+const RCLONE_RC_URL = process.env.RCLONE_RC_URL || "http://127.0.0.1:5572";
+const RCLONE_TARGET =
+  process.env.RCLONE_TARGET || "fabian:AlphaOS-Vault";
 
 
 function safeSlug(s) {
@@ -94,6 +97,22 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
+}
+
+function queueVaultSync() {
+  if (!RCLONE_TARGET) return { ok: false, status: "disabled" };
+  Promise.resolve()
+    .then(() =>
+      rcloneRc("sync/sync", {
+        srcFs: getVaultDir(),
+        dstFs: RCLONE_TARGET,
+      })
+    )
+    .then(() => console.log("[rclone] vault sync ok →", RCLONE_TARGET))
+    .catch((err) =>
+      console.error("[rclone] vault sync failed:", err?.message || err)
+    );
+  return { ok: true, status: "queued", target: RCLONE_TARGET };
 }
 
 function parseEnvFile(filePath) {
@@ -176,6 +195,19 @@ function getVaultDir() {
 
 function getDoorVaultDir() {
   return path.join(getVaultDir(), "Door");
+}
+
+async function rcloneRc(command, payload = {}) {
+  const url = `${RCLONE_RC_URL.replace(/\/$/, "")}/rc/${command}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`rclone ${command} failed: ${res.status}`);
+  }
+  return res.json().catch(() => ({}));
 }
 
 function getCore4TodayFile() {
@@ -617,7 +649,15 @@ app.post("/api/door/export", (req, res) => {
       }
     }
 
-    return res.json({ ok: true, tool, path: filepath, ticktick: tickInfo });
+    const rcloneInfo = queueVaultSync();
+
+    return res.json({
+      ok: true,
+      tool,
+      path: filepath,
+      ticktick: tickInfo,
+      rclone: rcloneInfo,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -687,7 +727,15 @@ app.post("/api/game/export", (req, res) => {
       }
     }
 
-    return res.json({ ok: true, map, path: filepath, ticktick: tickInfo });
+    const rcloneInfo = queueVaultSync();
+
+    return res.json({
+      ok: true,
+      map,
+      path: filepath,
+      ticktick: tickInfo,
+      rclone: rcloneInfo,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

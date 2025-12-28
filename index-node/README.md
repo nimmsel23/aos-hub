@@ -286,6 +286,16 @@ Mappings are stored in:
 ~/.local/share/alphaos/task_sync_map.json
 ```
 
+## Vault Sync (rclone)
+
+- Script: `scripts/vault-sync.sh` (modes: `pull`, `push`, default `bisync`).
+- Defaults: local `~/AlphaOS-Vault`, remote `fabian:AlphaOS-Vault`, remote backups `fabian:AlphaOS-Vault-backups`, local backups `~/.local/share/alphaos/vault-backups/`.
+- Backups: `--backup-dir` keeps overwritten/deleted files in timestamped folders; bisync resolves conflicts by newer mtime and tracks renames.
+- Symlinks: default is to skip symlinks (`--skip-links`); override flags via `VAULT_RCLONE_FLAGS` (e.g. `--copy-links`).
+- Systemd templates: `systemd/alphaos-vault-sync-pull.service` (pull on boot), `systemd/alphaos-vault-sync-push.service` (push on shutdown).
+  - Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`, then `systemctl enable alphaos-vault-sync-{pull,push}.service`.
+- Override remotes/paths via env: `VAULT_REMOTE`, `VAULT_REMOTE_BACKUP`, `VAULT_LOCAL`, `VAULT_LOCAL_BACKUP`.
+
 
 ---
 
