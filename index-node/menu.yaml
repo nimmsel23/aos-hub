@@ -1,0 +1,69 @@
+{
+  "links": [
+    {
+      "label": "General's Tent",
+      "cmd": "tent",
+      "url": "/game/tent"
+    },
+    {
+      "label": "War Stack Bot",
+      "cmd": "warstack-bot",
+      "url": "https://t.me/lenovo_sync_bot"
+    },
+    {
+      "label": "Core4 TTY",
+      "cmd": "core4",
+      "url": "/core4"
+    },
+    {
+      "label": "Fruits/Fact MAPS",
+      "cmd": "facts",
+      "url": "https://script.google.com/macros/s/AKfycbxEc2wucb2g5dOSqBelTsbBJxiZ0ZUi3OyI9ymUL-UPSjEF36g9QMUW-aQBmFwCb2V2vQ/exec"
+    },
+    {
+      "label": "Voice Centre",
+      "cmd": "voice",
+      "url": "https://script.google.com/macros/s/AKfycbzVqsY2igwRPGhpFPf41QZDSBUMdMLO6hvZ9HmpvADBlxpRn5ap7BM1yQMcUrVMVpjncw/exec"
+    },
+    {
+      "label": "Door Centre",
+      "cmd": "door",
+      "url": "/door"
+    },
+    {
+      "label": "Game Centre",
+      "cmd": "game",
+      "url": "/game"
+    },
+    {
+      "label": "Frame MAP 2026",
+      "cmd": "frame-map",
+      "url": "https://script.google.com/macros/s/AKfycbw_d6jb9uRXPD8di6B03BmIthdQrWb-9UP2sNG82pqzKDH7OFlMKTKHmWYauRPR_SeM/exec"
+    },
+    {
+      "label": "FRAME Centre",
+      "cmd": "frame",
+      "url": "https://script.google.com/macros/s/AKfycbyMPxhApwrykoxtAvQXLrbnCb0IOAPQTcYDFbfbJku9DYuUOIdeBikEAIuN16lpqvBRhA/exec"
+    },
+    {
+      "label": "Freedom Centre",
+      "cmd": "freedom",
+      "url": "https://script.google.com/macros/s/AKfycbxw4nsIK2aSc3ghCVqDniNABbdlLnkuBe-hPrPom1mf4_upcQwwJpRdrq27Czs84pVToA/exec"
+    },
+    {
+      "label": "Focus Centre",
+      "cmd": "focus",
+      "url": "https://script.google.com/macros/s/AKfycbyWL7KH3EEb8OgtOHR9MOoyTcYfsCC_vlfqF8C5GjP2P29msSAYcpwLtxPxTZZY26Ck/exec"
+    },
+    {
+      "label": "Fire Centre",
+      "cmd": "fire",
+      "url": "https://script.google.com/macros/s/AKfycbzOFrIeA9W0U3sWW07k8Lubb8TsuH5XIIawGWBZ2ulOtSHgFZiJuBv1r-Ah-D0VVCV1EQ/exec"
+    },
+    {
+      "label": "Creator King Assets",
+      "cmd": "king",
+      "url": "https://script.google.com/macros/s/AKfycbyXhksbIhXzD_n7YgWSGJ5ChmEnxzm6YgVdepcrwRa0tTTuot6IhQ2QRKOHhcNeoZBQ/exec"
+    }
+  ]
+}

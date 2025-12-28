@@ -1,0 +1,47 @@
+# AlphaOS Router Bot Configuration
+
+# Index API settings (local AlphaOS Index Node)
+index_api:
+  base: http://100.76.197.55:8799  # Tailscale IP
+  path: /api/centres
+  cache_ttl: 60  # seconds
+
+# Extensions to load (order matters)
+# Comment out to disable
+extensions:
+  - warstack_commands  # War Stack trigger (DOOR Pillar)
+  # - core4_actions    # Core4 Taskwarrior shortcuts (disabled for now)
+
+# Extension-specific configuration
+# (Will be passed to extension constructors)
+
+warstack_commands:
+  bot_username: "@YourWarStackBot"  # Replace with actual bot username
+  fallback_url: "https://t.me/YourWarStackBot"  # Direct link to bot
+  info_message: |
+    ⚔️ **War Stack Creation** (DOOR Pillar)
+
+    War Stacks = Strategische Wochen-Pläne für DOMINION
+
+    **Der Prozess:**
+    1️⃣ Domain wählen (BODY/BEING/BALANCE/BUSINESS)
+    2️⃣ Domino Door definieren
+    3️⃣ 4 strategische Hits planen (Fact/Obstacle/Strike)
+    4️⃣ Obsidian Notiz + Taskwarrior Tasks generieren
+
+    **Output:**
+    ✅ Markdown Notiz in ~/AlphaOS-Vault/Weekly/
+    ✅ Taskwarrior Commands (ready to execute)
+
+    Klicke unten um zu starten:
+
+# core4_actions:
+#   tags:
+#     fit: fitness
+#     fue: fuel
+#     med: meditation
+#     mem: memory
+#     par: partner
+#     pos: posterity
+#     dis: discipline
+#     dec: decision

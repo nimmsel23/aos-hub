@@ -1,0 +1,480 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# routerctl — AlphaOS Router + Heartbeat Manager (Arch/yay/gum)
+# ============================================================
+# Source of Truth: ~/.dotfiles/bin/routerctl
+#
+# Changelog:
+# - 0.3.0: Router v2 (Dumb Core + Extensions), config.yaml support
+# - 0.2.0: Heartbeat module (systemd user timer) + version command
+# - 0.2.0: doctor erweitert (router + heartbeat checks)
+#
+ROUTERCTL_VERSION="0.3.0"
+
+# =========================
+# Repo paths
+# =========================
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+
+# =========================
+# Router (aiogram bot)
+# =========================
+ROUTER_NAME="${ROUTER_NAME:-alphaos-router}"
+ROUTER_DIR="${ROUTER_DIR:-$PWD}"
+PY_ENTRY="${PY_ENTRY:-router_bot.py}"
+
+USE_VENV="${USE_VENV:-0}"           # 0 = system python, 1 = venv (optional)
+VENV_DIR="${VENV_DIR:-$ROUTER_DIR/.venv}"
+
+ENV_FILE="${ENV_FILE:-$ROUTER_DIR/.env}"
+SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+UNIT_FILE="$SYSTEMD_DIR/$ROUTER_NAME.service"
+
+# =========================
+# Heartbeat (fixed GAS WebApp URL)
+# =========================
+HB_NAME="${HB_NAME:-alphaos-heartbeat}"
+HB_URL="${HB_URL:-https://script.google.com/macros/s/AKfycbx2aqTxCVyyIuXG5qTI_OgUybwGUX8f0ftufI6ZzRqbG66p137XJ5kXEMbg9IF-_PXV/exec}"
+HB_HOST="${HB_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
+HB_BOOT_DELAY="${HB_BOOT_DELAY:-30s}"
+HB_INTERVAL="${HB_INTERVAL:-2min}"
+HB_SYSTEMD_DIR="$SYSTEMD_DIR"
+HB_SERVICE_FILE="$HB_SYSTEMD_DIR/$HB_NAME.service"
+HB_TIMER_FILE="$HB_SYSTEMD_DIR/$HB_NAME.timer"
+
+# =========================
+# UI helpers (gum optional)
+# =========================
+has_gum() { command -v gum >/dev/null 2>&1; }
+ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "routerctl" || echo "routerctl"; }
+ui_info() { has_gum && gum style --faint "$*" || echo "$*"; }
+ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || echo "✔ $*"; }
+ui_err()  { has_gum && gum style --foreground 9  "✘ $*" || echo "✘ $*"; }
+
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { ui_err "Missing: $1"; exit 1; }; }
+
+trap 'ui_err "Failed at line $LINENO"; exit 1' ERR
+
+abs_path() {
+  local p="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$p"
+    return 0
+  fi
+  if command -v readlink >/dev/null 2>&1; then
+    readlink -f -- "$p" 2>/dev/null && return 0
+  fi
+  [[ "$p" = /* ]] && echo "$p" || echo "$PWD/$p"
+}
+
+system_python() {
+  local py=""
+  py="$(command -v python 2>/dev/null || true)"
+  [[ -n "$py" ]] || py="$(command -v python3 2>/dev/null || true)"
+  [[ -n "$py" ]] || { ui_err "Missing: python/python3"; exit 1; }
+  abs_path "$py"
+}
+
+confirm() {
+  if has_gum; then gum confirm "$1"
+  else
+    read -r -p "$1 [y/N] " a
+    [[ "${a,,}" == "y" || "${a,,}" == "yes" ]]
+  fi
+}
+
+choose() {
+  if has_gum; then gum choose "$@"
+  else
+    ui_info "Choose one:"; select opt in "$@"; do echo "$opt"; break; done
+  fi
+}
+
+# Normalize defaults so `routerctl` works from any CWD.
+if [[ ! -f "$ROUTER_DIR/$PY_ENTRY" && "$ROUTER_DIR" == "$PWD" && -f "$DOTFILES_DIR/dev/alphaos-router/$PY_ENTRY" ]]; then
+  ROUTER_DIR="$DOTFILES_DIR/dev/alphaos-router"
+fi
+ROUTER_DIR="$(abs_path "$ROUTER_DIR")"
+VENV_DIR="$(abs_path "${VENV_DIR:-$ROUTER_DIR/.venv}")"
+ENV_FILE="$(abs_path "${ENV_FILE:-$ROUTER_DIR/.env}")"
+
+# =========================
+# Arch deps
+# =========================
+install_deps() {
+  need_cmd sudo
+  need_cmd pacman
+  need_cmd yay
+
+  ui_info "Installing deps (pacman + yay)…"
+  sudo pacman -S --needed --noconfirm python python-aiohttp curl >/dev/null
+
+  # AUR: aiogram
+  yay -S --needed --noconfirm python-aiogram >/dev/null
+
+  # dotenv optional
+  if grep -q "dotenv" "$ROUTER_DIR/$PY_ENTRY" 2>/dev/null; then
+    yay -S --needed --noconfirm python-python-dotenv >/dev/null || true
+  fi
+
+  # gum optional (UX); do not hard fail
+  if ! command -v gum >/dev/null 2>&1; then
+    ui_info "Note: gum not found. Optional UX. Install with: sudo pacman -S gum"
+  fi
+
+  ui_ok "Deps installed."
+}
+
+# =========================
+# venv optional
+# =========================
+ensure_venv() {
+  [[ "$USE_VENV" == "1" ]] || return 0
+  if [[ ! -d "$VENV_DIR" ]]; then
+    ui_info "Creating venv: $VENV_DIR (system-site-packages)"
+    "$(system_python)" -m venv "$VENV_DIR" --system-site-packages
+  fi
+}
+
+python_exec() {
+  if [[ "$USE_VENV" == "1" ]]; then
+    echo "$(abs_path "$VENV_DIR/bin/python")"
+  else
+    system_python
+  fi
+}
+
+# =========================
+# Router: env + unit
+# =========================
+write_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then return 0; fi
+  cat >"$ENV_FILE" <<'EOF'
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=
+ALLOWED_USER_ID=
+
+# Router Configuration (optional - config.yaml is preferred)
+# ROUTER_CONFIG=/path/to/custom/config.yaml
+EOF
+  chmod 600 "$ENV_FILE"
+  ui_ok "Created .env at: $ENV_FILE"
+}
+
+write_unit() {
+  mkdir -p "$SYSTEMD_DIR"
+  write_env_file
+  ensure_venv
+
+  local py; py="$(python_exec)"
+
+  cat >"$UNIT_FILE" <<EOF
+[Unit]
+Description=AlphaOS Router (aiogram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$ROUTER_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$py $PY_ENTRY
+Restart=on-failure
+RestartSec=2
+
+# Hardening (user-safe)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=$ROUTER_DIR
+
+[Install]
+WantedBy=default.target
+EOF
+
+  systemctl --user daemon-reload
+  ui_ok "Wrote unit: $UNIT_FILE"
+}
+
+start_svc()   { systemctl --user start    "$ROUTER_NAME.service"; ui_ok "Router started."; }
+stop_svc()    { systemctl --user stop     "$ROUTER_NAME.service"; ui_ok "Router stopped."; }
+restart_svc() { systemctl --user restart  "$ROUTER_NAME.service"; ui_ok "Router restarted."; }
+status_svc()  { systemctl --user status   "$ROUTER_NAME.service" --no-pager; }
+logs_svc()    { journalctl --user -u "$ROUTER_NAME.service" -n 200 -f; }
+enable_svc()  { systemctl --user enable   "$ROUTER_NAME.service"; ui_ok "Router enabled."; }
+disable_svc() { systemctl --user disable  "$ROUTER_NAME.service"; ui_ok "Router disabled."; }
+
+edit_env() {
+  write_env_file
+  "${EDITOR:-nano}" "$ENV_FILE"
+}
+
+install_all() {
+  ui_title
+  install_deps
+  write_unit
+  enable_svc
+  ui_ok "Router install complete."
+  ui_info "Next: routerctl edit-env  (set TELEGRAM_BOT_TOKEN)"
+  ui_info "Then: routerctl start"
+  if confirm "Install Heartbeat now?"; then
+    heartbeat_install
+  fi
+}
+
+# =========================
+# Heartbeat: systemd units
+# =========================
+heartbeat_write_units() {
+  mkdir -p "$HB_SYSTEMD_DIR"
+  local curl_bin
+  curl_bin="$(command -v curl 2>/dev/null || true)"
+  [[ -n "$curl_bin" ]] || { ui_err "Missing: curl"; exit 1; }
+  curl_bin="$(abs_path "$curl_bin")"
+
+  cat >"$HB_SERVICE_FILE" <<EOF
+[Unit]
+Description=AlphaOS Heartbeat -> Index GAS
+
+[Service]
+Type=oneshot
+ExecStart=$curl_bin -fsS -X POST \\
+  -H 'Content-Type: application/json' \\
+  -d '{"kind":"heartbeat","host":"%H"}' \\
+  "$HB_URL"
+EOF
+
+  cat >"$HB_TIMER_FILE" <<EOF
+[Unit]
+Description=AlphaOS Heartbeat Timer
+
+[Timer]
+OnBootSec=$HB_BOOT_DELAY
+OnUnitActiveSec=$HB_INTERVAL
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload
+  ui_ok "Wrote heartbeat units:"
+  ui_info "  $HB_SERVICE_FILE"
+  ui_info "  $HB_TIMER_FILE"
+}
+
+heartbeat_install() {
+  need_cmd systemctl
+  need_cmd curl
+  heartbeat_write_units
+  systemctl --user enable --now "$HB_NAME.timer"
+  ui_ok "Heartbeat installed & running."
+}
+
+heartbeat_uninstall() {
+  need_cmd systemctl
+  systemctl --user disable --now "$HB_NAME.timer" >/dev/null 2>&1 || true
+  rm -f "$HB_SERVICE_FILE" "$HB_TIMER_FILE"
+  systemctl --user daemon-reload
+  ui_ok "Heartbeat removed."
+}
+
+heartbeat_start()  { systemctl --user start  "$HB_NAME.timer"; ui_ok "Heartbeat timer started."; }
+heartbeat_stop()   { systemctl --user stop   "$HB_NAME.timer"; ui_ok "Heartbeat timer stopped."; }
+heartbeat_status() { systemctl --user status "$HB_NAME.timer" --no-pager; }
+heartbeat_logs()   { journalctl --user -u "$HB_NAME.service" -n 200 -f; }
+
+heartbeat_ping() {
+  need_cmd curl
+  ui_info "Pinging Heartbeat endpoint…"
+  curl -fsS -X POST \
+    -H 'Content-Type: application/json' \
+    -d "{\"kind\":\"heartbeat\",\"host\":\"$HB_HOST\",\"manual\":true}" \
+    "$HB_URL" >/dev/null
+  ui_ok "Ping OK."
+}
+
+# =========================
+# doctor
+# =========================
+doctor() {
+  ui_title
+  ui_info "routerctl version : $ROUTERCTL_VERSION"
+
+  ui_info "ROUTER_NAME: $ROUTER_NAME"
+  ui_info "ROUTER_DIR : $ROUTER_DIR"
+  ui_info "PY_ENTRY   : $PY_ENTRY"
+  ui_info "USE_VENV   : $USE_VENV"
+  ui_info "ENV_FILE   : $ENV_FILE"
+  ui_info "UNIT_FILE  : $UNIT_FILE"
+
+  ui_info "HB_NAME    : $HB_NAME"
+  ui_info "HB_URL     : $HB_URL"
+  ui_info "HB_HOST    : $HB_HOST"
+  ui_info "HB_SERVICE : $HB_SERVICE_FILE"
+  ui_info "HB_TIMER   : $HB_TIMER_FILE"
+
+  need_cmd systemctl
+  need_cmd journalctl
+  need_cmd curl
+  system_python >/dev/null
+
+  [[ -f "$ROUTER_DIR/$PY_ENTRY" ]] || { ui_err "Missing: $ROUTER_DIR/$PY_ENTRY"; exit 1; }
+
+  if [[ "$USE_VENV" == "1" ]]; then
+    ensure_venv
+    [[ -x "$VENV_DIR/bin/python" ]] || { ui_err "venv python missing"; exit 1; }
+  fi
+
+  # soft checks (no exit):
+  if [[ -f "$UNIT_FILE" ]]; then ui_ok "Router unit present."
+  else ui_info "Router unit not present (run: routerctl unit)"; fi
+
+  if [[ -f "$HB_TIMER_FILE" && -f "$HB_SERVICE_FILE" ]]; then
+    ui_ok "Heartbeat units present."
+  else
+    ui_info "Heartbeat units not present (run: routerctl heartbeat install)"
+  fi
+
+  # quick connectivity: don't spam output
+  if curl -fsS -X POST -H 'Content-Type: application/json' -d "{\"kind\":\"heartbeat\",\"host\":\"$HB_HOST\",\"doctor\":true}" "$HB_URL" >/dev/null 2>&1; then
+    ui_ok "Heartbeat endpoint reachable."
+  else
+    ui_info "Heartbeat endpoint not reachable (could be auth/deploy)."
+  fi
+
+  ui_ok "Doctor OK."
+}
+
+# =========================
+# menu
+# =========================
+menu() {
+  ui_title
+  local action
+  action="$(choose \
+    "install" "deps" "unit" \
+    "edit-env" \
+    "start" "stop" "restart" "status" "logs" \
+    "enable" "disable" \
+    "heartbeat install" "heartbeat status" "heartbeat logs" "heartbeat ping" "heartbeat uninstall" \
+    "doctor" "version" "quit")"
+
+  case "$action" in
+    install)  install_all ;;
+    deps)     install_deps ;;
+    unit)     write_unit ;;
+    edit-env) edit_env ;;
+    start)    start_svc ;;
+    stop)     stop_svc ;;
+    restart)  restart_svc ;;
+    status)   status_svc ;;
+    logs)     logs_svc ;;
+    enable)   enable_svc ;;
+    disable)  disable_svc ;;
+    "heartbeat install")   heartbeat_install ;;
+    "heartbeat status")    heartbeat_status ;;
+    "heartbeat logs")      heartbeat_logs ;;
+    "heartbeat ping")      heartbeat_ping ;;
+    "heartbeat uninstall") heartbeat_uninstall ;;
+    doctor)   doctor ;;
+    version)  echo "$ROUTERCTL_VERSION" ;;
+    quit)     exit 0 ;;
+  esac
+}
+
+# =========================
+# main
+# =========================
+print_help() {
+  cat <<EOF
+routerctl (Arch/yay/gum) — version $ROUTERCTL_VERSION
+
+AlphaOS Router v2: Dumb Core + Extension System
+  - Core: URL routing from Index API
+  - Extensions: Modular functionality (Core4, etc.)
+  - Config: config.yaml (extensions, Index API)
+
+Usage:
+  routerctl                # interactive menu
+  routerctl version
+
+Router:
+  routerctl install        # full setup (deps + unit + enable)
+  routerctl deps           # install system dependencies
+  routerctl unit           # generate systemd user unit
+  routerctl edit-env       # edit .env (bot token)
+  routerctl start|stop|restart|status|logs
+  routerctl enable|disable
+  routerctl doctor         # health check
+
+Heartbeat:
+  routerctl heartbeat install|uninstall|start|stop|status|logs|ping
+
+Configuration:
+  .env          - Secrets (TELEGRAM_BOT_TOKEN)
+  config.yaml   - Extensions, Index API, extension configs
+
+Optional env:
+  ROUTER_DIR=/path routerctl unit
+  USE_VENV=1 routerctl unit
+  HB_URL=https://... routerctl heartbeat ping
+EOF
+}
+
+print_heartbeat_help() {
+  cat <<'EOF'
+Usage:
+  routerctl heartbeat install
+  routerctl heartbeat uninstall
+  routerctl heartbeat start|stop|status|logs
+  routerctl heartbeat ping
+EOF
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    menu
+    exit 0
+  fi
+
+  case "${1:-}" in
+    -h|--help|help) print_help; exit 0 ;;
+    version) echo "$ROUTERCTL_VERSION" ;;
+    install)  install_all ;;
+    deps)     install_deps ;;
+    unit)     write_unit ;;
+    edit-env) edit_env ;;
+    start)    start_svc ;;
+    stop)     stop_svc ;;
+    restart)  restart_svc ;;
+    status)   status_svc ;;
+    logs)     logs_svc ;;
+    enable)   enable_svc ;;
+    disable)  disable_svc ;;
+    doctor)   doctor ;;
+    heartbeat)
+      case "${2:-}" in
+        install)   heartbeat_install ;;
+        uninstall) heartbeat_uninstall ;;
+        start)     heartbeat_start ;;
+        stop)      heartbeat_stop ;;
+        status)    heartbeat_status ;;
+        logs)      heartbeat_logs ;;
+        ping)      heartbeat_ping ;;
+        *)
+          print_heartbeat_help; exit 1
+          ;;
+      esac
+      ;;
+    *)
+      print_help; exit 1
+      ;;
+  esac
+}
+
+main "$@"

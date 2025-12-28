@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpha OS Control Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'terminal-green': '#00ff00',
+            'terminal-amber': '#ffbf00',
+            'arch-blue': '#1793d1'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .terminal-font { font-family: 'Fira Code', 'Monaco', 'Consolas', monospace; }
+    .glass { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.1); }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .glow { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+  </style>
+</head>
+<body class="bg-gray-900 text-green-400 min-h-screen terminal-font">
+  <header class="glass border-b border-green-500/30 p-4 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <div class="w-8 h-8 bg-arch-blue rounded flex items-center justify-center">
+          <span class="text-white font-bold text-sm">αOS</span>
+        </div>
+        <h1 class="text-2xl font-bold text-terminal-green">Alpha OS Control Center</h1>
+        <span class="text-xs bg-green-900/50 px-2 py-1 rounded text-green-300">v2.0.1-arch</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="text-xs">
+          <span class="text-gray-400">uptime:</span>
+          <span id="uptime" class="text-terminal-amber">00:00:00</span>
+        </div>
+        <button onclick="toggleTheme()" class="p-2 hover:bg-gray-800 rounded transition-colors">
+          <span id="theme-icon">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1 space-y-6">
+      <div class="glass border border-green-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-terminal-green mb-3 flex items-center">🔥 Hot List Quick Add</h2>
+        <div class="space-y-3">
+          <input
+            type="text"
+            id="hotlist-input"
+            placeholder="Neue Idee eingeben..."
+            class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-green-400 placeholder-gray-500 focus:border-terminal-green focus:ring-1 focus:ring-terminal-green transition-colors"
+            onkeypress="handleHotListEnter(event)"
+          >
+          <button
+            onclick="addToHotList()"
+            class="w-full bg-green-600 hover:bg-green-700 text-black font-bold py-2 px-4 rounded transition-colors glow"
+          >
+            Add to Hot List
+          </button>
+        </div>
+      </div>
+
+      <div class="glass border border-blue-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-blue-400 mb-3 flex items-center">⚡ Core 4 Tracker</h2>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="logCore4('fitness')" class="bg-red-600/20 border border-red-500 hover:bg-red-600/40 py-2 px-3 rounded text-red-400 text-sm transition-colors">🏃 Fitness</button>
+          <button onclick="logCore4('fuel')" class="bg-red-600/20 border border-red-500 hover:bg-red-600/40 py-2 px-3 rounded text-red-400 text-sm transition-colors">🥗 Fuel</button>
+          <button onclick="logCore4('meditation')" class="bg-purple-600/20 border border-purple-500 hover:bg-purple-600/40 py-2 px-3 rounded text-purple-400 text-sm transition-colors">🧘 Meditation</button>
+          <button onclick="logCore4('memoirs')" class="bg-purple-600/20 border border-purple-500 hover:bg-purple-600/40 py-2 px-3 rounded text-purple-400 text-sm transition-colors">📝 Memoirs</button>
+          <button onclick="logCore4('partner')" class="bg-pink-600/20 border border-pink-500 hover:bg-pink-600/40 py-2 px-3 rounded text-pink-400 text-sm transition-colors">❤️ Partner</button>
+          <button onclick="logCore4('posterity')" class="bg-pink-600/20 border border-pink-500 hover:bg-pink-600/40 py-2 px-3 rounded text-pink-400 text-sm transition-colors">👨‍👩‍👧‍👦 Familie</button>
+          <button onclick="logCore4('discover')" class="bg-yellow-600/20 border border-yellow-500 hover:bg-yellow-600/40 py-2 px-3 rounded text-yellow-400 text-sm transition-colors">📚 Learn</button>
+          <button onclick="logCore4('declare')" class="bg-yellow-600/20 border border-yellow-500 hover:bg-yellow-600/40 py-2 px-3 rounded text-yellow-400 text-sm transition-colors">🎯 Action</button>
+        </div>
+        <div class="mt-3 text-xs text-gray-400">
+          Heute: <span id="core4-today" class="text-terminal-amber">0.0/4.0</span> Punkte
+        </div>
+      </div>
+
+      <div class="glass border border-yellow-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-terminal-amber mb-3">🖥️ System Status</h2>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between">
+            <span>GAS Backend:</span>
+            <span id="gas-status" class="text-green-400">●  Connected</span>
+          </div>
+          <div class="flex justify-between">
+            <span>TickTick Sync:</span>
+            <span id="ticktick-status" class="text-green-400">●  Active</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Taskwarrior:</span>
+            <span id="taskwarrior-status" class="text-yellow-400">●  Local</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Telegram Bot:</span>
+            <span id="telegram-status" class="text-green-400">●  Online</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lg:col-span-2 space-y-6">
+      <div class="glass border border-purple-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-xl font-bold text-purple-400 mb-4 flex items-center">⚔️ Door War - Eisenhower Matrix</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-red-900/20 border border-red-500 rounded p-3">
+            <h3 class="text-red-400 font-bold text-sm mb-2">Q1: Urgent & Important</h3>
+            <div id="q1-tasks" class="space-y-1 text-xs">
+              <div class="bg-red-800/30 p-2 rounded">Fix server outage</div>
+              <div class="bg-red-800/30 p-2 rounded">Client deadline today</div>
+            </div>
+          </div>
+          <div class="bg-green-900/20 border border-green-500 rounded p-3 glow">
+            <h3 class="text-green-400 font-bold text-sm mb-2">Q2: Important & Not Urgent ⭐</h3>
+            <div id="q2-tasks" class="space-y-1 text-xs">
+              <div class="bg-green-800/30 p-2 rounded cursor-pointer hover:bg-green-700/40" onclick="promoteToWarStack('task1')">Build automation system</div>
+              <div class="bg-green-800/30 p-2 rounded cursor-pointer hover:bg-green-700/40" onclick="promoteToWarStack('task2')">Learn new programming language</div>
+            </div>
+          </div>
+          <div class="bg-yellow-900/20 border border-yellow-500 rounded p-3">
+            <h3 class="text-yellow-400 font-bold text-sm mb-2">Q3: Urgent & Not Important</h3>
+            <div id="q3-tasks" class="space-y-1 text-xs">
+              <div class="bg-yellow-800/30 p-2 rounded">Unnecessary meeting</div>
+              <div class="bg-yellow-800/30 p-2 rounded">Social media notification</div>
+            </div>
+          </div>
+          <div class="bg-gray-700/20 border border-gray-500 rounded p-3">
+            <h3 class="text-gray-400 font-bold text-sm mb-2">Q4: Not Important & Not Urgent</h3>
+            <div id="q4-tasks" class="space-y-1 text-xs">
+              <div class="bg-gray-600/30 p-2 rounded">Random browsing</div>
+              <div class="bg-gray-600/30 p-2 rounded">TV watching</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass border border-green-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-terminal-green mb-3 flex items-center">💻 Alpha Terminal</h2>
+        <div class="bg-black rounded p-4 h-64 overflow-y-auto" id="terminal-output">
+          <div class="text-green-400 text-sm">
+            <div>user@arch-laptop:~$ <span class="text-terminal-amber">alpha-os status</span></div>
+            <div>Alpha OS v2.0.1 - All systems operational</div>
+            <div>Hot List: 3 items | Door Wars: 2 pending | Active War Stacks: 1</div>
+            <div>&nbsp;</div>
+            <div>user@arch-laptop:~$ <span class="text-terminal-amber">core4 body fitness</span></div>
+            <div class="text-green-300">✓ Core4 logged: Body > Fitness (+0.5 points)</div>
+            <div>&nbsp;</div>
+            <div>user@arch-laptop:~$ <span class="cursor-blink">|</span></div>
+          </div>
+        </div>
+        <div class="mt-3 flex space-x-2">
+          <input
+            type="text"
+            id="terminal-input"
+            placeholder="Enter command..."
+            class="flex-1 bg-black border border-green-500 rounded px-3 py-2 text-green-400 placeholder-gray-600 focus:border-terminal-green focus:ring-1 focus:ring-terminal-green"
+            onkeypress="handleTerminalEnter(event)"
+          >
+          <button
+            onclick="executeCommand()"
+            class="bg-green-600 hover:bg-green-700 text-black font-bold py-2 px-4 rounded transition-colors"
+          >
+            Execute
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="glass border border-blue-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-blue-400" id="hot-list-count">5</div>
+          <div class="text-xs text-gray-400">Hot List Items</div>
+        </div>
+        <div class="glass border border-purple-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-purple-400" id="war-stacks-count">2</div>
+          <div class="text-xs text-gray-400">Active War Stacks</div>
+        </div>
+        <div class="glass border border-green-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-green-400" id="hits-count">8</div>
+          <div class="text-xs text-gray-400">Weekly Hits</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fixed bottom-6 right-6 space-y-3">
+    <button onclick="openGeneralsTent()" class="w-12 h-12 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="General's Tent - Weekly Review">🏛️</button>
+    <button onclick="triggerSync()" class="w-12 h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="Sync All Systems">🔄</button>
+    <button onclick="showNotifications()" class="w-12 h-12 bg-yellow-600 hover:bg-yellow-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="Notifications">🔔</button>
+  </div>
+
+  <div id="toast" class="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg transform translate-x-full transition-transform duration-300">
+    <span id="toast-message"></span>
+  </div>
+
+  <script>
+    let core4Today = 0.0;
+    let startTime = Date.now();
+
+    document.addEventListener('DOMContentLoaded', function() {
+      updateUptime();
+      setInterval(updateUptime, 1000);
+      initTelegram();
+      loadCore4Progress();
+    });
+
+    function getTelegramWebApp() {
+      return window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    }
+
+    function initTelegram() {
+      const tg = getTelegramWebApp();
+      if (!tg) return;
+      tg.expand();
+      tg.MainButton.hide();
+    }
+
+    function sendTelegramData(payload) {
+      const tg = getTelegramWebApp();
+      if (!tg) return false;
+      try {
+        tg.sendData(JSON.stringify(payload));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function telegramHaptic(type) {
+      const tg = getTelegramWebApp();
+      if (!tg || !tg.HapticFeedback) return;
+      const api = tg.HapticFeedback;
+      switch (type) {
+        case 'light':
+          api.impactOccurred('light');
+          break;
+        case 'medium':
+          api.impactOccurred('medium');
+          break;
+        case 'heavy':
+          api.impactOccurred('heavy');
+          break;
+        case 'success':
+          api.notificationOccurred('success');
+          break;
+        case 'error':
+          api.notificationOccurred('error');
+          break;
+        default:
+          api.impactOccurred('light');
+          break;
+      }
+    }
+
+    function updateUptime() {
+      const elapsed = Date.now() - startTime;
+      const hours = Math.floor(elapsed / 3600000);
+      const minutes = Math.floor((elapsed % 3600000) / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
+      document.getElementById('uptime').textContent =
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      const icon = document.getElementById('theme-icon');
+      icon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    }
+
+    function addToHotList() {
+      const input = document.getElementById('hotlist-input');
+      const idea = input.value.trim();
+
+      if (idea) {
+        telegramHaptic('light');
+        showToast(`Added to Hot List: "${idea}"`);
+        addToTerminal(`hotlist "${idea}"`, `✓ Hot List item created: "${idea}"`);
+
+        const counter = document.getElementById('hot-list-count');
+        counter.textContent = parseInt(counter.textContent, 10) + 1;
+
+        input.value = '';
+
+        const sent = sendTelegramData({ type: 'hotlist', idea, source: 'telegram_webapp' });
+        if (!sent) {
+          fetch('/api/hotlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idea: idea, source: 'tele' })
+          }).catch(() => {});
+        }
+      }
+    }
+
+    function handleHotListEnter(event) {
+      if (event.key === 'Enter') {
+        addToHotList();
+      }
+    }
+
+    function logCore4(subtask) {
+      telegramHaptic('success');
+      const sent = sendTelegramData({ type: 'core4', subtask, source: 'telegram_webapp' });
+      if (sent) {
+        core4Today += 0.5;
+        document.getElementById('core4-today').textContent = `${core4Today.toFixed(1)}/4.0`;
+        showToast(`Core4 logged: ${subtask} (+0.5 points)`);
+        addToTerminal(`core4 ${subtask}`, `✓ Core4 logged: ${subtask} (+0.5 points)`);
+        return;
+      }
+
+      fetch('/api/core4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subtask })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.ok) throw new Error(data.error || 'core4 failed');
+          core4Today = data.total || 0;
+          document.getElementById('core4-today').textContent = `${core4Today.toFixed(1)}/4.0`;
+          showToast(`Core4 logged: ${subtask} (+0.5 points)`);
+          addToTerminal(`core4 ${subtask}`, `✓ Core4 logged: ${subtask} (+0.5 points)`);
+        })
+        .catch(() => {});
+    }
+
+    function loadCore4Progress() {
+      fetch('/api/core4/today')
+        .then(response => response.json())
+        .then(data => {
+          if (!data.ok) return;
+          core4Today = data.total || 0;
+          document.getElementById('core4-today').textContent = `${core4Today.toFixed(1)}/4.0`;
+        })
+        .catch(() => {});
+    }
+
+    function promoteToWarStack(taskId) {
+      showToast('Task promoted to War Stack phase!');
+      addToTerminal(`promote-warstack ${taskId}`, `✓ Task promoted to War Stack: ${taskId}`);
+      event.target.style.opacity = '0.5';
+      event.target.textContent += ' → War Stack';
+    }
+
+    function handleTerminalEnter(event) {
+      if (event.key === 'Enter') {
+        executeCommand();
+      }
+    }
+
+    function executeCommand() {
+      const input = document.getElementById('terminal-input');
+      const command = input.value.trim();
+
+      if (command) {
+        if (command.startsWith('/')) {
+          sendTelegram(command);
+          addToTerminal(command, '✓ Sent to Telegram');
+          input.value = '';
+          return;
+        }
+        let response = processCommand(command);
+        addToTerminal(command, response);
+        input.value = '';
+      }
+    }
+
+    function processCommand(command) {
+      const [cmd, ...args] = command.split(' ');
+
+      switch(cmd) {
+        case 'hotlist':
+          return `✓ Hot List item created: "${args.join(' ')}"`;
+        case 'core4':
+          return `✓ Core4 logged: ${args[0]} > ${args[1]} (+0.5 points)`;
+        case 'sync':
+          return '✓ All systems synced successfully';
+        case 'status':
+          return 'Alpha OS v2.0.1 - All systems operational\nHot List: 5 items | War Stacks: 2 active | Core4: 1.5/4.0';
+        case 'generals-tent':
+          return '✓ Opening weekly review...';
+        case 'door-war':
+          return '✓ Door War evaluation started...';
+        case 'help':
+          return 'Available commands: hotlist, core4, sync, status, generals-tent, door-war, help';
+        default:
+          return `Command not found: ${cmd}. Type 'help' for available commands.`;
+      }
+    }
+
+    function addToTerminal(command, response) {
+      const output = document.getElementById('terminal-output');
+      const commandLine = document.createElement('div');
+      commandLine.innerHTML = `<div>user@arch-laptop:~$ <span class="text-terminal-amber">${command}</span></div>`;
+
+      const responseLine = document.createElement('div');
+      responseLine.className = 'text-green-300';
+      responseLine.textContent = response;
+
+      const newPrompt = document.createElement('div');
+      newPrompt.innerHTML = 'user@arch-laptop:~$ <span class="cursor-blink">|</span>';
+
+      const oldCursor = output.querySelector('.cursor-blink');
+      if (oldCursor) oldCursor.parentElement.remove();
+
+      output.appendChild(commandLine);
+      output.appendChild(responseLine);
+      output.appendChild(document.createElement('div'));
+      output.appendChild(newPrompt);
+
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function sendTelegram(message) {
+      const sent = sendTelegramData({ type: 'telegram_command', command: message });
+      if (sent) return;
+      fetch('/api/tele/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      }).catch(() => {});
+    }
+
+    function openGeneralsTent() {
+      sendTelegram('/tent');
+      showToast('Sent /tent to Telegram');
+      addToTerminal('/tent', '✓ Sent to Telegram');
+    }
+
+    function triggerSync() {
+      sendTelegram('/menu');
+      showToast('Sync request sent');
+      addToTerminal('/menu', '✓ Sent to Telegram');
+    }
+
+    function showNotifications() {
+      showToast('2 new Door War promotions, 1 War Stack completed');
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toast-message');
+
+      toastMessage.textContent = message;
+      toast.classList.remove('translate-x-full');
+
+      setTimeout(() => {
+        toast.classList.add('translate-x-full');
+      }, 3000);
+    }
+
+    document.addEventListener('keydown', function(event) {
+      if (event.ctrlKey && event.key === 'h') {
+        event.preventDefault();
+        document.getElementById('hotlist-input').focus();
+      }
+
+      if (event.ctrlKey && event.key === 't') {
+        event.preventDefault();
+        document.getElementById('terminal-input').focus();
+      }
+
+      if (event.ctrlKey && event.key === 'g') {
+        event.preventDefault();
+        openGeneralsTent();
+      }
+    });
+
+    const style = document.createElement('style');
+    style.textContent = `
+      .cursor-blink {
+        animation: blink 1s infinite;
+      }
+      @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

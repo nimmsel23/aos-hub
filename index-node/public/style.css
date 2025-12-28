@@ -1,0 +1,297 @@
+/* ===============================
+ *   αOS INDEX CENTRE — STYLE
+ *   =============================== */
+
+/* ---------- BASE ---------- */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  padding: 50px 20px;
+  background: #000;
+  color: #0f0;
+  font-family: 'Courier New', monospace, sans-serif;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.chapter-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 24px;
+  text-align: left;
+  position: relative;
+  z-index: 1;
+}
+
+.chapter-toc {
+  border: 1px solid #0f0;
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.35);
+  max-height: 80vh;
+  overflow-y: auto;
+  position: sticky;
+  top: 20px;
+}
+
+/* TOC scrollbar styling */
+.chapter-toc::-webkit-scrollbar {
+  width: 8px;
+}
+.chapter-toc::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+}
+.chapter-toc::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 0, 0.45);
+  border-radius: 999px;
+}
+.chapter-toc::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 0, 0.7);
+}
+
+.chapter-toc h3 {
+  margin-top: 0;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.chapter-toc a {
+  display: block;
+  color: #0f0;
+  text-decoration: none;
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.chapter-content {
+  border: 1px solid #0f0;
+  border-radius: 18px;
+  padding: 22px;
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 25px rgba(0, 255, 0, 0.35);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* Content scrollbar styling */
+.chapter-content::-webkit-scrollbar {
+  width: 10px;
+}
+.chapter-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+}
+.chapter-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 0, 0.35);
+  border-radius: 12px;
+}
+.chapter-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 0, 0.65);
+}
+
+.chapter-content h1,
+.chapter-content h2,
+.chapter-content h3 {
+  color: #0f0;
+}
+
+@media (max-width: 900px) {
+  .chapter-page {
+    grid-template-columns: 1fr;
+  }
+  .chapter-toc {
+    position: static;
+    max-height: none;
+  }
+  .chapter-content {
+    max-height: none;
+  }
+}
+
+/* ---------- MATRIX CANVAS ---------- */
+#matrix-rain {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+z-index: -1;
+pointer-events: none;
+}
+
+/* ---------- GRID ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+  margin-top: 30px;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  margin-top: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-card {
+  color: #0f0;
+  font-size: 1.2em;
+  text-decoration: none;
+  padding: 28px 20px;
+  border: 3px solid #0f0;
+  border-radius: 20px;
+  display: block;
+  background: transparent;
+  box-shadow: 0 0 15px #0f0;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  will-change: transform, box-shadow;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  text-align: left;
+}
+
+.doc-card h4 {
+  margin: 0 0 10px;
+  font-size: 1em;
+  letter-spacing: 0.25em;
+}
+
+.doc-card p {
+  margin: 0;
+  color: rgba(0, 255, 0, 0.7);
+  font-size: 0.7em;
+  letter-spacing: 0.15em;
+}
+
+.doc-card:hover {
+  transform: scale(1.03) translateY(-6px);
+  box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
+}
+
+/* ---------- LOADING ---------- */
+.loading {
+  color: #0f0;
+  opacity: 0.75;
+  font-size: 1.1em;
+  padding: 20px;
+}
+
+/* ---------- MENU LINKS ---------- */
+#menuGrid a {
+color: #0f0;
+font-size: 1.5em;
+text-decoration: none;
+padding: 40px 20px;
+border: 3px solid #0f0;
+border-radius: 20px;
+display: block;
+background: transparent;
+box-shadow: 0 0 15px #0f0;
+transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+will-change: transform, box-shadow;
+}
+
+#menuGrid a:hover {
+transform: scale(1.05) translateY(-8px);
+box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
+}
+
+/* ---------- GLITCH EFFECTS ---------- */
+@keyframes borderColorCycle {
+  0%   { border-image-source: linear-gradient(45deg, #0f0, #0ff); }
+  50%  { border-image-source: linear-gradient(45deg, #f0f, #ff0, #0ff); }
+  100% { border-image-source: linear-gradient(45deg, #0f0, cyan); }
+}
+
+@keyframes vhsShake {
+  0%   { transform: translateX(0); }
+  10%  { transform: translateX(-8px); }
+  20%  { transform: translateX(8px); }
+  30%  { transform: translateX(-6px); }
+  40%  { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes trackingLines {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes neonFlicker {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 15px #0f0;
+    border-color: #0f0;
+  }
+  10% {
+    opacity: 0.7;
+    box-shadow: 0 0 40px #0ff;
+    border-color: #0ff;
+  }
+  20% {
+    opacity: 1;
+    box-shadow: 0 0 20px #0f0;
+  }
+  30% {
+    opacity: 0.6;
+    box-shadow: 0 0 60px #f0f;
+    border-color: #f0f;
+  }
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 30px #0f0;
+  }
+  70% {
+    opacity: 0.8;
+    box-shadow: 0 0 50px #0ff;
+    border-color: #0ff;
+  }
+}
+
+/* ---------- GLITCH STATE ---------- */
+.glitching #menuGrid a {
+  border-image: linear-gradient(45deg, #0f0, #0ff, #f0f, #0f0) 1;
+  border-image-slice: 1;
+  position: relative;
+  animation:
+  vhsShake 0.7s linear,
+  borderColorCycle 0.2s linear,
+  neonFlicker 0.8s ease-in-out;
+}
+
+.glitching #menuGrid a::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    transparent 45%,
+    rgba(255,255,255,0.05) 50%,
+                              transparent 55%
+  );
+  animation: trackingLines 0.3s linear infinite;
+  pointer-events: none;
+}

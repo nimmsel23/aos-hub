@@ -1,0 +1,21 @@
+{
+  "name": "alphaos-index-node",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "core4": "node core4-tty.js"
+  },
+  "bin": {
+    "alphaos-core4": "./core4-tty.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "js-yaml": "^4.1.0",
+    "marked": "^12.0.2",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0",
+    "xterm": "^5.3.0"
+  }
+}

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freedom Map</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #111;
+      --border: #333;
+      --text: #e0e0e0;
+      --accent: #ffd700;
+      --glow: rgba(255,215,0,0.3);
+    }
+
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Georgia,serif; min-height:100vh; line-height:1.8; }
+    nav { position:fixed; top:0; left:0; right:0; z-index:1000; background:#000; padding:16px; text-align:center; border-bottom:6px solid var(--accent); box-shadow:0 0 40px var(--glow); }
+    nav a { color:#fff; margin:0 50px; text-decoration:none; font-weight:900; font-size:22px; letter-spacing:3px; }
+    nav a:hover, nav a.active { color:var(--accent); text-shadow:0 0 20px var(--glow); }
+
+    .container { max-width:1200px; margin:140px auto 80px; padding:0 20px; }
+    h1 { font-size:60px; font-weight:900; text-align:center; margin:0 0 30px;
+         background:linear-gradient(90deg,#ffd700,#ffaa00);
+         -webkit-background-clip:text; -webkit-text-fill-color:transparent; text-shadow:0 0 40px var(--glow); }
+    .subtitle { text-align:center; color:#888; font-size:24px; margin-bottom:80px; font-style:italic; }
+
+    h2 { font-size:40px; color:var(--accent); margin:0 0 50px; text-align:center; text-shadow:0 0 20px var(--glow); }
+    label { display:block; margin:40px 0 15px; font-size:20px; color:#ccc; font-weight:600; }
+    textarea { width:100%; padding:30px; background:#000; color:#fff; border:3px solid var(--accent); border-radius:20px; font-size:22px; min-height:220px; resize:vertical; transition:all 0.4s; }
+    textarea:focus { box-shadow:0 0 40px var(--glow); outline:none; }
+
+    button { background:var(--accent); color:#000; padding:25px 90px; border:none; border-radius:20px; font-size:30px; font-weight:900; cursor:pointer;
+             margin:60px auto 30px; display:block; box-shadow:0 15px 60px rgba(255,215,0,0.5); text-transform:uppercase; letter-spacing:3px; }
+    button:hover { transform:scale(1.05); box-shadow:0 25px 80px rgba(255,215,0,0.8); }
+
+    .god { text-align:center; font-size:28px; color:var(--accent); margin:80px 0; font-style:italic; text-shadow:0 0 20px var(--glow); }
+    footer { text-align:center; padding:100px 20px 60px; color:#666; font-size:16px; }
+
+    #horizonChoice {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 60px;
+      flex-wrap: wrap;
+      padding: 80px 20px;
+    }
+
+    .horizon-card {
+      flex: 1;
+      max-width: 500px;
+      min-width: 300px;
+      background: var(--card);
+      padding: 60px 40px;
+      border-radius: 32px;
+      border: 4px solid var(--accent);
+      box-shadow: 0 20px 80px var(--glow);
+      cursor: pointer;
+      transition: all 0.4s ease;
+      text-align: center;
+    }
+
+    .horizon-card:hover {
+      transform: translateY(-20px) scale(1.05);
+      box-shadow: 0 40px 120px rgba(255,215,0,0.4);
+    }
+
+    .horizon-card .icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .domain-selector {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      padding: 30px 20px;
+      margin: 40px 0 60px;
+    }
+
+    .domain-btn {
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 22px;
+      font-weight: 900;
+      padding: 12px 28px;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      position: relative;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .domain-btn.active {
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--glow);
+    }
+
+    .domain-btn::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      width: 0;
+      height: 5px;
+      background: var(--accent);
+      transition: all 0.4s ease;
+      transform: translateX(-50%);
+      box-shadow: 0 0 20px var(--glow);
+    }
+
+    .domain-btn.active::after { width: 80%; }
+
+    .domain-btn:hover:not(.active) { color: var(--accent); }
+
+    .glitch {
+      position: relative;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--glow);
+    }
+
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.8;
+    }
+
+    .glitch::before {
+      color: #00ffff;
+      left: 2px;
+      text-shadow: -2px 0 #ff00ff;
+      clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+      animation: glitch-1 0.6s infinite linear alternate-reverse;
+    }
+
+    .glitch::after {
+      color: #ff00ff;
+      left: -2px;
+      text-shadow: 2px 0 #00ffff;
+      clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+      animation: glitch-2 0.4s infinite linear alternate;
+    }
+
+    @keyframes glitch-1 {
+      0%, 100% { transform: translate(0); }
+      20% { transform: translate(-3px, 3px); }
+      40% { transform: translate(-3px, -3px); }
+      60% { transform: translate(3px, 3px); }
+      80% { transform: translate(3px, -3px); }
+    }
+
+    @keyframes glitch-2 {
+      0%, 100% { transform: translate(0); }
+      20% { transform: translate(3px, -3px); }
+      40% { transform: translate(3px, 3px); }
+      60% { transform: translate(-3px, -3px); }
+      80% { transform: translate(-3px, 3px); }
+    }
+
+    .horizon-card:hover .glitch,
+    .domain-btn:hover,
+    .domain-btn.active {
+      transform: scale(1.05);
+    }
+
+    .odin-rite {
+      text-align: center;
+      background: #000;
+      padding: 60px 40px;
+      border-radius: 28px;
+      border: 3px solid var(--accent);
+      box-shadow: 0 0 40px var(--glow);
+      margin: 60px auto 40px;
+      max-width: 900px;
+    }
+
+    .vision-area {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .manifest-btn { margin-top: 40px; }
+
+    .markdown-body {
+      font-family: Georgia, serif;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/game/" class="active">FREEDOM MAP</a>
+</nav>
+
+<div class="container">
+  <h1>FREEDOM MAP</h1>
+  <div class="subtitle">Das ideale parallele Reich in 10 Jahren · oder in 1 Jahr</div>
+
+  <div id="horizonChoice">
+    <div class="horizon-card" onclick="chooseHorizon('10Year')">
+      <div class="icon">🌅</div>
+      <h2 class="glitch" data-text="10-YEAR HORIZON">10-YEAR HORIZON</h2>
+      <p>Das ideale parallele Reich in 10 Jahren.</p>
+    </div>
+    <div class="horizon-card" onclick="chooseHorizon('annual')">
+      <div class="icon">🔥</div>
+      <h2 class="glitch" data-text="ANNUAL HORIZON">ANNUAL HORIZON</h2>
+      <p>Ein Jahr im Voraus. Klare Ziele für die nächste Etappe.</p>
+    </div>
+  </div>
+
+  <div id="odinRite" style="display:none;">
+    <div class="odin-rite">
+      <p style="font-size:48px; margin:0 0 40px; color:#ffd700;">I.P.W. - Ideal Parallel World</p>
+      <p style="font-size:32px;">Du hängst dich selbst an den Weltenbaum deines Lebens.<br>Du gibst ein Auge – deine alte, begrenzte Sicht.<br>Und trinkst aus dem Brunnen der unendlichen Vision.</p>
+      <p style="font-size:28px;">Die Freedom Map ist kein Wunsch.<br>Sie ist dein Opfer. Dein Preis.<br>Und deine Belohnung.</p>
+      <p>Wähle deinen Horizont.<br>Wähle dein Reich.<br>Und dann – schreibe, als wäre es bereits dein.</p>
+    </div>
+  </div>
+
+  <div id="chapter33" style="display:none;">
+    <article class="markdown-body" style="background:#000;color:#e0e0e0;padding:60px;border-radius:28px;border-left:12px solid #ffd700;box-shadow:0 0 60px rgba(255,215,0,0.2);margin:100px auto;max-width:1100px;font-size:20px;line-height:2;">
+      <h2 style="color:#ffd700;font-size:3em;text-align:center;margin-bottom:2em;text-shadow:0 0 30px #ffd700;">Gott segnet Wahrheit</h2>
+      <p>Die meisten Menschen bleiben ihr Leben lang in den gleichen Mustern gefangen – unsichtbare Ketten, die sie selbst geschmiedet haben.  Doch es gibt eine Kraft, die alles verändert: die Fähigkeit, dein <strong>Ideales Paralleles Reich</strong> klar vor Augen zu haben – ein Leben, in dem deine größten Träume bereits gelebt werden.</p>
+      <h3>1. Göttliche Vision durch Wahrheit</h3>
+      <p>Die Frame Map ist nicht nur eine Bestandsaufnahme – sie ist der Schlüssel zu deiner höheren Macht.  Je ehrlicher du deine aktuelle Realität annimmst – ohne Beschönigung, ohne Ausreden –, desto stärker verbindest du dich mit der göttlichen Quelle.  „Gott segnet Wahrheit.“  Je klarer du siehst, desto mächtiger wird deine Vision.</p>
+      <h3>2. Dein Ideales Paralleles Reich erschaffen</h3>
+      <p>Die Freedom Map zwingt dich, über das „Mögliche“ hinauszudenken.  Sie stellt die eine Frage, die alles verändert:  <strong>„Wenn wirklich ALLES möglich wäre – wie würde mein Leben in 10 Jahren aussehen?“</strong>  Hier geht es nicht um vorsichtige Ziele – hier geht es um die reine, ungebremste Version von dir.</p>
+      <h3>3. Die vier Bereiche – wieder groß träumen</h3>
+      <p>Genau wie bei der Frame Map betrachtest du vier Lebensbereiche, aber diesmal aus der Perspektive des Unmöglichen:</p>
+      <ul>
+        <li><strong>BODY:</strong> Ein Zustand von Gesundheit und Kraft, der heute wie Science-Fiction wirkt.</li>
+        <li><strong>BEING:</strong> Eine Tiefe der spirituellen Verbindung, die du dir heute kaum vorstellen kannst.</li>
+        <li><strong>BALANCE:</strong> Liebe, Respekt und Verbundenheit auf einem Level, das du bisher nur erahnt hast.</li>
+        <li><strong>BUSINESS:</strong> Finanzielle Freiheit und Einfluss, die deine kühnsten Fantasien übertreffen.</li>
+      </ul>
+      <h3>4. Vom Frame zur Freedom – die Transformation</h3>
+      <p>Die Frame Map zeigt dir, wer du heute bist.  Die Freedom Map zeigt dir, wer du werden kannst – und zwingt dich, dich zu verändern.  Dazwischen liegt Arbeit. Schmerz. Wachstum. Aber genau dort wird aus dem Mann ein König.</p>
+      <h3>5. Die Macht der Richtung</h3>
+      <p>Solange du nur träumst, bleibst du stehen.  Sobald du deine Freedom Map geschrieben hast, hat jeder Tag, jede Entscheidung, jedes Opfer einen klaren Zweck.  Du driftest nicht mehr – du bewegst dich mit Zielstrebigkeit auf dein Reich zu.  Die Freedom Map ist deine Landkarte in eine Zukunft, die heute noch unmöglich erscheint – aber morgen deine Realität sein wird.</p>
+      <p><strong>Schreibe es. Lebe es. Sei es.</strong> αOS</p>
+    </article>
+  </div>
+
+  <div id="mainArea" style="display:none;">
+    <div class="domain-selector">
+      <button class="domain-btn glitch-click active" data-text="BODY" onclick="triggerGlitch(this); selectDomain('BODY', event)">BODY</button>
+      <button class="domain-btn glitch-click" data-text="BEING" onclick="triggerGlitch(this); selectDomain('BEING', event)">BEING</button>
+      <button class="domain-btn glitch-click" data-text="BALANCE" onclick="triggerGlitch(this); selectDomain('BALANCE', event)">BALANCE</button>
+      <button class="domain-btn glitch-click" data-text="BUSINESS" onclick="triggerGlitch(this); selectDomain('BUSINESS', event)">BUSINESS</button>
+    </div>
+
+    <div class="vision-area">
+      <h2 id="visionTitle">BODY – 2035</h2>
+      <textarea id="visionText" placeholder="Write your vision here – as if it is already true..."></textarea>
+      <button class="manifest-btn" onclick="saveVision(false)">MANIFEST THIS VISION</button>
+      <button class="manifest-btn" onclick="saveVision(true)">MANIFEST → TICKTICK</button>
+    </div>
+  </div>
+
+</div>
+
+<footer>FREEDOM MAP – Alpha OS</footer>
+
+<script>
+let currentHorizon = null;
+let currentDomain = 'BODY';
+
+function triggerGlitch(element) {
+  if (element) {
+    element.classList.add('active');
+    setTimeout(() => element.classList.remove('active'), 1000);
+  }
+}
+
+function chooseHorizon(horizon) {
+  currentHorizon = horizon;
+  document.getElementById('horizonChoice').style.display = 'none';
+
+  if (horizon === '10Year') {
+    document.getElementById('odinRite').style.display = 'block';
+    document.getElementById('chapter33').style.display = 'none';
+  } else {
+    document.getElementById('odinRite').style.display = 'none';
+    document.getElementById('chapter33').style.display = 'block';
+  }
+
+  document.getElementById('mainArea').style.display = 'block';
+
+  currentDomain = 'BODY';
+  document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
+  const first = document.querySelector('.domain-btn');
+  if (first) first.classList.add('active');
+
+  updateVisionTitle();
+  document.getElementById('visionText').focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function selectDomain(domain, evt) {
+  currentDomain = domain;
+  document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
+  if (evt && evt.target) evt.target.classList.add('active');
+  updateVisionTitle();
+  document.getElementById('visionText').focus();
+}
+
+function updateVisionTitle() {
+  const year = currentHorizon === '10Year' ? '2035' : new Date().getFullYear() + 1;
+  document.getElementById('visionTitle').textContent = `${currentDomain} – ${year}`;
+}
+
+async function saveVision(ticktick) {
+  const vision = document.getElementById('visionText').value.trim();
+  if (!vision) return alert('Vision darf nicht leer sein.');
+
+  const period = currentHorizon === '10Year' ? '2035' : new Date().getFullYear() + 1;
+  const header = [
+    `# FREEDOM MAP – ${currentDomain}`,
+    `**Horizon:** ${currentHorizon || '-'}`,
+    `**Period:** ${period}`,
+    `**Date:** ${new Date().toLocaleDateString('de-DE')}`,
+    '',
+    '---',
+    ''
+  ].join('\n');
+
+  const body = `**Vision**\n${vision}`;
+  const markdown = header + body;
+  const title = `${currentDomain}_freedom_${period}`;
+
+  try {
+    const res = await fetch('/api/game/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map: 'freedom', title, markdown, ticktick: !!ticktick })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'save failed');
+    alert(`${currentDomain} ${period} manifestiert`);
+    document.getElementById('visionText').value = '';
+  } catch (err) {
+    alert('Fehler beim Speichern: ' + err.message);
+  }
+}
+</script>
+
+</body>
+</html>

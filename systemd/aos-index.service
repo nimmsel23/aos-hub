@@ -1,0 +1,14 @@
+[Unit]
+Description=AOS Hub - Index Node (HTTP server for menu.yaml)
+After=network.target
+
+[Service]
+Type=simple
+User=alpha
+WorkingDirectory=/home/alpha/aos-hub/index-node
+ExecStart=/usr/bin/node /home/alpha/aos-hub/index-node/server.js
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

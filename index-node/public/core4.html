@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlphaOS Core4 TTY</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/matrix.js" defer></script>
+  <style>
+    .panel {
+      max-width: 720px;
+      margin: 80px auto 0;
+      padding: 30px;
+      border: 2px solid #0f0;
+      border-radius: 16px;
+      box-shadow: 0 0 20px #0f0;
+      background: rgba(0, 0, 0, 0.7);
+      text-align: left;
+      line-height: 1.5;
+    }
+    .panel h1 {
+      margin: 0 0 12px;
+      font-size: 1.8em;
+    }
+    .panel code {
+      color: #0ff;
+    }
+    .panel a {
+      color: #0f0;
+    }
+    .panel .cmd {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 10px 14px;
+      border: 1px solid #0f0;
+      border-radius: 10px;
+      background: #001900;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrix-rain"></canvas>
+
+  <div class="panel">
+    <h1>Core4 TTY</h1>
+    <p>This Centre runs in the terminal. Launch it from the repo:</p>
+    <div class="cmd"><code>npm run core4</code></div>
+    <p>Or run it directly:</p>
+    <div class="cmd"><code>node core4-tty.js</code></div>
+    <p>Data is stored under <code>~/.local/share/alphaos</code>.</p>
+    <p><a href="/">Back to Index</a></p>
+  </div>
+</body>
+</html>
