@@ -9,7 +9,7 @@ HTTP server serving `menu.yaml` for AlphaOS Command Center navigation.
 
 **Location:** `index-node/`
 **Service:** `aos-index.service`
-**Port:** 3000 (default)
+**Port:** 8799 (default)
 
 **Start:**
 ```bash
