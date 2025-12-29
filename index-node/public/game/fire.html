@@ -145,6 +145,44 @@
       font-size: 14px;
     }
 
+    .strike-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .strike-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .strike-item input[type="text"] {
+      flex: 1;
+      background: #000;
+      color: #fff;
+      border: 2px solid rgba(255, 34, 0, 0.6);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .strike-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    .strike-actions input[type="date"] {
+      background: #000;
+      color: #fff;
+      border: 2px solid rgba(255, 34, 0, 0.6);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+
     .capture-note {
       margin-top: 16px;
       color: var(--muted);
@@ -219,39 +257,64 @@
     <header class="map-header">
       <div class="map-title">Fire Capture (Weekly + Daily Eingabe)</div>
       <div class="map-date subtle">Woche: <span id="capture-week">—</span></div>
+      <div class="map-date">Due: <input id="week-due" type="date"></div>
     </header>
     <input id="week" type="hidden" value="">
     <div class="capture-grid">
       <div class="capture-panel">
         <h2>BODY</h2>
-        <textarea id="body_weekly" placeholder="Structured Blaze (4 Strikes):\n- 3x Krafttraining\n- 1x Wandern"></textarea>
-        <textarea id="body_daily" placeholder="Daily Ignition: z.B. Sauna / Mobility / Schlaf"></textarea>
-        <button onclick="saveDomain('Body', false)">Ignite</button>
-        <button onclick="saveDomain('Body', true)">Ignite → TickTick</button>
+        <div class="strike-list">
+          <label class="strike-item"><input type="checkbox"><input id="body_strike_1" type="text" placeholder="Strike 1"></label>
+          <label class="strike-item"><input type="checkbox"><input id="body_strike_2" type="text" placeholder="Strike 2"></label>
+          <label class="strike-item"><input type="checkbox"><input id="body_strike_3" type="text" placeholder="Strike 3"></label>
+          <label class="strike-item"><input type="checkbox"><input id="body_strike_4" type="text" placeholder="Strike 4"></label>
+        </div>
+        <div class="strike-actions">
+          <label>Due <input id="body_due" type="date"></label>
+          <button onclick="saveStrikes('body')">Save Strikes</button>
+        </div>
       </div>
       <div class="capture-panel">
         <h2>BEING</h2>
-        <textarea id="being_weekly" placeholder="Weekly Strikes (4):\n- Dantian\n- Memoirs"></textarea>
-        <textarea id="being_daily" placeholder="Daily Ignition: Meditation / Voice Log"></textarea>
-        <button onclick="saveDomain('Being', false)">Ignite</button>
-        <button onclick="saveDomain('Being', true)">Ignite → TickTick</button>
+        <div class="strike-list">
+          <label class="strike-item"><input type="checkbox"><input id="being_strike_1" type="text" placeholder="Strike 1"></label>
+          <label class="strike-item"><input type="checkbox"><input id="being_strike_2" type="text" placeholder="Strike 2"></label>
+          <label class="strike-item"><input type="checkbox"><input id="being_strike_3" type="text" placeholder="Strike 3"></label>
+          <label class="strike-item"><input type="checkbox"><input id="being_strike_4" type="text" placeholder="Strike 4"></label>
+        </div>
+        <div class="strike-actions">
+          <label>Due <input id="being_due" type="date"></label>
+          <button onclick="saveStrikes('being')">Save Strikes</button>
+        </div>
       </div>
       <div class="capture-panel">
         <h2>BALANCE</h2>
-        <textarea id="balance_weekly" placeholder="Weekly Strikes (4):\n- Social\n- Headman"></textarea>
-        <textarea id="balance_daily" placeholder="Daily Ignition: People / Partner / Integration"></textarea>
-        <button onclick="saveDomain('Balance', false)">Ignite</button>
-        <button onclick="saveDomain('Balance', true)">Ignite → TickTick</button>
+        <div class="strike-list">
+          <label class="strike-item"><input type="checkbox"><input id="balance_strike_1" type="text" placeholder="Strike 1"></label>
+          <label class="strike-item"><input type="checkbox"><input id="balance_strike_2" type="text" placeholder="Strike 2"></label>
+          <label class="strike-item"><input type="checkbox"><input id="balance_strike_3" type="text" placeholder="Strike 3"></label>
+          <label class="strike-item"><input type="checkbox"><input id="balance_strike_4" type="text" placeholder="Strike 4"></label>
+        </div>
+        <div class="strike-actions">
+          <label>Due <input id="balance_due" type="date"></label>
+          <button onclick="saveStrikes('balance')">Save Strikes</button>
+        </div>
       </div>
       <div class="capture-panel">
         <h2>BUSINESS</h2>
-        <textarea id="business_weekly" placeholder="Structured Blaze (4):\n- Vitaltrainer\n- Creator King"></textarea>
-        <textarea id="business_daily" placeholder="Daily Ignition: Lernen / Shipping / Outreach"></textarea>
-        <button onclick="saveDomain('Business', false)">Ignite</button>
-        <button onclick="saveDomain('Business', true)">Ignite → TickTick</button>
+        <div class="strike-list">
+          <label class="strike-item"><input type="checkbox"><input id="business_strike_1" type="text" placeholder="Strike 1"></label>
+          <label class="strike-item"><input type="checkbox"><input id="business_strike_2" type="text" placeholder="Strike 2"></label>
+          <label class="strike-item"><input type="checkbox"><input id="business_strike_3" type="text" placeholder="Strike 3"></label>
+          <label class="strike-item"><input type="checkbox"><input id="business_strike_4" type="text" placeholder="Strike 4"></label>
+        </div>
+        <div class="strike-actions">
+          <label>Due <input id="business_due" type="date"></label>
+          <button onclick="saveStrikes('business')">Save Strikes</button>
+        </div>
       </div>
     </div>
-    <div class="capture-note">Ignite erstellt ein Markdown-Log im lokalen Vault.</div>
+    <div class="capture-note">Save Strikes erstellt Taskwarrior Tasks mit +fire (+domain) und optionalem Due.</div>
   </section>
 
   <div class="fire-rite">
@@ -293,44 +356,46 @@
     if (weekInput) weekInput.value = week;
   }
 
-  async function saveDomain(domain, ticktick) {
-    const p = domain.toLowerCase();
-    const weekly = document.getElementById(p + '_weekly').value.trim();
-    const daily = document.getElementById(p + '_daily').value.trim();
-    const week = document.getElementById('week')?.value || isoWeekString();
+  function collectStrikes(domain) {
+    const items = [];
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`${domain}_strike_${i}`);
+      const text = el?.value.trim() || '';
+      if (text) items.push(text);
+    }
+    return items;
+  }
 
-    if (!weekly && !daily) {
-      return alert('Bitte Weekly oder Daily eintragen.');
+  async function saveStrikes(domain) {
+    const week = document.getElementById('week')?.value || isoWeekString();
+    const weekDue = document.getElementById('week-due')?.value || '';
+    const due = document.getElementById(`${domain}_due`)?.value || weekDue;
+    const strikes = collectStrikes(domain);
+    if (!strikes.length) {
+      return alert('Bitte mindestens eine Strike eingeben.');
     }
 
-    const header = [
-      `# FIRE MAP – ${domain}`,
-      `**Week:** ${week}`,
-      `**Date:** ${new Date().toLocaleDateString('de-DE')}`,
-      '',
-      '---',
-      ''
-    ].join('\n');
-
-    const body = [
-      `**Weekly Tasks (4 Strikes)**\n${weekly || '_leer_'}`,
-      `**Daily Ignition**\n${daily || '_leer_'}`
-    ].join('\n\n');
-
-    const markdown = header + body;
-    const title = `${domain}_fire_${week}`;
+    const tasks = strikes.map((text) => ({
+      description: `${domain.toUpperCase()}: ${text}`,
+      due: due || undefined,
+      tags: ['fire', domain.toLowerCase()],
+      project: `fire-${week}`
+    }));
 
     try {
-      const res = await fetch('/api/game/export', {
+      const res = await fetch('/api/taskwarrior/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map: 'fire', title, markdown, ticktick: !!ticktick })
+        body: JSON.stringify({ tasks })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'save failed');
-      alert(`${domain} gespeichert`);
-      document.getElementById(p + '_weekly').value = '';
-      document.getElementById(p + '_daily').value = '';
+      alert(`${domain.toUpperCase()} gespeichert (${data.created}/${data.total})`);
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`${domain}_strike_${i}`);
+        if (el) el.value = '';
+      }
+      loadTasks();
     } catch (err) {
       alert('Fehler beim Speichern: ' + err.message);
     }
@@ -351,7 +416,7 @@
       listEl.textContent = 'Lade…';
     }
     try {
-      const res = await fetch('/api/taskwarrior/tasks?status=pending', { cache: 'no-store' });
+      const res = await fetch('/api/taskwarrior/tasks?status=pending&tags=fire', { cache: 'no-store' });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Fehler');
       metaEl.textContent = `${data.count} Tasks (Tags: ${data.tags.join(', ')})`;
@@ -359,11 +424,14 @@
         listEl.textContent = 'Keine passenden Tasks gefunden.';
         return;
       }
+      const today = new Date().toISOString().slice(0, 10);
       const items = data.tasks
         .map(t => {
           const tags = (t.tags || []).map(tag => `<span class="tag">${tag}</span>`).join(' ');
-          const due = t.due ? `· Due: ${t.due}` : '';
-          return `<div class="task-item"><div class="task-title">${t.description || '(ohne Beschreibung)'}</div><div class="task-meta">${tags} ${due}</div></div>`;
+          const dueDate = t.due ? t.due.slice(0, 10) : '';
+          const dueLabel = dueDate ? `· Due: ${dueDate}` : '';
+          const badge = dueDate === today ? '· Today' : '';
+          return `<div class="task-item"><div class="task-title">${t.description || '(ohne Beschreibung)'}</div><div class="task-meta">${tags} ${dueLabel} ${badge}</div></div>`;
         })
         .join('');
       listEl.innerHTML = items;
@@ -380,7 +448,7 @@
       const res = await fetch('/api/taskwarrior/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'pending' })
+        body: JSON.stringify({ status: 'pending', tags: ['fire'] })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Push failed');

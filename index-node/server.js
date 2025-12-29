@@ -31,7 +31,7 @@ const TICK_ENV_PATH =
 const TASK_EXPORT_PATH =
   process.env.TASK_EXPORT ||
   path.join(os.homedir(), ".local", "share", "alphaos", "task_export.json");
-const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4")
+const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
   .split(",")
   .map((tag) => tag.trim())
   .filter(Boolean);
@@ -134,6 +134,19 @@ function parseEnvFile(filePath) {
   } catch (_) {
     return {};
   }
+}
+
+function execFileAsync(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, opts, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        return reject(err);
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 }
 
 function getTickConfig() {
@@ -957,6 +970,10 @@ app.get("/api/door/chapters", (req, res) => {
 app.get("/api/taskwarrior/tasks", (req, res) => {
   try {
     const status = String(req.query?.status || "pending").toLowerCase();
+    const tagsParam = String(req.query?.tags || "").trim();
+    const tagsFilter = tagsParam
+      ? tagsParam.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean)
+      : [];
     const { ok, error, tasks } = loadTaskwarriorExport();
     if (!ok) {
       return res.status(404).json({ ok: false, error });
@@ -967,6 +984,11 @@ app.get("/api/taskwarrior/tasks", (req, res) => {
       .filter((task) => {
         if (status === "all") return true;
         return String(task.status || "").toLowerCase() === status;
+      })
+      .filter((task) => {
+        if (!tagsFilter.length) return true;
+        const taskTags = (task.tags || []).map((t) => String(t || "").toLowerCase());
+        return tagsFilter.some((t) => taskTags.includes(t));
       })
       .map((task) => ({
         uuid: task.uuid,
@@ -980,6 +1002,49 @@ app.get("/api/taskwarrior/tasks", (req, res) => {
       }));
 
     return res.json({ ok: true, source: "taskwarrior-export", count: filtered.length, tags: SYNC_TAGS, tasks: filtered });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Add Taskwarrior tasks (local CLI)
+app.post("/api/taskwarrior/add", async (req, res) => {
+  try {
+    const taskBin = process.env.TASK_BIN || "task";
+    const tasks = Array.isArray(req.body?.tasks) ? req.body.tasks : [];
+    if (!tasks.length) {
+      return res.status(400).json({ ok: false, error: "missing tasks" });
+    }
+
+    const results = [];
+    for (const t of tasks) {
+      const description = String(t?.description || "").trim();
+      if (!description) continue;
+      const due = String(t?.due || "").trim();
+      const project = String(t?.project || "").trim();
+      const tags = Array.isArray(t?.tags) ? t.tags : [];
+      const args = ["add", description];
+      if (due) args.push(`due:${due}`);
+      if (project) args.push(`project:${project}`);
+      tags
+        .map((tag) => String(tag || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, ""))
+        .filter(Boolean)
+        .forEach((tag) => args.push(`+${tag}`));
+
+      try {
+        await execFileAsync(taskBin, args);
+        results.push({ description, ok: true });
+      } catch (err) {
+        results.push({ description, ok: false, error: err?.message || String(err) });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      created: results.filter((r) => r.ok).length,
+      total: results.length,
+      results,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -1053,6 +1118,26 @@ app.get("/api/voice/history", (req, res) => {
     const limit = Number(req.query?.limit || 50);
     const files = listMarkdownFilesRecursive(getVoiceVaultDir(), { limit: isNaN(limit) ? 50 : limit });
     return res.json({ ok: true, count: files.length, files });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Voice file read (local markdown)
+app.get("/api/voice/file", (req, res) => {
+  try {
+    const rel = String(req.query?.path || "").trim();
+    if (!rel) return res.status(400).json({ ok: false, error: "missing path" });
+    const base = path.resolve(getVoiceVaultDir());
+    const target = path.resolve(base, rel);
+    if (!target.startsWith(base + path.sep)) {
+      return res.status(400).json({ ok: false, error: "invalid path" });
+    }
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ ok: false, error: "not found" });
+    }
+    const content = fs.readFileSync(target, "utf8");
+    return res.json({ ok: true, path: rel, content });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

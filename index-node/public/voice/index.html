@@ -721,11 +721,57 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         const html = data.files.map(f=>{
           const date = f.mtimeMs ? new Date(f.mtimeMs).toLocaleString('de-DE') : '';
           const label = f.relative || f.name || '';
-          return `<div class="history-item"><div class="task-title">${escapeHtml(label)}</div><div class="history-meta">${date}</div></div>`;
+          const rel = f.relative || f.name || '';
+          return `<div class="history-item">
+            <div class="task-title">${escapeHtml(label)}</div>
+            <div class="history-meta">${date}</div>
+            <div class="actions">
+              <button class="btn-ghost btn" type="button" data-open-file="${escapeHtml(rel)}">Open</button>
+              <button class="btn-ghost btn" type="button" data-copy-path="${escapeHtml(rel)}">Copy Path</button>
+            </div>
+          </div>`;
         }).join('');
         list.innerHTML = html;
+        list.querySelectorAll('[data-open-file]').forEach(btn=>{
+          btn.addEventListener('click', () => {
+            const rel = btn.getAttribute('data-open-file') || '';
+            if (rel) openHistoryFile(rel);
+          });
+        });
+        list.querySelectorAll('[data-copy-path]').forEach(btn=>{
+          btn.addEventListener('click', () => {
+            const rel = btn.getAttribute('data-copy-path') || '';
+            if (rel) copyText(rel);
+          });
+        });
       }catch(_){
         list.textContent = 'Fehler beim Laden.';
+      }
+    }
+
+    async function openHistoryFile(relPath){
+      try{
+        const res = await fetch(`/api/voice/file?path=${encodeURIComponent(relPath)}`, { cache:'no-store' });
+        const data = await res.json();
+        if(!data?.ok) throw new Error(data?.error || 'read failed');
+        const html = mdToTrustedHtml(data.content || '');
+        AOS_modalOpen({
+          title: 'Voice Entry',
+          sub: relPath,
+          html: `<div class="markdown-body">${html}</div>`
+        });
+      }catch(err){
+        alert('Fehler beim Laden: ' + (err?.message || String(err)));
+      }
+    }
+
+    function copyText(text){
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Pfad kopiert.');
+        }).catch(() => alert('Kopieren fehlgeschlagen.'));
+      } else {
+        alert(text);
       }
     }
 
