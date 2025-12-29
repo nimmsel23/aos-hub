@@ -213,10 +213,6 @@
   <nav>
     <a href="/" data-tab="back">Index</a>
     <a href="#" data-tab="home" class="active">Home</a>
-    <a href="#" data-tab="stop">Stop</a>
-    <a href="#" data-tab="submit">Submit</a>
-    <a href="#" data-tab="struggle">Struggle</a>
-    <a href="#" data-tab="strike">Strike</a>
     <a href="#" data-tab="history">Historie</a>
     <button type="button" id="zenToggle" class="nav-zen-toggle">Zen Mode</button>
   </nav>
@@ -357,7 +353,12 @@
   </div>
 
   <footer>
-    <h3>Stop · Submit · Struggle · Strike</h3>
+    <div class="phase-grid">
+      <button class="phase-card" data-target="stop" type="button">Stop</button>
+      <button class="phase-card" data-target="submit" type="button">Submit</button>
+      <button class="phase-card" data-target="struggle" type="button">Struggle</button>
+      <button class="phase-card" data-target="strike" type="button">Strike</button>
+    </div>
     <div class="theme-switcher">
       <label for="theme-select">Style:</label>
       <select id="theme-select" aria-label="Theme Auswahl">
@@ -690,7 +691,8 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         }
         const html = data.files.map(f=>{
           const date = f.mtimeMs ? new Date(f.mtimeMs).toLocaleString('de-DE') : '';
-          return `<div class="history-item"><div class="task-title">${escapeHtml(f.name)}</div><div class="history-meta">${date}</div></div>`;
+          const label = f.relative || f.name || '';
+          return `<div class="history-item"><div class="task-title">${escapeHtml(label)}</div><div class="history-meta">${date}</div></div>`;
         }).join('');
         list.innerHTML = html;
       }catch(_){
@@ -996,6 +998,14 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         document.body.classList.toggle('zen-mode');
         zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen Mode';
       });
+      document.querySelectorAll('.phase-card').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const target = btn.getAttribute('data-target');
+          if(!target) return;
+          activateTab(target);
+          window.scrollTo({ top:0, behavior:'smooth' });
+        });
+      });
       setTimeout(()=>{
         const loader = document.getElementById('loader-overlay');
         if(loader){
@@ -1011,3 +1021,6 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
     .history-item{border-bottom:1px solid var(--border);padding:10px 0;}
     .history-item:last-child{border-bottom:none;}
     .history-meta{color:var(--muted);font-size:0.9rem;}
+    .phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:980px;margin:0 auto 18px;}
+    .phase-card{border:1px solid var(--border);border-radius:14px;padding:14px 16px;background:var(--card);color:var(--text);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .2s, border-color .2s, box-shadow .2s;}
+    .phase-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 12px 36px var(--glow);}

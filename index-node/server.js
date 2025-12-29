@@ -198,6 +198,10 @@ function getDoorVaultDir() {
 }
 
 function getVoiceVaultDir() {
+  const env = process.env.VOICE_VAULT_DIR;
+  if (env) return env;
+  const homeVoice = path.join(os.homedir(), "Voice");
+  if (fs.existsSync(homeVoice)) return homeVoice;
   return path.join(getVaultDir(), "VOICE");
 }
 
@@ -214,6 +218,48 @@ function listMarkdownFiles(dirPath, { limit = 50 } = {}) {
           files.push({ name, path: full, mtimeMs: st.mtimeMs, size: st.size });
         }
       } catch (_) {}
+    }
+    return files
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(0, limit);
+  } catch (_) {
+    return [];
+  }
+}
+
+function listMarkdownFilesRecursive(dirPath, { limit = 100 } = {}) {
+  try {
+    if (!fs.existsSync(dirPath)) return [];
+    const files = [];
+    const stack = [dirPath];
+    while (stack.length) {
+      const current = stack.pop();
+      let entries = [];
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch (_) {
+        continue;
+      }
+      for (const entry of entries) {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        if (!entry.name.toLowerCase().endsWith(".md")) continue;
+        try {
+          const st = fs.statSync(full);
+          files.push({
+            name: entry.name,
+            path: full,
+            relative: path.relative(dirPath, full),
+            mtimeMs: st.mtimeMs,
+            size: st.size,
+          });
+        } catch (_) {}
+      }
+      if (files.length >= limit * 3) break;
     }
     return files
       .sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -1005,7 +1051,7 @@ app.post("/api/taskwarrior/push", async (req, res) => {
 app.get("/api/voice/history", (req, res) => {
   try {
     const limit = Number(req.query?.limit || 50);
-    const files = listMarkdownFiles(getVoiceVaultDir(), { limit: isNaN(limit) ? 50 : limit });
+    const files = listMarkdownFilesRecursive(getVoiceVaultDir(), { limit: isNaN(limit) ? 50 : limit });
     return res.json({ ok: true, count: files.length, files });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
