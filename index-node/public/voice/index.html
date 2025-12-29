@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>αOS Voice Centre</title>
   <script src="/vendor/marked/marked.min.js"></script>
+  <script src="/matrix.js" defer></script>
   <style>
     :root{
       --bg: #0b0c10;
@@ -33,6 +34,7 @@
     body.theme-forestnight{ --bg:#050d0a;--card:#0a1612;--border:rgba(255,255,255,.10);--text:rgba(235,255,245,.92);--muted:rgba(235,255,245,.60);--accent:#34d399;--accent-2:#93c5fd;--nav:rgba(0,0,0,.75);--glow:rgba(52,211,153,.16);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
     body.theme-inkgold{ --bg:#07070a;--card:#0f0f15;--border:rgba(255,255,255,.10);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.62);--accent:#d4af37;--accent-2:#a78bfa;--nav:rgba(0,0,0,.78);--glow:rgba(212,175,55,.16);--accent-light:var(--accent-2);--gold:#d4af37;--phaseFocusGlow:var(--glow);}
     body.theme-bloodred{ --bg:#0a0a0a;--card:#111111;--border:#2a2a2a;--text:#f0f0f0;--muted:#aaaaaa;--accent:#c41e3a;--accent-2:#ff4444;--accent-light:var(--accent-2);--nav:#000;--glow:rgba(196,30,58,0.6);--gold:#b8860b;--grain:url('data:image/svg+xml,%3Csvg viewBox=\"0 0 256 256\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cfilter id=\"noise\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.9\" numOctaves=\"4\" stitchTiles=\"stitch\"/%3E%3C/filter%3E%3Crect width=\"256\" height=\"256\" filter=\"url(%23noise)\" opacity=\"0.03\"/%3E%3C/svg%3E');--phaseFocusGlow:rgba(196,30,58,.55);}
+    body.theme-matrix{ --bg:#000;--card:rgba(0,0,0,.7);--border:#00ff00;--text:#00ff00;--muted:rgba(0,255,0,.6);--accent:#00ff00;--accent-2:#00ffcc;--nav:#000;--glow:rgba(0,255,0,.25);--grain:none;--phaseFocusGlow:rgba(0,255,0,.35);}
     body{
       margin:0;
       background: var(--bg);
@@ -141,6 +143,7 @@
       color:var(--text);
       overflow:auto;
     }
+    #matrix-rain{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;}
     .session-actions{
       display:flex;gap:10px;flex-wrap:wrap;
       background:color-mix(in srgb,var(--card) 88%, transparent);
@@ -166,6 +169,14 @@
       padding:8px 10px;
       font-weight:600;
     }
+    .history-item{border-bottom:1px solid var(--border);padding:10px 0;}
+    .history-item:last-child{border-bottom:none;}
+    .history-meta{color:var(--muted);font-size:0.9rem;}
+    .phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:980px;margin:0 auto 18px;}
+    .phase-card{border:1px solid var(--border);border-radius:14px;padding:14px 16px;background:var(--card);color:var(--text);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .2s, border-color .2s, box-shadow .2s;}
+    .phase-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 12px 36px var(--glow);}
+    .phase-chapter{margin-top:16px;border:1px dashed var(--border);border-radius:14px;padding:14px;background:color-mix(in srgb,var(--card) 92%, transparent);}
+    .phase-chapter h4{margin:0 0 8px;color:var(--accent);letter-spacing:0.12em;text-transform:uppercase;font-size:12px;}
     /* modal */
     :root{
       --aosAccent: var(--accent);
@@ -203,6 +214,7 @@
   </style>
 </head>
 <body class="theme-obsidian">
+  <canvas id="matrix-rain"></canvas>
   <div id="loader-overlay">
     <div class="loader-wrapper">
       <div class="loader-ring"></div>
@@ -261,6 +273,10 @@
           </div>
           <pre id="stopoutput"></pre>
         </div>
+        <div class="phase-chapter">
+          <h4>Stop Chapter</h4>
+          <div id="chapter-stop"></div>
+        </div>
       </div>
     </section>
 
@@ -290,6 +306,10 @@
           </div>
           <pre id="submitoutput"></pre>
         </div>
+        <div class="phase-chapter">
+          <h4>Submit Chapter</h4>
+          <div id="chapter-submit"></div>
+        </div>
       </div>
     </section>
 
@@ -314,6 +334,10 @@
           </div>
           <pre id="struggleoutput"></pre>
         </div>
+        <div class="phase-chapter">
+          <h4>Struggle Chapter</h4>
+          <div id="chapter-struggle"></div>
+        </div>
       </div>
     </section>
 
@@ -337,6 +361,10 @@
             </div>
           </div>
           <pre id="strikeoutput"></pre>
+        </div>
+        <div class="phase-chapter">
+          <h4>Strike Chapter</h4>
+          <div id="chapter-strike"></div>
         </div>
       </div>
   </section>
@@ -370,6 +398,7 @@
         <option value="forestnight">Forest Night</option>
         <option value="inkgold">Ink & Gold</option>
         <option value="bloodred">Blood Red</option>
+        <option value="matrix">Matrix</option>
       </select>
     </div>
   </footer>
@@ -702,7 +731,7 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
 
     function applyTheme(themeKey='obsidian'){
       const body = document.body;
-      const keys = ['obsidian','dawn','monk','aurora','copper','forestnight','inkgold','bloodred'];
+      const keys = ['obsidian','dawn','monk','aurora','copper','forestnight','inkgold','bloodred','matrix'];
       body.classList.forEach(c=>{ if(c.startsWith('theme-')) body.classList.remove(c); });
       const safe = keys.includes(themeKey)?themeKey:'obsidian';
       body.classList.add(`theme-${safe}`);
@@ -840,6 +869,20 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       return `<pre style="white-space:pre-wrap">${escapeHtml(md||'')}</pre>`;
     }
 
+    function renderPhaseChapters(){
+      const items = [
+        ['chapter-stop', CH_STOP],
+        ['chapter-submit', CH_SUBMIT],
+        ['chapter-struggle', CH_STRUGGLE],
+        ['chapter-strike', CH_STRIKE],
+      ];
+      items.forEach(([id, content])=>{
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = mdToTrustedHtml(content);
+      });
+    }
+
     function openPhaseModal(phaseId){
       const phase = PHASES[phaseId];
       if(!phase) return;
@@ -966,6 +1009,7 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
     document.addEventListener('DOMContentLoaded', ()=>{
       initTheme();
       loadDoc();
+      renderPhaseChapters();
       restoreTextareas();
       document.querySelectorAll('nav a[data-tab]').forEach(a=>{
         a.addEventListener('click', e=>{
@@ -1018,9 +1062,3 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
   </script>
 </body>
 </html>
-    .history-item{border-bottom:1px solid var(--border);padding:10px 0;}
-    .history-item:last-child{border-bottom:none;}
-    .history-meta{color:var(--muted);font-size:0.9rem;}
-    .phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:980px;margin:0 auto 18px;}
-    .phase-card{border:1px solid var(--border);border-radius:14px;padding:14px 16px;background:var(--card);color:var(--text);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .2s, border-color .2s, box-shadow .2s;}
-    .phase-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 12px 36px var(--glow);}
