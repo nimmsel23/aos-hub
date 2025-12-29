@@ -23,9 +23,6 @@
     drops = new Array(columns).fill(1);
   });
 
-  let glitchIntensity = 0;
-  let glitchTimer = 0;
-
   function drawRain() {
     ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -42,35 +39,8 @@
     }
   }
 
-  function applyBackgroundGlitch() {
-    if (glitchIntensity > 0) {
-      const shift = glitchIntensity * 32;
-      ctx.globalAlpha = 0.7;
-      ctx.fillStyle = "rgba(0, 255, 0, 0.4)";
-      ctx.fillRect(-shift, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "rgba(0, 150, 0, 0.4)";
-      ctx.fillRect(shift, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = 1;
-      glitchIntensity -= 8;
-    }
-  }
-
-  function triggerGlitchBurst() {
-    if (!menuEl) return;
-    menuEl.classList.add("glitching");
-    setTimeout(() => menuEl.classList.remove("glitching"), 1500);
-  }
-
   function draw() {
     drawRain();
-    applyBackgroundGlitch();
-
-    glitchTimer++;
-    if (glitchTimer > 360 && Math.random() > 0.97) {
-      glitchIntensity = 50;
-      triggerGlitchBurst();
-      glitchTimer = 0;
-    }
 
     ctx.strokeStyle = "rgba(0, 255, 0, 0.03)";
     for (let i = 0; i < canvas.height; i += 5) {

@@ -459,6 +459,14 @@
       gap: 12px;
     }
 
+    .task-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .tasklist { display: grid; gap: 8px; }
+    .taskrow { padding-bottom: 8px; border-bottom: 1px solid rgba(187,134,252,0.18); }
+    .taskrow:last-child { border-bottom: none; }
+    .tasktitle { font-weight: 800; }
+    .taskmeta { color: var(--muted); font-size: 12px; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(187,134,252,0.35); margin-right: 6px; font-size: 10px; letter-spacing: 1px; }
+
     .notehead {
       display: flex;
       align-items: baseline;
@@ -726,6 +734,21 @@
         </div>
       </div>
 
+      <div class="card" id="tasksCard">
+        <div class="hd">
+          <h2>⚔️ Fire Tasks</h2>
+          <p class="mini">Taskwarrior → TickTick</p>
+        </div>
+        <div class="bd">
+          <div class="task-actions">
+            <button class="btn" type="button" onclick="loadTasks()">Load Tasks</button>
+            <button class="btn" type="button" onclick="pushTasks()">Push TickTick</button>
+          </div>
+          <div class="mini" id="taskMeta">—</div>
+          <div id="taskList" class="tasklist">Lade…</div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="hd">
           <h2>🧭 Command Menu</h2>
@@ -943,6 +966,47 @@
     } catch (_) {}
   }
 
+  async function loadTasks() {
+    const list = document.getElementById("taskList");
+    const meta = document.getElementById("taskMeta");
+    if (list) list.textContent = "Lade…";
+    try {
+      const res = await fetch("/api/taskwarrior/tasks?status=pending", { cache: "no-store" });
+      const data = await res.json();
+      if (!data?.ok) throw new Error(data?.error || "fetch failed");
+      if (meta) meta.textContent = `${data.count} Tasks (Tags: ${data.tags.join(", ")})`;
+      if (!data.tasks.length) {
+        if (list) list.textContent = "Keine passenden Tasks gefunden.";
+        return;
+      }
+      const html = data.tasks.map(t => {
+        const tags = (t.tags || []).map(tag => `<span class="tag">${safeText(tag)}</span>`).join(" ");
+        const due = t.due ? ` · Due: ${safeText(t.due)}` : "";
+        return `<div class="taskrow"><div class="tasktitle">${safeText(t.description || "(ohne Beschreibung)")}</div><div class="taskmeta">${tags}${due}</div></div>`;
+      }).join("");
+      if (list) list.innerHTML = html;
+    } catch (err) {
+      if (meta) meta.textContent = "Error";
+      if (list) list.textContent = "Fehler beim Laden der Tasks.";
+    }
+  }
+
+  async function pushTasks() {
+    try {
+      const res = await fetch("/api/taskwarrior/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "pending" })
+      });
+      const data = await res.json();
+      if (!data?.ok) throw new Error(data?.error || "push failed");
+      alert(`TickTick push: ${data.pushed}/${data.total} Tasks`);
+      loadTasks();
+    } catch (err) {
+      alert("Fehler beim Push: " + (err?.message || String(err)));
+    }
+  }
+
   async function loadAll() {
     await fetchCentres();
     setLinks();
@@ -968,6 +1032,7 @@
     wireScoreLive();
     wireAutosave();
     initTerminal();
+    loadTasks();
   }
 
   function restoreLocal() {
