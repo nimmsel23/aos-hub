@@ -6,6 +6,16 @@
       "url": "/facts"
     },
     {
+      "label": "Core4 TTY",
+      "cmd": "core4",
+      "url": "/core4"
+    },
+    {
+      "label": "Voice Centre",
+      "cmd": "voice",
+      "url": "/voice"
+    },
+    {
       "label": "Door Centre",
       "cmd": "door",
       "url": "/door"
@@ -39,16 +49,6 @@
       "label": "General's Tent",
       "cmd": "tent",
       "url": "/game/tent"
-    },
-    {
-      "label": "Core4 TTY",
-      "cmd": "core4",
-      "url": "/core4"
-    },
-    {
-      "label": "Voice Centre",
-      "cmd": "voice",
-      "url": "/voice"
     },
     {
       "label": "Creator King Assets",
