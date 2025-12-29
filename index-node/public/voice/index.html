@@ -211,6 +211,7 @@
   </div>
 
   <nav>
+    <a href="/" data-tab="back">Index</a>
     <a href="#" data-tab="home" class="active">Home</a>
     <a href="#" data-tab="stop">Stop</a>
     <a href="#" data-tab="submit">Submit</a>
@@ -933,6 +934,7 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
           e.preventDefault();
           const tabId = a.dataset.tab;
           if(!tabId) return;
+          if(tabId === 'back'){ window.location.href = '/'; return; }
           activateTab(tabId);
           if(tabId === 'home') window.scrollTo({ top:0, behavior:'smooth' });
         });

@@ -752,41 +752,35 @@
   }
 
   function renderChapters(markdown, container, toc) {
-    const lines = markdown.split('\n');
-    if (toc) toc.innerHTML = '';
-    let html = '';
-
-    lines.forEach((line) => {
-      if (line.startsWith('# ')) {
-        const title = line.replace(/^#\s*/, '').trim();
-        const id = slugify(title);
-        if (toc) {
-          const link = document.createElement('a');
-          link.href = `#${id}`;
-          link.textContent = title;
-          link.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-          });
-          toc.appendChild(link);
-        }
-        html += `<h4 id="${id}">${escapeHtml(title)}</h4>`;
-        return;
-      }
-      if (line.startsWith('## ')) {
-        const title = line.replace(/^##\s*/, '').trim();
-        const id = slugify(title);
-        html += `<h5 id="${id}">${escapeHtml(title)}</h5>`;
-        return;
-      }
-      if (!line.trim()) {
-        html += '<p></p>';
+    if (!container) return;
+    // Render as markdown for readability
+    try {
+      if (window.marked) {
+        container.innerHTML = marked.parse(markdown);
       } else {
-        html += `<p>${escapeHtml(line)}</p>`;
+        container.textContent = markdown;
       }
-    });
+    } catch (_) {
+      container.textContent = markdown;
+    }
 
-    container.innerHTML = html;
+    if (toc) {
+      toc.innerHTML = '';
+      const headings = container.querySelectorAll('h1, h2, h3');
+      headings.forEach((heading) => {
+        const text = heading.textContent.trim();
+        if (!text) return;
+        if (!heading.id) heading.id = slugify(text);
+        const link = document.createElement('a');
+        link.href = `#${heading.id}`;
+        link.textContent = text;
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
+        });
+        toc.appendChild(link);
+      });
+    }
   }
 
   function splitChapters(markdown) {

@@ -439,12 +439,31 @@ function resolveGameExportDir(map) {
 }
 
 const DOC_PATHS = {
-  foundation: [path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-FOUNDATION.md")],
-  code: [path.join(getVaultDir(), "ALPHA_OS", "AlphaOS - THE ALPHA-CODE.md")],
-  core: [path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE CORE FOUR.md")],
-  door: [path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE DOOR.md")],
-  game: [path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE GAME.md")],
-  voice: [path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE VOICE.md")],
+  foundation: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-FOUNDATION.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE FOUNDATION.md"),
+  ],
+  code: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-ALPHA-CODE.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE ALPHA-CODE.md"),
+  ],
+  core: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-CORE-FOUR.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE CORE FOUR.md"),
+  ],
+  door: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-DOOR.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "AphaOS-THE-DOOR.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE DOOR.md"),
+  ],
+  game: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-GAME.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE GAME.md"),
+  ],
+  voice: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-VOICE.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE VOICE.md"),
+  ],
 };
 
 function loadDoc(name) {
@@ -893,6 +912,68 @@ app.get("/api/taskwarrior/tasks", (req, res) => {
       }));
 
     return res.json({ ok: true, source: "taskwarrior-export", count: filtered.length, tags: SYNC_TAGS, tasks: filtered });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Push Taskwarrior tasks to TickTick (by sync tags)
+app.post("/api/taskwarrior/push", async (req, res) => {
+  try {
+    const status = String(req.body?.status || "pending").toLowerCase();
+    const tagsFilter = Array.isArray(req.body?.tags)
+      ? req.body.tags.map((t) => String(t || "").trim().toLowerCase()).filter(Boolean)
+      : null;
+
+    const { ok, error, tasks } = loadTaskwarriorExport();
+    if (!ok) return res.status(404).json({ ok: false, error });
+
+    const { token } = getTickConfig();
+    if (!token) return res.status(400).json({ ok: false, error: "ticktick-token-missing" });
+
+    const filtered = tasks
+      .filter((task) => isSyncTag(task.tags))
+      .filter((task) => (status === "all" ? true : String(task.status || "").toLowerCase() === status))
+      .filter((task) => {
+        if (!tagsFilter || !tagsFilter.length) return true;
+        const taskTags = (task.tags || []).map((t) => String(t || "").toLowerCase());
+        return tagsFilter.some((t) => taskTags.includes(t));
+      });
+
+    const results = [];
+    for (const task of filtered) {
+      const title = task.description || "Taskwarrior task";
+      const content = [
+        task.project ? `Project: ${task.project}` : "",
+        task.due ? `Due: ${task.due}` : "",
+        `UUID: ${task.uuid || ""}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const tags = Array.isArray(task.tags) ? task.tags : [];
+
+      try {
+        const created = await ticktickCreateTask({ title, content, tags });
+        if (created) {
+          appendSyncEntry({
+            syncId: makeSyncId("tw"),
+            ticktickId: created.id || created.taskId || created.task_id || "",
+            scope: "taskwarrior",
+            tags,
+            title,
+            createdAt: new Date().toISOString(),
+          });
+          results.push({ uuid: task.uuid, ok: true });
+        } else {
+          results.push({ uuid: task.uuid, ok: false, error: "no-response" });
+        }
+      } catch (err) {
+        results.push({ uuid: task.uuid, ok: false, error: err?.message || String(err) });
+      }
+    }
+
+    const success = results.filter((r) => r.ok).length;
+    return res.json({ ok: true, pushed: success, total: filtered.length, results });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

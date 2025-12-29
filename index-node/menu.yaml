@@ -23,7 +23,7 @@
     {
       "label": "Voice Centre",
       "cmd": "voice",
-      "url": "https://script.google.com/macros/s/AKfycbzVqsY2igwRPGhpFPf41QZDSBUMdMLO6hvZ9HmpvADBlxpRn5ap7BM1yQMcUrVMVpjncw/exec"
+      "url": "/voice"
     },
     {
       "label": "Door Centre",

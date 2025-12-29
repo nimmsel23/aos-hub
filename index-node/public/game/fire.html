@@ -163,6 +163,15 @@
       color: var(--accent);
     }
 
+    .task-item {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 8px 0;
+    }
+    .task-item:last-child { border-bottom: none; }
+    .task-title { font-weight: 700; }
+    .task-meta { color: var(--muted); font-size: 0.9rem; }
+    .tag { display: inline-block; padding: 2px 8px; margin-right: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--text); font-size: 0.8rem; }
+
     .map-date { color: var(--muted); }
 
     .fire-rite {
@@ -185,15 +194,25 @@
   <header class="hero">
     <div class="hero-title">FIRE MAP</div>
     <div class="hero-subtitle">Weekly & Daily Capture</div>
-    <div id="token-status" class="token-status">Local mode · TickTick disabled</div>
+    <div id="token-status" class="token-status">Tasks: Taskwarrior → (optional) TickTick push</div>
   </header>
 
   <section class="controls">
-    <div class="token-hint">Local mode: TickTick sync ist deaktiviert. Nutze Fire Capture für lokale Logs.</div>
+    <div class="token-hint">Tasks aus Taskwarrior (Tags: door/hit/strike/core4 bzw. SYNC_TAGS). Push → TickTick Inbox (Tags bleiben erhalten).</div>
     <div class="control-row">
+      <button onclick="loadTasks()">Tasks laden</button>
+      <button onclick="pushTasks()">Push to TickTick</button>
       <button onclick="refreshDaily()">Daily neu laden</button>
       <button onclick="refreshWeekly()">Weekly neu laden</button>
     </div>
+  </section>
+
+  <section class="capture">
+    <header class="map-header">
+      <div class="map-title">Today & Week Tasks (Taskwarrior)</div>
+      <div class="map-date" id="tasks-meta">–</div>
+    </header>
+    <div id="task-list" class="capture-panel"></div>
   </section>
 
   <section class="capture">
@@ -325,7 +344,58 @@
     alert('Local mode: TickTick disabled.');
   }
 
-  window.addEventListener('load', initWeek);
+  async function loadTasks() {
+    const listEl = document.getElementById('task-list');
+    const metaEl = document.getElementById('tasks-meta');
+    if (listEl) {
+      listEl.textContent = 'Lade…';
+    }
+    try {
+      const res = await fetch('/api/taskwarrior/tasks?status=pending', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Fehler');
+      metaEl.textContent = `${data.count} Tasks (Tags: ${data.tags.join(', ')})`;
+      if (!data.tasks.length) {
+        listEl.textContent = 'Keine passenden Tasks gefunden.';
+        return;
+      }
+      const items = data.tasks
+        .map(t => {
+          const tags = (t.tags || []).map(tag => `<span class="tag">${tag}</span>`).join(' ');
+          const due = t.due ? `· Due: ${t.due}` : '';
+          return `<div class="task-item"><div class="task-title">${t.description || '(ohne Beschreibung)'}</div><div class="task-meta">${tags} ${due}</div></div>`;
+        })
+        .join('');
+      listEl.innerHTML = items;
+    } catch (err) {
+      if (listEl) listEl.textContent = 'Fehler beim Laden der Tasks.';
+      if (metaEl) metaEl.textContent = 'Error';
+    }
+  }
+
+  async function pushTasks() {
+    const listEl = document.getElementById('task-list');
+    if (listEl) listEl.textContent = 'Push → TickTick…';
+    try {
+      const res = await fetch('/api/taskwarrior/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'pending' })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Push failed');
+      alert(`TickTick push: ${data.pushed}/${data.total} Tasks`);
+      await loadTasks();
+    } catch (err) {
+      alert('Fehler beim Push: ' + err.message);
+      await loadTasks();
+    }
+  }
+
+  window.addEventListener('load', () => {
+    initWeek();
+    loadTasks();
+  });
   </script>
 </body>
 </html>
