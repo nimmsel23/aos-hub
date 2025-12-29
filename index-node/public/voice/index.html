@@ -217,6 +217,7 @@
     <a href="#" data-tab="submit">Submit</a>
     <a href="#" data-tab="struggle">Struggle</a>
     <a href="#" data-tab="strike">Strike</a>
+    <a href="#" data-tab="history">Historie</a>
     <button type="button" id="zenToggle" class="nav-zen-toggle">Zen Mode</button>
   </nav>
 
@@ -320,7 +321,7 @@
       </div>
     </section>
 
-    <section id="strike" class="tab">
+  <section id="strike" class="tab">
       <div class="card">
         <div class="card-head">
           <div class="kicker">Strike</div>
@@ -341,6 +342,16 @@
           </div>
           <pre id="strikeoutput"></pre>
         </div>
+      </div>
+  </section>
+
+    <section id="history" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <div class="kicker">History</div>
+          <span class="badge">~/AlphaOS-Vault/VOICE</span>
+        </div>
+        <div id="history-list">Lade…</div>
       </div>
     </section>
   </div>
@@ -662,6 +673,31 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       actions.style.display = active && active.id !== 'home' ? 'flex' : 'none';
     }
 
+    async function loadHistory(){
+      const list = document.getElementById('history-list');
+      if (!list) return;
+      list.textContent = 'Lade…';
+      try{
+        const res = await fetch('/api/voice/history?limit=50', { cache:'no-store' });
+        const data = await res.json();
+        if(!data?.ok || !Array.isArray(data.files)){
+          list.textContent = 'Keine Einträge gefunden.';
+          return;
+        }
+        if(!data.files.length){
+          list.textContent = 'Keine Einträge vorhanden.';
+          return;
+        }
+        const html = data.files.map(f=>{
+          const date = f.mtimeMs ? new Date(f.mtimeMs).toLocaleString('de-DE') : '';
+          return `<div class="history-item"><div class="task-title">${escapeHtml(f.name)}</div><div class="history-meta">${date}</div></div>`;
+        }).join('');
+        list.innerHTML = html;
+      }catch(_){
+        list.textContent = 'Fehler beim Laden.';
+      }
+    }
+
     function applyTheme(themeKey='obsidian'){
       const body = document.body;
       const keys = ['obsidian','dawn','monk','aurora','copper','forestnight','inkgold','bloodred'];
@@ -936,6 +972,7 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
           if(!tabId) return;
           if(tabId === 'back'){ window.location.href = '/'; return; }
           activateTab(tabId);
+          if(tabId === 'history') loadHistory();
           if(tabId === 'home') window.scrollTo({ top:0, behavior:'smooth' });
         });
       });
@@ -971,3 +1008,6 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
   </script>
 </body>
 </html>
+    .history-item{border-bottom:1px solid var(--border);padding:10px 0;}
+    .history-item:last-child{border-bottom:none;}
+    .history-meta{color:var(--muted);font-size:0.9rem;}

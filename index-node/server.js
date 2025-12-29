@@ -201,6 +201,28 @@ function getVoiceVaultDir() {
   return path.join(getVaultDir(), "VOICE");
 }
 
+function listMarkdownFiles(dirPath, { limit = 50 } = {}) {
+  try {
+    if (!fs.existsSync(dirPath)) return [];
+    const entries = fs.readdirSync(dirPath);
+    const files = [];
+    for (const name of entries) {
+      const full = path.join(dirPath, name);
+      try {
+        const st = fs.statSync(full);
+        if (st.isFile()) {
+          files.push({ name, path: full, mtimeMs: st.mtimeMs, size: st.size });
+        }
+      } catch (_) {}
+    }
+    return files
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(0, limit);
+  } catch (_) {
+    return [];
+  }
+}
+
 async function rcloneRc(command, payload = {}) {
   const url = `${RCLONE_RC_URL.replace(/\/$/, "")}/rc/${command}`;
   const res = await fetch(url, {
@@ -974,6 +996,17 @@ app.post("/api/taskwarrior/push", async (req, res) => {
 
     const success = results.filter((r) => r.ok).length;
     return res.json({ ok: true, pushed: success, total: filtered.length, results });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Voice history (vault files)
+app.get("/api/voice/history", (req, res) => {
+  try {
+    const limit = Number(req.query?.limit || 50);
+    const files = listMarkdownFiles(getVoiceVaultDir(), { limit: isNaN(limit) ? 50 : limit });
+    return res.json({ ok: true, count: files.length, files });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
