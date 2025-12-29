@@ -148,6 +148,7 @@ The websocket is restricted to localhost unless `TERMINAL_ALLOW_REMOTE=1` is set
 - `http://127.0.0.1:8799/game/fire` → Fire Map
 - `http://127.0.0.1:8799/game/tent` → General's Tent
 - `http://127.0.0.1:8799/door` → Door Centre
+- `http://127.0.0.1:8799/voice` → Voice Centre
 - `http://127.0.0.1:8799/tele` → Telegram Control Layer
 
 ## Door Centre Exports

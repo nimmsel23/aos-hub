@@ -197,6 +197,10 @@ function getDoorVaultDir() {
   return path.join(getVaultDir(), "Door");
 }
 
+function getVoiceVaultDir() {
+  return path.join(getVaultDir(), "VOICE");
+}
+
 async function rcloneRc(command, payload = {}) {
   const url = `${RCLONE_RC_URL.replace(/\/$/, "")}/rc/${command}`;
   const res = await fetch(url, {
@@ -734,6 +738,36 @@ app.post("/api/game/export", (req, res) => {
       map,
       path: filepath,
       ticktick: tickInfo,
+      rclone: rcloneInfo,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Voice session export (local markdown)
+app.post("/api/voice/export", (req, res) => {
+  try {
+    const markdownRaw = String(req.body?.markdown || "").trim();
+    if (!markdownRaw) {
+      return res.status(400).json({ ok: false, error: "missing markdown" });
+    }
+    const title = safeFilename(req.body?.title || "Voice Session");
+    const dir = getVoiceVaultDir();
+    ensureDir(dir);
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = title || `voice_${stamp}`;
+    const filename = `${base}.md`;
+    const filepath = path.join(dir, filename);
+
+    fs.writeFileSync(filepath, markdownRaw + "\n", "utf8");
+
+    const rcloneInfo = queueVaultSync();
+
+    return res.json({
+      ok: true,
+      path: filepath,
       rclone: rcloneInfo,
     });
   } catch (err) {

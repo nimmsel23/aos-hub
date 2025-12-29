@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>αOS Voice Centre</title>
+  <script src="/vendor/marked/marked.min.js"></script>
+  <style>
+    :root{
+      --bg: #0b0c10;
+      --card: #11131a;
+      --border: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+      --accent: #8b5cf6;
+      --accent-2: #22d3ee;
+      --nav: rgba(0,0,0,.75);
+      --glow: rgba(139,92,246,.24);
+      --grain: none;
+      --accent-light: var(--accent-2);
+      --gold: var(--accent-2);
+      --phaseFocusDim: 0.18;
+      --phaseFocusBlur: 1.5px;
+      --phaseFocusLift: 1.02;
+      --phaseFocusGlow: var(--glow);
+    }
+    /* themes */
+    body.theme-obsidian{ --bg:#07080c;--card:#0e1020;--border:rgba(255,255,255,.10);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.62);--accent:#8b5cf6;--accent-2:#22d3ee;--nav:rgba(0,0,0,.78);--glow:rgba(139,92,246,.24);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-aurora{ --bg:#050b1a;--card:#0b1533;--border:rgba(255,255,255,.10);--text:rgba(240,250,255,.92);--muted:rgba(240,250,255,.62);--accent:#2dd4bf;--accent-2:#60a5fa;--nav:rgba(2,6,23,.75);--glow:rgba(45,212,191,.18);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-dawn{ --bg:#0b0a08;--card:#14110d;--border:rgba(255,255,255,.10);--text:rgba(255,248,235,.92);--muted:rgba(255,248,235,.62);--accent:#f59e0b;--accent-2:#fb7185;--nav:rgba(0,0,0,.72);--glow:rgba(245,158,11,.18);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-monk{ --bg:#f7f2e8;--card:#fffaf1;--border:rgba(20,15,10,.18);--text:rgba(20,15,10,.92);--muted:rgba(20,15,10,.62);--accent:#0ea5e9;--accent-2:#16a34a;--nav:rgba(255,250,241,.85);--glow:rgba(14,165,233,.18);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-copper{ --bg:#0a0c0f;--card:#10151c;--border:rgba(255,255,255,.10);--text:rgba(245,245,245,.92);--muted:rgba(245,245,245,.60);--accent:#c08457;--accent-2:#a3a3a3;--nav:rgba(0,0,0,.75);--glow:rgba(192,132,87,.16);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-forestnight{ --bg:#050d0a;--card:#0a1612;--border:rgba(255,255,255,.10);--text:rgba(235,255,245,.92);--muted:rgba(235,255,245,.60);--accent:#34d399;--accent-2:#93c5fd;--nav:rgba(0,0,0,.75);--glow:rgba(52,211,153,.16);--accent-light:var(--accent-2);--gold:var(--accent-2);--phaseFocusGlow:var(--glow);}
+    body.theme-inkgold{ --bg:#07070a;--card:#0f0f15;--border:rgba(255,255,255,.10);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.62);--accent:#d4af37;--accent-2:#a78bfa;--nav:rgba(0,0,0,.78);--glow:rgba(212,175,55,.16);--accent-light:var(--accent-2);--gold:#d4af37;--phaseFocusGlow:var(--glow);}
+    body.theme-bloodred{ --bg:#0a0a0a;--card:#111111;--border:#2a2a2a;--text:#f0f0f0;--muted:#aaaaaa;--accent:#c41e3a;--accent-2:#ff4444;--accent-light:var(--accent-2);--nav:#000;--glow:rgba(196,30,58,0.6);--gold:#b8860b;--grain:url('data:image/svg+xml,%3Csvg viewBox=\"0 0 256 256\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cfilter id=\"noise\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.9\" numOctaves=\"4\" stitchTiles=\"stitch\"/%3E%3C/filter%3E%3Crect width=\"256\" height=\"256\" filter=\"url(%23noise)\" opacity=\"0.03\"/%3E%3C/svg%3E');--phaseFocusGlow:rgba(196,30,58,.55);}
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      background-image: var(--grain);
+    }
+    #loader-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.92);z-index:9999;}
+    .loader-wrapper{display:flex;flex-direction:column;align-items:center;gap:14px;}
+    .loader-ring{width:70px;height:70px;border-radius:50%;border:6px solid rgba(255,255,255,.12);border-top-color:var(--accent);border-right-color:var(--accent-2);animation:spin 1s linear infinite;box-shadow:0 0 24px var(--glow);}
+    .loader-text{letter-spacing:0.18em;text-transform:uppercase;font-size:13px;color:var(--text);}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    nav{
+      position:sticky;top:0;z-index:10;
+      display:flex;gap:10px;flex-wrap:wrap;
+      padding:16px 18px;
+      background:linear-gradient(135deg,var(--nav),color-mix(in srgb,var(--bg) 70%,transparent));
+      border-bottom:1px solid var(--border);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    nav a, nav button{
+      color:var(--text);
+      text-decoration:none;
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--card);
+      font-weight:700;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      transition:all .2s ease;
+      cursor:pointer;
+    }
+    nav a.active, nav a:hover, nav button:hover{
+      border-color:var(--accent);
+      color:var(--accent);
+      box-shadow:0 10px 30px color-mix(in srgb,var(--glow) 60%, transparent);
+    }
+    .container{
+      max-width:1200px;
+      margin:24px auto 80px;
+      padding:0 18px;
+      display:grid;
+      grid-template-columns:1fr;
+      gap:18px;
+    }
+    .tab{display:none;}
+    .tab.active{display:block;}
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px;
+      box-shadow:0 12px 40px rgba(0,0,0,.35);
+    }
+    .card-split{display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;}
+    .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+    .badge{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);}
+    .kicker{font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);font-weight:800;}
+    .toc{border:1px solid var(--border);border-radius:14px;padding:12px;background:color-mix(in srgb,var(--card) 85%,transparent);position:sticky;top:84px;}
+    .toc-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:10px;color:var(--muted);}
+    .toc ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
+    .toc a{color:var(--text);text-decoration:none;font-size:13px;border:1px solid color-mix(in srgb,var(--border) 60%,transparent);border-radius:10px;padding:6px 8px;display:block;}
+    .toc a:hover,.toc a.active{border-color:var(--accent);color:var(--accent);}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    textarea{
+      width:100%;
+      min-height:140px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:color-mix(in srgb,var(--bg) 82%, #000 18%);
+      color:var(--text);
+      padding:12px 14px;
+      font-size:15px;
+      line-height:1.5;
+      resize:vertical;
+    }
+    textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%, transparent);}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+    button.btn{
+      border:none;
+      border-radius:12px;
+      padding:11px 14px;
+      font-weight:800;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      color:#fff;
+      box-shadow:0 10px 30px color-mix(in srgb,var(--glow) 70%, transparent);
+    }
+    button.btn-ghost{
+      background:transparent;
+      color:var(--text);
+      border:1px solid var(--border);
+    }
+    .output{margin-top:12px;border:1px solid var(--border);border-radius:14px;padding:12px;background:color-mix(in srgb,var(--card) 90%, transparent);}
+    .output-head{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;}
+    pre{
+      white-space:pre-wrap;
+      background:color-mix(in srgb,var(--bg) 80%, #000 20%);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px;
+      color:var(--text);
+      overflow:auto;
+    }
+    .session-actions{
+      display:flex;gap:10px;flex-wrap:wrap;
+      background:color-mix(in srgb,var(--card) 88%, transparent);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      position:sticky;
+      top:68px;
+      z-index:5;
+    }
+    footer{
+      text-align:center;
+      padding:40px 20px;
+      color:var(--muted);
+      border-top:1px solid var(--border);
+    }
+    .theme-switcher{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px;}
+    .theme-switcher select{
+      background:var(--card);
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:8px 10px;
+      font-weight:600;
+    }
+    /* modal */
+    :root{
+      --aosAccent: var(--accent);
+      --aosAccent2: var(--accent-2);
+      --aosGlow: var(--glow);
+      --aosModalBorder: var(--border);
+      --aosModalText: var(--text);
+      --aosModalMuted: var(--muted);
+      --aosModalRadius: 22px;
+      --aosModalOverlayA: color-mix(in srgb, var(--aosAccent) 12%, transparent);
+      --aosModalOverlayB: rgba(0,0,0,.78);
+      --aosModalOverlayC: rgba(0,0,0,.90);
+      --aosModalCardA: color-mix(in srgb, var(--card) 92%, #000 8%);
+      --aosModalCardB: color-mix(in srgb, var(--card) 82%, #000 18%);
+    }
+    .aos-modal-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,var(--aosModalOverlayA) 0%,var(--aosModalOverlayB) 55%,var(--aosModalOverlayC) 100%);z-index:9999;padding:22px;backdrop-filter:blur(8px);}
+    .aos-modal-overlay.show{display:flex;}
+    .aos-modal{width:min(980px,100%);max-height:min(88vh,940px);overflow:hidden;border-radius:var(--aosModalRadius);background:linear-gradient(180deg,var(--aosModalCardA),var(--aosModalCardB));border:1px solid var(--aosModalBorder);box-shadow:0 30px 120px rgba(0,0,0,.8),0 0 60px var(--aosGlow);display:flex;flex-direction:column;}
+    .aos-modal-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:color-mix(in srgb,var(--card) 60%, transparent);border-bottom:1px solid color-mix(in srgb,var(--aosModalBorder) 70%, transparent);}
+    .aos-modal-title{font-weight:900;letter-spacing:2px;font-size:13px;text-transform:uppercase;color:var(--aosModalText);}
+    .aos-modal-sub{font-size:12px;line-height:1.55;color:var(--aosModalMuted);margin-top:4px;letter-spacing:.4px;}
+    .aos-modal-close{width:34px;height:34px;border-radius:999px;border:1px solid color-mix(in srgb,var(--aosModalBorder) 70%, transparent);background:color-mix(in srgb,var(--card) 45%, transparent);color:color-mix(in srgb,var(--aosModalText) 75%, transparent);cursor:pointer;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;}
+    .aos-modal-close:hover{border-color:color-mix(in srgb,var(--aosAccent) 70%, var(--aosModalBorder));color:var(--aosModalText);box-shadow:0 0 18px var(--aosGlow);}
+    .aos-modal-body{padding:18px;overflow:auto;-ms-overflow-style:none;scrollbar-width:none;}
+    .aos-modal-body::-webkit-scrollbar{display:none;}
+    .aos-modal-section{border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);border-radius:16px;padding:14px;background:color-mix(in srgb,var(--card) 70%, transparent);margin-bottom:12px;}
+    .aos-phase-wrap{border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);border-radius:18px;padding:18px;background:color-mix(in srgb,var(--card) 70%, transparent);}
+    .aos-phase-kicker{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:color-mix(in srgb,var(--aosModalMuted) 90%, transparent);margin-bottom:10px;}
+    .aos-phase-title{font-size:28px;font-weight:900;letter-spacing:2px;color:var(--aosModalText);margin-bottom:10px;text-shadow:0 0 24px var(--aosGlow);}
+    .aos-phase-hint{color:var(--aosModalMuted);font-size:14px;line-height:1.7;margin-bottom:14px;}
+    .aos-phase-input{width:100%;min-height:200px;resize:vertical;padding:14px 16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);background:color-mix(in srgb,var(--bg) 78%, #000 22%);color:var(--aosModalText);font-size:16px;line-height:1.6;outline:none;}
+    .aos-phase-actions{position:sticky;bottom:0;margin-top:14px;padding:12px 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 0%, transparent),color-mix(in srgb,var(--bg) 85%, transparent) 45%,color-mix(in srgb,var(--bg) 92%, transparent));border-top:1px solid color-mix(in srgb,var(--aosModalBorder) 60%, transparent);}
+    .copy-btn{border:1px solid var(--border);background:transparent;color:var(--text);border-radius:10px;padding:6px 10px;cursor:pointer;}
+    @media(max-width:900px){.card-split{grid-template-columns:1fr;}.session-actions{position:static;}.toc{position:static;top:auto;}}
+  </style>
+</head>
+<body class="theme-obsidian">
+  <div id="loader-overlay">
+    <div class="loader-wrapper">
+      <div class="loader-ring"></div>
+      <div class="loader-text">Loading · αOS</div>
+    </div>
+  </div>
+
+  <nav>
+    <a href="#" data-tab="home" class="active">Home</a>
+    <a href="#" data-tab="stop">Stop</a>
+    <a href="#" data-tab="submit">Submit</a>
+    <a href="#" data-tab="struggle">Struggle</a>
+    <a href="#" data-tab="strike">Strike</a>
+    <button type="button" id="zenToggle" class="nav-zen-toggle">Zen Mode</button>
+  </nav>
+
+  <div class="container">
+    <div class="session-actions" id="sessionActions" style="display:none;">
+      <button class="btn-ghost btn" type="button" onclick="openSessionPreview()">Preview</button>
+      <button class="btn" type="button" onclick="downloadVoiceSession()">Download</button>
+      <button class="btn" type="button" onclick="saveVoiceSession()">Save to Vault</button>
+    </div>
+
+    <section id="home" class="tab active">
+      <div class="card card-split">
+        <div class="card-main">
+          <div class="card-head">
+            <div class="kicker">αOS · Pillar #4</div>
+            <div class="badge">Stop · Submit · Struggle · Strike</div>
+          </div>
+          <div class="markdown-body" id="voice-markdown"></div>
+        </div>
+        <aside class="toc">
+          <div class="toc-title">Voice Chapters</div>
+          <ul id="toc-list"></ul>
+        </aside>
+      </div>
+    </section>
+
+    <section id="stop" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <div class="kicker">Stop</div>
+          <span class="badge">Pattern Interrupt</span>
+        </div>
+        <textarea id="stopinput" placeholder="Welche Geschichte muss heute stoppen?"></textarea>
+        <div class="actions">
+          <button class="btn" type="button" onclick="generateStep('stop')">Generate</button>
+          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('stop')">Phase Chapter</button>
+        </div>
+        <div class="output" id="stop-wrapper" style="display:none;">
+          <div class="output-head">
+            <strong>Output</strong>
+            <div class="actions">
+              <button class="copy-btn" data-target="stopoutput">Copy</button>
+              <button class="btn-ghost btn" type="button" onclick="exportVoice('Stop', document.getElementById('stopoutput')?.textContent || '')">Save</button>
+            </div>
+          </div>
+          <pre id="stopoutput"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="submit" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <div class="kicker">Submit</div>
+          <span class="badge">Facts · Feelings · Focus · Fruit</span>
+        </div>
+        <div class="form-grid">
+          <textarea id="submit_facts" placeholder="Facts — Was ist objektiv wahr?"></textarea>
+          <textarea id="submit_feelings" placeholder="Feelings — Welche Emotionen kochen hoch?"></textarea>
+          <textarea id="submit_focus" placeholder="Focus — Wohin ging dein Fokus?"></textarea>
+          <textarea id="submit_fruit" placeholder="Fruit — Welche Früchte erntest du?"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" onclick="generateStep('submit')">Generate</button>
+          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('submit')">Phase Chapter</button>
+        </div>
+        <div class="output" id="submit-wrapper" style="display:none;">
+          <div class="output-head">
+            <strong>Output</strong>
+            <div class="actions">
+              <button class="copy-btn" data-target="submitoutput">Copy</button>
+              <button class="btn-ghost btn" type="button" onclick="exportVoice('Submit', document.getElementById('submitoutput')?.textContent || '')">Save</button>
+            </div>
+          </div>
+          <pre id="submitoutput"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="struggle" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <div class="kicker">Struggle</div>
+          <span class="badge">Rewrite the story</span>
+        </div>
+        <textarea id="struggleinput" placeholder="Welche Story reißt dich zurück?"></textarea>
+        <div class="actions">
+          <button class="btn" type="button" onclick="generateStep('struggle')">Generate</button>
+          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('struggle')">Phase Chapter</button>
+        </div>
+        <div class="output" id="struggle-wrapper" style="display:none;">
+          <div class="output-head">
+            <strong>Output</strong>
+            <div class="actions">
+              <button class="copy-btn" data-target="struggleoutput">Copy</button>
+              <button class="btn-ghost btn" type="button" onclick="exportVoice('Struggle', document.getElementById('struggleoutput')?.textContent || '')">Save</button>
+            </div>
+          </div>
+          <pre id="struggleoutput"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="strike" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <div class="kicker">Strike</div>
+          <span class="badge">Execute above all</span>
+        </div>
+        <textarea id="strikeinput" placeholder="Welche Handlung schlägst du ein?"></textarea>
+        <div class="actions">
+          <button class="btn" type="button" onclick="generateStep('strike')">Generate</button>
+          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('strike')">Phase Chapter</button>
+        </div>
+        <div class="output" id="strike-wrapper" style="display:none;">
+          <div class="output-head">
+            <strong>Output</strong>
+            <div class="actions">
+              <button class="copy-btn" data-target="strikeoutput">Copy</button>
+              <button class="btn-ghost btn" type="button" onclick="exportVoice('Strike', document.getElementById('strikeoutput')?.textContent || '')">Save</button>
+            </div>
+          </div>
+          <pre id="strikeoutput"></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <h3>Stop · Submit · Struggle · Strike</h3>
+    <div class="theme-switcher">
+      <label for="theme-select">Style:</label>
+      <select id="theme-select" aria-label="Theme Auswahl">
+        <option value="obsidian">Obsidian Ritual</option>
+        <option value="aurora">Aurora</option>
+        <option value="dawn">Dawn Sand</option>
+        <option value="monk">Monk Paper</option>
+        <option value="copper">Copper</option>
+        <option value="forestnight">Forest Night</option>
+        <option value="inkgold">Ink & Gold</option>
+        <option value="bloodred">Blood Red</option>
+      </select>
+    </div>
+  </footer>
+
+  <div id="aosModalOverlay" class="aos-modal-overlay" aria-hidden="true">
+    <div class="aos-modal" role="dialog" aria-modal="true" aria-labelledby="aosModalTitle">
+      <div class="aos-modal-head">
+        <div>
+          <div id="aosModalTitle" class="aos-modal-title">Modal</div>
+          <div id="aosModalSub" class="aos-modal-sub"></div>
+        </div>
+        <button type="button" class="aos-modal-close" onclick="AOS_modalClose()" aria-label="Close">×</button>
+      </div>
+      <div id="aosModalBody" class="aos-modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+    const voiceMarkdown = `The Voice is not reflection.
+It is correction.
+
+STOP the pattern.
+SUBMIT to the truth.
+STRUGGLE with the story.
+STRIKE with action.
+
+No strike. No progress.
+
+
+# EVERY DAY IS A BATTLEFIELD
+Picture yourself at the dawn of a new day. Behind you are:  
+- The echoes of the IPW and Annual Freedom Game (Freedom Map).  
+- The promises of the Monthly Mission (Focus Map).  
+- The strategies of the Weekly War (Fire Map).  
+Ahead lies the crucible of today, demanding your full commitment, offering the chance to seize its vast potential.
+
+# THE TRINITY: POWER, PERSPECTIVE, PRODUCTION
+Each day presents three essential elements: power, perspective, and production.  
+- **Power through The Core:** Every Alpha needs their arsenal, and yours is The Core.   
+These aren’t just principles but vows you uphold daily.   
+Your commitment to Body, Being, Balance, and Business is about channeling energy and vigor into every part of your life.   
+Eight simple promises you make to yourself every single day.   
+These are your shields and swords, making you unstoppable.  
+- **Perspective through The Voice:** While The Core arms you, The Voice provides clarity.   
+It’s your daily communion, your time to converse with God and your soul.   
+This alignment isn’t just a ritual; it’s a necessity.   
+The Voice sharpens your focus, offers clarity, and guides your daily actions.  
+- **Production through The Door:** Armed with power and perspective, the day’s battlefield awaits. Key tasks emerge from your Fire Map and Weekly War.   
+Some come from your communion in The Voice; others are strategies aligned with broader visions. These are your priority tasks that align with the larger narrative of the Alpha OS.
+
+# THE DELICATE DANCE OF DECISIONS  
+For the untrained, these tools might feel overwhelming.   
+But you, Alpha, know their worth. They are your compass, your North Star. It’s not about juggling but creating a harmony that turns each day into a masterpiece. It’s a commitment, a pact with the present. Every day, you must choose. Choose to acknowledge today’s Frame. Recognize the Freedom of the future. Understand the focus of the month ahead. Feel the fire of the week. And most importantly, immerse yourself in today’s game: The Core, The Voice, The Door.
+
+# EMBRACING THE WORK 
+With clarity in heart and focus in mind, you march into the day.   
+It’s time to Do The Work. Today’s tasks weave the tapestry of the Weekly War.   
+This week’s successes lead to the completion of the Monthly Mission.   
+And every monthly victory brings you closer to conquering the Annual Freedom Game and your Ideal Parallel World. Alpha, every day is your proving ground.   
+Rise, commit, and conquer. Remember, every action counts in the grand tapestry of the Alpha OS.
+
+`;
+    const CH_STOP = `
+## 1 CREATING VALUABLE SPACE IN A CROWDED WORLD
+
+Society moves at a relentless pace, rarely offering us a chance to breathe.   
+Our days become a series of reactions, a continuous flow of events that we respond to without thinking.   
+These reactions turn into habits, into routines, fooling us into believing we’re living with purpose when, in reality, we’re just surviving.  
+Survival is essential, but it’s not the same as thriving.   
+As Alphas, we’re not here just to exist; we’re here to flourish, lead, and conquer.   
+But how can you do that when life’s whirlwind constantly pushes you around?
+
+## 2 RECOGNIZING THE POWER OF THE PAUSE
+
+There’s unmatched power in stillness.   
+When you choose to Stop, you’re not just pausing your physical movements—you’re also quieting the mental noise.   
+You create space to think, reflect, and question the stories that have controlled your mind for too long.   
+You give yourself a break from life’s relentless rhythm, and in that break, you open up new possibilities.  
+But it’s not just about being still—it’s about understanding the value of stillness.   
+In a world that glorifies constant motion and endless hustle, stopping might seem like the wrong move.   
+However, this intentional pause, this choice to stop, offers a huge return on investment. It’s when you reset, recalibrate, and get ready to redirect your energy.
+
+## 3 BEYOND REACTION: DESIGNING CHANGE
+
+Too often, people only change when they’re forced to by trauma or drama.   
+They switch paths because of external pressure, not personal choice. But the Alpha doesn’t wait for life to make decisions for them. The Alpha chooses. By stopping change becomes deliberate, not just something that happens to you.  
+Stopping is the first step in acknowledging the need for change.   
+It’s a conscious interruption of your usual patterns, a momentary break from the old ways to make room for something new.   
+It’s the Alpha’s superpower—to be still when the world demands action, to think when others react, to connect with oneself and God in a deep way that most never achieve.  
+As the world races by with its distractions and pressures, the Alpha stands apart, not just in action, but in deliberate inaction.   
+Stopping isn’t just about physical stillness—it’s about mental and spiritual stillness too.   
+It’s the first crucial step on the journey of self-awareness, self-improvement, and self-mastery.   
+The Alpha understands that to truly change the stories we tell ourselves, we must first stop and listen to them as they are.   
+Only then can we rewrite them. Only then can we change our actions and transform our lives.
+`;
+
+    const CH_SUBMIT = `
+In the vast landscape of our minds, there are places we avoid, truths we deny, and stories we ignore.   
+After the deliberate pause—Stop—we move into the next crucial phase: Submit.   
+This is where we shine a light on what’s been hidden and bring the truth into clear focus.  
+The journey of transformation isn’t just about reaching new heights; it’s often about digging deep into the trenches of our souls.   
+To submit means to lay yourself bare, to strip away the masks and pretenses, and to confront the raw, unfiltered truth about who you are.
+
+## 1 RADICAL HONESTY
+
+Society and self-preservation teach us to hide the truths that make us uncomfortable.   
+These might be truths about our failures, fears, desires, or vulnerabilities.   
+Over time, hiding becomes so automatic that it’s hard to see your true self.   
+In Submit, the first requirement is honesty—radical honesty.   
+This level of truth-telling demands courage and vulnerability.   
+It’s about revealing, recognizing, and reckoning with every part of yourself, no matter how uncomfortable it is.
+
+## 2 UNLEASHING YOUR EMOTIONS
+
+Human emotions cover a wide range, from intense anger to deep gratitude.   
+All these emotions, whether dark or light, need to be acknowledged during submission.   
+Suppressing feelings doesn’t solve anything.   
+Whether it’s rage, joy, shame, or appreciation, every emotion gives you clues to understanding yourself better.   
+By bringing them to the surface, you allow yourself to process, understand, and use these feelings as fuel for change.
+
+## 3 ACKNOWLEDGING THE FOUR TRUTHS IN SUBMISSION
+
+- **Facts:** What are the undeniable realities of your current situation? No exaggerations, no minimizing—just the pure, objective truth.  
+- **Feelings:** Emotions are complex and layered. How do you truly feel about these facts? Go beyond surface reactions.  
+- **Focus:** What has been your mindset toward these facts and feelings? Have you been in denial, avoiding the truth, or confronting it head-on?  
+- **Fruit:** What results or outcomes have you gotten from this mindset? And what do you want the results to be?
+
+## 4 FROM PRESENT TO POTENTIAL
+
+Submission isn’t just about acknowledging where you are now; it’s also about recognizing your potential.   
+Once you have a clear, unclouded view of your current situation, the next step is to envision where you want to be.   
+This balance—between acknowledging the present and aspiring to the future—is at the heart of submission.  
+In this space of truth, as uncomfortable and confronting as it might be, lies immense power.   
+By submitting to the truth within and being radically honest about your feelings, facts, focus, and fruit, you take the most crucial step toward transformation.  
+Submission isn’t about defeat; it’s about empowerment.   
+When you submit to the truth, you’re no longer at its mercy—you become its master, ready to shape and direct it to chart the course of your destiny.  
+As Ralph Waldo Emerson once said, "To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment."  
+This chapter—Submit—is your guide to claiming that greatest accomplishment.
+`;
+
+    const CH_STRUGGLE = `
+Every transformative journey hits a crucible, a tough test that reshapes the soul.   
+For an Alpha, this crucible is called Struggle.   
+After you choose to Stop—taking a deliberate pause from life’s nonstop momentum—and bravely Submit to the raw, unfiltered truths of your reality, you step onto the battlefield of Struggle.
+
+## 1 A BATTLE OF IDENTITIES
+
+This fight is both simple and complex: it’s a clash between who you were and who you are becoming.   
+It’s a battle with the stories from your past, the narratives that shaped your actions.   
+But then, something triggers you—an event or emotion that pulls you away from those old stories.   
+This new awareness, often hidden in your subconscious, rises to the surface, demanding that you deal with it.
+
+## 2 ACTIVE ENGAGEMENT AND TRANSFORMATION
+
+Struggle isn’t just about recognizing what’s wrong; it’s about actively engaging with it.   
+A passive Alpha might turn The Voice into just another diary entry.   
+But if you’re serious about real transformation, the struggle becomes a deliberate battle between outdated beliefs and new aspirations.   
+It’s a war within yourself, a deep engagement of the soul.
+
+## 3 THE MIND’S DUAL TENDENCIES
+
+The mind naturally wants to stick with what it knows, preferring the comfort of the familiar.   
+But an Alpha understands that true growth comes from stepping into the unknown and breaking old patterns.   
+This is where Struggle and The Code work together.   
+The Struggle is your daily battle, and The Code is your guide, sharpening your actions and thoughts.
+
+## 4 EMERGENCE AND REBIRTH
+
+Choosing to face the Struggle every day is more than just a routine—it’s a commitment to rise, evolve, and thrive.   
+In the heat of Struggle, an Alpha finds their true strength. And in that discovery, they unlock a freedom that’s unparalleled.  
+Struggle is where the Alpha’s identity is forged and where transformation takes root.  
+It’s not about avoiding the fight; it’s about engaging with it fully and coming out the other side stronger, clearer, and more aligned with your true self.
+`;
+
+    const CH_STRIKE = `
+# THE CULMINATION OF STACKING
+
+The Voice isn’t just about reflection.   
+It’s a process designed to push you into decisive action.   
+While the first three stages—Stop, Submit, and Struggle—shape your mindset and perspective, the final stage, Strike, brings those insights into the real world.
+
+## 1 WHY ACTION IS PARAMOUNT
+
+Many people live in a world of ideas—constantly dreaming, reflecting, and thinking.   
+While these activities have value, they don’t amount to much without action.   
+Dreams without steps to achieve them are just fantasies.   
+In life, actions speak louder than thoughts, intentions, or even words.
+
+## 2 DIVINE INTERVENTION: GOD'S ROLE IN THE STRIKE
+
+Through The Voice, you’ve been wrestling with your truths and desires.   
+But there’s also a guiding force at work—God.   
+If you’re open to Him, God can light your path, especially in the Strike phase, ensuring your actions align with a greater purpose.   
+This spiritual connection elevates mere action into something more—divinely   
+inspired execution.
+
+## 3 THE DANGERS OF INACTION
+
+Today, there’s a dangerous trend—celebrating ideas as if they were actions.   
+People get caught up in the excitement of a “eureka moment,” thinking that having a great idea is the same as making it happen.   
+But that’s an illusion.   
+Ideas are just the beginning.   
+Without action, even the best insights from The Voice are worthless.
+
+## 4 WHY THE STRIKE IS THE GAME-CHANGER
+
+The Strike is what makes the difference.   
+It’s the daily force that drives your Weekly Fire, your Monthly Focus, and your journey towards Annual Freedom.   
+It’s the leap from “what if” to “I did it.”   
+The Strike moves you from theory to practice, from potential energy to real-world impact.   
+It’s about correcting, adjusting, and taking bold steps every day.
+
+## 5 EXECUTION ABOVE ALL
+
+As we wrap up this chapter, remember this fundamental truth: The Voice isn’t just about gaining insight or feeling good for a moment.   
+It’s a call to action.   
+It’s not about having grand ideas—it’s about the grit to execute those ideas.   
+In the end, it’s not the brilliance of our thoughts but the strength of our actions that shapes our destiny.
+`;
+
+    const TEXTAREA_IDS = [
+      'stopinput',
+      'submit_facts','submit_feelings','submit_focus','submit_fruit',
+      'struggleinput','strikeinput'
+    ];
+
+    const PHASES = {
+      stop: { title:'Stop', textareaId:'stopinput', body:CH_STOP },
+      submit: { title:'Submit', textareaId:null, body:CH_SUBMIT },
+      struggle: { title:'Struggle', textareaId:'struggleinput', body:CH_STRUGGLE },
+      strike: { title:'Strike', textareaId:'strikeinput', body:CH_STRIKE },
+    };
+
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderDoc(markdown){
+      const target = document.getElementById('voice-markdown');
+      if (!target) return;
+      try{
+        target.innerHTML = (typeof marked !== 'undefined') ? marked.parse(markdown) : `<pre>${escapeHtml(markdown)}</pre>`;
+      }catch(e){
+        target.textContent = markdown;
+      }
+      buildToc();
+    }
+
+    async function loadDoc(){
+      try{
+        const res = await fetch('/api/doc?name=voice', { cache: 'no-store' });
+        if(res.ok){
+          const data = await res.json();
+          if(data?.ok && data.content){
+            renderDoc(data.content);
+            return;
+          }
+        }
+      }catch(_){}
+      renderDoc(voiceMarkdown);
+    }
+
+    function buildToc(){
+      const container = document.getElementById('voice-markdown');
+      const tocList = document.getElementById('toc-list');
+      if(!container || !tocList) return;
+      tocList.innerHTML = '';
+      const headings = container.querySelectorAll('h1, h2, h3');
+      headings.forEach(h=>{
+        const text = (h.textContent||'').trim();
+        if(!text) return;
+        if(!h.id){
+          h.id = text.toLowerCase().replace(/[ä]/g,'ae').replace(/[ö]/g,'oe').replace(/[ü]/g,'ue').replace(/[ß]/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+        }
+        const li = document.createElement('li');
+        li.classList.add('level-'+(h.tagName==='H1'?1:h.tagName==='H2'?2:3));
+        const a = document.createElement('a');
+        a.href = '#'+h.id;
+        a.textContent = text;
+        a.addEventListener('click', ev=>{
+          ev.preventDefault();
+          activateTab('home');
+          const target = document.getElementById(h.id);
+          if(!target) return;
+          window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 80, behavior:'smooth' });
+        });
+        li.appendChild(a);
+        tocList.appendChild(li);
+      });
+    }
+
+    function activateTab(tabId){
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('nav a[data-tab]').forEach(n=>n.classList.remove('active'));
+      document.getElementById(tabId)?.classList.add('active');
+      document.querySelector(`nav a[data-tab="${tabId}"]`)?.classList.add('active');
+      updateSessionActionsVisibility();
+    }
+
+    function updateSessionActionsVisibility(){
+      const actions = document.getElementById('sessionActions');
+      if(!actions) return;
+      const active = document.querySelector('.tab.active');
+      actions.style.display = active && active.id !== 'home' ? 'flex' : 'none';
+    }
+
+    function applyTheme(themeKey='obsidian'){
+      const body = document.body;
+      const keys = ['obsidian','dawn','monk','aurora','copper','forestnight','inkgold','bloodred'];
+      body.classList.forEach(c=>{ if(c.startsWith('theme-')) body.classList.remove(c); });
+      const safe = keys.includes(themeKey)?themeKey:'obsidian';
+      body.classList.add(`theme-${safe}`);
+      const sel = document.getElementById('theme-select');
+      if(sel) sel.value = safe;
+      try{ localStorage.setItem('voice_theme', safe); }catch(_){}
+    }
+
+    function initTheme(){
+      let stored = 'obsidian';
+      try{ stored = localStorage.getItem('voice_theme') || 'obsidian'; }catch(_){}
+      applyTheme(stored);
+      document.getElementById('theme-select')?.addEventListener('change', e=>applyTheme(e.target.value));
+    }
+
+    function restoreTextareas(){
+      TEXTAREA_IDS.forEach(id=>{
+        const el = document.getElementById(id);
+        if(!el) return;
+        const saved = localStorage.getItem('voice_'+id);
+        if(saved!==null) el.value = saved;
+        el.addEventListener('input', ()=>{
+          try{ localStorage.setItem('voice_'+id, el.value); }catch(_){}
+        });
+      });
+    }
+
+    function buildVoiceSessionMarkdown(){
+      const now = new Date();
+      const ts = now.toISOString().slice(0,19).replace('T',' ');
+      const stopInput = (document.getElementById('stopinput')?.value || '').trim();
+      const submitFacts = (document.getElementById('submit_facts')?.value || '').trim();
+      const submitFeel = (document.getElementById('submit_feelings')?.value || '').trim();
+      const submitFocus = (document.getElementById('submit_focus')?.value || '').trim();
+      const submitFruit = (document.getElementById('submit_fruit')?.value || '').trim();
+      const struggleInput = (document.getElementById('struggleinput')?.value || '').trim();
+      const strikeInput = (document.getElementById('strikeinput')?.value || '').trim();
+      const stopOutput = (document.getElementById('stopoutput')?.textContent || '').trim();
+      const submitOutput = (document.getElementById('submitoutput')?.textContent || '').trim();
+      const struggleOutput = (document.getElementById('struggleoutput')?.textContent || '').trim();
+      const strikeOutput = (document.getElementById('strikeoutput')?.textContent || '').trim();
+      const fence = (content)=>content?`**Generated Markdown:**\n\n\`\`\`md\n${content}\n\`\`\`\n\n`:'';
+
+      let md = `# The Voice Session – αOS\n\n_${ts}_\n\n---\n\n`;
+      md += `## STOP\n\n**Input:**\n\n${stopInput || '_leer_'}\n\n${fence(stopOutput)}`;
+      md += `---\n\n## SUBMIT\n\n**FACTS:**\n\n${submitFacts || '_leer_'}\n\n**FEELINGS:**\n\n${submitFeel || '_leer_'}\n\n**FOCUS:**\n\n${submitFocus || '_leer_'}\n\n**FRUIT:**\n\n${submitFruit || '_leer_'}\n\n${fence(submitOutput)}`;
+      md += `---\n\n## STRUGGLE\n\n**Input:**\n\n${struggleInput || '_leer_'}\n\n${fence(struggleOutput)}`;
+      md += `---\n\n## STRIKE\n\n**Input:**\n\n${strikeInput || '_leer_'}\n\n${fence(strikeOutput)}`;
+      md += `---\n\n_Generated via The Voice Centre · αOS_\n`;
+      return md;
+    }
+
+    function AOS_modalOpen(opts){
+      const overlay = document.getElementById('aosModalOverlay');
+      const titleEl = document.getElementById('aosModalTitle');
+      const subEl = document.getElementById('aosModalSub');
+      const bodyEl = document.getElementById('aosModalBody');
+      if(!overlay || !titleEl || !bodyEl) return;
+      titleEl.textContent = opts?.title || 'Modal';
+      subEl.textContent = opts?.sub || '';
+      bodyEl.innerHTML = opts?.html || '';
+      overlay.classList.add('show');
+      overlay.setAttribute('aria-hidden','false');
+      overlay._escHandler = (e)=>{ if(e.key==='Escape') AOS_modalClose(); };
+      document.addEventListener('keydown', overlay._escHandler);
+      overlay._clickHandler = (e)=>{ if(e.target===overlay) AOS_modalClose(); };
+      overlay.addEventListener('click', overlay._clickHandler);
+      document.body.classList.add('phase-focus');
+    }
+
+    function AOS_modalClose(){
+      const overlay = document.getElementById('aosModalOverlay');
+      if(!overlay) return;
+      overlay.classList.remove('show');
+      overlay.setAttribute('aria-hidden','true');
+      if(overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler);
+      if(overlay._clickHandler) overlay.removeEventListener('click', overlay._clickHandler);
+      overlay._escHandler = null; overlay._clickHandler = null;
+      document.body.classList.remove('phase-focus');
+    }
+
+    function openSessionPreview(){
+      const md = buildVoiceSessionMarkdown();
+      const html = `<div class="markdown-body">${(typeof marked !== 'undefined') ? marked.parse(md) : `<pre>${escapeHtml(md)}</pre>`}</div>`;
+      AOS_modalOpen({ title:'Voice Session Preview', sub:'Aus deinen Feldern', html });
+    }
+
+    async function exportVoice(tool, markdown){
+      const text = String(markdown || '').trim();
+      if(!text) return alert('Kein Inhalt zum Speichern.');
+      const title = `${tool || 'Voice'}_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}`;
+      try{
+        const res = await fetch('/api/voice/export',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ markdown:text, title })
+        });
+        const data = await res.json();
+        if(res.ok && data?.ok){
+          const sync = data?.rclone?.status || 'queued';
+          AOS_modalOpen({
+            title:'Saved to Vault',
+            sub: tool || 'Voice',
+            html:`<p>Pfad: <code>${escapeHtml(data.path || '')}</code></p><p>rclone: ${escapeHtml(sync)}</p>`
+          });
+        }else{
+          alert('Speichern fehlgeschlagen.');
+        }
+      }catch(err){
+        alert('Fehler: '+err);
+      }
+    }
+
+    async function saveVoiceSession(){
+      const md = buildVoiceSessionMarkdown();
+      await exportVoice('Session', md);
+    }
+
+    function downloadVoiceSession(){
+      const md = buildVoiceSessionMarkdown();
+      const blob = new Blob([md], { type:'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'VoiceSession_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.md';
+      document.body.appendChild(a);
+      a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function mdToTrustedHtml(md){
+      if(typeof marked !== 'undefined' && marked?.parse){
+        return marked.parse(String(md||''));
+      }
+      return `<pre style="white-space:pre-wrap">${escapeHtml(md||'')}</pre>`;
+    }
+
+    function openPhaseModal(phaseId){
+      const phase = PHASES[phaseId];
+      if(!phase) return;
+      let body = `
+        <div class="aos-phase-wrap">
+          <div class="aos-phase-kicker">Phase Focus</div>
+          <div class="aos-phase-title">${phase.title.toUpperCase()}</div>
+          <div class="aos-phase-hint">Schreib roh. Kein “schön”. Nur wahr.</div>
+          <details class="aos-lore" open>
+            <summary>Chapter</summary>
+            <div class="aos-lore-body">
+              <div class="markdown-body">${mdToTrustedHtml(phase.body)}</div>
+            </div>
+          </details>
+      `;
+
+      if(phaseId === 'submit'){
+        const facts = document.getElementById('submit_facts')?.value || '';
+        const feel  = document.getElementById('submit_feelings')?.value || '';
+        const focus = document.getElementById('submit_focus')?.value || '';
+        const fruit = document.getElementById('submit_fruit')?.value || '';
+        body += `
+          <div class="aos-modal-section"><h3>FACTS</h3><textarea class="aos-phase-input" id="aosSubmitFacts">${escapeHtml(facts)}</textarea></div>
+          <div class="aos-modal-section"><h3>FEELINGS</h3><textarea class="aos-phase-input" id="aosSubmitFeel">${escapeHtml(feel)}</textarea></div>
+          <div class="aos-modal-section"><h3>FOCUS</h3><textarea class="aos-phase-input" id="aosSubmitFocus">${escapeHtml(focus)}</textarea></div>
+          <div class="aos-modal-section"><h3>FRUIT</h3><textarea class="aos-phase-input" id="aosSubmitFruit">${escapeHtml(fruit)}</textarea></div>
+          <div class="aos-phase-actions">
+            <button type="button" class="btn-ghost btn" onclick="AOS_modalClose()">Schließen</button>
+            <button type="button" class="btn-ghost btn" onclick="AOS_submitSync()">Übernehmen</button>
+            <button type="button" class="btn" onclick="AOS_submitRun()">Generieren</button>
+          </div>
+        `;
+      }else{
+        const src = document.getElementById(phase.textareaId);
+        body += `
+          <textarea class="aos-phase-input" id="aosPhaseInput">${escapeHtml(src?.value || '')}</textarea>
+          <div class="aos-phase-actions">
+            <button type="button" class="btn-ghost btn" onclick="AOS_modalClose()">Schließen</button>
+            <button type="button" class="btn-ghost btn" onclick="AOS_phaseSync('${phase.textareaId}')">Übernehmen</button>
+            <button type="button" class="btn" onclick="AOS_phaseRun('${phaseId}')">Generieren</button>
+          </div>
+        `;
+      }
+
+      body += `</div>`;
+      AOS_modalOpen({ title: phase.title, html: body });
+      setTimeout(()=>{ document.querySelector('.aos-phase-input')?.focus(); }, 30);
+    }
+
+    function AOS_phaseSync(targetId){
+      const src = document.getElementById('aosPhaseInput');
+      const dst = document.getElementById(targetId);
+      if(!src || !dst) return;
+      dst.value = src.value;
+      try{ localStorage.setItem('voice_'+targetId, dst.value); }catch(_){}
+    }
+
+    function AOS_phaseRun(phaseId){
+      const phase = PHASES[phaseId];
+      if(!phase || !phase.textareaId) return;
+      AOS_phaseSync(phase.textareaId);
+      generateStep(phaseId);
+    }
+
+    function AOS_submitSync(){
+      const facts = document.getElementById('aosSubmitFacts');
+      const feel = document.getElementById('aosSubmitFeel');
+      const focus = document.getElementById('aosSubmitFocus');
+      const fruit = document.getElementById('aosSubmitFruit');
+      const dstFacts = document.getElementById('submit_facts');
+      const dstFeel = document.getElementById('submit_feelings');
+      const dstFocus = document.getElementById('submit_focus');
+      const dstFruit = document.getElementById('submit_fruit');
+      if (facts && dstFacts) dstFacts.value = facts.value;
+      if (feel && dstFeel) dstFeel.value = feel.value;
+      if (focus && dstFocus) dstFocus.value = focus.value;
+      if (fruit && dstFruit) dstFruit.value = fruit.value;
+      try{
+        if (dstFacts) localStorage.setItem('voice_submit_facts', dstFacts.value);
+        if (dstFeel) localStorage.setItem('voice_submit_feelings', dstFeel.value);
+        if (dstFocus) localStorage.setItem('voice_submit_focus', dstFocus.value);
+        if (dstFruit) localStorage.setItem('voice_submit_fruit', dstFruit.value);
+      }catch(_){}
+    }
+
+    function AOS_submitRun(){
+      AOS_submitSync();
+      generateStep('submit');
+    }
+
+    function generateStep(step){
+      let md = '';
+      if(step === 'submit'){
+        const facts = document.getElementById('submit_facts')?.value.trim() || '';
+        const feelings = document.getElementById('submit_feelings')?.value.trim() || '';
+        const focus = document.getElementById('submit_focus')?.value.trim() || '';
+        const fruit = document.getElementById('submit_fruit')?.value.trim() || '';
+        if(!facts && !feelings && !focus && !fruit) return alert('Submit braucht Inhalt.');
+        md = `# SUBMIT: Face the Abyss\\n\\n` +
+             `**FACTS**\\n${facts || '_leer_'}\\n\\n` +
+             `**FEELINGS**\\n${feelings || '_leer_'}\\n\\n` +
+             `**FOCUS**\\n${focus || '_leer_'}\\n\\n` +
+             `**FRUIT**\\n${fruit || '_leer_'}\\n\\n`;
+      }else{
+        const input = document.getElementById(step+'input')?.value.trim() || '';
+        if(!input) return alert('Bitte Text eingeben.');
+        md = `# ${step.toUpperCase()}\\n\\n**Eingabe:**\\n${input}\\n`;
+      }
+      const out = document.getElementById(step+'output');
+      const wrap = document.getElementById(step+'-wrapper');
+      if(out) out.textContent = md;
+      if(wrap) wrap.style.display = 'block';
+      AOS_modalOpen({
+        title: step.toUpperCase(),
+        sub: 'Generated',
+        html: `<pre>${escapeHtml(md)}</pre>
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn-ghost btn" type="button" onclick="AOS_modalClose()">Schließen</button>
+          <button class="btn" type="button" onclick="exportVoice('${step}', document.getElementById('${step}output')?.textContent || '')">Save</button>
+        </div>`
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      initTheme();
+      loadDoc();
+      restoreTextareas();
+      document.querySelectorAll('nav a[data-tab]').forEach(a=>{
+        a.addEventListener('click', e=>{
+          e.preventDefault();
+          const tabId = a.dataset.tab;
+          if(!tabId) return;
+          activateTab(tabId);
+          if(tabId === 'home') window.scrollTo({ top:0, behavior:'smooth' });
+        });
+      });
+      document.addEventListener('click', e=>{
+        const btn = e.target;
+        if(!btn?.classList?.contains('copy-btn')) return;
+        const targetId = btn.getAttribute('data-target');
+        const pre = document.getElementById(targetId);
+        if(!pre) return;
+        const text = pre.textContent || '';
+        if(navigator.clipboard?.writeText){
+          navigator.clipboard.writeText(text).then(()=>{
+            const old = btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=old, 800);
+          }).catch(()=>alert('Konnte nicht kopieren.'));
+        }else{
+          alert('Clipboard API nicht verfügbar.');
+        }
+      });
+      const zenBtn = document.getElementById('zenToggle');
+      zenBtn?.addEventListener('click', ()=>{
+        document.body.classList.toggle('zen-mode');
+        zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen Mode';
+      });
+      setTimeout(()=>{
+        const loader = document.getElementById('loader-overlay');
+        if(loader){
+          loader.style.transition = 'opacity 0.35s ease';
+          loader.style.opacity = '0';
+          setTimeout(()=>{ loader.style.display='none'; }, 360);
+        }
+      }, 200);
+    });
+  </script>
+</body>
+</html>
