@@ -1,0 +1,16 @@
+[Unit]
+Description=AlphaOS Bridge (aiohttp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.env/aos.env
+# Optional per-service overrides
+EnvironmentFile=-%h/.env/bridge.env
+ExecStart=/usr/bin/bash -lc 'cd "$AOS_HUB_DIR/bridge" && exec /usr/bin/python app.py --host 0.0.0.0 --port 8080'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
