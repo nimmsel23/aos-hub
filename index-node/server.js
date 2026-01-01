@@ -6,7 +6,7 @@ import path from "path";
 import yaml from "js-yaml";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 
 
 const app = express();
@@ -31,6 +31,10 @@ const TICK_ENV_PATH =
 const TASK_EXPORT_PATH =
   process.env.TASK_EXPORT ||
   path.join(os.homedir(), ".local", "share", "alphaos", "task_export.json");
+const TASK_BIN = process.env.TASK_BIN || "task";
+const TASKRC = process.env.TASKRC || "";
+const TASK_CACHE_TTL = Number(process.env.TASK_CACHE_TTL || 30);
+const TASK_EXPORT_FILTER = String(process.env.TASK_EXPORT_FILTER || "").trim();
 const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
   .split(",")
   .map((tag) => tag.trim())
@@ -41,6 +45,42 @@ const SYNC_MAP_PATH =
 const RCLONE_RC_URL = process.env.RCLONE_RC_URL || "http://127.0.0.1:5572";
 const RCLONE_TARGET =
   process.env.RCLONE_TARGET || "fabian:AlphaOS-Vault";
+const RCLONE_FLAGS = String(
+  process.env.RCLONE_FLAGS || "--update --skip-links --create-empty-src-dirs"
+)
+  .split(" ")
+  .map((flag) => flag.trim())
+  .filter(Boolean);
+const RCLONE_BACKUP_TARGET =
+  process.env.RCLONE_BACKUP_TARGET ||
+  (RCLONE_TARGET ? `${RCLONE_TARGET}-backups` : "");
+const BRIDGE_URL = (process.env.AOS_BRIDGE_URL || process.env.BRIDGE_URL || "").replace(/\/$/, "");
+const BRIDGE_TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS || 2500);
+const FRUITS_MAP_TITLE = "Fruit Fact Maps";
+const FRUITS_MAP_SUBTITLE = "Facing the Fruits of Reality - Raw Facts";
+const FRUITS_QUESTIONS_PATH =
+  process.env.FRUITS_QUESTIONS || path.resolve("data", "fruits_questions.json");
+const FRUITS_DIR =
+  process.env.FRUITS_DIR ||
+  path.join(os.homedir(), "AlphaOS-Vault", "Game", "Fruits");
+const FRUITS_STORE_PATH =
+  process.env.FRUITS_STORE || path.join(FRUITS_DIR, "fruits_store.json");
+const FRUITS_EXPORT_DIR =
+  process.env.FRUITS_EXPORT_DIR || FRUITS_DIR;
+const FRUIT_EMOJIS = ["🍎", "🍌", "🍇", "🍉", "🍓", "🍒", "🍍", "🥝", "🍊", "🍏"];
+let FRUITS_QUESTIONS_CACHE = null;
+const DOOR_FLOW_PATH =
+  process.env.DOOR_FLOW_PATH || path.join(getDoorVaultDir(), ".door-flow.json");
+const DOOR_HITS_TICKTICK = process.env.DOOR_HITS_TICKTICK === "1";
+const DOOR_HITS_TAGS = String(
+  process.env.DOOR_HITS_TAGS || "door,hit,production"
+)
+  .split(",")
+  .map((tag) => tag.trim())
+  .filter(Boolean);
+const FIRE_GCAL_EMBED_URL = process.env.FIRE_GCAL_EMBED_URL || "";
+
+let TASK_CACHE = { ts: 0, tasks: [], error: null };
 
 
 function safeSlug(s) {
@@ -99,20 +139,159 @@ function ensureDir(dirPath) {
   }
 }
 
+function loadFruitsQuestions() {
+  if (FRUITS_QUESTIONS_CACHE) return FRUITS_QUESTIONS_CACHE;
+  try {
+    const raw = fs.readFileSync(FRUITS_QUESTIONS_PATH, "utf8");
+    FRUITS_QUESTIONS_CACHE = JSON.parse(raw);
+  } catch (err) {
+    FRUITS_QUESTIONS_CACHE = {};
+  }
+  return FRUITS_QUESTIONS_CACHE;
+}
+
+function defaultFruitsStore() {
+  return {
+    answers: {},
+    users: {},
+    skipped: null,
+    updated_at: "",
+  };
+}
+
+function normalizeFruitsStore(raw) {
+  const base = defaultFruitsStore();
+  if (!raw || typeof raw !== "object") return base;
+  base.answers = raw.answers && typeof raw.answers === "object" ? raw.answers : {};
+  base.users = raw.users && typeof raw.users === "object" ? raw.users : {};
+  base.skipped = raw.skipped && typeof raw.skipped === "object" ? raw.skipped : null;
+  base.updated_at = String(raw.updated_at || "");
+  return base;
+}
+
+function loadFruitsStore() {
+  ensureDir(FRUITS_DIR);
+  if (!fs.existsSync(FRUITS_STORE_PATH)) return defaultFruitsStore();
+  try {
+    const raw = fs.readFileSync(FRUITS_STORE_PATH, "utf8");
+    return normalizeFruitsStore(JSON.parse(raw));
+  } catch (_) {
+    return defaultFruitsStore();
+  }
+}
+
+function saveFruitsStore(store) {
+  ensureDir(FRUITS_DIR);
+  const payload = {
+    ...store,
+    updated_at: new Date().toISOString(),
+  };
+  const tempPath = FRUITS_STORE_PATH + ".tmp";
+  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), "utf8");
+  fs.renameSync(tempPath, FRUITS_STORE_PATH);
+  return payload;
+}
+
+function getFruitsAnswerValue(entry) {
+  if (!entry) return "";
+  if (typeof entry === "string") return entry;
+  if (typeof entry.answer === "string") return entry.answer;
+  return "";
+}
+
+function flattenFruitsAnswers(store) {
+  const out = {};
+  Object.entries(store.answers || {}).forEach(([question, entry]) => {
+    out[question] = getFruitsAnswerValue(entry);
+  });
+  return out;
+}
+
+function findFruitsSection(question) {
+  const qs = loadFruitsQuestions();
+  for (const [section, list] of Object.entries(qs)) {
+    if (!Array.isArray(list)) continue;
+    if (list.includes(question)) return section;
+  }
+  return "";
+}
+
+function hasPendingFruitsSkip(store) {
+  if (store.skipped && store.skipped.question) return true;
+  const answers = store.answers || {};
+  return Object.values(answers).some((entry) => getFruitsAnswerValue(entry) === "_geskippt_");
+}
+
+function firstUnansweredFruit(store) {
+  const answers = flattenFruitsAnswers(store);
+  const qs = loadFruitsQuestions();
+  for (const [section, list] of Object.entries(qs)) {
+    if (!Array.isArray(list)) continue;
+    for (const q of list) {
+      if (!answers[q]) return { section, question: q };
+    }
+  }
+  return null;
+}
+
+function updateFruitsUser(store, chatId, userName) {
+  if (!chatId) return;
+  const id = String(chatId);
+  const existing = store.users[id] || {};
+  store.users[id] = {
+    chat_id: id,
+    user_name: userName || existing.user_name || "User",
+    status: "active",
+    started_at: existing.started_at || new Date().toISOString(),
+    last_section: existing.last_section || "",
+    last_question: existing.last_question || "",
+  };
+}
+
+function setFruitsLastQuestion(store, chatId, section, question) {
+  if (!chatId) return;
+  const id = String(chatId);
+  const existing = store.users[id] || { chat_id: id, status: "active" };
+  store.users[id] = {
+    ...existing,
+    last_section: section || "",
+    last_question: question || "",
+  };
+}
+
+function getFruitsLastQuestion(store, chatId) {
+  if (!chatId) return { section: "", question: "" };
+  const user = store.users[String(chatId)] || {};
+  return { section: user.last_section || "", question: user.last_question || "" };
+}
+
 function queueVaultSync() {
   if (!RCLONE_TARGET) return { ok: false, status: "disabled" };
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..+/, "")
+    .replace("T", "-");
+  const backupDir = RCLONE_BACKUP_TARGET
+    ? `${RCLONE_BACKUP_TARGET}/push-${stamp}`
+    : "";
+  const args = ["copy", ...RCLONE_FLAGS];
+  if (backupDir) args.push("--backup-dir", backupDir);
+  args.push(getVaultDir(), RCLONE_TARGET);
   Promise.resolve()
+    .then(() => execFileAsync("rclone", args))
     .then(() =>
-      rcloneRc("sync/sync", {
-        srcFs: getVaultDir(),
-        dstFs: RCLONE_TARGET,
-      })
+      console.log("[rclone] vault copy ok →", RCLONE_TARGET)
     )
-    .then(() => console.log("[rclone] vault sync ok →", RCLONE_TARGET))
     .catch((err) =>
-      console.error("[rclone] vault sync failed:", err?.message || err)
+      console.error("[rclone] vault copy failed:", err?.message || err)
     );
-  return { ok: true, status: "queued", target: RCLONE_TARGET };
+  return {
+    ok: true,
+    status: "queued",
+    target: RCLONE_TARGET,
+    backup: backupDir || null,
+  };
 }
 
 function parseEnvFile(filePath) {
@@ -186,6 +365,62 @@ async function ticktickCreateTask({ title, content, tags, projectId }) {
   }
 
   return res.json();
+}
+
+async function ticktickListProjectTasks() {
+  const { token, projectId } = getTickConfig();
+  if (!token) {
+    throw new Error("ticktick-token-missing");
+  }
+  if (!projectId) {
+    throw new Error("ticktick-project-missing");
+  }
+
+  const res = await fetch(
+    `https://api.ticktick.com/open/v1/project/${encodeURIComponent(projectId)}/tasks`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ticktick-error-${res.status}:${text}`);
+  }
+
+  return res.json();
+}
+
+function getWeekRangeLocal(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(d);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  const week = isoWeekString(start);
+  const rangeLabel = `${start.toLocaleDateString("de-DE")} – ${new Date(end.getTime() - 1).toLocaleDateString("de-DE")}`;
+  return { start, end, week, rangeLabel };
+}
+
+function parseTickTickDue(task) {
+  if (!task) return null;
+  const raw = task.dueDateTime || task.dueDate || task.due;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function taskInRange(task, start, end) {
+  const due = parseTickTickDue(task);
+  if (!due) return false;
+  return due >= start && due < end;
 }
 
 function isoWeekString(date = new Date()) {
@@ -295,6 +530,22 @@ async function rcloneRc(command, payload = {}) {
   return res.json().catch(() => ({}));
 }
 
+async function bridgeFetch(pathname, options = {}) {
+  if (!BRIDGE_URL) return null;
+  const url = `${BRIDGE_URL}${pathname}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? data : { ok: false, error: data?.error || `bridge ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: err?.message || "bridge error" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function getCore4TodayFile() {
   return path.join(os.homedir(), ".local", "share", "alphaos", "drop", "core4_today.json");
 }
@@ -349,6 +600,20 @@ function updateCore4Subtask(subtask) {
   return data;
 }
 
+function mapCore4Subtask(subtask) {
+  const map = {
+    fitness: { domain: "body", task: "fitness" },
+    fuel: { domain: "body", task: "fuel" },
+    meditation: { domain: "being", task: "meditation" },
+    memoirs: { domain: "being", task: "memoirs" },
+    partner: { domain: "balance", task: "person1" },
+    posterity: { domain: "balance", task: "person2" },
+    discover: { domain: "business", task: "discover" },
+    declare: { domain: "business", task: "declare" },
+  };
+  return map[subtask] || null;
+}
+
 function resolveDoorExportDir(tool) {
   const base = getDoorVaultDir();
   const map = {
@@ -359,6 +624,371 @@ function resolveDoorExportDir(tool) {
     profit: path.join(base, "4-Profit"),
   };
   return map[tool] || base;
+}
+
+const WARSTACK_STEPS = [
+  {
+    key: "domain",
+    prompt:
+      "Step 1/10: Domain & Sub-Domain\nWelche Domain passt?\nBody / Being / Balance / Business (oder eine Sub-Domain).",
+  },
+  {
+    key: "domino_door",
+    prompt:
+      "Step 2/10: Domino Door\nWelche eine Door bringt alles ins Rollen? (konkret + messbar)",
+  },
+  {
+    key: "trigger",
+    prompt:
+      "Step 3/10: Trigger\nWelches Ereignis oder welche Person hat das ausgelost?",
+  },
+  {
+    key: "narrative",
+    prompt:
+      "Step 4/10: Narrative\nWelche Story erzählst du dir gerade über diese Door?",
+  },
+  {
+    key: "validation",
+    prompt:
+      "Step 5/10: Validation\nWarum muss diese Door genau jetzt geöffnet werden?",
+  },
+  {
+    key: "impact",
+    prompt:
+      "Step 6/10: Impact\nWas verändert sich, wenn die Door offen ist?",
+  },
+  {
+    key: "consequences",
+    prompt:
+      "Step 7/10: Consequences\nWas passiert, wenn du sie nicht öffnest?",
+  },
+  {
+    key: "insights",
+    prompt:
+      "Step 8/10: Insights\nWelche neuen Realisierungen hast du?",
+  },
+  {
+    key: "lessons",
+    prompt:
+      "Step 9/10: Lessons Learned\nWelche wichtigste Lektion nimmst du mit?",
+  },
+  {
+    key: "hits",
+    prompt:
+      "Step 10/10: Hits\nAny constraints for the Four Hits? (or reply: generate)",
+  },
+];
+
+function doorFlowTemplate() {
+  const now = new Date().toISOString();
+  return {
+    version: 1,
+    updated_at: now,
+    hotlist: [],
+    doorwars: [],
+    warstacks: [],
+    profits: [],
+    active_chats: {},
+  };
+}
+
+function loadDoorFlow() {
+  try {
+    if (!fs.existsSync(DOOR_FLOW_PATH)) return doorFlowTemplate();
+    const raw = fs.readFileSync(DOOR_FLOW_PATH, "utf8");
+    const data = JSON.parse(raw);
+    const flow = data && typeof data === "object" ? data : doorFlowTemplate();
+    flow.hotlist = Array.isArray(flow.hotlist) ? flow.hotlist : [];
+    flow.doorwars = Array.isArray(flow.doorwars) ? flow.doorwars : [];
+    flow.warstacks = Array.isArray(flow.warstacks) ? flow.warstacks : [];
+    flow.profits = Array.isArray(flow.profits) ? flow.profits : [];
+    flow.active_chats =
+      flow.active_chats && typeof flow.active_chats === "object"
+        ? flow.active_chats
+        : {};
+    return flow;
+  } catch (_) {
+    return doorFlowTemplate();
+  }
+}
+
+function saveDoorFlow(flow) {
+  try {
+    const payload = flow && typeof flow === "object" ? flow : doorFlowTemplate();
+    payload.updated_at = new Date().toISOString();
+    ensureDir(path.dirname(DOOR_FLOW_PATH));
+    fs.writeFileSync(DOOR_FLOW_PATH, JSON.stringify(payload, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function makeDoorGuid() {
+  const stamp = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `${stamp}${rand}`;
+}
+
+function doorShortId(guid) {
+  return String(guid || "").slice(0, 8);
+}
+
+function findWarstack(flow, idOrPrefix) {
+  const ref = String(idOrPrefix || "").trim();
+  if (!ref) return null;
+  return flow.warstacks.find((entry) => {
+    if (!entry || !entry.guid) return false;
+    if (entry.guid === ref) return true;
+    if (entry.short_id === ref) return true;
+    return entry.guid.startsWith(ref);
+  });
+}
+
+function normalizeDomain(value) {
+  const raw = String(value || "").toLowerCase();
+  if (raw.includes("body")) return "Body";
+  if (raw.includes("being")) return "Being";
+  if (raw.includes("balance")) return "Balance";
+  if (raw.includes("business")) return "Business";
+  return value ? String(value).trim() : "Business";
+}
+
+function evaluateEisenhowerMatrix(item) {
+  const title = String(item?.title || "");
+  const tags = Array.isArray(item?.tags) ? item.tags : [];
+  let importanceScore = 0;
+  let urgencyScore = 0;
+
+  if (tags.includes("business") || tags.includes("career")) importanceScore += 3;
+  if (tags.includes("health") || tags.includes("body")) importanceScore += 3;
+  if (tags.includes("relationship") || tags.includes("balance")) importanceScore += 2;
+  if (title.toLowerCase().includes("goal") || title.toLowerCase().includes("vision")) {
+    importanceScore += 2;
+  }
+  if ((item?.priority || 0) >= 3) importanceScore += 2;
+
+  if (tags.includes("urgent") || title.includes("!")) urgencyScore += 3;
+  if ((item?.priority || 0) >= 4) urgencyScore += 2;
+  if (item?.created) {
+    const daysSince =
+      (Date.now() - new Date(item.created).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince > 7) urgencyScore += 1;
+    if (daysSince > 14) urgencyScore += 2;
+  }
+
+  const isImportant = importanceScore >= 3;
+  const isUrgent = urgencyScore >= 3;
+  let quadrant = 4;
+  if (isImportant && isUrgent) quadrant = 1;
+  else if (isImportant && !isUrgent) quadrant = 2;
+  else if (!isImportant && isUrgent) quadrant = 3;
+
+  return {
+    quadrant,
+    importanceScore,
+    urgencyScore,
+    isImportant,
+    isUrgent,
+    reasoning: `Importance: ${importanceScore}/10, Urgency: ${urgencyScore}/10`,
+  };
+}
+
+function renderWarStackMarkdown(entry) {
+  const responses = entry.responses || {};
+  const title = entry.title || "War Stack";
+  const lines = [];
+  lines.push(`# War Stack – ${title}`);
+  lines.push("");
+  lines.push(`**Domain:** ${responses.domain || "-"}`);
+  lines.push(`**Domino Door:** ${responses.domino_door || "-"}`);
+  lines.push(`**Trigger:** ${responses.trigger || "-"}`);
+  lines.push("");
+  lines.push("**Narrative:**");
+  lines.push(responses.narrative || "-");
+  lines.push("");
+  lines.push("**Validation:**");
+  lines.push(responses.validation || "-");
+  lines.push("");
+  lines.push("**Impact:**");
+  lines.push(responses.impact || "-");
+  lines.push("");
+  lines.push("**Consequences:**");
+  lines.push(responses.consequences || "-");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Insights");
+  lines.push(responses.insights || "-");
+  lines.push("");
+  lines.push("## Lessons Learned");
+  lines.push(responses.lessons || "-");
+  lines.push("");
+  return lines.join("\n");
+}
+
+function renderHotListMarkdown(items) {
+  const lines = [];
+  lines.push("# Hot List – Guardian of Ideas");
+  lines.push("");
+  (items || []).forEach((item, idx) => {
+    const title = typeof item === "string" ? item : item?.title;
+    if (title) lines.push(`${idx + 1}. ${title}`);
+  });
+  lines.push("");
+  lines.push("> Wähle aus dieser Liste deine Domino Door im Door War.");
+  return lines.join("\n");
+}
+
+function renderDoorWarMarkdown(candidates, choice, reasoning) {
+  const lines = [];
+  lines.push("# Door War – Quadrant-2 Entscheidung");
+  lines.push("");
+  lines.push("## Kandidaten (aus der Hot List)");
+  lines.push("");
+  (candidates || []).forEach((item) => {
+    const title = typeof item === "string" ? item : item?.title;
+    if (title) lines.push(`- [ ] ${title}`);
+  });
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Gewählte Domino Door");
+  lines.push("");
+  lines.push(`**Door:** ${choice || "_hier deine Wahl eintragen_"}`);
+  lines.push("");
+  lines.push(`**Grund:** ${reasoning || "_warum genau diese Door?_"}`);
+  lines.push("");
+  lines.push("> Nächster Schritt: Erzeuge den War Stack zu dieser Door.");
+  return lines.join("\n");
+}
+
+function renderHitsMarkdown(entry) {
+  const title = entry.title || "War Stack";
+  const hits = Array.isArray(entry.hits) ? entry.hits : [];
+  const lines = [];
+  lines.push(`# Weekly Jar – Hits for ${title}`);
+  lines.push("");
+  hits.forEach((hit, idx) => {
+    lines.push(`## Hit ${idx + 1}`);
+    lines.push(`- **Fact:** ${hit.fact || "-"}`);
+    lines.push(`- **Obstacle:** ${hit.obstacle || "-"}`);
+    lines.push(`- **Strike:** ${hit.strike || "-"}`);
+    lines.push(`- **Responsibility:** ${hit.responsibility || "-"}`);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function generateHitsForDomain(domain) {
+  const templates = {
+    Body: [
+      {
+        fact: "Establish daily fitness routine",
+        obstacle: "Time constraints",
+        strike: "Block 30min morning slot",
+      },
+      {
+        fact: "Optimize nutrition plan",
+        obstacle: "Food prep time",
+        strike: "Meal prep on Sunday",
+      },
+      {
+        fact: "Track health metrics",
+        obstacle: "Forgetting to measure",
+        strike: "Set reminders",
+      },
+      {
+        fact: "Build sustainable habits",
+        obstacle: "Motivation dips",
+        strike: "Accountability partner",
+      },
+    ],
+    Being: [
+      {
+        fact: "Daily meditation practice",
+        obstacle: "Busy schedule",
+        strike: "5-min minimum commitment",
+      },
+      {
+        fact: "Weekly reflection sessions",
+        obstacle: "Resistance to introspection",
+        strike: "Structured prompts",
+      },
+      {
+        fact: "Spiritual growth activity",
+        obstacle: "Lack of direction",
+        strike: "Find mentor/guide",
+      },
+      {
+        fact: "Consistent journaling",
+        obstacle: "Nothing to write",
+        strike: "Daily gratitude focus",
+      },
+    ],
+    Balance: [
+      {
+        fact: "Quality time with partner",
+        obstacle: "Work distractions",
+        strike: "Phone-free evenings",
+      },
+      {
+        fact: "Family activity planning",
+        obstacle: "Scheduling conflicts",
+        strike: "Monthly family calendar",
+      },
+      {
+        fact: "Friend connection maintenance",
+        obstacle: "Distance",
+        strike: "Weekly check-ins",
+      },
+      {
+        fact: "Social boundary setting",
+        obstacle: "People pleasing",
+        strike: "Practice saying no",
+      },
+    ],
+    Business: [
+      {
+        fact: "Revenue milestone progress",
+        obstacle: "Market uncertainty",
+        strike: "Diversify income streams",
+      },
+      {
+        fact: "Skill development completion",
+        obstacle: "Learning overwhelm",
+        strike: "Focus on one skill",
+      },
+      {
+        fact: "Network expansion",
+        obstacle: "Introversion",
+        strike: "Attend one event weekly",
+      },
+      {
+        fact: "System optimization",
+        obstacle: "Analysis paralysis",
+        strike: "Implement incrementally",
+      },
+    ],
+  };
+
+  const normalized = normalizeDomain(domain);
+  const base = templates[normalized] || templates.Business;
+  return base.map((hit, idx) => ({
+    id: `hit-${idx + 1}`,
+    fact: hit.fact,
+    obstacle: hit.obstacle,
+    strike: hit.strike,
+    responsibility: "Self",
+  }));
+}
+
+function writeDoorMarkdown(tool, title, markdown) {
+  const dir = resolveDoorExportDir(tool);
+  ensureDir(dir);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const base = safeFilename(title) || `${tool || "door"}_${stamp}`;
+  const filename = `${base}.md`;
+  const filepath = path.join(dir, filename);
+  fs.writeFileSync(filepath, `${markdown}\n`, "utf8");
+  return filepath;
 }
 
 function safeFilename(name) {
@@ -400,13 +1030,28 @@ function appendSyncEntry(entry) {
 }
 
 function loadTaskwarriorExport() {
+  const now = Date.now();
+  if (TASK_CACHE_TTL > 0 && now - TASK_CACHE.ts < TASK_CACHE_TTL * 1000 && TASK_CACHE.tasks.length) {
+    return { ok: true, tasks: TASK_CACHE.tasks, source: "cache" };
+  }
+
+  const args = [];
+  if (TASK_EXPORT_FILTER) {
+    args.push(...TASK_EXPORT_FILTER.split(/\s+/).filter(Boolean));
+  }
+  args.push("export");
+
   try {
-    if (!fs.existsSync(TASK_EXPORT_PATH)) return { ok: false, error: "missing-export" };
-    const raw = fs.readFileSync(TASK_EXPORT_PATH, "utf8");
-    const tasks = JSON.parse(raw);
+    const env = TASKRC ? { ...process.env, TASKRC } : process.env;
+    const stdout = execFileSync(TASK_BIN, args, { encoding: "utf8", timeout: 8000, env });
+    const tasks = JSON.parse(stdout);
     if (!Array.isArray(tasks)) return { ok: false, error: "invalid-export" };
-    return { ok: true, tasks };
+    TASK_CACHE = { ts: now, tasks, error: null };
+    return { ok: true, tasks, source: "live" };
   } catch (err) {
+    if (TASK_CACHE.tasks.length) {
+      return { ok: true, tasks: TASK_CACHE.tasks, source: "cache", warning: "task-export-failed" };
+    }
     return { ok: false, error: String(err) };
   }
 }
@@ -690,6 +1335,219 @@ app.post("/api/generals/report", (req, res) => {
   }
 });
 
+// Fruits Centre data (local JSON)
+app.get("/api/fruits", (_req, res) => {
+  try {
+    const store = loadFruitsStore();
+    const questions = loadFruitsQuestions();
+    return res.json({
+      ok: true,
+      mapTitle: FRUITS_MAP_TITLE,
+      mapSubtitle: FRUITS_MAP_SUBTITLE,
+      questions,
+      emojis: FRUIT_EMOJIS,
+      answers: flattenFruitsAnswers(store),
+      skipped: store.skipped,
+      updated_at: store.updated_at || "",
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get("/api/fruits/users", (_req, res) => {
+  try {
+    const store = loadFruitsStore();
+    const users = Object.values(store.users || {}).map((u) => ({
+      chat_id: String(u.chat_id || ""),
+      user_name: String(u.user_name || ""),
+      status: String(u.status || ""),
+      last_section: String(u.last_section || ""),
+      last_question: String(u.last_question || ""),
+      started_at: String(u.started_at || ""),
+    }));
+    return res.json({ ok: true, users });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/fruits/register", (req, res) => {
+  try {
+    const chatId = String(req.body?.chat_id || "").trim();
+    const userName = String(req.body?.user_name || "").trim();
+    if (!chatId) return res.status(400).json({ ok: false, error: "missing chat_id" });
+    const store = loadFruitsStore();
+    updateFruitsUser(store, chatId, userName);
+    saveFruitsStore(store);
+    return res.json({ ok: true, chat_id: chatId });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/fruits/next", (req, res) => {
+  try {
+    const chatId = String(req.body?.chat_id || "").trim();
+    const userName = String(req.body?.user_name || "").trim();
+    const store = loadFruitsStore();
+    if (chatId) updateFruitsUser(store, chatId, userName);
+
+    let nextQ = firstUnansweredFruit(store);
+    const answers = flattenFruitsAnswers(store);
+    if (!nextQ && store.skipped && store.skipped.question) {
+      if (answers[store.skipped.question] === "_geskippt_") {
+        nextQ = store.skipped;
+      }
+    }
+
+    if (!nextQ) {
+      if (chatId) setFruitsLastQuestion(store, chatId, "", "");
+      saveFruitsStore(store);
+      return res.json({ ok: true, done: true, pending_skip: hasPendingFruitsSkip(store) });
+    }
+
+    if (chatId) setFruitsLastQuestion(store, chatId, nextQ.section, nextQ.question);
+    saveFruitsStore(store);
+    return res.json({
+      ok: true,
+      done: false,
+      section: nextQ.section,
+      question: nextQ.question,
+      pending_skip: hasPendingFruitsSkip(store),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/fruits/answer", (req, res) => {
+  try {
+    const answer = String(req.body?.answer || "").trim();
+    if (!answer) return res.status(400).json({ ok: false, error: "missing answer" });
+
+    let question = String(req.body?.question || "").trim();
+    let section = String(req.body?.section || "").trim();
+    const source = String(req.body?.source || "webapp").trim();
+    const chatId = String(req.body?.chat_id || "").trim();
+    const userName = String(req.body?.user_name || "").trim();
+
+    const store = loadFruitsStore();
+    if (chatId) updateFruitsUser(store, chatId, userName);
+
+    if (!question && chatId) {
+      const last = getFruitsLastQuestion(store, chatId);
+      question = last.question;
+      section = section || last.section;
+    }
+
+    if (!question) {
+      return res.status(400).json({ ok: false, error: "missing question" });
+    }
+
+    if (!section) section = findFruitsSection(question);
+    if (!section) {
+      return res.status(400).json({ ok: false, error: "unknown question" });
+    }
+
+    if (answer === "_geskippt_") {
+      if (store.skipped && store.skipped.question && store.skipped.question !== question) {
+        return res.status(400).json({ ok: false, error: "skip already used" });
+      }
+      store.skipped = { question, section };
+    } else if (store.skipped && store.skipped.question === question) {
+      store.skipped = null;
+    }
+
+    const mode = store.answers[question] ? "updated" : "inserted";
+    store.answers[question] = {
+      question,
+      section,
+      answer,
+      source,
+      chat_id: chatId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (chatId) setFruitsLastQuestion(store, chatId, "", "");
+    saveFruitsStore(store);
+    return res.json({ ok: true, mode, question, section });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/fruits/skip", (req, res) => {
+  try {
+    let question = String(req.body?.question || "").trim();
+    let section = String(req.body?.section || "").trim();
+    const chatId = String(req.body?.chat_id || "").trim();
+    const userName = String(req.body?.user_name || "").trim();
+
+    const store = loadFruitsStore();
+    if (chatId) updateFruitsUser(store, chatId, userName);
+
+    if (!question && chatId) {
+      const last = getFruitsLastQuestion(store, chatId);
+      question = last.question;
+      section = section || last.section;
+    }
+    if (!question) return res.status(400).json({ ok: false, error: "missing question" });
+    if (!section) section = findFruitsSection(question);
+    if (!section) return res.status(400).json({ ok: false, error: "unknown question" });
+
+    if (store.skipped && store.skipped.question && store.skipped.question !== question) {
+      return res.status(400).json({ ok: false, error: "skip already used" });
+    }
+
+    store.skipped = { question, section };
+    store.answers[question] = {
+      question,
+      section,
+      answer: "_geskippt_",
+      source: "skip",
+      chat_id: chatId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (chatId) setFruitsLastQuestion(store, chatId, "", "");
+    saveFruitsStore(store);
+    return res.json({ ok: true, question, section });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/fruits/export", (_req, res) => {
+  try {
+    const store = loadFruitsStore();
+    const questions = loadFruitsQuestions();
+    const answers = flattenFruitsAnswers(store);
+    const dateLabel = new Date().toLocaleDateString("de-AT");
+    let md = "# AlphaOS Fruits Frame Map\n";
+    md += `Completed: ${dateLabel}\n\n`;
+    for (const [section, list] of Object.entries(questions)) {
+      md += `## ${section}\n\n`;
+      if (!Array.isArray(list)) continue;
+      for (const q of list) {
+        const ans = answers[q] || "_noch offen_";
+        md += `**${q}**\n\n${ans}\n\n---\n\n`;
+      }
+    }
+
+    ensureDir(FRUITS_EXPORT_DIR);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `Fruits_Frame_Map_${stamp}.md`;
+    const filepath = path.join(FRUITS_EXPORT_DIR, filename);
+    fs.writeFileSync(filepath, md, "utf8");
+
+    const rcloneInfo = queueVaultSync();
+    return res.json({ ok: true, name: filename, path: filepath, rclone: rcloneInfo });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 // Door export (local markdown)
 app.post("/api/door/export", (req, res) => {
   try {
@@ -765,6 +1623,349 @@ app.post("/api/door/export", (req, res) => {
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
+});
+
+app.get("/api/door/flow", (_req, res) => {
+  try {
+    const flow = loadDoorFlow();
+    return res.json({ ok: true, flow });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get("/api/door/hotlist", (_req, res) => {
+  try {
+    const flow = loadDoorFlow();
+    return res.json({ ok: true, items: flow.hotlist || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/door/hotlist", (req, res) => {
+  try {
+    const raw = req.body?.items ?? req.body?.text ?? "";
+    const source = String(req.body?.source || "manual");
+    const list = Array.isArray(raw)
+      ? raw.map((item) => {
+          // Handle object with title property or plain string
+          if (typeof item === "object" && item !== null && item.title) {
+            return String(item.title).trim();
+          }
+          return String(item || "").trim();
+        }).filter(Boolean)
+      : String(raw)
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+    if (!list.length) {
+      return res.status(400).json({ ok: false, error: "missing items" });
+    }
+    const flow = loadDoorFlow();
+    const entries = list.map((title) => {
+      const guid = makeDoorGuid();
+      return {
+        guid,
+        short_id: doorShortId(guid),
+        title,
+        source,
+        created_at: new Date().toISOString(),
+      };
+    });
+    flow.hotlist.push(...entries);
+    saveDoorFlow(flow);
+    return res.json({ ok: true, items: entries });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/door/doorwar", (req, res) => {
+  try {
+    const raw = req.body?.candidates ?? req.body?.items ?? "";
+    const choice = String(req.body?.choice || "").trim();
+    const reasoning = String(req.body?.reasoning || "").trim();
+    const list = Array.isArray(raw)
+      ? raw
+      : String(raw)
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((title) => ({ title }));
+    if (!list.length) {
+      return res.status(400).json({ ok: false, error: "missing candidates" });
+    }
+    const evaluated = list.map((item) => ({
+      ...item,
+      evaluation: evaluateEisenhowerMatrix(item),
+    }));
+    let selected = choice;
+    if (!selected) {
+      const q2 = evaluated
+        .filter((item) => item.evaluation?.quadrant === 2)
+        .sort((a, b) => {
+          const ia = a.evaluation?.importanceScore || 0;
+          const ib = b.evaluation?.importanceScore || 0;
+          return ib - ia;
+        });
+      if (q2.length) selected = q2[0].title || "";
+    }
+
+    const flow = loadDoorFlow();
+    const guid = makeDoorGuid();
+    const entry = {
+      guid,
+      short_id: doorShortId(guid),
+      created_at: new Date().toISOString(),
+      candidates: evaluated,
+      choice: selected,
+      reasoning,
+    };
+    flow.doorwars.push(entry);
+    saveDoorFlow(flow);
+
+    const markdown = renderDoorWarMarkdown(evaluated, selected, reasoning);
+    const title = `Door_War_${new Date().toISOString().slice(0, 10)}`;
+    const filepath = writeDoorMarkdown("doorwar", title, markdown);
+
+    const rcloneInfo = queueVaultSync();
+    return res.json({
+      ok: true,
+      doorwar: entry,
+      path: filepath,
+      rclone: rcloneInfo,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/door/warstack/start", (req, res) => {
+  try {
+    const idRef = String(req.body?.id || "").trim();
+    const title = String(req.body?.title || "War Stack").trim() || "War Stack";
+    const door = String(req.body?.door || "").trim();
+    const chatId = String(req.body?.chat_id || "").trim();
+    const source = String(req.body?.source || "telegram").trim();
+
+    const flow = loadDoorFlow();
+    let entry = null;
+
+    if (idRef) {
+      entry = findWarstack(flow, idRef);
+      if (!entry) {
+        return res.status(404).json({ ok: false, error: "warstack not found" });
+      }
+    } else {
+      const guid = makeDoorGuid();
+      entry = {
+        guid,
+        short_id: doorShortId(guid),
+        title,
+        door,
+        source,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: "draft",
+        current_step: WARSTACK_STEPS[0].key,
+        responses: {},
+        hits: [],
+        files: {},
+        ticktick: {},
+      };
+      flow.warstacks.push(entry);
+    }
+
+    if (chatId) flow.active_chats[chatId] = entry.guid;
+    saveDoorFlow(flow);
+
+    if (entry.status === "complete") {
+      if (chatId) delete flow.active_chats[chatId];
+      saveDoorFlow(flow);
+      return res.json({
+        ok: true,
+        done: true,
+        guid: entry.guid,
+        short_id: entry.short_id,
+      });
+    }
+
+    const step = WARSTACK_STEPS.find((s) => s.key === entry.current_step) || WARSTACK_STEPS[0];
+    return res.json({
+      ok: true,
+      guid: entry.guid,
+      short_id: entry.short_id,
+      step: step.key,
+      prompt: step.prompt,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/door/warstack/answer", async (req, res) => {
+  try {
+    const idRef = String(req.body?.id || "").trim();
+    const chatId = String(req.body?.chat_id || "").trim();
+    const answer = String(req.body?.answer || "").trim();
+    if (!answer) {
+      return res.status(400).json({ ok: false, error: "missing answer" });
+    }
+
+    const flow = loadDoorFlow();
+    let entry = null;
+    if (idRef) entry = findWarstack(flow, idRef);
+    if (!entry && chatId && flow.active_chats[chatId]) {
+      entry = findWarstack(flow, flow.active_chats[chatId]);
+    }
+    if (!entry) {
+      return res.status(404).json({ ok: false, error: "warstack not found" });
+    }
+    if (entry.status === "complete") {
+      return res.json({ ok: true, done: true, guid: entry.guid });
+    }
+
+    const stepKey = entry.current_step || WARSTACK_STEPS[0].key;
+    entry.responses = entry.responses || {};
+    if (stepKey === "domain") {
+      const normalized = normalizeDomain(answer);
+      entry.responses.domain = normalized;
+      entry.domain = normalized;
+    } else {
+      entry.responses[stepKey] = answer;
+    }
+    entry.updated_at = new Date().toISOString();
+
+    const stepIndex = WARSTACK_STEPS.findIndex((s) => s.key === stepKey);
+    const nextIndex = stepIndex + 1;
+
+    if (stepKey === "hits" || nextIndex >= WARSTACK_STEPS.length) {
+      const domain = entry.responses.domain || "Business";
+      entry.hits = generateHitsForDomain(domain);
+      entry.status = "complete";
+      entry.completed_at = new Date().toISOString();
+      entry.current_step = null;
+
+      const warstackMd = renderWarStackMarkdown(entry);
+      const hitsMd = renderHitsMarkdown(entry);
+      const warstackPath = writeDoorMarkdown(
+        "warstack",
+        `WarStack_${safeFilename(entry.title)}_${entry.short_id}`,
+        warstackMd
+      );
+      const hitsPath = writeDoorMarkdown(
+        "hitlist",
+        `Hits_${safeFilename(entry.title)}_${entry.short_id}`,
+        hitsMd
+      );
+      entry.files = { warstack: warstackPath, hits: hitsPath };
+
+      if (DOOR_HITS_TICKTICK) {
+        const { token } = getTickConfig();
+        if (token) {
+          entry.ticktick = entry.ticktick || {};
+          entry.ticktick.hits = [];
+          await Promise.all(
+            entry.hits.map(async (hit, idx) => {
+              try {
+                const created = await ticktickCreateTask({
+                  title: `Hit ${idx + 1}: ${hit.fact}`,
+                  content: `Obstacle: ${hit.obstacle}\nStrike: ${hit.strike}\nDoor: ${entry.title}`,
+                  tags: DOOR_HITS_TAGS,
+                });
+                if (created?.id || created?.taskId || created?.task_id) {
+                  entry.ticktick.hits.push({
+                    hit_id: hit.id,
+                    ticktick_id: created.id || created.taskId || created.task_id,
+                  });
+                }
+              } catch (err) {
+                console.error("TickTick hit failed:", err?.message || err);
+              }
+            })
+          );
+        }
+      }
+
+      if (chatId) {
+        delete flow.active_chats[chatId];
+      }
+      saveDoorFlow(flow);
+      const rcloneInfo = queueVaultSync();
+      return res.json({
+        ok: true,
+        done: true,
+        guid: entry.guid,
+        short_id: entry.short_id,
+        hits: entry.hits,
+        files: entry.files,
+        rclone: rcloneInfo,
+      });
+    }
+
+    entry.current_step = WARSTACK_STEPS[nextIndex].key;
+    saveDoorFlow(flow);
+    return res.json({
+      ok: true,
+      done: false,
+      guid: entry.guid,
+      step: entry.current_step,
+      prompt: WARSTACK_STEPS[nextIndex].prompt,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get("/api/door/warstack/:id", (req, res) => {
+  try {
+    const flow = loadDoorFlow();
+    const entry = findWarstack(flow, req.params.id);
+    if (!entry) return res.status(404).json({ ok: false, error: "not found" });
+    return res.json({ ok: true, warstack: entry });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Fire Week (TickTick primary, GCal fallback)
+app.get("/api/fire/week", async (req, res) => {
+  const tag = String(req.query?.tag || "fire").trim().toLowerCase();
+  const { start, end, week, rangeLabel } = getWeekRangeLocal();
+  let tasks = [];
+  let error = null;
+
+  try {
+    const raw = await ticktickListProjectTasks();
+    const filtered = raw
+      .filter((task) => !task.isCompleted && !task.completedTime)
+      .filter((task) => taskInRange(task, start, end))
+      .filter((task) => {
+        if (!tag) return true;
+        const tags = (task.tags || []).map((t) => String(t || "").toLowerCase());
+        return tags.includes(tag);
+      })
+      .map((task) => ({
+        id: task.id,
+        title: task.title || "(ohne Titel)",
+        tags: task.tags || [],
+        due: (parseTickTickDue(task) || "").toISOString?.() || (task.dueDateTime || task.dueDate || ""),
+      }));
+    tasks = filtered;
+  } catch (err) {
+    error = err?.message || String(err);
+  }
+
+  return res.json({
+    ok: !error,
+    source: error ? "gcal" : "ticktick",
+    week,
+    rangeLabel,
+    tasks,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
 });
 
 // Game map export (local markdown)
@@ -905,29 +2106,62 @@ app.post("/api/hotlist", (req, res) => {
 });
 
 // Core4 update (local JSON)
-app.post("/api/core4", (req, res) => {
+app.post("/api/core4", async (req, res) => {
   try {
     const subtask = String(req.body?.subtask || req.body?.task || "").trim().toLowerCase();
     if (!subtask) {
       return res.status(400).json({ ok: false, error: "missing subtask" });
     }
+
+    const mapped = mapCore4Subtask(subtask);
+    const todayKey = new Date().toISOString().split("T")[0];
+
+    if (BRIDGE_URL && mapped) {
+      const payload = {
+        id: `core4-${todayKey}-${subtask}`,
+        ts: new Date().toISOString(),
+        domain: mapped.domain,
+        task: mapped.task,
+        points: 0.5,
+        source: "hq",
+      };
+      const logRes = await bridgeFetch("/bridge/core4/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (logRes && logRes.ok !== false) {
+        const todayRes = await bridgeFetch("/bridge/core4/today");
+        if (todayRes && todayRes.ok !== false) {
+          return res.json({ ok: true, total: todayRes.total || 0, source: "bridge" });
+        }
+      }
+    }
+
     const data = updateCore4Subtask(subtask);
     if (!data) {
       return res.status(400).json({ ok: false, error: "unknown subtask" });
     }
     const total = getCore4Total(data);
-    return res.json({ ok: true, data, total });
+    return res.json({ ok: true, data, total, source: "local" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
 // Core4 today (local JSON)
-app.get("/api/core4/today", (_req, res) => {
+app.get("/api/core4/today", async (_req, res) => {
   try {
+    if (BRIDGE_URL) {
+      const todayRes = await bridgeFetch("/bridge/core4/today");
+      if (todayRes && todayRes.ok !== false) {
+        return res.json({ ok: true, total: todayRes.total || 0, source: "bridge" });
+      }
+    }
     const data = ensureCore4Today();
     const total = getCore4Total(data);
-    return res.json({ ok: true, data, total });
+    return res.json({ ok: true, data, total, source: "local" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -1138,6 +2372,26 @@ app.get("/api/voice/file", (req, res) => {
     }
     const content = fs.readFileSync(target, "utf8");
     return res.json({ ok: true, path: rel, content });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Voice autosave (local markdown)
+app.post("/api/voice/autosave", (req, res) => {
+  try {
+    const sectionRaw = String(req.body?.section || "voice").trim().toLowerCase();
+    const section = safeFilename(sectionRaw) || "voice";
+    const date = String(req.body?.date || new Date().toISOString().slice(0, 10)).trim();
+    const markdown = String(req.body?.markdown || "");
+    const dir = getVoiceVaultDir();
+    ensureDir(dir);
+
+    const filename = `Voice_${section}_${date}.md`;
+    const filepath = path.join(dir, filename);
+    fs.writeFileSync(filepath, markdown, "utf8");
+
+    return res.json({ ok: true, path: filepath });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

@@ -178,7 +178,7 @@ curl http://127.0.0.1:8799/api/fruits
 
 ## Known Issues
 
-### 1. Door Hot List Title Bug 🐛
+### 1. Door Hot List Title Bug 🐛 ✅ FIXED
 
 **Problem:** POST to `/api/door/hotlist` stores titles as `[object Object]`
 
@@ -186,9 +186,27 @@ curl http://127.0.0.1:8799/api/fruits
 
 **Severity:** Low (data still stored, just display issue)
 
-**Workaround:** None currently
+**Status:** ✅ **FIXED on 2026-01-01**
 
-**Fix Needed:** Check JSON parsing in `server.js` Hot List handler
+**Fix Applied:**
+- Location: `index-node/server.js` line 1651-1657
+- Change: Added object property extraction for `item.title`
+- Backwards compatible: Still handles plain strings and multiline text
+
+**Verification:**
+```bash
+# Object mode
+curl -X POST .../api/door/hotlist -d '{"items":[{"title":"Test"}]}'
+# Result: "Test" ✅
+
+# Plain string mode
+curl -X POST .../api/door/hotlist -d '{"items":["Test"]}'
+# Result: "Test" ✅
+
+# Multiline text mode
+curl -X POST .../api/door/hotlist -d '{"text":"Test1\nTest2"}'
+# Result: ["Test1","Test2"] ✅
+```
 
 ### 2. TickTick PROJECT_ID Missing ⚠️
 
