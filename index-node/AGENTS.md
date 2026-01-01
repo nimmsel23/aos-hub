@@ -3,13 +3,16 @@
 ## Project Structure & Module Organization
 - `server.js` runs the local router API and serves static files from `public/`.
 - `menu.yaml` is the single source of truth for routes shown on the index UI.
+- `data/` holds JSON payloads (e.g., `data/fruits_questions.json`).
 - `public/` holds all frontend assets:
   - `public/index.html` is the menu-only root UI.
   - `public/game/` is the local Game Centre (`/game`).
   - `public/game/tent.html` is General’s Tent (`/game/tent`).
   - `public/door/` is the local Door Centre (`/door`).
+  - `public/facts.html` is the local Fruits UI (`/facts`).
+  - `public/voice/` contains Voice Centre pages.
   - `public/core4.html` is the Core4 TTY bridge page.
-- Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, latest map entries).
+- Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
 - Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
 ## Build, Test, and Development Commands
@@ -39,4 +42,8 @@
 ## Security & Configuration Tips
 - Local-only terminal is served via `/ws/terminal` and blocked for non-local IPs unless `TERMINAL_ALLOW_REMOTE=1`.
 - Routes rely on `menu.yaml`; treat it as read-only input for UI consumers.
+- Bridge handoff uses `AOS_BRIDGE_URL` (or `BRIDGE_URL`) when set.
 - Vault content is read from `~/AlphaOS-Vault`; keep file paths stable.
+
+## Documentation Locations
+- Node centre docs belong in `DOCS/node/`.

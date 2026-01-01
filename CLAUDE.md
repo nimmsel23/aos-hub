@@ -6,6 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **aos-hub** is the central infrastructure for the AlphaOS ecosystem - a Hub-and-Spoke architecture combining a local Node.js server (Index Node), a Python Telegram router bot, an aiohttp bridge service, and Google Apps Script fallback centres.
 
+## Component-Specific Guidelines
+
+**IMPORTANT:** When working on a specific component, always read its AGENTS.md first:
+
+| Component | Guidelines | Purpose |
+|-----------|------------|---------|
+| **Index Node** | `index-node/AGENTS.md` | Build commands, coding style, smoke tests |
+| **Router Bot** | `router/AGENTS.md` | routerctl usage, extension patterns |
+| **Bridge** | `bridge/AGENTS.md` | bridgectl, selftest.py, handler patterns |
+| **GAS HQ** | `gas/AGENTS.md` | **Scope isolation** - work only in gas/ |
+| **War Stack Bot** | `python-warstack-bot/AGENTS.md` | Idle timeout, resume flow |
+| **Fire Map Bot** | `python-firemap-bot/AGENTS.md` | On-demand usage, tele fallback |
+
+**Pattern:** Each component has focused guidelines. This CLAUDE.md provides the high-level architecture, component AGENTS.md files provide detailed implementation notes.
+
 **Critical Architectural Principle:** This is NOT a monolith. It's a coordinated multi-service system where:
 - **Index Node (8799)** = Primary HQ (local web UI + API server)
 - **Router Bot** = Telegram interface that routes commands to centres
@@ -414,6 +429,23 @@ journalctl -u aos-index -f             # If system service
 - Script: `index-node/scripts/vault-sync.sh`
 - Modes: `pull`, `push`, `bisync`
 - Timers: `alphaos-vault-sync-pull.service`, `alphaos-vault-sync-push.service`
+
+## Component Work Guidelines
+
+**Before editing any component:**
+
+1. **Read its AGENTS.md** - Contains component-specific gotchas, patterns, coding style
+2. **Follow scope isolation** - Especially important for GAS (work only in gas/)
+3. **Use component tools** - routerctl (Router), bridgectl (Bridge), indexctl (Index Node)
+4. **Test appropriately** - Each component has different test patterns
+
+**Component AGENTS.md files:**
+- `index-node/AGENTS.md` - Repository guidelines, build commands, smoke tests
+- `router/AGENTS.md` - Router bot patterns, extension system
+- `bridge/AGENTS.md` - Bridge patterns, non-throwing handlers
+- `gas/AGENTS.md` - **CRITICAL:** Scope isolation - do NOT edit other components in GAS session
+- `python-warstack-bot/AGENTS.md` - War Stack bot specific patterns
+- `python-firemap-bot/AGENTS.md` - Fire Map bot specific patterns
 
 ## Future Directions
 
