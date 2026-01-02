@@ -546,6 +546,37 @@ async function bridgeFetch(pathname, options = {}) {
   }
 }
 
+/**
+ * Create Taskwarrior task(s) via Bridge /bridge/task/execute
+ * @param {Object|Array} task - Single task object or array of tasks
+ * @returns {Promise<Object>} - { ok, results: [{ ok, task_uuid, task_id, ... }] }
+ */
+async function createTaskwarriorTask(task) {
+  if (!BRIDGE_URL) {
+    return { ok: false, error: "BRIDGE_URL not configured" };
+  }
+  const tasks = Array.isArray(task) ? task : [task];
+  return bridgeFetch("/bridge/task/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks }),
+  });
+}
+
+/**
+ * Update Taskwarrior task via `task <uuid> modify ...`
+ * Note: Bridge doesn't have a modify endpoint yet, so we use task CLI directly
+ * TODO: Add /bridge/task/modify endpoint in bridge/app.py
+ * @param {String} uuid - Taskwarrior UUID
+ * @param {Object} updates - { tags: ['+newtag'], project: 'newproject', ... }
+ * @returns {Promise<Object>} - { ok, stdout, stderr }
+ */
+async function updateTaskwarriorTask(uuid, updates) {
+  // For now, return not implemented - we'll add Bridge endpoint later
+  // Alternatively, spawn child_process here to run `task <uuid> modify ...`
+  return { ok: false, error: "task modify via bridge not implemented yet" };
+}
+
 function getCore4TodayFile() {
   return path.join(os.homedir(), ".local", "share", "alphaos", "drop", "core4_today.json");
 }
@@ -1643,10 +1674,11 @@ app.get("/api/door/hotlist", (_req, res) => {
   }
 });
 
-app.post("/api/door/hotlist", (req, res) => {
+app.post("/api/door/hotlist", async (req, res) => {
   try {
     const raw = req.body?.items ?? req.body?.text ?? "";
     const source = String(req.body?.source || "manual");
+    const domain = String(req.body?.domain || "Business").trim();
     const list = Array.isArray(raw)
       ? raw.map((item) => {
           // Handle object with title property or plain string
@@ -1659,49 +1691,84 @@ app.post("/api/door/hotlist", (req, res) => {
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean);
+
     if (!list.length) {
       return res.status(400).json({ ok: false, error: "missing items" });
     }
-    const flow = loadDoorFlow();
-    const entries = list.map((title) => {
-      const guid = makeDoorGuid();
-      return {
-        guid,
-        short_id: doorShortId(guid),
-        title,
+
+    // Create Taskwarrior tasks via Bridge
+    const tasks = list.map((title) => ({
+      description: title,
+      tags: ["potential", domain.toLowerCase()],
+      project: "HotList",
+      meta: {
         source,
-        created_at: new Date().toISOString(),
-      };
-    });
+        domain,
+        created_via: "index-node"
+      }
+    }));
+
+    const result = await createTaskwarriorTask(tasks);
+
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: `taskwarrior creation failed: ${result.error}`
+      });
+    }
+
+    // Save UUIDs to .door-flow.json (UUID-only format)
+    const flow = loadDoorFlow();
+    const entries = result.results.map((r, idx) => ({
+      task_uuid: r.task_uuid,
+      task_id: r.task_id,
+      title: list[idx],
+      source,
+      domain,
+      created_at: new Date().toISOString()
+    }));
+
     flow.hotlist.push(...entries);
     saveDoorFlow(flow);
+
     return res.json({ ok: true, items: entries });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
-app.post("/api/door/doorwar", (req, res) => {
+app.post("/api/door/doorwar", async (req, res) => {
   try {
-    const raw = req.body?.candidates ?? req.body?.items ?? "";
     const choice = String(req.body?.choice || "").trim();
     const reasoning = String(req.body?.reasoning || "").trim();
-    const list = Array.isArray(raw)
-      ? raw
-      : String(raw)
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .map((title) => ({ title }));
-    if (!list.length) {
-      return res.status(400).json({ ok: false, error: "missing candidates" });
+    const domain = String(req.body?.domain || "Business").trim();
+
+    // Load Hot List from flow
+    const flow = loadDoorFlow();
+    const hotlist = flow.hotlist || [];
+
+    if (!hotlist.length) {
+      return res.status(400).json({
+        ok: false,
+        error: "hot list is empty - add items first via POST /api/door/hotlist"
+      });
     }
-    const evaluated = list.map((item) => ({
+
+    // Evaluate Hot List items with Eisenhower Matrix
+    const evaluated = hotlist.map((item) => ({
       ...item,
       evaluation: evaluateEisenhowerMatrix(item),
     }));
-    let selected = choice;
-    if (!selected) {
+
+    // Auto-select Q2 Domino Door if no manual choice
+    let selectedItem = null;
+    if (choice) {
+      // Find by title or UUID
+      selectedItem = evaluated.find(
+        (item) => item.title === choice || item.task_uuid === choice
+      );
+    } else {
+      // Auto-recommend highest Q2 item
       const q2 = evaluated
         .filter((item) => item.evaluation?.quadrant === 2)
         .sort((a, b) => {
@@ -1709,23 +1776,57 @@ app.post("/api/door/doorwar", (req, res) => {
           const ib = b.evaluation?.importanceScore || 0;
           return ib - ia;
         });
-      if (q2.length) selected = q2[0].title || "";
+      if (q2.length) selectedItem = q2[0];
     }
 
-    const flow = loadDoorFlow();
-    const guid = makeDoorGuid();
-    const entry = {
-      guid,
-      short_id: doorShortId(guid),
-      created_at: new Date().toISOString(),
-      candidates: evaluated,
-      choice: selected,
-      reasoning,
+    if (!selectedItem) {
+      return res.status(400).json({
+        ok: false,
+        error: "no suitable door found (try selecting Q2 item manually)"
+      });
+    }
+
+    // Create "Door" task in Taskwarrior via Bridge
+    const doorTask = {
+      description: `Door: ${selectedItem.title}`,
+      tags: ["plan", domain.toLowerCase()],
+      project: domain,
+      depends: selectedItem.task_uuid, // Depends on Hot List task
+      meta: {
+        hotlist_uuid: selectedItem.task_uuid,
+        hotlist_title: selectedItem.title,
+        eisenhower_quadrant: selectedItem.evaluation?.quadrant,
+        created_via: "index-node"
+      }
     };
+
+    const result = await createTaskwarriorTask(doorTask);
+
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: `door task creation failed: ${result.error}`
+      });
+    }
+
+    const doorTaskData = result.results[0];
+
+    // Save to .door-flow.json
+    const entry = {
+      door_task_uuid: doorTaskData.task_uuid,
+      door_task_id: doorTaskData.task_id,
+      hotlist_uuid: selectedItem.task_uuid,
+      selected_title: selectedItem.title,
+      domain,
+      reasoning: reasoning || `Q${selectedItem.evaluation?.quadrant} - ${selectedItem.evaluation?.reasoning}`,
+      created_at: new Date().toISOString()
+    };
+
     flow.doorwars.push(entry);
     saveDoorFlow(flow);
 
-    const markdown = renderDoorWarMarkdown(evaluated, selected, reasoning);
+    // Export markdown (optional)
+    const markdown = renderDoorWarMarkdown(evaluated, selectedItem.title, entry.reasoning);
     const title = `Door_War_${new Date().toISOString().slice(0, 10)}`;
     const filepath = writeDoorMarkdown("doorwar", title, markdown);
 
@@ -1733,6 +1834,8 @@ app.post("/api/door/doorwar", (req, res) => {
     return res.json({
       ok: true,
       doorwar: entry,
+      evaluated,
+      selected: selectedItem,
       path: filepath,
       rclone: rcloneInfo,
     });
