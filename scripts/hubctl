@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="hubctl"
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+die() { echo "[$APP] $*" >&2; exit 1; }
+
+repo_exec() {
+  local rel="$1"; shift || true
+  local path="$ROOT_DIR/$rel"
+  [[ -e "$path" ]] || die "missing: $path"
+  [[ -x "$path" ]] || die "not executable: $path"
+  exec "$path" "$@"
+}
+
+install_cli() {
+  local bin_dir="${HUBCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/hubctl"
+  mkdir -p "$bin_dir" 2>/dev/null || die "cannot create: $bin_dir (set HUBCTL_BIN_DIR=... )"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    die "refusing to overwrite non-symlink: $dst"
+  fi
+  ln -sf "$ROOT_DIR/scripts/hubctl" "$dst"
+  echo "[$APP] installed: $dst"
+  if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+    echo "[$APP] NOTE: add to PATH: export PATH=\"$bin_dir:\$PATH\""
+  fi
+}
+
+uninstall_cli() {
+  local bin_dir="${HUBCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/hubctl"
+  if [[ -L "$dst" ]]; then
+    rm -f "$dst"
+    echo "[$APP] removed: $dst"
+    return 0
+  fi
+  echo "[$APP] nothing to remove at: $dst"
+}
+
+usage() {
+  cat <<EOF
+$APP — unified CLI for aos-hub
+
+Usage:
+  $APP doctor
+  $APP bridge <bridgectl-args...>
+  $APP router <routerctl-args...>
+  $APP index  <indexctl-args...>
+  $APP sync   <syncvaultctl-args...>
+  $APP fire   <command>
+
+Install into PATH (optional):
+  $APP install-cli
+  $APP uninstall-cli
+
+Examples:
+  $APP doctor
+  $APP bridge health
+  $APP router doctor
+  $APP index doctor
+  $APP sync status
+  $APP fire status
+  $APP fire enable
+  $APP fire run
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help|"") usage ;;
+  install-cli) install_cli ;;
+  uninstall-cli) uninstall_cli ;;
+
+  doctor) repo_exec "scripts/aos-doctor" "$@" ;;
+  bridge) repo_exec "bridge/bridgectl" "$@" ;;
+  router) repo_exec "router/routerctl" "$@" ;;
+  index) repo_exec "scripts/indexctl" "$@" ;;
+  sync) repo_exec "scripts/syncvaultctl" "$@" ;;
+  fire)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      setup)
+        repo_exec "scripts/setup-fire-map.sh" "$@"
+        ;;
+      run|sync)
+        repo_exec "firemap" sync "$@"
+        ;;
+      status)
+        repo_exec "firemap" status
+        ;;
+      list)
+        repo_exec "firemap" list
+        ;;
+      enable)
+        systemctl --user enable --now alphaos-firemap-weekly.timer
+        ;;
+      disable)
+        systemctl --user disable --now alphaos-firemap-weekly.timer
+        ;;
+      start)
+        systemctl --user start alphaos-firemap-weekly.timer
+        ;;
+      stop)
+        systemctl --user stop alphaos-firemap-weekly.timer
+        ;;
+      logs)
+        journalctl --user -u alphaos-firemap-weekly.service -n 200 -f
+        ;;
+      ""|-h|--help|help)
+        cat <<EOF
+hubctl fire — Fire Map scheduling + sync
+
+Commands:
+  hubctl fire setup        # install Taskwarrior config + weekly timer
+  hubctl fire enable       # enable + start weekly timer
+  hubctl fire disable      # disable + stop weekly timer
+  hubctl fire start|stop   # start/stop weekly timer
+  hubctl fire status       # show Fire Map status (current week)
+  hubctl fire list         # list Fire Maps
+  hubctl fire run|sync     # sync Fire Maps to Taskwarrior now
+  hubctl fire logs         # follow weekly sync logs
+EOF
+        ;;
+      *)
+        die "unknown fire command: $sub"
+        ;;
+    esac
+    ;;
+
+  *)
+    echo "[$APP] unknown command: $cmd" >&2
+    usage
+    exit 1
+    ;;
+esac

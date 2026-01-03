@@ -564,17 +564,234 @@ async function createTaskwarriorTask(task) {
 }
 
 /**
- * Update Taskwarrior task via `task <uuid> modify ...`
- * Note: Bridge doesn't have a modify endpoint yet, so we use task CLI directly
- * TODO: Add /bridge/task/modify endpoint in bridge/app.py
+ * Update Taskwarrior task via Bridge /bridge/task/modify
  * @param {String} uuid - Taskwarrior UUID
- * @param {Object} updates - { tags: ['+newtag'], project: 'newproject', ... }
+ * @param {Object} updates - { tags_add: [], tags_remove: [], depends: [], wait: '', ... }
  * @returns {Promise<Object>} - { ok, stdout, stderr }
  */
 async function updateTaskwarriorTask(uuid, updates) {
-  // For now, return not implemented - we'll add Bridge endpoint later
-  // Alternatively, spawn child_process here to run `task <uuid> modify ...`
-  return { ok: false, error: "task modify via bridge not implemented yet" };
+  if (!BRIDGE_URL) {
+    return { ok: false, error: "BRIDGE_URL not configured" };
+  }
+  return bridgeFetch("/bridge/task/modify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uuid, updates }),
+  });
+}
+
+/**
+ * Parse War Stack markdown to extract hits, domain, title
+ * @param {String} markdown - War Stack markdown content
+ * @returns {Object} - { hits: [{fact, obstacle, strike, responsibility}], domain, title }
+ */
+function parseWarStackMarkdown(markdown) {
+  const hits = [];
+  const lines = markdown.split("\n");
+
+  // Extract domain from frontmatter or markdown
+  let domain = "Business";
+  const domainMatch = markdown.match(/domain:\s*(\w+)/i) || markdown.match(/\*\*Domain:\*\*\s*(\w+)/i);
+  if (domainMatch) {
+    domain = domainMatch[1];
+  }
+
+  // Extract title from first heading
+  let title = "War Stack";
+  const titleMatch = markdown.match(/^#\s+(.+)$/m);
+  if (titleMatch) {
+    title = titleMatch[1].replace(/^WAR STACK\s*-\s*/i, "").trim();
+  }
+
+  // Extract 4 Hits (sections: ### Hit 1, ### Hit 2, etc)
+  for (let hitNum = 1; hitNum <= 4; hitNum++) {
+    const hitRegex = new RegExp(`###\\s+Hit\\s+${hitNum}[\\s\\S]*?(?=###\\s+Hit\\s+|##\\s+|$)`, "i");
+    const hitMatch = markdown.match(hitRegex);
+
+    if (hitMatch) {
+      const hitSection = hitMatch[0];
+      const fact = (hitSection.match(/\*\*FACT:\*\*\s*(.+)/i) || [])[1] || "";
+      const obstacle = (hitSection.match(/\*\*OBSTACLE:\*\*\s*(.+)/i) || [])[1] || "";
+      const strike = (hitSection.match(/\*\*STRIKE:\*\*\s*(.+)/i) || [])[1] || "";
+      const responsibility = (hitSection.match(/\*\*RESPONSIBILITY:\*\*\s*(.+)/i) || [])[1] || "";
+
+      hits.push({
+        fact: fact.trim(),
+        obstacle: obstacle.trim(),
+        strike: strike.trim(),
+        responsibility: responsibility.trim()
+      });
+    }
+  }
+
+  return { hits, domain, title };
+}
+
+/**
+ * Build War Stack task objects (before UUID assignment)
+ * Pattern from GAS door_buildWarStackTasks_()
+ * @param {Object} parsed - Result from parseWarStackMarkdown()
+ * @param {Object} meta - { sessionId, fileId, title }
+ * @returns {Array} - Array of task objects for Bridge
+ */
+function buildWarStackTasks(parsed, meta = {}) {
+  const { hits, domain, title } = parsed;
+  const tasks = [];
+
+  if (!hits || hits.length === 0) {
+    return tasks;
+  }
+
+  const domainTag = domain.toLowerCase();
+  const domainProject = domain;
+
+  // 1. Build 4 Hit tasks (first in array, created first)
+  hits.forEach((hit, idx) => {
+    const primary = hit.fact || hit.strike || hit.obstacle || hit.responsibility || "War Stack Hit";
+    const desc = `Hit ${idx + 1}: ${primary}`;
+
+    tasks.push({
+      description: desc,
+      tags: ["hit", "production", domainTag],
+      project: domainProject,
+      due: `today+${idx + 1}d`,  // Hit 1-4: today+1..4d
+      wait: `+${idx + 1}d`,
+      meta: {
+        warstack_session_id: meta.sessionId || "",
+        warstack_file_path: meta.filePath || "",
+        warstack_title: title,
+        hit_index: idx + 1,
+        hit_title: primary
+      }
+    });
+  });
+
+  // 2. Door parent task (depends filled after UUIDs known)
+  tasks.push({
+    description: `Door: ${title}`,
+    tags: ["plan", domainTag],
+    project: domainProject,
+    meta: {
+      warstack_session_id: meta.sessionId || "",
+      warstack_file_path: meta.filePath || "",
+      warstack_title: title,
+      door_parent: true,
+      hit_count: hits.length
+    }
+  });
+
+  // 3. Profit task (wait + depends filled after Door UUID known)
+  tasks.push({
+    description: `Profit: ${title}`,
+    tags: ["profit", domainTag],
+    project: domainProject,
+    wait: "+5d",
+    meta: {
+      warstack_session_id: meta.sessionId || "",
+      warstack_file_path: meta.filePath || "",
+      warstack_title: title,
+      profit: true
+    }
+  });
+
+  return tasks;
+}
+
+/**
+ * Wire War Stack dependencies after UUIDs are known
+ * Pattern from GAS door_wireWarStackDependencies_()
+ * @param {Array} results - Results from Bridge task execution
+ * @returns {Object} - { door_uuid, hit_uuids, profit_uuid }
+ */
+function wireWarStackDependencies(results) {
+  const hits = [];
+  let door = null;
+  let profit = null;
+
+  results.forEach((result) => {
+    if (!result || !result.task_uuid) return;
+    const meta = result.meta || {};
+
+    if (meta.door_parent) {
+      door = result;
+    } else if (meta.profit) {
+      profit = result;
+    } else {
+      hits.push(result);
+    }
+  });
+
+  const hitUuids = hits.map(h => h.task_uuid).filter(Boolean);
+
+  return {
+    door_uuid: door?.task_uuid,
+    door_task_id: door?.task_id,
+    hit_uuids: hitUuids,
+    hits: hits.map(h => ({
+      uuid: h.task_uuid,
+      task_id: h.task_id,
+      hit_index: h.meta?.hit_index,
+      title: h.meta?.hit_title || h.description
+    })),
+    profit_uuid: profit?.task_uuid,
+    profit_task_id: profit?.task_id
+  };
+}
+
+/**
+ * Update markdown with Taskwarrior UUIDs (frontmatter + section)
+ * Pattern from GAS door_upsertTaskwarriorFrontmatter_() and door_upsertTaskwarriorSection_()
+ * @param {String} markdown - Original markdown
+ * @param {Object} wired - Result from wireWarStackDependencies()
+ * @returns {String} - Updated markdown with UUIDs
+ */
+function updateMarkdownWithUUIDs(markdown, wired) {
+  let updated = markdown;
+
+  // Add ## Taskwarrior section at end
+  const taskSection = [
+    "",
+    "## Taskwarrior",
+    "",
+    "War Stack Tasks (UUIDs):",
+    "",
+    `- Door: \`${wired.door_uuid}\` (${wired.door_task_id})`,
+    ...wired.hits.map(h => `- Hit ${h.hit_index}: \`${h.uuid}\` (${h.task_id}) — ${h.title}`),
+    `- Profit: \`${wired.profit_uuid}\` (${wired.profit_task_id})`,
+    ""
+  ].join("\n");
+
+  // Remove existing ## Taskwarrior section if present
+  updated = updated.replace(/\n## Taskwarrior[\s\S]*?(?=\n##|$)/g, "");
+  updated = updated.trim() + "\n" + taskSection;
+
+  // Update frontmatter if exists
+  if (updated.startsWith("---")) {
+    const fmEnd = updated.indexOf("---", 3);
+    if (fmEnd > 0) {
+      const head = updated.slice(0, fmEnd + 3);
+      const body = updated.slice(fmEnd + 3);
+
+      // Remove old taskwarrior fields
+      let cleanedHead = head
+        .split("\n")
+        .filter(line => !line.match(/^taskwarrior_/))
+        .join("\n");
+
+      // Add new fields before closing ---
+      const newFields = [
+        `taskwarrior_door_uuid: ${wired.door_uuid}`,
+        `taskwarrior_profit_uuid: ${wired.profit_uuid}`,
+        `taskwarrior_hits:`,
+        ...wired.hits.map(h => `  - uuid: ${h.uuid}\n    hit_index: ${h.hit_index}`)
+      ].join("\n");
+
+      cleanedHead = cleanedHead.replace(/\n---$/, `\n${newFields}\n---`);
+      updated = cleanedHead + body;
+    }
+  }
+
+  return updated;
 }
 
 function getCore4TodayFile() {
@@ -1580,75 +1797,121 @@ app.post("/api/fruits/export", (_req, res) => {
 });
 
 // Door export (local markdown)
-app.post("/api/door/export", (req, res) => {
+app.post("/api/door/export", async (req, res) => {
   try {
     const markdownRaw = String(req.body?.markdown || "").trim();
     if (!markdownRaw) {
       return res.status(400).json({ ok: false, error: "missing markdown" });
     }
-    const tool = String(req.body?.tool || "").trim().toLowerCase();
-    const title = String(req.body?.title || "").trim();
-    const ticktick = req.body?.ticktick === true;
-    const dir = resolveDoorExportDir(tool);
-    ensureDir(dir);
 
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const base = safeFilename(title) || `${tool || "door"}_${stamp}`;
-    const filename = `${base}.md`;
+    const sessionId = String(req.body?.sessionId || "").trim();
+    const createTasks = req.body?.createTasks !== false; // Default true
+
+    // Parse War Stack markdown
+    const parsed = parseWarStackMarkdown(markdownRaw);
+    if (!parsed.hits || parsed.hits.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "no hits found in markdown - expected ### Hit 1-4 sections"
+      });
+    }
+
+    // Determine filepath
+    const dir = path.join(os.homedir(), "AlphaOS-Vault", "Door", "War-Stacks");
+    ensureDir(dir);
+    const stamp = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const base = safeFilename(parsed.title) || `warstack_${stamp}`;
+    const filename = `${stamp}_${base}.md`;
     const filepath = path.join(dir, filename);
 
     let markdown = markdownRaw;
-    let syncId = null;
-    if (ticktick) {
-      syncId = makeSyncId(`door-${tool || "entry"}`);
-      markdown = `${markdownRaw}\n\nSYNC-ID: ${syncId}`;
+    let wired = null;
+
+    // Create Taskwarrior tasks if requested
+    if (createTasks && BRIDGE_URL) {
+      // Build task objects
+      const tasks = buildWarStackTasks(parsed, {
+        sessionId,
+        filePath: filepath,
+        title: parsed.title
+      });
+
+      if (tasks.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          error: "failed to build tasks from parsed data"
+        });
+      }
+
+      // Create all tasks via Bridge
+      const result = await createTaskwarriorTask(tasks);
+
+      if (!result.ok) {
+        return res.status(502).json({
+          ok: false,
+          error: `taskwarrior creation failed: ${result.error}`
+        });
+      }
+
+      // Wire dependencies
+      wired = wireWarStackDependencies(result.results);
+
+      // Update Door task with depends: [hit1, hit2, hit3, hit4]
+      if (wired.door_uuid && wired.hit_uuids.length > 0) {
+        await updateTaskwarriorTask(wired.door_uuid, {
+          depends: wired.hit_uuids
+        });
+      }
+
+      // Update Profit task with depends: [door_uuid]
+      if (wired.profit_uuid && wired.door_uuid) {
+        await updateTaskwarriorTask(wired.profit_uuid, {
+          depends: [wired.door_uuid]
+        });
+      }
+
+      // Update markdown with UUIDs
+      markdown = updateMarkdownWithUUIDs(markdownRaw, wired);
     }
+
+    // Write markdown to file
     fs.writeFileSync(filepath, markdown + "\n", "utf8");
 
-    const tickInfo = { ok: false, status: "skipped" };
-    if (ticktick) {
-      const { token } = getTickConfig();
-      if (token) {
-        tickInfo.syncId = syncId;
-        tickInfo.ok = true;
-        tickInfo.status = "queued";
-        const tags = ["door"];
-        if (tool) tags.push(tool);
-        Promise.resolve()
-          .then(() =>
-            ticktickCreateTask({
-              title: title || `Door ${tool || "entry"}`,
-              content: markdown,
-              tags,
-            })
-          )
-          .then((created) => {
-            if (!created) return;
-            appendSyncEntry({
-              syncId,
-              ticktickId: created.id || created.taskId || created.task_id || "",
-              scope: "door",
-              tool,
-              title: title || "",
-              path: filepath,
-              createdAt: new Date().toISOString(),
-            });
-          })
-          .catch((err) => {
-            console.error("TickTick push failed:", err?.message || err);
-          });
-      } else {
-        tickInfo.status = "missing-token";
-      }
+    // Save to .door-flow.json
+    if (wired) {
+      const flow = loadDoorFlow();
+      flow.warstacks.push({
+        door_task_uuid: wired.door_uuid,
+        door_task_id: wired.door_task_id,
+        profit_task_uuid: wired.profit_uuid,
+        profit_task_id: wired.profit_task_id,
+        hit_uuids: wired.hit_uuids,
+        title: parsed.title,
+        domain: parsed.domain,
+        filepath,
+        session_id: sessionId,
+        created_at: new Date().toISOString()
+      });
+      saveDoorFlow(flow);
     }
 
     const rcloneInfo = queueVaultSync();
 
     return res.json({
       ok: true,
-      tool,
       path: filepath,
-      ticktick: tickInfo,
+      parsed: {
+        title: parsed.title,
+        domain: parsed.domain,
+        hit_count: parsed.hits.length
+      },
+      tasks: wired ? {
+        door_uuid: wired.door_uuid,
+        door_task_id: wired.door_task_id,
+        profit_uuid: wired.profit_uuid,
+        profit_task_id: wired.profit_task_id,
+        hits: wired.hits
+      } : null,
       rclone: rcloneInfo,
     });
   } catch (err) {

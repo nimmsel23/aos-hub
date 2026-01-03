@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Git Auto-Sync Script (repo-local copy)
+# Auto-commit + pull --rebase + push for any repo.
+# Usage: git-auto-sync.sh [<repo_path>] [<label>]
+
+set -euo pipefail
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log() { echo -e "${BLUE}→${NC} $1"; }
+success() { echo -e "${GREEN}✓${NC} $1"; }
+warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+die() { echo -e "${RED}✗${NC} $1"; exit 1; }
+
+show_help() {
+  cat <<EOF
+Usage: $(basename "$0") [<repo_path>] [<label>]
+
+Auto-commit + pull --rebase + push for a git repo.
+- repo_path: defaults to current directory
+- label: optional name for output
+EOF
+}
+
+if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+  show_help
+  exit 0
+fi
+
+REPO_DIR="${1:-$(pwd)}"
+LABEL="${2:-$(basename "$REPO_DIR")}"
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+  die "Not a git repository: $REPO_DIR"
+fi
+
+if ! git -C "$REPO_DIR" remote get-url origin &>/dev/null; then
+  warn "No remote 'origin' configured."
+  echo ""
+  echo "To add a remote, run:"
+  echo "  cd $REPO_DIR"
+  echo "  git remote add origin <your-repo-url>"
+  echo ""
+  exit 0
+fi
+
+BRANCH="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+
+echo ""
+echo "╔════════════════════════════════════════╗"
+printf "║   %-34s ║\n" "${LABEL} Git Auto-Sync"
+echo "╚════════════════════════════════════════╝"
+echo ""
+
+log "Checking for changes..."
+if git -C "$REPO_DIR" status --porcelain | grep -q .; then
+  log "Adding changes..."
+  git -C "$REPO_DIR" add -A
+
+  TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+  COMMIT_MSG="Auto-sync: $TIMESTAMP - $LABEL"
+
+  if ! git -C "$REPO_DIR" diff --staged --quiet; then
+    log "Committing changes..."
+    git -C "$REPO_DIR" commit -m "$COMMIT_MSG"
+    success "Committed: $COMMIT_MSG"
+  else
+    success "No changes to commit."
+  fi
+else
+  success "No changes to commit."
+fi
+
+log "Pulling remote changes..."
+if git -C "$REPO_DIR" pull --rebase origin "$BRANCH"; then
+  success "Pulled latest changes from remote"
+else
+  die "Pull failed - resolve conflicts manually"
+fi
+
+log "Pushing changes to remote..."
+if git -C "$REPO_DIR" rev-parse --abbrev-ref --symbolic-full-name @{u} &>/dev/null; then
+  ahead=$(git -C "$REPO_DIR" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
+  if [ "$ahead" -gt 0 ]; then
+    if git -C "$REPO_DIR" push origin "$BRANCH" || git -C "$REPO_DIR" push -u origin "$BRANCH"; then
+      success "Pushed successfully!"
+    else
+      die "Push failed - check your network and permissions"
+    fi
+  else
+    success "Already up to date."
+  fi
+else
+  if git -C "$REPO_DIR" push -u origin "$BRANCH"; then
+    success "Pushed successfully!"
+  else
+    die "Push failed - check your network and permissions"
+  fi
+fi
+
+echo ""
+echo "╔════════════════════════════════════════╗"
+echo "║   ✓ Sync Complete!                     ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+
+log "Recent commits:"
+git -C "$REPO_DIR" log --oneline -3
+echo ""
+
