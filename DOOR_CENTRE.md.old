@@ -1,0 +1,808 @@
+# Door Centre Documentation
+
+**Door Centre** implements the **DOOR Pillar** from AlphaOS - the weekly tactics system using the 4P Flow:
+**Potential → Plan → Production → Profit**
+
+This document covers the complete Door Centre implementation across all aos-hub components.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Phase 1: POTENTIAL (Hot List)](#phase-1-potential-hot-list)
+4. [Phase 2: PLAN (Door War)](#phase-2-plan-door-war)
+5. [Phase 3: PRODUCTION (Hit List)](#phase-3-production-hit-list)
+6. [Phase 4: PROFIT (Reflection)](#phase-4-profit-reflection)
+7. [Data Flow](#data-flow)
+8. [API Reference](#api-reference)
+9. [Multi-Component Integration](#multi-component-integration)
+
+---
+
+## Overview
+
+**Purpose:** Transform chaotic ideas (Hot List) into systematic weekly execution (Hit List) through strategic filtering (Door War) and transformative inquiry (War Stack).
+
+**Key Concepts:**
+- **Hot List** - Capture all potential doors (ideas, projects, opportunities)
+- **Door War** - Select ONE Domino Door using Eisenhower Matrix (Quadrant 2: Important + Not Urgent)
+- **War Stack** - Deep inquiry into selected door (Trigger/Narrative/Validation/Impact → 4 Hits)
+- **Hit List** - Tactical execution (4 Hits from War Stack pushed to Taskwarrior/TickTick)
+- **Profit** - Weekly reflection and achieved doors review
+
+**Domino Door Principle:** One door opens many. Focus on doors that unlock multiple opportunities.
+
+---
+
+## Architecture
+
+### Multi-Component System
+
+Door Centre functionality is distributed across:
+
+| Component | Role | Location |
+|-----------|------|----------|
+| **Index Node** | Primary HQ - Web UI + API server | `index-node/server.js` |
+| **Router Bot** | Telegram interface (`/door` commands) | `router/extensions/door_flow.py` |
+| **War Stack Bot** | Conversational War Stack creation | `python-warstack-bot/warstack_bot.py` |
+| **GAS Web App** | Cloud fallback (offline mode) | `gas/Door_*.html` |
+| **Bridge** | Data flow + GAS webhook forwarding | `bridge/app.py` |
+
+### Data Persistence
+
+**Primary Storage:** `~/AlphaOS-Vault/Door/.door-flow.json`
+
+**Structure:**
+```json
+{
+  "version": 1,
+  "updated_at": "2026-01-02T12:00:00.000Z",
+  "hotlist": [
+    {
+      "guid": "lqz7qxxx123abc",
+      "short_id": "lqz7qxxx",
+      "title": "Vitaltrainer Module 6 fertigstellen",
+      "source": "manual",
+      "created_at": "2026-01-02T10:30:00.000Z"
+    }
+  ],
+  "doorwars": [
+    {
+      "guid": "lqz8yyyy456def",
+      "selected_door": "Vitaltrainer Module 6 fertigstellen",
+      "reasoning": "Q2 Domino Door - credibility + content for FADARO",
+      "candidates": ["Door 1", "Door 2", "Door 3"],
+      "created_at": "2026-01-02T11:00:00.000Z"
+    }
+  ],
+  "warstacks": [
+    {
+      "guid": "lqz9zzzz789ghi",
+      "short_id": "lqz9zzzz",
+      "door_title": "Vitaltrainer Module 6 fertigstellen",
+      "domain": "Business",
+      "trigger": "Was triggert mich?",
+      "narrative": "Welche Story erzähle ich mir?",
+      "validation": "Warum ist das wichtig?",
+      "impact": "Was passiert wenn ich es tue/nicht tue?",
+      "hits": [
+        {
+          "fact": "Concrete fact",
+          "obstacle": "Specific obstacle",
+          "strike": "Actionable task",
+          "responsibility": "Who I need to be"
+        }
+      ],
+      "created_at": "2026-01-02T11:30:00.000Z"
+    }
+  ],
+  "profits": [
+    {
+      "guid": "lqzaxxxx012jkl",
+      "door_title": "Platform Setup FADARO",
+      "reflection": "WordPress live, X profile optimized, SEO foundation established",
+      "achieved_at": "2026-01-02T18:00:00.000Z"
+    }
+  ],
+  "active_chats": {
+    "12345678": {
+      "warstack_guid": "lqz9zzzz789ghi",
+      "step": "narrative",
+      "started_at": "2026-01-02T11:15:00.000Z"
+    }
+  }
+}
+```
+
+**Persistence Functions:** (index-node/server.js)
+- `loadDoorFlow()` - line 695 - Loads flow state from vault
+- `saveDoorFlow()` - line 715 - Saves flow state to vault
+- Fail-soft: Missing/corrupt file → returns `doorFlowTemplate()` (empty template)
+
+---
+
+## Phase 1: POTENTIAL (Hot List)
+
+**Purpose:** Capture ALL potential doors without filtering. Brain dump of ideas, projects, opportunities.
+
+### Web UI
+
+**Location:** `http://127.0.0.1:8799/door` → Hot List tab
+
+**Features:**
+- Add single item via text input
+- Add multiple items via textarea (one per line)
+- View all Hot List items with GUID and timestamp
+- Source tracking (manual, telegram, voice)
+
+### API Endpoints
+
+#### GET `/api/door/hotlist`
+
+**Request:**
+```bash
+curl http://127.0.0.1:8799/api/door/hotlist
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "guid": "lqz7qxxx123abc",
+      "short_id": "lqz7qxxx",
+      "title": "Vitaltrainer Module 6 fertigstellen",
+      "source": "manual",
+      "created_at": "2026-01-02T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+**Implementation:** index-node/server.js line 1637
+
+#### POST `/api/door/hotlist`
+
+**Accepts 3 Input Modes:**
+
+**Mode 1: Object Array (from Web UI)**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/hotlist \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"title":"Task 1"},{"title":"Task 2"}],"source":"manual"}'
+```
+
+**Mode 2: Plain String Array (from API)**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/hotlist \
+  -H "Content-Type: application/json" \
+  -d '{"items":["Task 1","Task 2"],"source":"telegram"}'
+```
+
+**Mode 3: Multiline Text (from Telegram)**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/hotlist \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Task 1\nTask 2\nTask 3","source":"telegram"}'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "guid": "lqz7qxxx123abc",
+      "short_id": "lqz7qxxx",
+      "title": "Task 1",
+      "source": "telegram",
+      "created_at": "2026-01-02T12:34:56.789Z"
+    }
+  ]
+}
+```
+
+**Implementation:** index-node/server.js lines 1646-1682
+
+**Critical Fix (2026-01-01):** Object title extraction
+- **Before:** `String(item)` converted objects to `"[object Object]"`
+- **After:** Proper object property extraction with `item.title` (lines 1651-1657)
+- **Backwards Compatible:** Still handles plain strings and multiline text
+
+### GUID Generation
+
+**Function:** `makeDoorGuid()` (line 724)
+
+**Algorithm:**
+```javascript
+const stamp = Date.now().toString(36);  // Timestamp in base36 → "lqz7qxxx"
+const rand = Math.random().toString(36).slice(2, 10);  // Random string → "123abc"
+return `${stamp}${rand}`;  // Combined → "lqz7qxxx123abc"
+```
+
+**Short ID:** `doorShortId(guid)` (line 730) - First 8 chars for display
+
+**Why GUID?** Items need unique identifiers to track through all 4 phases:
+- Hot List → Door War → War Stack → Hits → Profit
+
+### Entry Creation Flow
+
+```javascript
+// For each item in input:
+const guid = makeDoorGuid();
+const entry = {
+  guid,                         // Full GUID (unique identifier)
+  short_id: doorShortId(guid),  // First 8 chars for display
+  title,                        // Parsed title
+  source,                       // "manual", "telegram", "voice", etc.
+  created_at: new Date().toISOString()
+};
+
+// Add to flow.hotlist
+flow.hotlist.push(...entries);
+saveDoorFlow(flow);
+```
+
+### Sources
+
+**Possible Values:**
+- `manual` - Added via web UI
+- `telegram` - Added via Telegram `/door` command
+- `voice` - Extracted from VOICE session
+- `warstack` - Leftover items from War Stack creation
+- `tent` - Extracted from General's Tent review
+
+---
+
+## Phase 2: PLAN (Door War)
+
+**Purpose:** Select ONE Domino Door from Hot List using Eisenhower Matrix evaluation.
+
+### Eisenhower Matrix Evaluation
+
+**Function:** `evaluateEisenhowerMatrix(item)` (line 754)
+
+**Importance Score (0-10):**
+- Business/career tags: +3
+- Health/body tags: +3
+- Relationship/balance tags: +2
+- Goal/vision keywords in title: +2
+- Priority ≥ 3: +2
+
+**Urgency Score (0-10):**
+- Urgent tag or "!" in title: +3
+- Priority ≥ 4: +2
+- Age > 7 days: +1
+- Age > 14 days: +2
+
+**Quadrant Assignment:**
+- **Q1:** Important (≥3) + Urgent (≥3) - Crisis
+- **Q2:** Important (≥3) + Not Urgent (<3) - **DOMINO DOORS** ← Target
+- **Q3:** Not Important (<3) + Urgent (≥3) - Distraction
+- **Q4:** Not Important (<3) + Not Urgent (<3) - Waste
+
+**Why Q2?** Domino Doors are important but not urgent - strategic investments that unlock multiple opportunities.
+
+### API Endpoint
+
+#### POST `/api/door/doorwar`
+
+**Request:**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/doorwar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidates": [
+      {"title": "Vitaltrainer Module 6", "tags": ["business"], "priority": 3},
+      {"title": "Fix urgent bug", "tags": ["urgent"], "priority": 4},
+      {"title": "Research new framework", "tags": ["being"]}
+    ],
+    "choice": "",
+    "reasoning": ""
+  }'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "evaluated": [
+    {
+      "title": "Vitaltrainer Module 6",
+      "tags": ["business"],
+      "priority": 3,
+      "evaluation": {
+        "quadrant": 2,
+        "importanceScore": 5,
+        "urgencyScore": 0,
+        "isImportant": true,
+        "isUrgent": false,
+        "reasoning": "Importance: 5/10, Urgency: 0/10"
+      }
+    }
+  ],
+  "selected": "Vitaltrainer Module 6",
+  "recommendation": "Q2 Domino Door recommended based on importance score"
+}
+```
+
+**Implementation:** index-node/server.js lines 1684-1740
+
+**Flow:**
+1. Load candidates (from Hot List or manual input)
+2. Evaluate each candidate with Eisenhower Matrix
+3. Auto-recommend highest Q2 item (or allow manual selection)
+4. Save selection to `flow.doorwars`
+5. Return selected door for War Stack creation
+
+---
+
+## Phase 3: PRODUCTION (Hit List)
+
+**Purpose:** Execute 4 Hits from War Stack via Taskwarrior or TickTick.
+
+### War Stack Structure
+
+Each War Stack produces **4 Hits** following the pattern:
+
+```
+Hit 1: FACT + OBSTACLE + STRIKE + RESPONSIBILITY
+Hit 2: FACT + OBSTACLE + STRIKE + RESPONSIBILITY
+Hit 3: FACT + OBSTACLE + STRIKE + RESPONSIBILITY
+Hit 4: FACT + OBSTACLE + STRIKE + RESPONSIBILITY
+```
+
+**Example Hit:**
+```json
+{
+  "fact": "Module 6 content needs to be written by Jan 15",
+  "obstacle": "I don't have a structured writing routine",
+  "strike": "Write 1 hour daily from 9-10am in General's Tent",
+  "responsibility": "Disciplined Content Creator who shows up daily"
+}
+```
+
+### API Endpoint
+
+#### POST `/api/door/export`
+
+**Purpose:** Export War Stack markdown to vault and push Hits to Taskwarrior/TickTick
+
+**Request:**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/export \
+  -H "Content-Type: application/json" \
+  -d '{
+    "warstack_guid": "lqz9zzzz789ghi",
+    "export_markdown": true,
+    "push_to_ticktick": true
+  }'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "markdown_path": "~/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md",
+  "hits_pushed": 4,
+  "ticktick_tasks": ["task_id_1", "task_id_2", "task_id_3", "task_id_4"]
+}
+```
+
+**Markdown Export Location:**
+- Path: `~/AlphaOS-Vault/Door/War-Stacks/YYYY-MM-DD_Title.md`
+- Format: AlphaOS War Stack template (Trigger/Narrative/Validation/Impact + 4 Hits)
+
+**Taskwarrior Integration:**
+- Tags: `+door +warstack +<domain>`
+- Priority: Based on War Stack domain
+- Due date: Current week Friday
+- UDAs: `pillar:door`, `alphatype:hit`, `domain:<domain>`
+
+**TickTick Integration (if enabled):**
+- Project: Configured via `DOOR_HITS_TICKTICK` env var
+- Tags: `#door #warstack`
+- Due date: Current week Friday
+
+---
+
+## Phase 4: PROFIT (Reflection)
+
+**Purpose:** Review achieved doors, extract learnings, celebrate wins.
+
+### API Endpoint
+
+#### POST `/api/door/profit`
+
+**Request:**
+```bash
+curl -X POST http://127.0.0.1:8799/api/door/profit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "door_title": "Platform Setup FADARO",
+    "reflection": "WordPress live, X profile optimized, SEO foundation established. Learned: Technical setup is easier than content creation. Next: Focus on content calendar.",
+    "achieved_at": "2026-01-02T18:00:00.000Z"
+  }'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "profit_entry": {
+    "guid": "lqzaxxxx012jkl",
+    "door_title": "Platform Setup FADARO",
+    "reflection": "WordPress live, X profile optimized...",
+    "achieved_at": "2026-01-02T18:00:00.000Z"
+  }
+}
+```
+
+**Storage:** Added to `flow.profits` array in `.door-flow.json`
+
+**Export:** Can be exported to `~/AlphaOS-Vault/Door/4-Profit/YYYY-MM-DD_Title.md`
+
+---
+
+## Data Flow
+
+### Complete 4P Flow Visualization
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ POTENTIAL (Hot List)                                        │
+│                                                             │
+│ Capture ideas → POST /api/door/hotlist                     │
+│ View items → GET /api/door/hotlist                         │
+│                                                             │
+│ Items with GUID + timestamp + source                       │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PLAN (Door War)                                             │
+│                                                             │
+│ Load Hot List → POST /api/door/doorwar                     │
+│ Eisenhower evaluation → Q1/Q2/Q3/Q4 classification         │
+│ Auto-recommend Q2 (Domino Door) → User confirms/overrides  │
+│                                                             │
+│ Selected door → War Stack creation                         │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ War Stack Creation (Transformative Inquiry)                 │
+│                                                             │
+│ POST /api/door/warstack/start                              │
+│ → Trigger: What triggers me?                               │
+│ → Narrative: What story am I telling myself?               │
+│ → Validation: Why does this matter?                        │
+│ → Impact: What happens if I do/don't do this?              │
+│                                                             │
+│ → Generate 4 Hits (Fact/Obstacle/Strike/Responsibility)    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PRODUCTION (Hit List)                                       │
+│                                                             │
+│ POST /api/door/export                                      │
+│ → Export markdown to ~/AlphaOS-Vault/Door/War-Stacks/     │
+│ → Push 4 Hits to Taskwarrior (+door +warstack)            │
+│ → Optional: Push to TickTick                              │
+│                                                             │
+│ Execute Hits → Weekly tactical work                        │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ PROFIT (Reflection)                                         │
+│                                                             │
+│ POST /api/door/profit                                      │
+│ → Door achieved? → Reflection                              │
+│ → What worked? What didn't?                                │
+│ → Learnings for next Door                                  │
+│                                                             │
+│ Export reflection → ~/AlphaOS-Vault/Door/4-Profit/        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Cross-Component Data Flow
+
+```
+User (Telegram)
+    ↓
+Router Bot (/door command)
+    ↓
+Index Node API (POST /api/door/hotlist)
+    ↓
+.door-flow.json (persistence)
+    ↓
+Door War (Eisenhower evaluation)
+    ↓
+War Stack Bot (conversational inquiry) OR Index Node UI
+    ↓
+War Stack markdown → ~/AlphaOS-Vault/Door/War-Stacks/
+    ↓
+Taskwarrior (4 Hits as tasks)
+    ↓
+TickTick (optional sync)
+    ↓
+Weekly execution → Hit completion
+    ↓
+Profit reflection → Learning loop
+```
+
+---
+
+## API Reference
+
+### Door Flow State
+
+**GET `/api/door/flow`**
+- Returns complete flow state (hotlist, doorwars, warstacks, profits, active_chats)
+- Used by web UI to render all tabs
+
+### Hot List
+
+**GET `/api/door/hotlist`**
+- Returns all Hot List items
+- Used by Door War to load candidates
+
+**POST `/api/door/hotlist`**
+- Add items to Hot List
+- Accepts objects, strings, or multiline text
+- Auto-generates GUID + timestamp
+
+### Door War
+
+**POST `/api/door/doorwar`**
+- Evaluate candidates with Eisenhower Matrix
+- Auto-recommend Q2 Domino Door
+- Returns evaluated items + selection
+
+### War Stack
+
+**POST `/api/door/warstack/start`**
+- Start new War Stack for selected door
+- Returns warstack_guid + first question (Trigger)
+
+**POST `/api/door/warstack/answer`**
+- Submit answer to current War Stack question
+- Progresses through: Trigger → Narrative → Validation → Impact
+- After Impact: Auto-generates 4 Hits
+
+**GET `/api/door/warstack/:id`**
+- Fetch War Stack by GUID or short_id
+- Returns complete War Stack data
+
+### Export
+
+**POST `/api/door/export`**
+- Export War Stack markdown to vault
+- Optional: Push Hits to Taskwarrior/TickTick
+- Returns file path + task IDs
+
+### Profit
+
+**POST `/api/door/profit`**
+- Add reflection for achieved door
+- Stores in flow.profits
+- Can be exported to markdown
+
+---
+
+## Multi-Component Integration
+
+### Index Node (Primary HQ)
+
+**Role:** Web UI + API server
+**Port:** 8799
+**Files:** `index-node/server.js` (Door API), `index-node/public/door/` (Web UI)
+
+**Responsibilities:**
+- Serve Door Centre web UI
+- Provide REST API for all Door operations
+- Persist state to `.door-flow.json`
+- GUID generation
+- Eisenhower Matrix evaluation
+
+### Router Bot (Telegram Interface)
+
+**Role:** Telegram command routing
+**Extension:** `router/extensions/door_flow.py`
+
+**Commands:**
+- `/door` - Show Door Centre menu
+- `/hot` - Add to Hot List
+- `/war` - Start Door War (delegates to War Stack Bot)
+
+**Flow:**
+1. User sends `/hot Task 1\nTask 2`
+2. Router forwards to Index API: `POST /api/door/hotlist`
+3. Index creates entries, returns GUIDs
+4. Router confirms to user
+
+### War Stack Bot (Conversational Flow)
+
+**Role:** Interactive War Stack creation via Telegram
+**File:** `python-warstack-bot/warstack_bot.py`
+
+**Flow:**
+1. User starts `/war` (via Router or direct)
+2. Bot asks: "What door are you opening?"
+3. Bot runs 4-step inquiry (Trigger/Narrative/Validation/Impact)
+4. Bot generates 4 Hits
+5. Bot exports markdown + pushes to Taskwarrior
+
+**Features:**
+- `/resume` - Continue interrupted War Stack
+- Idle timeout (default 900s)
+- GAS webhook output (optional)
+- Telegram result push (optional)
+
+**See:** `python-warstack-bot/AGENTS.md` for detailed bot patterns
+
+### GAS Web App (Cloud Fallback)
+
+**Role:** Cloud-based Door Centre when laptop offline
+**Files:** `gas/Door_*.html`, `gas/door.gs`
+
+**Centres:**
+- Door Index - Main menu
+- Door Hot List Panel - Add/view Hot List
+- Door War Panel - Eisenhower evaluation
+- Door WarStack Panel - War Stack creation
+- Door HitList Panel - View/export Hits
+
+**Storage:** Google Sheets as database
+**Sync:** Bridge service forwards operations to GAS via webhook
+
+### Bridge (Data Flow Service)
+
+**Role:** Forward operations to GAS, handle offline queue
+**Port:** 8080
+**File:** `bridge/app.py`
+
+**Endpoints:**
+- `POST /bridge/warstack/draft` - Save War Stack draft for `/resume`
+- `POST /bridge/queue/flush` - Retry failed GAS operations
+
+**See:** `bridge/AGENTS.md` for bridge patterns
+
+---
+
+## Common Workflows
+
+### Workflow 1: Telegram Hot List to Taskwarrior
+
+```bash
+# User in Telegram
+/hot Vitaltrainer Module 6\nFADARO Content Calendar\nSteuerausgleich 2025
+
+# Router Bot
+→ POST http://127.0.0.1:8799/api/door/hotlist
+→ 3 items created with GUIDs
+
+# User continues
+/war
+
+# War Stack Bot
+→ "Which door are you opening?"
+→ User: "Vitaltrainer Module 6"
+→ Bot runs 4-step inquiry
+→ Bot generates 4 Hits
+→ Bot exports to vault + pushes to Taskwarrior
+
+# Result
+→ War Stack: ~/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md
+→ Taskwarrior: 4 tasks with +door +warstack tags
+→ TickTick: 4 tasks synced (if enabled)
+```
+
+### Workflow 2: Web UI Complete Flow
+
+```bash
+# User opens browser
+http://127.0.0.1:8799/door
+
+# Tab 1: Hot List
+→ Add 5 ideas
+→ View all Hot List items
+
+# Tab 2: Door War
+→ Load Hot List as candidates
+→ System recommends Q2 item
+→ User confirms selection
+
+# Tab 3: War Stack
+→ Start War Stack for selected door
+→ Answer 4 questions interactively
+→ Review 4 generated Hits
+→ Export to vault + Taskwarrior
+
+# Tab 4: Hit List
+→ View Taskwarrior tasks (+door)
+→ Mark Hits as done
+
+# Tab 5: Profit
+→ Write reflection
+→ Mark door as achieved
+→ Export to vault
+```
+
+### Workflow 3: GAS Fallback (Laptop Offline)
+
+```bash
+# User on mobile (laptop off)
+→ Open GAS Door Centre Web App
+→ Add items to Hot List (saves to Google Sheets)
+→ Run Door War (Eisenhower in Apps Script)
+→ Create War Stack (saves to Sheets)
+
+# Laptop comes online
+→ Bridge sync pulls GAS data
+→ Merges with .door-flow.json
+→ Pushes Hits to Taskwarrior
+```
+
+---
+
+## Testing
+
+### Smoke Test Checklist
+
+```bash
+# 1. Hot List - Add items
+curl -X POST http://127.0.0.1:8799/api/door/hotlist \
+  -H "Content-Type: application/json" \
+  -d '{"items":["Test 1","Test 2"]}'
+
+# 2. Hot List - View items
+curl http://127.0.0.1:8799/api/door/hotlist | jq
+
+# 3. Door War - Evaluate candidates
+curl -X POST http://127.0.0.1:8799/api/door/doorwar \
+  -H "Content-Type: application/json" \
+  -d '{"candidates":[{"title":"Test","tags":["business"],"priority":3}]}' | jq
+
+# 4. Check persistence
+cat ~/AlphaOS-Vault/Door/.door-flow.json | jq
+
+# 5. Web UI navigation
+open http://127.0.0.1:8799/door
+```
+
+### Known Issues
+
+**Fixed (2026-01-01):**
+- ✅ Hot List title parsing bug - Objects converted to "[object Object]"
+  - **Fix:** Object property extraction in server.js lines 1651-1657
+
+**Current:**
+- None known
+
+---
+
+## Future Enhancements
+
+**Planned:**
+- [ ] Hot List auto-prioritization using historical data
+- [ ] War Stack template library (common door types)
+- [ ] Hit completion tracking via webhooks
+- [ ] Weekly Profit summary email
+- [ ] Multi-user support (separate flow state per user)
+- [ ] Door analytics dashboard (completion rate, average time, etc)
+
+---
+
+## References
+
+- **AlphaOS DOOR Pillar:** Elliott Hulse's 4P Flow (Potential → Plan → Production → Profit)
+- **Eisenhower Matrix:** Importance + Urgency quadrant classification
+- **Domino Door Principle:** One strategic door unlocks multiple opportunities
+- **War Stack Format:** Trigger/Narrative/Validation/Impact → 4 Hits (Fact/Obstacle/Strike/Responsibility)
+
+---
+
+**Last Updated:** 2026-01-02
+**System Status:** ✅ Operational (95% - all components tested)
