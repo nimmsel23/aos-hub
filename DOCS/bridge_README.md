@@ -1,0 +1,1 @@
+/home/alpha/.aos/bridge/README.md

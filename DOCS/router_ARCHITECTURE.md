@@ -1,0 +1,1 @@
+/home/alpha/αOS/aos-hub/router/ARCHITECTURE.md
