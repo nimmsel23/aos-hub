@@ -98,7 +98,10 @@
         target.classList.remove('hidden');
         target.scrollIntoView({ behavior: 'smooth' });
         hideHomeShell();
-        hideHeader();
+        // Keep header visible for centresOverview and gameCentre
+        if (id !== 'centresOverview' && id !== 'gameCentre') {
+          hideHeader();
+        }
         hideHQFabs();
         showToolbar();
       } else {
