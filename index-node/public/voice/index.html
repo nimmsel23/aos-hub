@@ -232,8 +232,6 @@
   <div class="container">
     <div class="session-actions" id="sessionActions" style="display:none;">
       <button class="btn-ghost btn" type="button" onclick="openSessionPreview()">Preview</button>
-      <button class="btn" type="button" onclick="downloadVoiceSession()">Download</button>
-      <button class="btn" type="button" onclick="saveVoiceSession()">Save to Vault</button>
     </div>
 
     <section id="home" class="tab active">
@@ -268,7 +266,6 @@
             <strong>Output</strong>
             <div class="actions">
               <button class="copy-btn" data-target="stopoutput">Copy</button>
-              <button class="btn-ghost btn" type="button" onclick="exportVoice('Stop', document.getElementById('stopoutput')?.textContent || '')">Save</button>
             </div>
           </div>
           <pre id="stopoutput"></pre>
@@ -301,7 +298,6 @@
             <strong>Output</strong>
             <div class="actions">
               <button class="copy-btn" data-target="submitoutput">Copy</button>
-              <button class="btn-ghost btn" type="button" onclick="exportVoice('Submit', document.getElementById('submitoutput')?.textContent || '')">Save</button>
             </div>
           </div>
           <pre id="submitoutput"></pre>
@@ -329,7 +325,6 @@
             <strong>Output</strong>
             <div class="actions">
               <button class="copy-btn" data-target="struggleoutput">Copy</button>
-              <button class="btn-ghost btn" type="button" onclick="exportVoice('Struggle', document.getElementById('struggleoutput')?.textContent || '')">Save</button>
             </div>
           </div>
           <pre id="struggleoutput"></pre>
@@ -357,7 +352,6 @@
             <strong>Output</strong>
             <div class="actions">
               <button class="copy-btn" data-target="strikeoutput">Copy</button>
-              <button class="btn-ghost btn" type="button" onclick="exportVoice('Strike', document.getElementById('strikeoutput')?.textContent || '')">Save</button>
             </div>
           </div>
           <pre id="strikeoutput"></pre>
@@ -624,6 +618,16 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       'submit_facts','submit_feelings','submit_focus','submit_fruit',
       'struggleinput','strikeinput'
     ];
+    const VOICE_SECTION_BY_ID = {
+      stopinput: 'stop',
+      submit_facts: 'submit',
+      submit_feelings: 'submit',
+      submit_focus: 'submit',
+      submit_fruit: 'submit',
+      struggleinput: 'struggle',
+      strikeinput: 'strike'
+    };
+    const VOICE_AUTOSAVE_CACHE = {};
 
     const PHASES = {
       stop: { title:'Stop', textareaId:'stopinput', body:CH_STOP },
@@ -802,7 +806,51 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         el.addEventListener('input', ()=>{
           try{ localStorage.setItem('voice_'+id, el.value); }catch(_){}
         });
+        el.addEventListener('blur', ()=>{
+          const section = VOICE_SECTION_BY_ID[id];
+          if(section) autosaveVoiceSection(section);
+        });
       });
+    }
+
+    function voiceDateStamp(){
+      return new Date().toISOString().slice(0,10);
+    }
+
+    function buildVoiceSectionMarkdown(section){
+      const date = voiceDateStamp();
+      if(section === 'submit'){
+        const facts = document.getElementById('submit_facts')?.value.trim() || '';
+        const feelings = document.getElementById('submit_feelings')?.value.trim() || '';
+        const focus = document.getElementById('submit_focus')?.value.trim() || '';
+        const fruit = document.getElementById('submit_fruit')?.value.trim() || '';
+        const blocks = [];
+        if(facts) blocks.push(`## Facts\n${facts}`);
+        if(feelings) blocks.push(`## Feelings\n${feelings}`);
+        if(focus) blocks.push(`## Focus\n${focus}`);
+        if(fruit) blocks.push(`## Fruit\n${fruit}`);
+        if(!blocks.length) return '';
+        return `# Voice Submit - ${date}\n\n${blocks.join('\n\n')}\n`;
+      }
+      const input = document.getElementById(section+'input')?.value.trim() || '';
+      if(!input) return '';
+      return `# Voice ${section.toUpperCase()} - ${date}\n\n${input}\n`;
+    }
+
+    async function autosaveVoiceSection(section){
+      const md = buildVoiceSectionMarkdown(section);
+      if(!md) return;
+      if(VOICE_AUTOSAVE_CACHE[section] === md) return;
+      VOICE_AUTOSAVE_CACHE[section] = md;
+      try{
+        await fetch('/api/voice/autosave', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ section, date: voiceDateStamp(), markdown: md })
+        });
+      }catch(err){
+        console.warn('Voice autosave failed', err);
+      }
     }
 
     function buildVoiceSessionMarkdown(){
@@ -863,49 +911,6 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       const md = buildVoiceSessionMarkdown();
       const html = `<div class="markdown-body">${(typeof marked !== 'undefined') ? marked.parse(md) : `<pre>${escapeHtml(md)}</pre>`}</div>`;
       AOS_modalOpen({ title:'Voice Session Preview', sub:'Aus deinen Feldern', html });
-    }
-
-    async function exportVoice(tool, markdown){
-      const text = String(markdown || '').trim();
-      if(!text) return alert('Kein Inhalt zum Speichern.');
-      const title = `${tool || 'Voice'}_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}`;
-      try{
-        const res = await fetch('/api/voice/export',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ markdown:text, title })
-        });
-        const data = await res.json();
-        if(res.ok && data?.ok){
-          const sync = data?.rclone?.status || 'queued';
-          AOS_modalOpen({
-            title:'Saved to Vault',
-            sub: tool || 'Voice',
-            html:`<p>Pfad: <code>${escapeHtml(data.path || '')}</code></p><p>rclone: ${escapeHtml(sync)}</p>`
-          });
-        }else{
-          alert('Speichern fehlgeschlagen.');
-        }
-      }catch(err){
-        alert('Fehler: '+err);
-      }
-    }
-
-    async function saveVoiceSession(){
-      const md = buildVoiceSessionMarkdown();
-      await exportVoice('Session', md);
-    }
-
-    function downloadVoiceSession(){
-      const md = buildVoiceSessionMarkdown();
-      const blob = new Blob([md], { type:'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'VoiceSession_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.md';
-      document.body.appendChild(a);
-      a.click(); a.remove();
-      URL.revokeObjectURL(url);
     }
 
     function mdToTrustedHtml(md){
@@ -984,6 +989,8 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       if(!src || !dst) return;
       dst.value = src.value;
       try{ localStorage.setItem('voice_'+targetId, dst.value); }catch(_){}
+      const section = VOICE_SECTION_BY_ID[targetId];
+      if(section) autosaveVoiceSection(section);
     }
 
     function AOS_phaseRun(phaseId){
@@ -1012,6 +1019,7 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         if (dstFocus) localStorage.setItem('voice_submit_focus', dstFocus.value);
         if (dstFruit) localStorage.setItem('voice_submit_fruit', dstFruit.value);
       }catch(_){}
+      autosaveVoiceSection('submit');
     }
 
     function AOS_submitRun(){
@@ -1047,7 +1055,6 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         html: `<pre>${escapeHtml(md)}</pre>
         <div class="actions" style="margin-top:10px;">
           <button class="btn-ghost btn" type="button" onclick="AOS_modalClose()">Schließen</button>
-          <button class="btn" type="button" onclick="exportVoice('${step}', document.getElementById('${step}output')?.textContent || '')">Save</button>
         </div>`
       });
     }

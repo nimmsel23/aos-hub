@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Tent Bot Control Script
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_NAME="aos-tent-bot"
+SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
+
+cmd_install() {
+    echo "📦 Installing Tent Bot systemd service..."
+
+    mkdir -p "$HOME/.config/systemd/user"
+
+    cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=AlphaOS Tent Bot - Strategic Intelligence Reports
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${SCRIPT_DIR}
+ExecStart=$(which python3) ${SCRIPT_DIR}/tent_bot.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+
+    systemctl --user daemon-reload
+    echo "✅ Service installed: $SERVICE_FILE"
+    echo "   Run: ./tentctl start"
+}
+
+cmd_start() {
+    echo "🚀 Starting Tent Bot..."
+    systemctl --user start "$SERVICE_NAME"
+    echo "✅ Started"
+}
+
+cmd_stop() {
+    echo "🛑 Stopping Tent Bot..."
+    systemctl --user stop "$SERVICE_NAME"
+    echo "✅ Stopped"
+}
+
+cmd_restart() {
+    echo "🔄 Restarting Tent Bot..."
+    systemctl --user restart "$SERVICE_NAME"
+    echo "✅ Restarted"
+}
+
+cmd_status() {
+    systemctl --user status "$SERVICE_NAME"
+}
+
+cmd_logs() {
+    journalctl --user -u "$SERVICE_NAME" -f
+}
+
+cmd_enable() {
+    echo "🔧 Enabling Tent Bot (start on boot)..."
+    systemctl --user enable "$SERVICE_NAME"
+    echo "✅ Enabled"
+}
+
+cmd_disable() {
+    echo "🔧 Disabling Tent Bot..."
+    systemctl --user disable "$SERVICE_NAME"
+    echo "✅ Disabled"
+}
+
+cmd_uninstall() {
+    echo "🗑️  Uninstalling Tent Bot service..."
+    systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl --user disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$SERVICE_FILE"
+    systemctl --user daemon-reload
+    echo "✅ Uninstalled"
+}
+
+cmd_health() {
+    echo "🏥 Tent Bot Health Check"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Check service status
+    if systemctl --user is-active --quiet "$SERVICE_NAME"; then
+        echo "✅ Service: Running"
+    else
+        echo "❌ Service: Stopped"
+    fi
+
+    # Check .env file
+    if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+        echo "✅ Config: .env exists"
+    else
+        echo "⚠️  Config: .env missing (copy from .env.example)"
+    fi
+
+    # Check Index Node API
+    if curl -sf http://127.0.0.1:8799/health > /dev/null 2>&1; then
+        echo "✅ Index Node API: Reachable"
+    else
+        echo "❌ Index Node API: Unreachable (http://127.0.0.1:8799)"
+    fi
+
+    # Check domain states
+    if [[ -d "$HOME/AlphaOS-Vault/.states" ]]; then
+        state_count=$(ls -1 "$HOME/AlphaOS-Vault/.states"/*.json 2>/dev/null | wc -l)
+        echo "✅ Domain States: $state_count files found"
+    else
+        echo "⚠️  Domain States: Directory missing"
+    fi
+
+    # Check Python dependencies
+    if python3 -c "import aiogram, aiohttp, dotenv" 2>/dev/null; then
+        echo "✅ Dependencies: Installed"
+    else
+        echo "⚠️  Dependencies: Missing (run: pip install -r requirements.txt)"
+    fi
+}
+
+cmd_test() {
+    echo "🧪 Testing Tent Bot message generation..."
+    if [[ ! -f "${SCRIPT_DIR}/.env" ]]; then
+        echo "❌ .env file missing. Copy from .env.example first."
+        exit 1
+    fi
+
+    # Test API endpoint
+    echo "📡 Testing Index Node API..."
+    if ! curl -sf http://127.0.0.1:8799/api/tent/component/return-report > /dev/null; then
+        echo "❌ Index Node API unreachable. Is server running?"
+        exit 1
+    fi
+
+    echo "✅ API reachable"
+    echo ""
+    echo "Run bot with: python tent_bot.py"
+    echo "Then in Telegram: /tent"
+}
+
+cmd_help() {
+    cat <<EOF
+Tent Bot Control Script
+
+Usage: ./tentctl <command>
+
+Commands:
+  install     Install systemd service
+  start       Start the bot
+  stop        Stop the bot
+  restart     Restart the bot
+  status      Show service status
+  logs        Follow logs (Ctrl+C to exit)
+  enable      Enable auto-start on boot
+  disable     Disable auto-start
+  uninstall   Remove systemd service
+  health      Run health check
+  test        Test configuration
+  help        Show this help
+
+Examples:
+  ./tentctl install
+  ./tentctl start
+  ./tentctl status
+  ./tentctl logs
+
+Service File: $SERVICE_FILE
+EOF
+}
+
+# Main command router
+case "${1:-}" in
+    install)   cmd_install ;;
+    start)     cmd_start ;;
+    stop)      cmd_stop ;;
+    restart)   cmd_restart ;;
+    status)    cmd_status ;;
+    logs)      cmd_logs ;;
+    enable)    cmd_enable ;;
+    disable)   cmd_disable ;;
+    uninstall) cmd_uninstall ;;
+    health)    cmd_health ;;
+    test)      cmd_test ;;
+    help|--help|-h|"") cmd_help ;;
+    *)
+        echo "❌ Unknown command: $1"
+        echo "Run: ./tentctl help"
+        exit 1
+        ;;
+esac

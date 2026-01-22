@@ -1,0 +1,51 @@
+<script>
+function mdToTrustedHtml(md) {
+  const s = String(md || '');
+  if (typeof marked !== 'undefined' && marked?.parse) {
+    return marked.parse(s); // trusted, weil aus deinem Code (Chapters) kommt
+  }
+  return `<pre style="white-space:pre-wrap">${escapeHtml(s)}</pre>`;
+}
+
+window.PHASES = {
+  stop: {
+    title: 'BEYOND REACTION: DESIGNING CHANGE.',
+    subHtml: `<div class="markdown-body">${mdToTrustedHtml(CH_STOP)}</div>`,
+    textareaId: 'stopinput',
+    outputId: 'stopoutput',
+    wrapperId: 'stop-wrapper',
+    generateLabel: 'STOP',
+    saveLabel: 'STOP in Drive',
+  },
+
+  submit: {
+    title: 'FROM PRESENT TO POTENTIAL',
+    subHtml: `<div class="markdown-body">${mdToTrustedHtml(CH_SUBMIT)}</div>`,
+    textareaId: null,
+    outputId: 'submitoutput',
+    wrapperId: 'submit-wrapper',
+    generateLabel: 'SUBMIT',
+    saveLabel: 'SUBMIT in Drive',
+  },
+
+  struggle: {
+    title: 'EMERGENCE AND REBIRTH',
+    subHtml: `<div class="markdown-body">${mdToTrustedHtml(CH_STRUGGLE)}</div>`,
+    textareaId: 'struggleinput',
+    outputId: 'struggleoutput',
+    wrapperId: 'struggle-wrapper',
+    generateLabel: 'STRUGGLE',
+    saveLabel: 'STRUGGLE in Drive',
+  },
+
+  strike: {
+    title: 'EXECUTION ABOVE ALL',
+    subHtml: `<div class="markdown-body">${mdToTrustedHtml(CH_STRIKE)}</div>`,
+    textareaId: 'strikeinput',
+    outputId: 'strikeoutput',
+    wrapperId: 'strike-wrapper',
+    generateLabel: 'STRIKE',
+    saveLabel: 'STRIKE in Drive',
+  },
+};
+</script>

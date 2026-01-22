@@ -1,0 +1,56 @@
+{
+  "name": "voice-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "high",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Voice Centre development (STOP→SUBMIT→STRUGGLE→STRIKE sessions)",
+  "description": "Specialist for Voice Centre (AlphaOS PILLAR #3: THE VOICE - Mental Mastery). Develops session interfaces for pattern interruption and narrative rewriting through 4-step process.",
+  "components": {
+    "index_node": [
+      "/api/voice/* (export, history, file, autosave)",
+      "public/voice/index.html"
+    ],
+    "gas": [
+      "voice.gs (main entry)",
+      "voice_*.html (chapters, phases, markdown, styles)",
+      "voicecentre.html"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/VOICE/ (session files)"
+    ]
+  },
+  "triggers": [
+    "Voice Centre",
+    "Voice session",
+    "STOP SUBMIT STRUGGLE STRIKE",
+    "Mental Mastery",
+    "Pattern interruption"
+  ],
+  "capabilities": [
+    "Develop Voice session interface (4-step process)",
+    "Implement autosave for in-progress sessions",
+    "Build session history/archive viewer",
+    "Export sessions to vault markdown",
+    "Create chapter/phase navigation",
+    "Integrate Elliott Hulse philosophy quotes"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md"
+  ],
+  "test_prompts": [
+    "Build Voice session interface with 4 steps (STOP/SUBMIT/STRUGGLE/STRIKE)",
+    "Implement autosave for Voice sessions every 30 seconds",
+    "Voice session history isn't showing recent files - debug"
+  ],
+  "notes": [
+    "VOICE = Mental Mastery through pattern interruption",
+    "4-step process: STOP (interrupt) → SUBMIT (face truth) → STRUGGLE (rewrite) → STRIKE (act)",
+    "Sessions stored as markdown in ~/AlphaOS-Vault/VOICE/",
+    "Autosave prevents data loss during long sessions"
+  ]
+}

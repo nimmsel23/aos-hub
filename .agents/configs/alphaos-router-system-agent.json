@@ -1,0 +1,56 @@
+{
+  "name": "alphaos-router-system-agent",
+  "version": "1.0.0",
+  "category": "infrastructure",
+  "priority": "high",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Router Bot operations (router_bot.py + extensions)",
+  "description": "Specialist for Telegram router bot (aiogram) + extension system. Manages routerctl, systemd services, heartbeat timers, extension loading, command routing to centres.",
+  "components": {
+    "router": [
+      "router_bot.py (main bot)",
+      "extensions/*.py (door_flow, fruits_daily, firemap_commands, core4_actions)",
+      "config.yaml (extension configs)",
+      "routerctl (CLI wrapper)",
+      ".env (bot token, endpoints)"
+    ],
+    "systemd": [
+      "alphaos-router.service (user unit)",
+      "alphaos-heartbeat.timer (heartbeat)"
+    ]
+  },
+  "triggers": [
+    "Router bot",
+    "Telegram router",
+    "routerctl",
+    "Extension system",
+    "Bot not responding"
+  ],
+  "capabilities": [
+    "Debug router bot issues",
+    "Create new extensions",
+    "Manage systemd services (routerctl)",
+    "Configure heartbeat timer",
+    "Debug command routing (Index API integration)",
+    "Handle extension loading errors"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/router/AGENTS.md",
+    "/home/alpha/aos-hub/router/README.md"
+  ],
+  "test_prompts": [
+    "Router bot not responding to /door command - debug",
+    "Create new router extension for General's Tent",
+    "Heartbeat timer not posting - check systemd status"
+  ],
+  "notes": [
+    "Router is dispatcher only (doesn't create War Stacks itself)",
+    "Extensions loaded from config.yaml",
+    "routerctl: install, restart, status, heartbeat commands",
+    "Heartbeat posts to GAS webhook for online status",
+    "Fetches centre URLs from Index API /api/centres (menu.yaml)"
+  ]
+}

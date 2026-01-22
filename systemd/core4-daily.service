@@ -1,0 +1,8 @@
+[Unit]
+Description=Core4 daily rebuild/export (rolling CSV)
+ConditionPathExists=%h/bin/core4
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/core4 export-daily --days=56
+

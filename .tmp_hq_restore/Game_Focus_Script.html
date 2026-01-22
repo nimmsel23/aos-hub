@@ -1,0 +1,122 @@
+
+<script>
+let currentMonth = 'current';
+let currentDomain = 'BODY';
+
+function updateActiveStates() {
+  // Month-Cards (rechte Säule)
+  document.querySelectorAll('.month-card').forEach(c => 
+    c.classList.toggle('active', c.dataset.month === currentMonth));
+  
+  // Domain-Tabs im Header
+  document.querySelectorAll('nav .domain-tab').forEach(b => 
+    b.classList.toggle('active', b.dataset.domain === currentDomain));
+}
+
+function updateMissionTitle() {
+  const label = currentMonth === 'current' ? 'CURRENT MONTH' : currentMonth.toUpperCase() + ' MISSION';
+  const titleEl = document.getElementById('missionTitle');
+  if (titleEl) titleEl.textContent = `${currentDomain} – ${label}`;
+}
+
+function selectMonth(month) {
+  if (currentMonth === month) return;
+  currentMonth = month;
+  updateActiveStates();
+  updateMissionTitle();
+}
+
+function selectDomain(domain) {
+  if (currentDomain === domain) return;
+  currentDomain = domain;
+  updateActiveStates();
+  updateMissionTitle();
+}
+
+function saveMission() {
+  const h = document.getElementById('habitsText')?.value.trim() || '';
+  const r = document.getElementById('routinesText')?.value.trim() || '';
+  const a = document.getElementById('additionsText')?.value.trim() || '';
+  const e = document.getElementById('eliminationsText')?.value.trim() || '';
+
+  if (!h || !r || !a || !e) {
+    alert('ALLE VIER PFEILER MÜSSEN GEFÜLLT SEIN – KEINE SCHWÄCHE.');
+    return;
+  }
+
+  const monthName = currentMonth === 'current'
+    ? new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
+    : currentMonth.toUpperCase();
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.ok) {
+        alert(`${currentDomain} ${monthName} → LOCKED\n${res.file.url}`);
+        document.querySelectorAll('textarea').forEach(t => t.value = '');
+      }
+    })
+    .saveFocusEntry(currentDomain, {habits: h, routines: r, additions: a, eliminations: e}, monthName, currentMonth);
+}
+
+// HOTKEYS – UNVERWÜSTBAR
+function onFocusKeydown(e) {
+  if (window.AOS_ACTIVE_MAP !== 'focus') return;
+  if (e.target.tagName === 'TEXTAREA') return;
+
+  // Zeitphasen
+  if (e.key === '^') selectMonth('current');
+  if (e.key === '1') selectMonth('q1');
+  if (e.key === '2') selectMonth('q2');
+  if (e.key === '3') selectMonth('q3');
+  if (e.key === '4') selectMonth('q4');
+
+  // Domains
+  const map = {
+    q:'BODY', w:'BEING', e:'BALANCE', r:'BUSINESS',
+    t:'BODY', z:'BEING', u:'BALANCE', i:'BUSINESS',
+    a:'BODY', s:'BEING', d:'BALANCE', f:'BUSINESS',
+    g:'BODY', h:'BEING', j:'BALANCE', k:'BUSINESS'
+  };
+  const domain = map[e.key.toLowerCase()];
+  if (domain) selectDomain(domain);
+
+  // ENTER = LOCK
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const lockBtn = document.getElementById('lockBtn');
+    if (lockBtn) lockBtn.click();
+  }
+}
+
+// INIT – ROBUST & SICHER
+function initFocusCentre() {
+  // Month-Cards rechts
+  document.querySelectorAll('.month-card').forEach(card => {
+    card.addEventListener('click', () => selectMonth(card.dataset.month));
+  });
+
+  // Domain-Tabs im Header
+  document.querySelectorAll('nav .domain-tab').forEach(tab => {
+    tab.addEventListener('click', () => selectDomain(tab.dataset.domain));
+  });
+
+  // Lock-Button
+  const lockBtn = document.getElementById('lockBtn');
+  if (lockBtn) lockBtn.addEventListener('click', saveMission);
+
+  // Initialer Zustand
+  updateActiveStates();
+  updateMissionTitle();
+
+  if (!window.__AOS_FOCUS_KEYDOWN_BOUND) {
+    document.addEventListener('keydown', onFocusKeydown);
+    window.__AOS_FOCUS_KEYDOWN_BOUND = true;
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initFocusCentre);
+} else {
+  initFocusCentre();
+}
+</script>

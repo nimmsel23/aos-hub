@@ -1,6 +1,6 @@
 # Hot List Scripts
 
-**Status:** ⚠️ DEPRECATED - Use `hot.fish` instead
+**Status:** ⚠️ DEPRECATED - Use `aos-hot.fish` instead
 
 ## hot_to_md.sh
 
@@ -44,6 +44,7 @@ hot "My idea"
 ---
 
 **Related:**
-- `~/.config/fish/functions/hot.fish` - Current implementation
+- `~/.dotfiles/config/fish/functions/aos-hot.fish` - Active implementation
+- `scripts/hot-list/aos-hot.fish` - Repo copy
 - `index-node/server.js` - POST `/api/door/hotlist` endpoint
 - `DOOR_CENTRE.md` - Hot List documentation

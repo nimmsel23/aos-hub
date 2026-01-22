@@ -1,0 +1,435 @@
+#!/usr/bin/env python3
+"""
+Fruits CLI (YAML primary store)
+
+Progressiver CLI-Fragebogen fuer den Foundational Fact Map.
+Speichert Antworten im YAML-Store und optional als JSON-Mirror
+kompatibel mit GAS/Standalone.
+"""
+from __future__ import annotations
+
+import os
+import csv
+import json
+import random
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Any
+
+# -----------------------------------------------------------------------------
+# Konfiguration
+# -----------------------------------------------------------------------------
+try:
+    import yaml  # type: ignore
+except Exception:
+    yaml = None
+
+raw_store = os.environ.get("FRUITS_STORE", "").strip()
+_yaml_path = ""
+_json_path = ""
+if raw_store:
+    if raw_store.endswith((".yaml", ".yml")):
+        _yaml_path = raw_store
+    elif raw_store.endswith(".json"):
+        _json_path = raw_store
+    else:
+        _yaml_path = raw_store
+
+STORE_YAML = Path(
+    os.environ.get(
+        "FRUITS_STORE_YAML",
+        _yaml_path or os.path.expanduser("~/AlphaOS-Vault/Game/Fruits/fruits_store.yaml"),
+    )
+)
+STORE_JSON = Path(
+    os.environ.get(
+        "FRUITS_STORE_JSON",
+        _json_path or os.path.expanduser("~/AlphaOS-Vault/Game/Fruits/fruits_store.json"),
+    )
+)
+LEGACY_CSV = Path(
+    os.environ.get(
+        "FRUITS_LEGACY_CSV",
+        os.path.expanduser("~/AlphaOs-Vault/.config/fruits.csv"),
+    )
+)
+
+FRUIT_EMOJIS: List[str] = [
+    "🍎", "🍌", "🍇", "🍉", "🍓", "🍒", "🍍", "🥝", "🍊", "🍏"
+]
+
+QUESTIONS: Dict[str, List[str]] = {
+  "Body - Fruit - Frame": [
+        "What are the facts about your fat?",
+        "What are the facts about your muscle?",
+        "What are the facts about your body image?",
+        "What are the facts about your height and weight?"
+    ],
+    "Body - Fruit - Function": [
+        "What are the facts about your gut and colon?",
+        "What are the facts about your hearing in sight?",
+        "What are the facts about your spine and brain function?",
+        "What are the facts about your injuries or disease?"
+    ],
+    "Body - Fruit - Foundation": [
+        "What are the facts about your inner organ function?",
+        "What are the facts about your annual physicals?",
+        "What are the facts about your use of chiropractor and dentist?",
+        "What are the facts about your sleep patterns?"
+    ],
+    "Body - Fruit - Fitness": [
+        "What are the facts about your current workout routine?",
+        "What are the facts about your strength?",
+        "What are the facts about your mobility and flexibility?",
+        "What are the facts about your cardio?"
+    ],
+    "Body - Fruit - Fuel": [
+        "What are the facts about your use of alcohol?",
+        "What are the facts about your use of caffeine?",
+        "What are the facts about your diet?",
+        "What are the facts about your daily supplements?"
+    ],
+    "Body - Fruit - Fire + Fun": [
+        "What are the facts about your energy?",
+        "What are the facts about your sex drive?",
+        "What are the facts about your physical hobbies?",
+        "What are the facts about your sense that your body is a weapon for you to produce and create?"
+    ],
+    "Being - Meditation": [
+        "What are the facts about prayer for you?",
+        "What are the facts about meditation for you?",
+        "What are the facts about personal development for you?",
+        "What are the facts about the amount of energy you invest in understanding you?"
+    ],
+    "Being - Memoirs": [
+        "What are the facts about journaling for you?",
+        "What are the facts about reading spiritual books?",
+        "What are the facts about stacking daily?",
+        "What are the facts about your vulnerability and authenticity?"
+    ],
+    "Being - Meaning": [
+        "What are the facts about God for you?",
+        "What are the facts about religion for you?",
+        "What are the facts about scripture for you?",
+        "What are the facts about the purpose of life to you?"
+    ],
+    "Being - Movement": [
+        "What are the facts about living your purpose in life?",
+        "What are the facts about your spiritual leadership?",
+        "What are the facts about your communication with the voice inside of you for guidance?",
+        "What are the facts about the number and type of people who follow you as a leader?"
+    ],
+    "Balance - Partner": [
+        "What are the facts about your direct authentic communication with your spouse?",
+        "What are the facts about your intimacy and vulnerability with your spouse?",
+        "What are the facts about your sex life with your spouse?",
+        "What are the facts about your partnership and friendship with your spouse?"
+    ],
+    "Balance - Posterity": [
+        "What are the facts about your open and asking communication with your children?",
+        "What are the facts about your true connection and vulnerability with your children?",
+        "What are the facts about your quality time you invest with your children?",
+        "What are the facts about the legacy building or not building in your children with your actions?"
+    ],
+    "Balance - Friends": [
+        "What are the facts about your current circle of friends?",
+        "What are facts about your trust in your friendships?",
+        "What are the facts about the role friends play or don't play in your life?",
+        "What are the facts about how you show up as a friend for others in your life?"
+    ],
+    "Balance - Family": [
+        "What are the facts about your coparenting with your spouse and the unified leadership of your children?",
+        "What are the facts about your leadership of your family toward a bigger future?",
+        "What are the facts about your quality time as a family during the week and weekends?",
+        "What are the facts about respect and honor currently exist between your family members?"
+    ],
+    "Balance - Self": [
+        "What are the facts about the amount of time and money you invest in you outside of marriage, family in business?",
+        "What are the facts about spending time with yourself with no one else around you?",
+        "What are the facts about putting yourself first and assuring you are taking care of yourself?",
+        "What are the facts about the amount of pressure and stress you experience on a daily basis and the impact on you?"
+    ],
+    "Business - Product": [
+        "What are the facts about the product and service you provide?",
+        "What are the facts about the features and benefits of this product?",
+        "What are the facts about the ideal target market for this product?",
+        "What are the facts about your success or failure with selling this product?"
+    ],
+    "Business - Production": [
+        "What are the facts about your marketing mindset and skill set?",
+        "What are the facts about your sales mindset and skill set?",
+        "What are the facts about your leadership mindset and skill set?",
+        "What are the facts about your systems and sequencing, mindset and skill set?"
+    ],
+    "Business - Profit": [
+        "What are the facts about your average annual business revenue?",
+        "What are the facts about your average annual business profit?",
+        "What are the facts about your average annual personal home income?",
+        "What are the facts about your average annual personal expenses?"
+    ],
+    "Business - Protection": [
+        "What are the facts about your accounting and bookkeeping?",
+        "What are the facts about your taxes and legal strategies?",
+        "What are the facts about your current business cash available?",
+        "What are the facts about your personal cash savings?"
+        ]
+}
+
+SKIP_TOKEN = "!skip"
+
+
+def _ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _seed_store() -> Dict[str, Any]:
+    return {
+        "answers": {},
+        "users": {},
+        "logs": [],
+        "skipped": None,
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+def _ensure_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "answers" not in data:
+        data["answers"] = {}
+    if "users" not in data:
+        data["users"] = {}
+    if "logs" not in data:
+        data["logs"] = []
+    if "skipped" not in data:
+        data["skipped"] = None
+    return data
+
+
+def _load_yaml(path: Path) -> Dict[str, Any]:
+    if not yaml:
+        raise RuntimeError("PyYAML fehlt: bitte `pip install pyyaml` ausfuehren.")
+    if not path.exists():
+        return _seed_store()
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            return _seed_store()
+        return _ensure_keys(data)
+    except Exception:
+        return _seed_store()
+
+
+def _load_json(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return _seed_store()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return _seed_store()
+        return _ensure_keys(data)
+    except Exception:
+        return _seed_store()
+
+
+def load_store() -> Dict[str, Any]:
+    if STORE_YAML.exists():
+        return _load_yaml(STORE_YAML)
+    if STORE_JSON.exists():
+        return _load_json(STORE_JSON)
+    return _seed_store()
+
+
+def _write_yaml(path: Path, store: Dict[str, Any]) -> None:
+    if not yaml:
+        raise RuntimeError("PyYAML fehlt: bitte `pip install pyyaml` ausfuehren.")
+    _ensure_parent(path)
+    path.write_text(
+        yaml.safe_dump(store, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def _write_json(path: Path, store: Dict[str, Any]) -> None:
+    _ensure_parent(path)
+    path.write_text(
+        json.dumps(store, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    if "answers" not in data:
+        data["answers"] = {}
+    if "users" not in data:
+        data["users"] = {}
+    if "logs" not in data:
+        data["logs"] = []
+    if "skipped" not in data:
+        data["skipped"] = None
+    return data
+
+
+def save_store(store: Dict[str, Any]) -> None:
+    store["updated_at"] = datetime.now().isoformat()
+    _write_yaml(STORE_YAML, store)
+    if STORE_JSON:
+        _write_json(STORE_JSON, store)
+
+
+def migrate_csv(store: Dict[str, Any]) -> None:
+    if not LEGACY_CSV.exists():
+        return
+    answers = store.get("answers", {})
+    with LEGACY_CSV.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            question = (row.get("question") or "").strip()
+            answer = (row.get("answer") or "").strip()
+            section = (row.get("section") or "").strip()
+            if not question or not answer:
+                continue
+            if question in answers:
+                continue
+            answers[question] = {
+                "answer": answer,
+                "section": section,
+                "source": "cli-migrate",
+                "chat_id": "",
+                "updated_at": datetime.now().isoformat(),
+            }
+    store["answers"] = answers
+
+
+def load_answers(store: Dict[str, Any]) -> Dict[str, str]:
+    answers = {}
+    for q, entry in (store.get("answers") or {}).items():
+        if isinstance(entry, dict):
+            answers[q] = entry.get("answer", "")
+        else:
+            answers[q] = str(entry)
+    return answers
+
+
+def append_answer(store: Dict[str, Any], section: str, question: str, answer: str) -> None:
+    answers = store.get("answers", {})
+    previous = answers.get(question, {}) if isinstance(answers.get(question), dict) else {}
+    answers[question] = {
+        "answer": answer,
+        "section": section,
+        "source": "cli",
+        "chat_id": "",
+        "updated_at": datetime.now().isoformat(),
+    }
+    store["answers"] = answers
+    logs = store.get("logs", [])
+    logs.append(
+        {
+            "type": "answer",
+            "timestamp": datetime.now().isoformat(),
+            "section": section,
+            "question": question,
+            "answer": answer,
+            "source": "cli",
+            "chat_id": "",
+            "previous_answer": previous.get("answer") if isinstance(previous, dict) else "",
+        }
+    )
+    store["logs"] = logs
+    save_store(store)
+
+
+def _question_section(question: str) -> str:
+    for section, qs in QUESTIONS.items():
+        if question in qs:
+            return section
+    return ""
+
+
+def _has_fzf() -> bool:
+    return shutil.which("fzf") is not None
+
+
+def _select_existing_question(answers: Dict[str, str], store: Dict[str, Any]) -> str:
+    if not answers:
+        return ""
+    entries = []
+    for section, qs in QUESTIONS.items():
+        for q in qs:
+            if q in answers:
+                entry = store.get("answers", {}).get(q, {})
+                sec = entry.get("section") or section
+                entries.append(f"{sec} | {q}")
+    if not entries:
+        return ""
+    if _has_fzf():
+        proc = subprocess.run(
+            ["fzf", "--prompt", "Fruits> ", "--height", "40%"],
+            input="\n".join(entries),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return ""
+        line = (proc.stdout or "").strip()
+    else:
+        for idx, line in enumerate(entries, start=1):
+            print(f"{idx:02d}. {line}")
+        choice = input("Nummer waehlen (oder Enter fuer Abbruch): ").strip()
+        if not choice.isdigit():
+            return ""
+        idx = int(choice)
+        if idx < 1 or idx > len(entries):
+            return ""
+        line = entries[idx - 1]
+    parts = line.split(" | ", 1)
+    return parts[1] if len(parts) == 2 else line
+
+
+def cmd_fruits() -> None:
+    print("🍎🍌🍇 Fruits Homework: Foundational Fact Map🍉🍓🍍")
+    store = load_store()
+    migrate_csv(store)
+    save_store(store)
+    while True:
+        answers = load_answers(store)
+        mode = input("Modus: [n]ext, [e]dit (fzf), [q]uit > ").strip().lower() or "n"
+        if mode.startswith("q"):
+            return
+        if mode.startswith("e"):
+            question = _select_existing_question(answers, store)
+            if not question:
+                continue
+            section = _question_section(question)
+            current = answers.get(question, "")
+            print(f"\nAktuell:\n{question}\n└─ {current}")
+            emoji = random.choice(FRUIT_EMOJIS)
+            ans = input(f"{emoji} Neue Antwort (leer = Abbruch): ").strip()
+            if not ans:
+                continue
+            append_answer(store, section, question, ans)
+            print(f"{emoji} Antwort gespeichert. {emoji}")
+            continue
+
+        for section, qs in QUESTIONS.items():
+            left, right = random.choice(FRUIT_EMOJIS), random.choice(FRUIT_EMOJIS)
+            print(f"\n== {left} {section} {right} ==")
+
+            for q in qs:
+                if q in answers:
+                    print(f"\033[32m{q}\n\u2514\u2500 {answers[q]}\033[0m")
+                    continue
+
+                emoji = random.choice(FRUIT_EMOJIS)
+                ans = input(f"{emoji} {q} {emoji}\n> ").strip()
+                if not ans or ans.lower() == SKIP_TOKEN:
+                    print(f"{emoji} Uebersprungen. Starte das Skript erneut, um weiterzumachen. {emoji}")
+                    return
+
+                append_answer(store, section, q, ans)
+                print(f"{emoji} Antwort gespeichert. Starte das Skript erneut, um weiterzumachen. {emoji}")
+                return
+
+        print(f"✅ Alle Fragen beantwortet! Datei: {STORE_YAML}")
+
+
+if __name__ == "__main__":
+    cmd_fruits()

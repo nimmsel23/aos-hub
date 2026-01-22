@@ -592,6 +592,7 @@
     ].join('\n');
 
     out.textContent = md;
+    syncHotListFlow(lines);
   }
 
   function selectDoor() {
@@ -625,6 +626,7 @@
     ].join('\n');
 
     out.textContent = md;
+    syncDoorWarFlow(ideas, choice);
   }
 
   document.getElementById('warform').addEventListener('submit', function(e) {
@@ -753,6 +755,26 @@
     } catch (_) {
       alert('Speichern fehlgeschlagen.');
     }
+  }
+
+  async function syncHotListFlow(lines) {
+    try {
+      await fetch('/api/door/hotlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: lines, source: 'door-ui' })
+      });
+    } catch (_) {}
+  }
+
+  async function syncDoorWarFlow(ideas, choice) {
+    try {
+      await fetch('/api/door/doorwar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: ideas, choice, source: 'door-ui' })
+      });
+    } catch (_) {}
   }
 
   function escapeHtml(text) {

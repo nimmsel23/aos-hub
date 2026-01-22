@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Core4 daily export (rolling CSV)
+
+[Timer]
+OnCalendar=*-*-* 03:10:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+

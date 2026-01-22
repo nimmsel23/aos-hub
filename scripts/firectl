@@ -1,0 +1,502 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# firectl — Fire tooling (installer + wrapper around local Fire bot)
+# ============================================================
+# Goal: keep Fire logic runnable locally (CLI) and callable by bots/services.
+# - Fire logic lives in `python-firemap-bot/firemap.py` (Taskwarrior → Markdown-formatted text messages).
+# - Fire bot (`python-firemap-bot/firemap_bot.py`) sends or prints those messages.
+# - firectl wraps the bot and installs optional taskrc/systemd helpers.
+#
+# This file is repo-local. You can symlink into PATH via: firectl install-cli
+
+FIRECTL_VERSION="0.1.0"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+has_gum() { command -v gum >/dev/null 2>&1; }
+has_fzf() { command -v fzf >/dev/null 2>&1; }
+
+ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "firectl" || echo "firectl"; }
+ui_info() { has_gum && gum style --faint "$*" || echo "$*"; }
+ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || echo "✔ $*"; }
+ui_err()  { has_gum && gum style --foreground 9  "✘ $*" || echo "✘ $*"; }
+
+die() { ui_err "$*"; exit 1; }
+
+systemd_ok() {
+  has_cmd systemctl || return 1
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+choose() {
+  if has_fzf; then
+    printf "%s\n" "$@" | fzf --prompt="firectl> " --height=18 --reverse --border
+    return 0
+  fi
+  if has_gum; then
+    gum choose "$@"
+    return 0
+  fi
+  ui_info "Choose one:"
+  select opt in "$@"; do echo "$opt"; break; done
+}
+
+abs_path() {
+  local p="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$p"
+    return 0
+  fi
+  [[ "$p" = /* ]] && echo "$p" || echo "$PWD/$p"
+}
+
+TASK_BIN="${AOS_TASK_BIN:-task}"
+PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+FIRE_ROOT="${AOS_FIRE_DIR:-$VAULT_DIR/Game/Fire}"
+FIREBOT_SCRIPT="${AOS_FIREBOT_SCRIPT:-$ROOT_DIR/python-firemap-bot/firemap_bot.py}"
+SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+SERVICE_DAILY="alphaos-fire-daily.service"
+TIMER_DAILY="alphaos-fire-daily.timer"
+SERVICE_WEEKLY="alphaos-fire-weekly.service"
+TIMER_WEEKLY="alphaos-fire-weekly.timer"
+
+install_path_hint() {
+  local target="$1"
+  local dir; dir="$(dirname -- "$target")"
+  ui_info "Installed: $target"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) ui_info "Note: $dir is not in PATH. Add: export PATH=\"$dir:\$PATH\"" ;;
+  esac
+}
+
+install_cli() {
+  local bin_dir="${FIRECTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/firectl"
+  local src="$SCRIPT_DIR/firectl"
+  mkdir -p "$bin_dir" 2>/dev/null || die "cannot create: $bin_dir (set FIRECTL_BIN_DIR=... )"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    die "refusing to overwrite non-symlink: $dst"
+  fi
+  ln -sf "$src" "$dst"
+  ui_ok "Symlinked firectl into PATH."
+  install_path_hint "$dst"
+}
+
+uninstall_cli() {
+  local bin_dir="${FIRECTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/firectl"
+  if [[ -L "$dst" ]]; then
+    rm -f "$dst"
+    ui_ok "Removed: $dst"
+    return 0
+  fi
+  ui_info "Nothing to remove at: $dst"
+}
+
+need_task() { has_cmd "$TASK_BIN" || die "missing: $TASK_BIN"; }
+need_firebot() { has_cmd "$PYTHON_BIN" || die "missing: $PYTHON_BIN"; [[ -f "$FIREBOT_SCRIPT" ]] || die "missing: $FIREBOT_SCRIPT"; }
+
+firebot_env_file() {
+  local dir
+  dir="$(dirname -- "$FIREBOT_SCRIPT")"
+  echo "$dir/.env"
+}
+
+firebot_env_get_() {
+  # Usage: firebot_env_get_ KEY
+  local key="${1:-}"
+  local file
+  file="$(firebot_env_file)"
+  [[ -n "$key" ]] || return 0
+  [[ -f "$file" ]] || return 0
+
+  local line k v
+  while IFS= read -r line; do
+    line="${line%%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "$line" ]] || continue
+    [[ "${line:0:1}" == "#" ]] && continue
+    [[ "$line" == export\ * ]] && line="${line#export }"
+    [[ "$line" == *"="* ]] || continue
+    k="${line%%=*}"; v="${line#*=}"
+    k="${k%"${k##*[![:space:]]}"}"
+    k="${k#"${k%%[![:space:]]*}"}"
+    [[ "$k" == "$key" ]] || continue
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    v="${v%\"}"; v="${v#\"}"
+    v="${v%\'}"; v="${v#\'}"
+    echo "$v"
+    return 0
+  done <"$file"
+}
+
+firebot_effective_() {
+  # Usage: firebot_effective_ KEY [default]
+  local key="${1:-}"
+  local def="${2:-}"
+  local env_val=""
+  if [[ -n "$key" ]]; then
+    env_val="${!key:-}"
+  fi
+  if [[ -n "$env_val" ]]; then
+    echo "$env_val"
+    return 0
+  fi
+  local file_val
+  file_val="$(firebot_env_get_ "$key")"
+  if [[ -n "$file_val" ]]; then
+    echo "$file_val"
+    return 0
+  fi
+  echo "$def"
+}
+
+week_label() {
+  local w y
+  w="$(date +%V)"
+  y="$(date +%Y)"
+  printf "KW%s_%s" "$w" "$y"
+}
+
+today_iso() { date +%F; }
+
+fire_dir_daily()  { printf "%s/Daily/%s"  "$FIRE_ROOT" "$(week_label)"; }
+fire_dir_weekly() { printf "%s/Weekly/%s" "$FIRE_ROOT" "$(week_label)"; }
+
+out_file_daily()  { printf "%s/fire-%s.md" "$(fire_dir_daily)" "$(today_iso)"; }
+out_file_weekly() { printf "%s/fire-week-%s.md" "$(fire_dir_weekly)" "$(week_label)"; }
+
+build_markdown() {
+  local scope="$1"
+  local out file_dir
+  case "$scope" in
+    daily)
+      file_dir="$(fire_dir_daily)"
+      out="$(out_file_daily)"
+      ;;
+    weekly)
+      file_dir="$(fire_dir_weekly)"
+      out="$(out_file_weekly)"
+      ;;
+    *)
+      die "unknown scope: $scope"
+      ;;
+  esac
+
+  mkdir -p "$file_dir"
+  print_message "$scope" >"$out"
+  ui_ok "Wrote: $out"
+}
+
+print_message() {
+  local scope="$1"
+  case "$scope" in
+    daily) ;;
+    weekly) ;;
+    *) die "unknown scope: $scope" ;;
+  esac
+  need_firebot
+  "$PYTHON_BIN" "$FIREBOT_SCRIPT" print --scope "$scope"
+}
+
+send_message() {
+  local scope="$1"
+  need_firebot
+  case "$scope" in
+    daily) "$PYTHON_BIN" "$FIREBOT_SCRIPT" daily ;;
+    weekly) "$PYTHON_BIN" "$FIREBOT_SCRIPT" weekly ;;
+    *) die "unknown scope: $scope" ;;
+  esac
+  ui_ok "Sent: $scope"
+}
+
+test_message() {
+  need_firebot
+  local text=""
+  local debug="0"
+  local scope=""
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+      --debug)
+        debug="1"
+        shift
+        ;;
+      --scope)
+        scope="${2:-}"
+        shift 2 || true
+        ;;
+      *)
+        # single text argument (optional)
+        text="${1:-}"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ "$debug" == "1" ]]; then
+    # Send a real firemap snapshot (same as /fire), but marked as TEST.
+    "$PYTHON_BIN" "$FIREBOT_SCRIPT" test --scope "${scope:-daily}" --debug
+  else
+    "$PYTHON_BIN" "$FIREBOT_SCRIPT" test --text "$text"
+  fi
+  ui_ok "Sent test message."
+}
+
+write_systemd_units() {
+  mkdir -p "$SYSTEMD_DIR"
+
+  cat >"$SYSTEMD_DIR/$SERVICE_DAILY" <<EOF
+[Unit]
+Description=AlphaOS Fire Daily Send
+
+[Service]
+Type=oneshot
+ExecStart=${SCRIPT_DIR}/firectl send daily
+EOF
+
+  cat >"$SYSTEMD_DIR/$TIMER_DAILY" <<'EOF'
+[Unit]
+Description=AlphaOS Fire Daily Send (08:00)
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  cat >"$SYSTEMD_DIR/$SERVICE_WEEKLY" <<EOF
+[Unit]
+Description=AlphaOS Fire Weekly Send
+
+[Service]
+Type=oneshot
+ExecStart=${SCRIPT_DIR}/firectl send weekly
+EOF
+
+  cat >"$SYSTEMD_DIR/$TIMER_WEEKLY" <<'EOF'
+[Unit]
+Description=AlphaOS Fire Weekly Send (Mon 08:05)
+
+[Timer]
+OnCalendar=Mon *-*-* 08:05:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload
+  ui_ok "Wrote: $SYSTEMD_DIR/$TIMER_DAILY"
+  ui_ok "Wrote: $SYSTEMD_DIR/$TIMER_WEEKLY"
+}
+
+setup_systemd() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+  write_systemd_units
+  systemctl --user enable --now "$TIMER_DAILY" >/dev/null 2>&1 || true
+  systemctl --user enable --now "$TIMER_WEEKLY" >/dev/null 2>&1 || true
+  ui_ok "Enabled timers."
+}
+
+status() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+
+  ui_title
+  ui_info "Timers:"
+  systemctl --user list-timers --all --no-pager | (grep -E "alphaos-fire-(daily|weekly)\\.timer" || true)
+  echo
+  ui_info "Status:"
+  systemctl --user status "$TIMER_DAILY" "$TIMER_WEEKLY" --no-pager || true
+}
+
+logs() {
+  has_cmd journalctl || die "missing: journalctl"
+  local follow="0"
+  local lines="200"
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+      -f|--follow) follow="1"; shift ;;
+      -n|--lines) lines="${2:-200}"; shift 2 || true ;;
+      *) shift ;;
+    esac
+  done
+
+  local args=(--user -n "$lines" --no-pager -u "$SERVICE_DAILY" -u "$SERVICE_WEEKLY")
+  if [[ "$follow" == "1" ]]; then
+    args=(--user -f -u "$SERVICE_DAILY" -u "$SERVICE_WEEKLY")
+  fi
+  journalctl "${args[@]}" || true
+}
+
+enable_timers() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+  systemctl --user enable --now "$TIMER_DAILY" "$TIMER_WEEKLY" >/dev/null 2>&1 || true
+  ui_ok "Enabled timers."
+}
+
+disable_timers() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+  systemctl --user disable --now "$TIMER_DAILY" "$TIMER_WEEKLY" >/dev/null 2>&1 || true
+  ui_ok "Disabled timers."
+}
+
+fix() {
+  ui_title
+  doctor
+  echo
+
+  local taskrc="${AOS_TASKRC:-$HOME/.taskrc}"
+  if has_cmd rg && [[ -f "$taskrc" ]] && rg -q "AlphaOS Fire Reports" "$taskrc" 2>/dev/null; then
+    ui_ok "Taskwarrior reports present."
+  else
+    if [[ -e "$taskrc" && ! -w "$taskrc" ]]; then
+      ui_info "Note: cannot write taskrc ($taskrc); skipping setup-reports"
+    else
+      ui_info "Fix: installing Taskwarrior reports (fired/firew)"
+      "$ROOT_DIR/scripts/setup-fire-reports.sh" || true
+    fi
+  fi
+
+  if systemd_ok; then
+    if [[ ! -f "$SYSTEMD_DIR/$TIMER_DAILY" || ! -f "$SYSTEMD_DIR/$TIMER_WEEKLY" ]]; then
+      ui_info "Fix: writing systemd units"
+      write_systemd_units || true
+    fi
+    enable_timers || true
+  else
+    ui_info "Note: systemd user session not available here; run: firectl setup-systemd"
+  fi
+
+  local env_file
+  env_file="$(firebot_env_file)"
+  if [[ ! -f "$env_file" && -f "$env_file.example" ]]; then
+    cp -n "$env_file.example" "$env_file" || true
+    ui_ok "Created: $env_file (from .env.example)"
+  fi
+
+  ui_ok "Fix done."
+}
+
+doctor() {
+  need_task
+  need_firebot
+  ui_info "task: $("$TASK_BIN" --version 2>/dev/null || echo ok)"
+  ui_info "vault: $(abs_path "$VAULT_DIR")"
+  ui_info "fire root: $(abs_path "$FIRE_ROOT")"
+  ui_info "taskrc: $(abs_path "${AOS_TASKRC:-$HOME/.taskrc}")"
+  ui_info "fire bot: $FIREBOT_SCRIPT"
+  ui_info "fire bot .env: $(abs_path "$(firebot_env_file)")"
+  ui_info "fire bot sender: $(firebot_effective_ AOS_FIREMAP_SENDER api)"
+  ui_info "fire bot chat_id set: $( [[ -n "$(firebot_effective_ AOS_FIREMAP_CHAT_ID)" ]] && echo yes || echo no )"
+  ui_info "fire bot token set: $( [[ -n "$(firebot_effective_ AOS_FIREMAP_BOT_TOKEN)" ]] && echo yes || echo no )"
+}
+
+menu() {
+  ui_title
+  local action
+  action="$(choose \
+    "send daily" "send weekly" \
+    "build daily md" "build weekly md" \
+    "print daily" "print weekly" \
+    "test message" \
+    "status" "logs" \
+    "enable timers" "disable timers" \
+    "fix" \
+    "doctor" \
+    "setup reports (taskrc)" "setup systemd timers" \
+    "install-cli" "uninstall-cli" \
+    "quit")"
+  case "$action" in
+    "send daily") send_message daily ;;
+    "send weekly") send_message weekly ;;
+    "build daily md") build_markdown daily ;;
+    "build weekly md") build_markdown weekly ;;
+    "print daily") print_message daily ;;
+    "print weekly") print_message weekly ;;
+    "test message") test_message "🔥 firectl test ($(date +%F_%H:%M))" ;;
+    "status") status ;;
+    "logs") logs ;;
+    "enable timers") enable_timers ;;
+    "disable timers") disable_timers ;;
+    "fix") fix ;;
+    "doctor") doctor ;;
+    "setup reports (taskrc)") exec "$ROOT_DIR/scripts/setup-fire-reports.sh" ;;
+    "setup systemd timers") setup_systemd ;;
+    "install-cli") install_cli ;;
+    "uninstall-cli") uninstall_cli ;;
+    "quit") exit 0 ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+firectl — Fire tooling ($FIRECTL_VERSION)
+
+Usage:
+  firectl menu
+  firectl doctor
+  firectl fix
+  firectl status
+  firectl logs [--follow] [--lines N]
+  firectl enable
+  firectl disable
+  firectl print daily|weekly
+  firectl build daily|weekly
+  firectl send  daily|weekly
+  firectl test [text] [--debug] [--scope daily|weekly]  # --debug sends a TEST firemap snapshot
+  firectl install-cli
+  firectl uninstall-cli
+  firectl setup-reports     # append Taskwarrior reports fired/firew to \$AOS_TASKRC (~/.taskrc)
+  firectl setup-systemd     # install + enable daily/weekly send timers
+
+Env:
+  AOS_TASK_BIN=task
+  AOS_PYTHON_BIN=python
+  AOS_FIREBOT_SCRIPT=<repo>/python-firemap-bot/firemap_bot.py
+  AOS_VAULT_DIR=~/AlphaOS-Vault
+  AOS_FIRE_DIR=<vault>/Game/Fire
+  AOS_TASKRC=~/.taskrc
+EOF
+}
+
+cmd="${1:-menu}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  menu) menu ;;
+  doctor) doctor ;;
+  fix) fix ;;
+  status) status ;;
+  logs) logs "$@" ;;
+  enable) enable_timers ;;
+  disable) disable_timers ;;
+  print) print_message "${1:-}" ;;
+  build) build_markdown "${1:-}" ;;
+  send) send_message "${1:-}" ;;
+  test) test_message "$@" ;;
+  install-cli) install_cli ;;
+  uninstall-cli) uninstall_cli ;;
+  setup-reports) exec "$ROOT_DIR/scripts/setup-fire-reports.sh" ;;
+  setup-systemd) setup_systemd ;;
+  *)
+    ui_err "unknown command: $cmd"
+    usage
+    exit 1
+    ;;
+esac

@@ -1,6 +1,7 @@
 # AOS Hot List - Fish Shell Interface
 
 **Path:** `~/.dotfiles/config/fish/functions/aos-hot.fish`
+**Repo copy:** `scripts/hot-list/aos-hot.fish`
 **Version:** 1.0 (2026-01-04)
 **Purpose:** Terminal interface for AOS Hot List (POTENTIAL phase of THE DOOR)
 
@@ -13,7 +14,7 @@ The AOS Hot List provides a **multi-format capture system** for ideas:
 ```
 Terminal (fish) → hot "idea"
   ├─ 1. Markdown file     (~/AlphaOS-Vault/Door/1-Potential/*.md)
-  ├─ 2. JSON index        (ideas.json with UUIDs)
+  ├─ 2. JSON index        (hotlist_index.json with UUIDs)
   ├─ 3. Taskwarrior task  (project:HotList +hot +potential prio:L)
   └─ 4. TickTick sync     (via Taskwarrior on-add hook)
 ```
@@ -23,7 +24,7 @@ Terminal (fish) → hot "idea"
 | Format | Purpose | Location |
 |--------|---------|----------|
 | **Markdown** | Human-readable (Obsidian) | `~/AlphaOS-Vault/Door/1-Potential/*.md` |
-| **JSON** | GAS/Bot processing | `~/AlphaOS-Vault/Door/1-Potential/ideas.json` |
+| **JSON** | GAS/Bot processing | `~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json` |
 | **Taskwarrior** | Source of Truth | `~/.task/` database |
 | **TickTick** | Mobile access | Cloud (synced via hook) |
 
@@ -48,7 +49,7 @@ hot "Build Door-Bot for Telegram interface"
 
 **What happens:**
 1. Creates Markdown file with YAML frontmatter + template
-2. Adds entry to `ideas.json` with UUID reference
+2. Adds entry to `hotlist_index.json` with UUID reference
 3. Creates Taskwarrior task (triggers TickTick hook automatically)
 4. Syncs to Google Drive via rclone (background)
 
@@ -97,7 +98,7 @@ hotopen 74    # Opens task ID 74's markdown file
 
 **What it does:**
 1. Gets UUID from Taskwarrior task ID
-2. Looks up file path in `ideas.json` by UUID
+2. Looks up file path in `hotlist_index.json` by UUID
 3. Opens file in default application (xdg-open/open)
 
 ---
@@ -118,8 +119,8 @@ async def handle_hot(message: Message):
 ```javascript
 // ~/aos-hub/gas/door.gs
 function addHotIdea(idea) {
-  // Read ideas.json from Drive
-  var json = DriveApp.getFileById(IDEAS_JSON_ID);
+  // Read hotlist_index.json from Drive
+  var json = DriveApp.getFileById(HOTLIST_INDEX_ID);
   var data = JSON.parse(json.getBlob().getDataAsString());
 
   // Add new entry
@@ -187,20 +188,22 @@ source: fish
 
 ## JSON Structure
 
-`ideas.json` format:
+`hotlist_index.json` format:
 
 ```json
-[
-  {
-    "idea": "Build Door-Bot for Telegram",
-    "created": "2026-01-04T09:30:45Z",
-    "file": "/home/alpha/AlphaOS-Vault/Door/1-Potential/20260104-103045--build-door-bot.md",
-    "tw_uuid": "a3f2b91c-8c4e-4d21-9a1f-3d8e7f2c1b4a",
-    "status": "active",
-    "quadrant": 2,
-    "tags": ["hot", "potential"]
-  }
-]
+{
+  "items": [
+    {
+      "idea": "Build Door-Bot for Telegram",
+      "created": "2026-01-04T09:30:45Z",
+      "file": "/home/alpha/AlphaOS-Vault/Door/1-Potential/20260104-103045--build-door-bot.md",
+      "tw_uuid": "a3f2b91c-8c4e-4d21-9a1f-3d8e7f2c1b4a",
+      "status": "active",
+      "quadrant": 2,
+      "tags": ["hot", "potential"]
+    }
+  ]
+}
 ```
 
 **Key fields:**
@@ -245,7 +248,7 @@ task add project:HotList prio:L +hot +potential "Idea text"
 ~/.task/hooks/on-add.hotlist-ticktick             # TickTick sync hook
 ~/AlphaOS-Vault/Door/1-Potential/                 # Markdown files
   ├─ *.md                                         # Individual ideas
-  └─ ideas.json                                   # JSON index
+  └─ hotlist_index.json                           # JSON index
 ~/.alphaos/hotlist_ticktick_map.json              # Taskwarrior ↔ TickTick mapping
 ```
 
@@ -270,13 +273,13 @@ cat ~/.ticktick_token
 tail -f ~/.local/share/alphaos/logs/hotlist-ticktick.log
 ```
 
-### ideas.json not updating
+### hotlist_index.json not updating
 ```bash
 # Check file permissions
-ls -la ~/AlphaOS-Vault/Door/1-Potential/ideas.json
+ls -la ~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json
 
 # Manually verify JSON is valid
-jq '.' ~/AlphaOS-Vault/Door/1-Potential/ideas.json
+jq '.' ~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json
 ```
 
 ---
@@ -284,7 +287,7 @@ jq '.' ~/AlphaOS-Vault/Door/1-Potential/ideas.json
 ## Next Steps
 
 - [ ] Telegram Bot integration (`/hot` command)
-- [ ] GAS WebApp (Google Forms → ideas.json)
+- [ ] GAS WebApp (Google Forms → hotlist_index.json)
 - [ ] Node.js Door-Centre dashboard
 - [ ] Obsidian plugin for inline capture
 

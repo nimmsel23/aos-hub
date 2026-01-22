@@ -35,6 +35,10 @@ const TASK_BIN = process.env.TASK_BIN || "task";
 const TASKRC = process.env.TASKRC || "";
 const TASK_CACHE_TTL = Number(process.env.TASK_CACHE_TTL || 30);
 const TASK_EXPORT_FILTER = String(process.env.TASK_EXPORT_FILTER || "").trim();
+const CORE4_TW_SYNC = process.env.CORE4_TW_SYNC !== "0";
+const CORE4_JOURNAL_DIR =
+  process.env.CORE4_JOURNAL_DIR ||
+  path.join(getVaultDir(), "Alpha_Journal", "Entries");
 const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
   .split(",")
   .map((tag) => tag.trim())
@@ -79,6 +83,16 @@ const DOOR_HITS_TAGS = String(
   .map((tag) => tag.trim())
   .filter(Boolean);
 const FIRE_GCAL_EMBED_URL = process.env.FIRE_GCAL_EMBED_URL || "";
+const FIRE_TASK_TAGS_ALL = String(
+  process.env.FIRE_TASK_TAGS_ALL || process.env.FIRE_TASK_TAGS || "fire,production,hit"
+)
+  .split(",")
+  .map((tag) => tag.trim().toLowerCase())
+  .filter(Boolean);
+const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "scheduled,due")
+  .split(",")
+  .map((field) => field.trim())
+  .filter(Boolean);
 
 let TASK_CACHE = { ts: 0, tasks: [], error: null };
 
@@ -127,6 +141,20 @@ function buildCentresPayload() {
     updated_at: new Date(st.mtimeMs).toISOString(),
     centres,
   };
+}
+
+function findCentreBySlug(slugOrCmd) {
+  const safe = safeSlug(slugOrCmd || "");
+  const links = loadMenu();
+  for (const link of links) {
+    if (safeSlug(link.cmd || link.label) === safe) {
+      return link;
+    }
+    if (safeSlug(link.label || "") === safe) {
+      return link;
+    }
+  }
+  return null;
 }
 
 function getGeneralsDir() {
@@ -423,6 +451,96 @@ function taskInRange(task, start, end) {
   return due >= start && due < end;
 }
 
+function getDayRangeLocal(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const start = new Date(d);
+  const end = new Date(d);
+  end.setDate(start.getDate() + 1);
+  return { start, end, label: start.toLocaleDateString("de-DE") };
+}
+
+function parseTaskwarriorDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  const match = text.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  return new Date(Date.UTC(year, month, day, hour, minute, second));
+}
+
+function fireTaskHasAllTags(taskTags, required) {
+  if (!required.length) return true;
+  const tags = (taskTags || []).map((t) => String(t || "").toLowerCase());
+  return required.every((tag) => tags.includes(tag));
+}
+
+function fireTaskDateCandidates(task) {
+  const dates = [];
+  FIRE_TASK_DATE_FIELDS.forEach((field) => {
+    const value = parseTaskwarriorDate(task[field]);
+    if (value) dates.push(value);
+  });
+  return dates;
+}
+
+function fireTaskPrimaryDate(task) {
+  const dates = fireTaskDateCandidates(task);
+  if (!dates.length) return null;
+  return new Date(Math.min(...dates.map((d) => d.getTime())));
+}
+
+function fireTaskInRange(task, start, end, includeOverdue) {
+  const date = fireTaskPrimaryDate(task);
+  if (!date) return false;
+  if (includeOverdue && date < start) return true;
+  return date >= start && date < end;
+}
+
+function detectFireDomain(task) {
+  const tags = (task.tags || []).map((t) => String(t || "").toLowerCase());
+  const project = String(task.project || "").toLowerCase();
+  const haystack = `${project} ${tags.join(" ")}`;
+  if (/\bbody\b/.test(haystack)) return "body";
+  if (/\bbeing\b/.test(haystack)) return "being";
+  if (/\bbalance\b/.test(haystack)) return "balance";
+  if (/\bbusiness\b/.test(haystack)) return "business";
+  return "other";
+}
+
+function detectDomainFromTags(tags) {
+  const tagStr = (tags || []).map((t) => String(t || "").toLowerCase()).join(" ");
+  if (/\bbody\b/.test(tagStr)) return "body";
+  if (/\bbeing\b/.test(tagStr)) return "being";
+  if (/\bbalance\b/.test(tagStr)) return "balance";
+  if (/\bbusiness\b/.test(tagStr)) return "business";
+  return "other";
+}
+
+function normalizeFireTask(task, referenceDate) {
+  const date = fireTaskPrimaryDate(task);
+  return {
+    id: task.id || task.uuid,
+    title: task.description || "(ohne Titel)",
+    tags: task.tags || [],
+    project: task.project || "",
+    due: task.due || "",
+    scheduled: task.scheduled || "",
+    date: date ? date.toISOString() : "",
+    domain: detectFireDomain(task),
+    overdue: date ? date < referenceDate : false,
+  };
+}
+
 function isoWeekString(date = new Date()) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -445,12 +563,1096 @@ function getDoorVaultDir() {
   return path.join(getVaultDir(), "Door");
 }
 
+function getGameVaultDir() {
+  return path.join(getVaultDir(), "Game");
+}
+
+function getDomainStatesDir() {
+  return path.join(getVaultDir(), ".states");
+}
+
+// ============================================================================
+// DOMAIN-STATE SYSTEM
+// ============================================================================
+// Strategic state tracking for each domain (BODY/BEING/BALANCE/BUSINESS)
+// across all centres (Frame/Freedom/Focus/Fire).
+//
+// Purpose: Enable cross-domain synthesis, temporal cascade analysis,
+// and pipeline flow diagnosis for General's Tent strategic intelligence.
+//
+// Storage: ~/AlphaOS-Vault/.states/{domain}.json
+// Schema: domain-state-schema.json
+// ============================================================================
+
+const DOMAINS = ["BODY", "BEING", "BALANCE", "BUSINESS"];
+
+/**
+ * Load domain state JSON for a single domain
+ * @param {string} domain - Domain name (BODY/BEING/BALANCE/BUSINESS)
+ * @returns {object|null} Domain state object or null if not found
+ */
+function loadDomainState(domain) {
+  const domainUpper = String(domain || "").toUpperCase();
+  if (!DOMAINS.includes(domainUpper)) {
+    console.error(`[loadDomainState] Invalid domain: ${domain}`);
+    return null;
+  }
+
+  const statesDir = getDomainStatesDir();
+  const statePath = path.join(statesDir, `${domainUpper}.json`);
+
+  try {
+    if (!fs.existsSync(statePath)) {
+      console.warn(`[loadDomainState] State not found: ${statePath}`);
+      return null;
+    }
+
+    const raw = fs.readFileSync(statePath, "utf8");
+    const state = JSON.parse(raw);
+
+    // Validate domain matches filename
+    if (state.domain !== domainUpper) {
+      console.error(
+        `[loadDomainState] Domain mismatch in ${statePath}: expected ${domainUpper}, got ${state.domain}`
+      );
+      return null;
+    }
+
+    return state;
+  } catch (err) {
+    console.error(`[loadDomainState] Error loading ${statePath}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Save domain state JSON for a single domain
+ * @param {string} domain - Domain name
+ * @param {object} state - Domain state object (must match schema)
+ * @returns {boolean} Success status
+ */
+function saveDomainState(domain, state) {
+  const domainUpper = String(domain || "").toUpperCase();
+  if (!DOMAINS.includes(domainUpper)) {
+    console.error(`[saveDomainState] Invalid domain: ${domain}`);
+    return false;
+  }
+
+  const statesDir = getDomainStatesDir();
+  const statePath = path.join(statesDir, `${domainUpper}.json`);
+
+  try {
+    // Ensure .states directory exists
+    if (!fs.existsSync(statesDir)) {
+      fs.mkdirSync(statesDir, { recursive: true });
+      console.log(`[saveDomainState] Created states dir: ${statesDir}`);
+    }
+
+    // Ensure domain field matches
+    state.domain = domainUpper;
+    state.updated_at = new Date().toISOString();
+
+    // Write with pretty formatting for human readability
+    const json = JSON.stringify(state, null, 2);
+    fs.writeFileSync(statePath, json, "utf8");
+
+    console.log(`[saveDomainState] Saved ${domainUpper} state: ${statePath}`);
+    return true;
+  } catch (err) {
+    console.error(`[saveDomainState] Error saving ${statePath}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Update domain state with partial updates (deep merge)
+ * @param {string} domain - Domain name
+ * @param {object} updates - Partial state updates
+ * @returns {boolean} Success status
+ */
+function updateDomainState(domain, updates) {
+  const current = loadDomainState(domain);
+  if (!current) {
+    console.error(`[updateDomainState] Cannot update non-existent state for ${domain}`);
+    return false;
+  }
+
+  // Deep merge updates into current state
+  const merged = deepMerge(current, updates);
+  return saveDomainState(domain, merged);
+}
+
+/**
+ * Load all domain states (BODY, BEING, BALANCE, BUSINESS)
+ * @returns {object} Object with domain names as keys, states as values
+ */
+function getAllDomainStates() {
+  const states = {};
+  for (const domain of DOMAINS) {
+    const state = loadDomainState(domain);
+    if (state) {
+      states[domain] = state;
+    }
+  }
+  return states;
+}
+
+/**
+ * Deep merge two objects (for state updates)
+ * @param {object} target - Target object
+ * @param {object} source - Source object to merge
+ * @returns {object} Merged object
+ */
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key in source) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])) {
+      result[key] = deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
+/**
+ * Generate initial domain state from existing vault data
+ * Scans for Frame/Freedom/Focus/Fire maps, War Stacks, VOICE sessions, Core4 data
+ * @param {string} domain - Domain name
+ * @returns {object} Initial domain state object
+ */
+function generateInitialDomainState(domain) {
+  const domainUpper = String(domain || "").toUpperCase();
+  if (!DOMAINS.includes(domainUpper)) {
+    throw new Error(`Invalid domain: ${domain}`);
+  }
+
+  const domainLower = domainUpper.toLowerCase();
+  const gameDir = getGameVaultDir();
+  const doorDir = getDoorVaultDir();
+  const voiceDir = getVoiceVaultDir();
+  const week = isoWeekString();
+
+  console.log(`[generateInitialDomainState] Generating state for ${domainUpper}...`);
+
+  const state = {
+    domain: domainUpper,
+    version: "1.0.0",
+    updated_at: new Date().toISOString(),
+    week,
+
+    // Frame Map (yearly)
+    frame: scanForMap(gameDir, "Frame", domainLower) || {
+      file: `Game/Frame/${domainUpper}_frame.md`,
+      status: "unknown",
+      last_shift: null,
+      updated_at: null,
+    },
+
+    // Freedom Map (10-year IPW)
+    freedom: scanForMap(gameDir, "Freedom", domainLower) || {
+      file: `Game/Freedom/${domainUpper}_freedom.md`,
+      ipw: "unknown",
+      alignment: "unknown",
+      updated_at: null,
+    },
+
+    // Focus Map (monthly/quarterly)
+    focus: scanForMap(gameDir, "Focus", domainLower) || {
+      file: `Game/Focus/${domainUpper}_focus.md`,
+      mission: "unknown",
+      quarter: getCurrentQuarter(),
+      serves_freedom: null,
+      updated_at: null,
+    },
+
+    // Fire Map (weekly)
+    fire: scanForFireMap(gameDir, domainLower, week) || {
+      week,
+      hits: [],
+      completion: 0,
+      serves_focus: null,
+      updated_at: null,
+    },
+
+    // VOICE sessions
+    voice: scanForVoiceSessions(voiceDir, domainLower) || {
+      latest_session: null,
+      latest_strike: null,
+      session_count: 0,
+      integrated: false,
+      updated_at: null,
+    },
+
+    // War Stacks
+    war_stacks: scanForWarStacks(doorDir, domainLower) || [],
+
+    // Core4 metrics
+    core4: scanForCore4Metrics(domainLower, week) || {
+      week_total: 0,
+      daily_streak: 0,
+      trend: "unknown",
+    },
+
+    // Synthesis (empty initially, computed by synthesis engines)
+    synthesis: {
+      patterns: [],
+      blockers: [],
+      cascade_health: {
+        fire_to_focus: "unknown",
+        focus_to_freedom: "unknown",
+        freedom_to_frame: "unknown",
+      },
+      pipeline_health: {
+        voice_to_door: 0,
+        door_to_fire: 0,
+      },
+    },
+  };
+
+  console.log(`[generateInitialDomainState] Generated state for ${domainUpper}`);
+  return state;
+}
+
+/**
+ * Scan for Frame/Freedom/Focus map files
+ * @param {string} gameDir - Game vault directory
+ * @param {string} mapType - Map type (Frame/Freedom/Focus)
+ * @param {string} domain - Domain (lowercase)
+ * @returns {object|null} Map metadata or null
+ */
+function scanForMap(gameDir, mapType, domain) {
+  const mapDir = path.join(gameDir, mapType);
+  if (!fs.existsSync(mapDir)) {
+    console.warn(`[scanForMap] Directory not found: ${mapDir}`);
+    return null;
+  }
+
+  // Look for {DOMAIN}_{maptype}.md (e.g., BODY_frame.md)
+  const domainUpper = domain.toUpperCase();
+  const filename = `${domainUpper}_${mapType.toLowerCase()}.md`;
+  const filePath = path.join(mapDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    console.warn(`[scanForMap] Map not found: ${filePath}`);
+    return null;
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    const content = fs.readFileSync(filePath, "utf8");
+
+    // Parse YAML front matter if exists
+    const yaml = extractYamlFrontMatter(content);
+
+    const relativePath = path.relative(getVaultDir(), filePath);
+
+    return {
+      file: relativePath,
+      title: yaml.title || `${domainUpper} ${mapType} Map`,
+      status: yaml.status || yaml.frame_status || "unknown",
+      last_shift: yaml.last_shift || null,
+      updated_at: stats.mtime.toISOString(),
+    };
+  } catch (err) {
+    console.error(`[scanForMap] Error reading ${filePath}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Scan for Fire Map (weekly)
+ * @param {string} gameDir - Game vault directory
+ * @param {string} domain - Domain (lowercase)
+ * @param {string} week - ISO week string
+ * @returns {object|null} Fire map data or null
+ */
+function scanForFireMap(gameDir, domain, week) {
+  const fireDir = path.join(gameDir, "Fire");
+  if (!fs.existsSync(fireDir)) {
+    console.warn(`[scanForFireMap] Directory not found: ${fireDir}`);
+    return null;
+  }
+
+  // Look for fire map with week in filename or YAML
+  const domainUpper = domain.toUpperCase();
+  const files = fs.readdirSync(fireDir).filter((f) => f.endsWith(".md"));
+
+  for (const file of files) {
+    const filePath = path.join(fireDir, file);
+    try {
+      const content = fs.readFileSync(filePath, "utf8");
+      const yaml = extractYamlFrontMatter(content);
+
+      // Check if this file is for this domain and week
+      if (
+        yaml.domain &&
+        yaml.domain.toUpperCase() === domainUpper &&
+        yaml.week === week
+      ) {
+        const stats = fs.statSync(filePath);
+        const relativePath = path.relative(getVaultDir(), filePath);
+
+        return {
+          file: relativePath,
+          week,
+          hits: yaml.hits || [],
+          completion: yaml.completion || 0,
+          serves_focus: yaml.serves_focus || null,
+          updated_at: stats.mtime.toISOString(),
+        };
+      }
+    } catch (err) {
+      console.error(`[scanForFireMap] Error reading ${filePath}:`, err);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Scan for VOICE sessions related to domain
+ * @param {string} voiceDir - VOICE vault directory
+ * @param {string} domain - Domain (lowercase)
+ * @returns {object|null} VOICE metadata or null
+ */
+function scanForVoiceSessions(voiceDir, domain) {
+  if (!fs.existsSync(voiceDir)) {
+    console.warn(`[scanForVoiceSessions] Directory not found: ${voiceDir}`);
+    return null;
+  }
+
+  try {
+    const files = fs
+      .readdirSync(voiceDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => {
+        const filePath = path.join(voiceDir, f);
+        const stats = fs.statSync(filePath);
+        return { name: f, path: filePath, mtime: stats.mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    // Simple heuristic: count sessions, find latest STRIKE
+    let sessionCount = 0;
+    let latestSession = null;
+    let latestStrike = null;
+
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(file.path, "utf8");
+        const yaml = extractYamlFrontMatter(content);
+
+        // Check if this session relates to domain (tags, content mentions, etc.)
+        const isDomainRelated =
+          yaml.domain &&
+          yaml.domain.toLowerCase() === domain.toLowerCase();
+
+        if (isDomainRelated || content.toLowerCase().includes(domain)) {
+          sessionCount++;
+          if (!latestSession) {
+            latestSession = path.relative(getVaultDir(), file.path);
+          }
+
+          // Extract STRIKE section if exists
+          if (!latestStrike) {
+            const strikeMatch = content.match(/##\s*STRIKE\s*\n+(.*?)(?=\n##|\n---|$)/is);
+            if (strikeMatch) {
+              latestStrike = strikeMatch[1].trim().substring(0, 200);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[scanForVoiceSessions] Error reading ${file.path}:`, err);
+      }
+    }
+
+    return {
+      latest_session: latestSession,
+      latest_strike: latestStrike,
+      session_count: sessionCount,
+      integrated: false, // TODO: detect integration
+      updated_at: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error(`[scanForVoiceSessions] Error scanning ${voiceDir}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Scan for War Stacks related to domain
+ * @param {string} doorDir - Door vault directory
+ * @param {string} domain - Domain (lowercase)
+ * @returns {array} Array of war stack objects
+ */
+function scanForWarStacks(doorDir, domain) {
+  const warStackDir = path.join(doorDir, "War-Stacks");
+  if (!fs.existsSync(warStackDir)) {
+    console.warn(`[scanForWarStacks] Directory not found: ${warStackDir}`);
+    return [];
+  }
+
+  try {
+    const files = fs
+      .readdirSync(warStackDir)
+      .filter((f) => f.endsWith(".md"));
+
+    const warStacks = [];
+    const domainUpper = domain.toUpperCase();
+
+    for (const file of files) {
+      const filePath = path.join(warStackDir, file);
+      try {
+        const content = fs.readFileSync(filePath, "utf8");
+        const yaml = extractYamlFrontMatter(content);
+
+        // Check if this war stack is for this domain
+        if (
+          yaml.domain &&
+          yaml.domain.toUpperCase() === domainUpper
+        ) {
+          const stats = fs.statSync(filePath);
+          const relativePath = path.relative(getVaultDir(), filePath);
+
+          warStacks.push({
+            file: relativePath,
+            title: yaml.title || file.replace(".md", ""),
+            status: yaml.status || "active",
+            hits_completed: yaml.hits_completed || 0,
+            created_at: yaml.created_at || stats.birthtime.toISOString().split("T")[0],
+          });
+        }
+      } catch (err) {
+        console.error(`[scanForWarStacks] Error reading ${filePath}:`, err);
+      }
+    }
+
+    return warStacks;
+  } catch (err) {
+    console.error(`[scanForWarStacks] Error scanning ${warStackDir}:`, err);
+    return [];
+  }
+}
+
+/**
+ * Scan for Core4 metrics from weekly JSON
+ * @param {string} domain - Domain (lowercase)
+ * @param {string} week - ISO week string
+ * @returns {object|null} Core4 metrics or null
+ */
+function scanForCore4Metrics(domain, week) {
+  const core4Dir = path.join(getVaultDir(), "Alpha_Core4");
+  const weekFile = path.join(core4Dir, `core4_week_${week}.json`);
+
+  if (!fs.existsSync(weekFile)) {
+    console.warn(`[scanForCore4Metrics] Week file not found: ${weekFile}`);
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(weekFile, "utf8");
+    const data = JSON.parse(raw);
+
+    const domainKey = domain.toLowerCase();
+    const weekTotal = data.totals && data.totals[domainKey] ? data.totals[domainKey] : 0;
+
+    return {
+      week_total: weekTotal,
+      daily_streak: 0, // TODO: calculate from daily data
+      trend: "unknown", // TODO: compare with previous weeks
+    };
+  } catch (err) {
+    console.error(`[scanForCore4Metrics] Error reading ${weekFile}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Extract YAML front matter from markdown content
+ * @param {string} content - Markdown content
+ * @returns {object} Parsed YAML object or empty object
+ */
+function extractYamlFrontMatter(content) {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+
+  try {
+    return yaml.load(match[1]) || {};
+  } catch (err) {
+    console.error("[extractYamlFrontMatter] YAML parse error:", err);
+    return {};
+  }
+}
+
+/**
+ * Get current quarter string (Q1-2026, etc.)
+ * @returns {string} Quarter string
+ */
+function getCurrentQuarter() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const quarter = Math.ceil(month / 3);
+  return `Q${quarter}-${year}`;
+}
+
+// ============================================================================
+// SYNTHESIS ENGINES
+// ============================================================================
+// Strategic intelligence engines for General's Tent
+//
+// 1. Cross-Domain Synthesis: Pattern recognition across BODY/BEING/BALANCE/BUSINESS
+// 2. Temporal Cascade Analysis: Frame→Freedom→Focus→Fire alignment check
+// 3. Pipeline Flow Diagnosis: VOICE→DOOR→FIRE energy flow analysis
+// ============================================================================
+
+/**
+ * SYNTHESIS ENGINE #1: Cross-Domain Pattern Recognition
+ *
+ * Analyzes all 4 domain states to detect:
+ * - Cross-domain patterns (e.g., BUSINESS overemphasis → BEING neglect)
+ * - Domain dependencies (e.g., BALANCE foundation → unlocks BUSINESS capacity)
+ * - Blocking patterns (e.g., Fire without grounding → Lower Dantian needed)
+ *
+ * @param {object} states - Object with all 4 domain states (BODY, BEING, BALANCE, BUSINESS)
+ * @returns {object} Cross-domain synthesis report
+ */
+function synthesizeCrossDomain(states) {
+  console.log("[synthesizeCrossDomain] Running cross-domain pattern recognition...");
+
+  const patterns = [];
+  const domainHealth = {};
+  const crossDomainInsights = [];
+
+  // Extract domain metrics
+  const domainMetrics = DOMAINS.map((domain) => {
+    const state = states[domain];
+    if (!state) return null;
+
+    const frameStatus = state.frame?.status || "unknown";
+    const fireCompletion = state.fire?.completion || 0;
+    const core4Week = state.core4?.week_total || 0;
+    const warStacksActive = state.war_stacks?.filter((ws) => ws.status === "active").length || 0;
+    const voiceIntegrated = state.voice?.integrated || false;
+
+    domainHealth[domain] = {
+      frame_status: frameStatus,
+      fire_completion: fireCompletion,
+      core4_week: core4Week,
+      war_stacks_active: warStacksActive,
+      voice_integrated: voiceIntegrated,
+      blocking_pattern: "none",
+    };
+
+    return {
+      domain,
+      frameStatus,
+      fireCompletion,
+      core4Week,
+      warStacksActive,
+      voiceIntegrated,
+    };
+  }).filter(Boolean);
+
+  // Pattern #1: Detect spiritual bypassing (BUSINESS overemphasis while BEING neglected)
+  const business = domainMetrics.find((d) => d.domain === "BUSINESS");
+  const being = domainMetrics.find((d) => d.domain === "BEING");
+
+  if (business && being) {
+    if (business.core4Week >= 6 && being.core4Week <= 4) {
+      patterns.push("BUSINESS overemphasis → BEING neglect = Spiritual Bypassing ACTIVE");
+      domainHealth.BUSINESS.blocking_pattern = "bypassing_being";
+      domainHealth.BEING.blocking_pattern = "no_daily_ritual";
+
+      crossDomainInsights.push({
+        type: "spiritual_bypass",
+        severity: "high",
+        description:
+          "BUSINESS execution (Core4: " +
+          business.core4Week +
+          "/7) is high while BEING practice (Core4: " +
+          being.core4Week +
+          "/7) is low. This indicates spiritual bypassing pattern.",
+        recommendation:
+          "Reduce BUSINESS Fire Hits from 4 to 3. Add BEING Fire Hit: 'Meditation 20min daily'.",
+      });
+    }
+  }
+
+  // Pattern #2: Detect foundation unlocking (BALANCE → enables other domains)
+  const balance = domainMetrics.find((d) => d.domain === "BALANCE");
+  const body = domainMetrics.find((d) => d.domain === "BODY");
+
+  if (balance && balance.core4Week >= 5) {
+    patterns.push(
+      "BALANCE foundation solid → unlocked capacity in other domains"
+    );
+
+    crossDomainInsights.push({
+      type: "foundation_unlock",
+      severity: "positive",
+      description:
+        "BALANCE foundation (Core4: " +
+        balance.core4Week +
+        "/7) is strong. This typically unlocks BODY & BUSINESS capacity.",
+      recommendation:
+        "Maintain BALANCE consistency. It's the base for other domains.",
+    });
+  }
+
+  // Pattern #3: Detect VOICE integration gaps
+  const voiceIntegrationGaps = domainMetrics.filter(
+    (d) => !d.voiceIntegrated && d.domain !== "BALANCE"
+  );
+
+  if (voiceIntegrationGaps.length > 0) {
+    const domainNames = voiceIntegrationGaps.map((d) => d.domain).join(", ");
+    patterns.push(
+      `VOICE material rich but practice poor in: ${domainNames}`
+    );
+
+    crossDomainInsights.push({
+      type: "voice_integration_gap",
+      severity: "medium",
+      description:
+        "VOICE sessions exist for " +
+        domainNames +
+        " but not integrated into daily practice.",
+      recommendation:
+        "Create War Stack 'Daily Practice Foundation' with 4 Hits derived from VOICE insights.",
+    });
+  }
+
+  // Pattern #4: Detect Fire without grounding (multiple domains low completion)
+  const lowFireDomains = domainMetrics.filter((d) => d.fireCompletion < 0.5);
+
+  if (lowFireDomains.length >= 2) {
+    const domainNames = lowFireDomains.map((d) => d.domain).join(", ");
+    patterns.push(`Fire without grounding in: ${domainNames}`);
+
+    crossDomainInsights.push({
+      type: "fire_without_grounding",
+      severity: "medium",
+      description:
+        "Low Fire Map completion in " +
+        domainNames +
+        ". May indicate overcommitment or lack of grounding practice.",
+      recommendation:
+        "Reduce Fire Hits per domain from 4 to 3. Add grounding practice (Lower Dantian, breath work).",
+    });
+  }
+
+  // Pattern #5: Detect Domino Door opportunities
+  const highActivityDomains = domainMetrics.filter(
+    (d) => d.warStacksActive >= 2 || d.core4Week >= 6
+  );
+
+  if (highActivityDomains.length >= 2) {
+    const domainNames = highActivityDomains.map((d) => d.domain).join(" + ");
+    patterns.push(`Domino Door opportunity: ${domainNames} synergy`);
+
+    crossDomainInsights.push({
+      type: "domino_door",
+      severity: "opportunity",
+      description:
+        "High activity in " +
+        domainNames +
+        ". These domains may have synergistic Domino Doors.",
+      recommendation:
+        "Look for War Stacks that serve multiple domains (e.g., Vital Dojo serves BUSINESS + BEING).",
+    });
+  }
+
+  console.log(
+    `[synthesizeCrossDomain] Detected ${patterns.length} patterns, ${crossDomainInsights.length} insights`
+  );
+
+  return {
+    patterns,
+    domain_health: domainHealth,
+    insights: crossDomainInsights,
+    overall_balance: calculateOverallBalance(domainMetrics),
+  };
+}
+
+/**
+ * Calculate overall domain balance score (0.0-1.0)
+ * Checks if energy is distributed evenly across domains
+ * @param {array} domainMetrics - Array of domain metrics
+ * @returns {number} Balance score (0.0 = severely imbalanced, 1.0 = perfectly balanced)
+ */
+function calculateOverallBalance(domainMetrics) {
+  if (!domainMetrics || domainMetrics.length === 0) return 0;
+
+  const core4Values = domainMetrics.map((d) => d.core4Week);
+  const avg = core4Values.reduce((sum, val) => sum + val, 0) / core4Values.length;
+  const variance =
+    core4Values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) /
+    core4Values.length;
+  const stdDev = Math.sqrt(variance);
+
+  // Lower stdDev = more balanced
+  // Max stdDev possible = 3.5 (if one domain 7/7, others 0/7)
+  // Balance score = 1 - (stdDev / 3.5)
+  const balanceScore = Math.max(0, 1 - stdDev / 3.5);
+
+  return Math.round(balanceScore * 100) / 100;
+}
+
+/**
+ * SYNTHESIS ENGINE #2: Temporal Cascade Analysis
+ *
+ * Analyzes alignment across time horizons:
+ * - Fire (weekly) → Focus (monthly/quarterly)
+ * - Focus (quarterly) → Freedom (annual/10-year)
+ * - Freedom (10-year IPW) → Frame (current reality)
+ *
+ * Detects cascade breakdowns where lower levels don't serve higher levels
+ *
+ * @param {object} states - Object with all 4 domain states
+ * @returns {object} Temporal cascade analysis report
+ */
+function synthesizeTemporalCascade(states) {
+  console.log("[synthesizeTemporalCascade] Running temporal cascade analysis...");
+
+  const cascadeHealth = {};
+  const cascadeBlockers = [];
+  const frameShifts = [];
+
+  for (const domain of DOMAINS) {
+    const state = states[domain];
+    if (!state) {
+      cascadeHealth[domain] = {
+        fire_to_focus: "unknown",
+        focus_to_freedom: "unknown",
+        freedom_to_frame: "unknown",
+      };
+      continue;
+    }
+
+    // Fire → Focus alignment
+    const fireServesFocus = state.fire?.serves_focus;
+    const fireToFocus =
+      fireServesFocus === true
+        ? "aligned"
+        : fireServesFocus === false
+        ? "blocked"
+        : "unknown";
+
+    // Focus → Freedom alignment
+    const focusServesFreedom = state.focus?.serves_freedom;
+    const focusToFreedom =
+      focusServesFreedom === true
+        ? "aligned"
+        : focusServesFreedom === false
+        ? "blocked"
+        : "unknown";
+
+    // Freedom → Frame alignment
+    const freedomAlignment = state.freedom?.alignment || "unknown";
+    const freedomToFrame = freedomAlignment;
+
+    cascadeHealth[domain] = {
+      fire_to_focus: fireToFocus,
+      focus_to_freedom: focusToFreedom,
+      freedom_to_frame: freedomToFrame,
+    };
+
+    // Detect blockers
+    if (fireToFocus === "blocked") {
+      cascadeBlockers.push({
+        domain,
+        level: "fire_to_focus",
+        description:
+          `${domain} Fire Hits this week do NOT serve Focus mission. ` +
+          `Weekly execution is misaligned with monthly goal.`,
+        impact: "Focus mission will not progress.",
+        correction:
+          "Review Fire Hits. Replace non-aligned Hits with Focus-aligned tasks.",
+      });
+    }
+
+    if (focusToFreedom === "blocked") {
+      cascadeBlockers.push({
+        domain,
+        level: "focus_to_freedom",
+        description:
+          `${domain} Focus mission does NOT serve Freedom vision (IPW). ` +
+          `Monthly goal is misaligned with 10-year vision.`,
+        impact: "Long-term vision will not manifest.",
+        correction:
+          "Review Focus mission. Align with Freedom Map IPW description.",
+      });
+    }
+
+    if (freedomToFrame === "blocked") {
+      cascadeBlockers.push({
+        domain,
+        level: "freedom_to_frame",
+        description:
+          `${domain} Freedom vision is BLOCKED by current Frame reality. ` +
+          `There's a fundamental misalignment between 'where you are' and 'where you want to be'.`,
+        impact:
+          "Frame will not shift. Executing tactics without transforming reality.",
+        correction:
+          "Frame shift needed. Review Frame Map. What fundamental change is required?",
+      });
+    }
+
+    // Detect Frame shifts
+    if (state.frame?.last_shift) {
+      const shiftDate = new Date(state.frame.last_shift);
+      const daysSinceShift = Math.floor(
+        (new Date() - shiftDate) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysSinceShift <= 30) {
+        frameShifts.push({
+          domain,
+          date: state.frame.last_shift,
+          days_ago: daysSinceShift,
+          new_status: state.frame.status,
+          cascade_updates_needed: [
+            "Update Freedom Map with new Frame reality",
+            "Adjust Focus mission to new Frame context",
+            "Re-align Fire Hits with new Focus",
+          ],
+        });
+      }
+    }
+  }
+
+  console.log(
+    `[synthesizeTemporalCascade] Found ${cascadeBlockers.length} blockers, ${frameShifts.length} recent Frame shifts`
+  );
+
+  return {
+    cascade_health: cascadeHealth,
+    blockers: cascadeBlockers,
+    frame_shifts: frameShifts,
+    overall_alignment: calculateCascadeAlignment(cascadeHealth),
+  };
+}
+
+/**
+ * Calculate overall cascade alignment score (0.0-1.0)
+ * @param {object} cascadeHealth - Cascade health per domain
+ * @returns {number} Alignment score
+ */
+function calculateCascadeAlignment(cascadeHealth) {
+  let alignedCount = 0;
+  let totalCount = 0;
+
+  for (const domain of DOMAINS) {
+    const health = cascadeHealth[domain];
+    if (!health) continue;
+
+    for (const level of [
+      "fire_to_focus",
+      "focus_to_freedom",
+      "freedom_to_frame",
+    ]) {
+      totalCount++;
+      if (health[level] === "aligned") alignedCount++;
+    }
+  }
+
+  if (totalCount === 0) return 0;
+  return Math.round((alignedCount / totalCount) * 100) / 100;
+}
+
+/**
+ * SYNTHESIS ENGINE #3: Pipeline Flow Diagnosis
+ *
+ * Analyzes VOICE → DOOR → FIRE energy flow:
+ * - VOICE STRIKE → War Stack creation (VOICE → DOOR)
+ * - War Stack 4 Hits → Fire Map execution (DOOR → FIRE)
+ * - Fire Map completion → Focus/Freedom progression (FIRE → GAME)
+ *
+ * Detects pipeline blockages where mental insights don't become physical action
+ *
+ * @param {object} states - Object with all 4 domain states
+ * @returns {object} Pipeline flow diagnosis report
+ */
+function synthesizePipelineFlow(states) {
+  console.log("[synthesizePipelineFlow] Running pipeline flow diagnosis...");
+
+  const pipelineHealth = {};
+  const pipelineIssues = [];
+  const pipelineFlow = [];
+
+  for (const domain of DOMAINS) {
+    const state = states[domain];
+    if (!state) {
+      pipelineHealth[domain] = {
+        voice_to_door: 0,
+        door_to_fire: 0,
+        overall: 0,
+      };
+      continue;
+    }
+
+    // VOICE → DOOR health
+    const voiceSessionCount = state.voice?.session_count || 0;
+    const warStacksActive = state.war_stacks?.filter(
+      (ws) => ws.status === "active"
+    ).length || 0;
+
+    // If VOICE sessions exist but no War Stacks, pipeline is blocked
+    let voiceToDoor = 0;
+    if (voiceSessionCount === 0) {
+      voiceToDoor = 0; // No VOICE input
+    } else if (warStacksActive === 0) {
+      voiceToDoor = 0.2; // VOICE exists but not converting to War Stacks
+      pipelineIssues.push({
+        domain,
+        stage: "voice_to_door",
+        severity: "high",
+        description:
+          `${domain} has ${voiceSessionCount} VOICE sessions but 0 active War Stacks. ` +
+          `Mental insights are not converting to tactical plans.`,
+        impact:
+          "VOICE material remains theoretical. No execution channel.",
+        correction:
+          "Create War Stack from latest VOICE STRIKE. Extract 4 Hits from VOICE insights.",
+      });
+    } else if (voiceSessionCount > warStacksActive * 5) {
+      voiceToDoor = 0.5; // Some conversion but low ratio
+      pipelineIssues.push({
+        domain,
+        stage: "voice_to_door",
+        severity: "medium",
+        description:
+          `${domain} has ${voiceSessionCount} VOICE sessions but only ${warStacksActive} active War Stacks. ` +
+          `Conversion ratio is low (${Math.round((warStacksActive / voiceSessionCount) * 100)}%).`,
+        impact:
+          "VOICE insights accumulating faster than they're being executed.",
+        correction:
+          "Review VOICE sessions. Extract more War Stacks from existing material.",
+      });
+    } else {
+      voiceToDoor = 0.9; // Healthy conversion
+    }
+
+    // DOOR → FIRE health
+    const warStackHitsTotal = state.war_stacks?.reduce(
+      (sum, ws) => sum + (ws.hits_completed || 0),
+      0
+    ) || 0;
+    const fireHitsCount = state.fire?.hits?.length || 0;
+    const fireCompletion = state.fire?.completion || 0;
+
+    let doorToFire = 0;
+    if (warStacksActive === 0) {
+      doorToFire = 0; // No War Stacks to execute
+    } else if (fireHitsCount === 0) {
+      doorToFire = 0.2; // War Stacks exist but not in Fire Map
+      pipelineIssues.push({
+        domain,
+        stage: "door_to_fire",
+        severity: "high",
+        description:
+          `${domain} has ${warStacksActive} active War Stacks but 0 Fire Hits this week. ` +
+          `Tactical plans are not converting to weekly execution.`,
+        impact:
+          "War Stacks remain plans. No actual execution happening.",
+        correction:
+          "Extract 4 Hits from active War Stacks. Add to this week's Fire Map.",
+      });
+    } else if (fireCompletion < 0.5) {
+      doorToFire = 0.5; // Fire Hits exist but low completion
+      pipelineIssues.push({
+        domain,
+        stage: "door_to_fire",
+        severity: "medium",
+        description:
+          `${domain} has ${fireHitsCount} Fire Hits but only ${Math.round(fireCompletion * 100)}% completed. ` +
+          `Execution is happening but completion rate is low.`,
+        impact: "Fire Map execution stalling. Tactics not completing.",
+        correction:
+          "Review Fire Hits. Are they too ambitious? Reduce scope or increase time allocation.",
+      });
+    } else {
+      doorToFire = 0.9; // Healthy execution
+    }
+
+    const overall = (voiceToDoor + doorToFire) / 2;
+
+    pipelineHealth[domain] = {
+      voice_to_door: Math.round(voiceToDoor * 100) / 100,
+      door_to_fire: Math.round(doorToFire * 100) / 100,
+      overall: Math.round(overall * 100) / 100,
+    };
+
+    // Track pipeline flow for this domain
+    if (state.voice?.latest_strike) {
+      pipelineFlow.push({
+        domain,
+        voice_strike: state.voice.latest_strike.substring(0, 100) + "...",
+        war_stacks_active: warStacksActive,
+        fire_hits_count: fireHitsCount,
+        fire_completion: Math.round(fireCompletion * 100),
+        pipeline_health: Math.round(overall * 100),
+      });
+    }
+  }
+
+  console.log(
+    `[synthesizePipelineFlow] Detected ${pipelineIssues.length} pipeline issues`
+  );
+
+  return {
+    pipeline_health: pipelineHealth,
+    issues: pipelineIssues,
+    flow: pipelineFlow,
+    overall_health: calculateOverallPipelineHealth(pipelineHealth),
+  };
+}
+
+/**
+ * Calculate overall pipeline health (0.0-1.0)
+ * @param {object} pipelineHealth - Pipeline health per domain
+ * @returns {number} Overall health score
+ */
+function calculateOverallPipelineHealth(pipelineHealth) {
+  let totalHealth = 0;
+  let domainCount = 0;
+
+  for (const domain of DOMAINS) {
+    const health = pipelineHealth[domain];
+    if (!health) continue;
+    totalHealth += health.overall;
+    domainCount++;
+  }
+
+  if (domainCount === 0) return 0;
+  return Math.round((totalHealth / domainCount) * 100) / 100;
+}
+
 function getVoiceVaultDir() {
   const env = process.env.VOICE_VAULT_DIR;
   if (env) return env;
   const homeVoice = path.join(os.homedir(), "Voice");
   if (fs.existsSync(homeVoice)) return homeVoice;
   return path.join(getVaultDir(), "VOICE");
+}
+
+function journalEntryPath(subtask) {
+  const date = new Date().toISOString().split("T")[0];
+  const base = safeSlug(subtask || "journal") || "journal";
+  let filename = `${base}-${date}.md`;
+  let full = path.join(CORE4_JOURNAL_DIR, filename);
+  if (fs.existsSync(full)) {
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .replace("T", "_")
+      .replace("Z", "");
+    filename = `${base}-${date}-${stamp}.md`;
+    full = path.join(CORE4_JOURNAL_DIR, filename);
+  }
+  return full;
 }
 
 function listMarkdownFiles(dirPath, { limit = 50 } = {}) {
@@ -642,8 +1844,9 @@ function buildWarStackTasks(parsed, meta = {}) {
     return tasks;
   }
 
-  const domainTag = domain.toLowerCase();
-  const domainProject = domain;
+  const domainTag = normalizeDomain(domain).toLowerCase();
+  const domainProject = doorProjectFromTitle(title);
+  const warstackTag = "warstack";
 
   // 1. Build 4 Hit tasks (first in array, created first)
   hits.forEach((hit, idx) => {
@@ -652,7 +1855,7 @@ function buildWarStackTasks(parsed, meta = {}) {
 
     tasks.push({
       description: desc,
-      tags: ["hit", "production", domainTag],
+      tags: ["hit", "production", domainTag, warstackTag],
       project: domainProject,
       due: `today+${idx + 1}d`,  // Hit 1-4: today+1..4d
       wait: `+${idx + 1}d`,
@@ -669,7 +1872,7 @@ function buildWarStackTasks(parsed, meta = {}) {
   // 2. Door parent task (depends filled after UUIDs known)
   tasks.push({
     description: `Door: ${title}`,
-    tags: ["plan", domainTag],
+    tags: ["door", "plan", domainTag, warstackTag],
     project: domainProject,
     meta: {
       warstack_session_id: meta.sessionId || "",
@@ -683,7 +1886,7 @@ function buildWarStackTasks(parsed, meta = {}) {
   // 3. Profit task (wait + depends filled after Door UUID known)
   tasks.push({
     description: `Profit: ${title}`,
-    tags: ["profit", domainTag],
+    tags: ["door", "profit", domainTag, warstackTag],
     project: domainProject,
     wait: "+5d",
     meta: {
@@ -840,10 +2043,14 @@ function getCore4Total(data) {
   return raw * 0.5;
 }
 
-function updateCore4Subtask(subtask) {
+function updateCore4Subtask(subtask, nextValue) {
   const data = ensureCore4Today();
   if (!data || typeof data[subtask] === "undefined") return null;
-  data[subtask] = data[subtask] >= 1 ? 0 : 1;
+  if (typeof nextValue === "number") {
+    data[subtask] = nextValue >= 1 ? 1 : 0;
+  } else {
+    data[subtask] = data[subtask] >= 1 ? 0 : 1;
+  }
   fs.writeFileSync(getCore4TodayFile(), JSON.stringify(data, null, 2));
   return data;
 }
@@ -860,6 +2067,128 @@ function mapCore4Subtask(subtask) {
     declare: { domain: "business", task: "declare" },
   };
   return map[subtask] || null;
+}
+
+function core4TaskMeta(subtask) {
+  const map = {
+    fitness: { domain: "body", label: "fitness", title: "Did you sweat today?" },
+    fuel: { domain: "body", label: "fuel", title: "Did you fuel your body?" },
+    meditation: { domain: "being", label: "meditation", title: "Did you meditate?" },
+    memoirs: { domain: "being", label: "memoirs", title: "Did you write memoirs?" },
+    partner: { domain: "balance", label: "partner", title: "Did you invest in your partner?" },
+    posterity: { domain: "balance", label: "posterity", title: "Did you invest in posterity?" },
+    discover: { domain: "business", label: "discover", title: "Did you discover?" },
+    declare: { domain: "business", label: "declare", title: "Did you declare?" },
+  };
+  return map[subtask] || null;
+}
+
+function normalizeTaskTag(tag) {
+  return String(tag || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "");
+}
+
+function taskwarriorEnv() {
+  return TASKRC ? { ...process.env, TASKRC } : process.env;
+}
+
+function taskwarriorAvailable() {
+  try {
+    execFileSync(TASK_BIN, ["--version"], { stdio: "ignore", env: taskwarriorEnv() });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function taskwarriorExportByTags(tags, extraArgs = []) {
+  const cleanedTags = tags.map(normalizeTaskTag).filter(Boolean);
+  const args = ["rc.verbose=0", "rc.confirmation=no", "+core4"];
+  cleanedTags.forEach((tag) => args.push(`+${tag}`));
+  extraArgs.forEach((arg) => args.push(arg));
+  args.push("export");
+  try {
+    const { stdout } = await execFileAsync(TASK_BIN, args, {
+      encoding: "utf8",
+      timeout: 8000,
+      env: taskwarriorEnv(),
+    });
+    const raw = String(stdout || "").trim();
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function pickLatestTask(list) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const sorted = [...list].sort((a, b) => {
+    const am = Date.parse(a.modified || a.entry || 0);
+    const bm = Date.parse(b.modified || b.entry || 0);
+    return bm - am;
+  });
+  return sorted[0] || null;
+}
+
+async function taskwarriorCreateCore4Task(meta, tags) {
+  const cleanedTags = tags.map(normalizeTaskTag).filter(Boolean);
+  const args = [
+    "add",
+    meta.title,
+    "project:core4",
+    "due:today",
+    "rec:daily",
+    "wait:+1d",
+    "+core4",
+    ...cleanedTags.map((tag) => `+${tag}`),
+  ];
+  try {
+    await execFileAsync(TASK_BIN, args, {
+      timeout: 8000,
+      env: taskwarriorEnv(),
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function taskwarriorMarkDone(uuid) {
+  if (!uuid) return false;
+  try {
+    await execFileAsync(TASK_BIN, [uuid, "done"], {
+      timeout: 8000,
+      env: taskwarriorEnv(),
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function syncCore4Taskwarrior(subtask, value) {
+  if (!CORE4_TW_SYNC) return { ok: false, skipped: true, reason: "disabled" };
+  if (value < 1) return { ok: true, skipped: true, reason: "unset" };
+  if (!taskwarriorAvailable()) return { ok: false, skipped: true, reason: "taskwarrior-missing" };
+  const meta = core4TaskMeta(subtask);
+  if (!meta) return { ok: false, skipped: true, reason: "unknown-subtask" };
+  const tags = [meta.label, meta.domain];
+
+  const existing = pickLatestTask(await taskwarriorExportByTags(tags, ["status:pending,completed"]));
+  if (!existing) {
+    await taskwarriorCreateCore4Task(meta, tags);
+  }
+
+  const dueToday = pickLatestTask(await taskwarriorExportByTags(tags, ["due:today", "status:pending"]));
+  if (dueToday?.uuid) {
+    const done = await taskwarriorMarkDone(dueToday.uuid);
+    return { ok: true, done, uuid: dueToday.uuid };
+  }
+  return { ok: true, done: false };
 }
 
 function resolveDoorExportDir(tool) {
@@ -997,6 +2326,11 @@ function normalizeDomain(value) {
   if (raw.includes("balance")) return "Balance";
   if (raw.includes("business")) return "Business";
   return value ? String(value).trim() : "Business";
+}
+
+function doorProjectFromTitle(title) {
+  const value = String(title || "").trim();
+  return value || "Door";
 }
 
 function evaluateEisenhowerMatrix(item) {
@@ -1283,6 +2617,26 @@ function loadTaskwarriorExport() {
     return { ok: true, tasks: TASK_CACHE.tasks, source: "cache" };
   }
 
+  const readExportFile = (allowStale = false) => {
+    try {
+      if (!TASK_EXPORT_PATH || !fs.existsSync(TASK_EXPORT_PATH)) return null;
+      const st = fs.statSync(TASK_EXPORT_PATH);
+      if (!allowStale && TASK_CACHE_TTL > 0 && now - st.mtimeMs > TASK_CACHE_TTL * 1000) {
+        return null;
+      }
+      const raw = fs.readFileSync(TASK_EXPORT_PATH, "utf8");
+      const tasks = JSON.parse(raw);
+      if (!Array.isArray(tasks)) return null;
+      TASK_CACHE = { ts: now, tasks, error: null };
+      return { ok: true, tasks, source: allowStale ? "file-stale" : "file" };
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const fileFresh = readExportFile(false);
+  if (fileFresh) return fileFresh;
+
   const args = [];
   if (TASK_EXPORT_FILTER) {
     args.push(...TASK_EXPORT_FILTER.split(/\s+/).filter(Boolean));
@@ -1295,8 +2649,20 @@ function loadTaskwarriorExport() {
     const tasks = JSON.parse(stdout);
     if (!Array.isArray(tasks)) return { ok: false, error: "invalid-export" };
     TASK_CACHE = { ts: now, tasks, error: null };
+    try {
+      if (TASK_EXPORT_PATH) {
+        ensureDir(path.dirname(TASK_EXPORT_PATH));
+        const tmp = `${TASK_EXPORT_PATH}.tmp`;
+        fs.writeFileSync(tmp, JSON.stringify(tasks, null, 2), "utf8");
+        fs.renameSync(tmp, TASK_EXPORT_PATH);
+      }
+    } catch (_) {}
     return { ok: true, tasks, source: "live" };
   } catch (err) {
+    const fileStale = readExportFile(true);
+    if (fileStale) {
+      return { ...fileStale, warning: "task-export-failed" };
+    }
     if (TASK_CACHE.tasks.length) {
       return { ok: true, tasks: TASK_CACHE.tasks, source: "cache", warning: "task-export-failed" };
     }
@@ -1563,6 +2929,16 @@ app.get("/game/freedom", (_req, res) => res.redirect(302, "/game/freedom.html"))
 app.get("/game/focus", (_req, res) => res.redirect(302, "/game/focus.html"));
 app.get("/game/fire", (_req, res) => res.redirect(302, "/game/fire.html"));
 app.get("/tele", (_req, res) => res.redirect(302, "/tele.html"));
+
+// GPT redirects
+app.get("/gpt/:slug", (req, res) => {
+  const slug = String(req.params.slug || "");
+  const centre = findCentreBySlug(slug);
+  if (!centre || !centre.url) {
+    return res.status(404).send(`Unknown GPT centre: ${slug}`);
+  }
+  return res.redirect(302, centre.url);
+});
 
 // General's Tent report save (local markdown)
 app.post("/api/generals/report", (req, res) => {
@@ -2050,10 +3426,11 @@ app.post("/api/door/doorwar", async (req, res) => {
     }
 
     // Create "Door" task in Taskwarrior via Bridge
+    const domainTag = normalizeDomain(domain).toLowerCase();
     const doorTask = {
       description: `Door: ${selectedItem.title}`,
-      tags: ["plan", domain.toLowerCase()],
-      project: domain,
+      tags: ["door", "plan", domainTag],
+      project: doorProjectFromTitle(selectedItem.title),
       depends: selectedItem.task_uuid, // Depends on Hot List task
       meta: {
         hotlist_uuid: selectedItem.task_uuid,
@@ -2295,37 +3672,64 @@ app.get("/api/door/warstack/:id", (req, res) => {
   }
 });
 
-// Fire Week (TickTick primary, GCal fallback)
+// Fire Week (TickTick primary, GCal fallback, Taskwarrior offline fallback)
 app.get("/api/fire/week", async (req, res) => {
-  const tag = String(req.query?.tag || "fire").trim().toLowerCase();
   const { start, end, week, rangeLabel } = getWeekRangeLocal();
   let tasks = [];
   let error = null;
+  let source = "ticktick";
 
+  // Try TickTick FIRST (primary cloud source)
   try {
     const raw = await ticktickListProjectTasks();
     const filtered = raw
       .filter((task) => !task.isCompleted && !task.completedTime)
       .filter((task) => taskInRange(task, start, end))
-      .filter((task) => {
-        if (!tag) return true;
-        const tags = (task.tags || []).map((t) => String(t || "").toLowerCase());
-        return tags.includes(tag);
-      })
-      .map((task) => ({
-        id: task.id,
-        title: task.title || "(ohne Titel)",
-        tags: task.tags || [],
-        due: (parseTickTickDue(task) || "").toISOString?.() || (task.dueDateTime || task.dueDate || ""),
-      }));
-    tasks = filtered;
-  } catch (err) {
-    error = err?.message || String(err);
+      .map((task) => {
+        const due = parseTickTickDue(task);
+        return {
+          id: task.id,
+          title: task.title || "(no title)",
+          tags: task.tags || [],
+          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          domain: detectDomainFromTags(task.tags),
+          overdue: due ? due < start : false
+        };
+      });
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+  } catch (tickErr) {
+    // TickTick failed, try Taskwarrior as offline fallback
+    source = "taskwarrior";
+    error = tickErr?.message || String(tickErr);
+    try {
+      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+      if (!ok) throw new Error(taskError || "task-export-failed");
+
+      const filtered = twTasks
+        .filter((task) => String(task.status || "").toLowerCase() === "pending")
+        .filter((task) => fireTaskInRange(task, start, end, true))
+        .map((task) => normalizeFireTask(task, start));
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (twErr) {
+      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    }
   }
 
   return res.json({
-    ok: !error,
-    source: error ? "gcal" : "ticktick",
+    ok: tasks.length > 0 || !error,
+    source,
     week,
     rangeLabel,
     tasks,
@@ -2333,6 +3737,129 @@ app.get("/api/fire/week", async (req, res) => {
     gcal_url: FIRE_GCAL_EMBED_URL || "",
   });
 });
+
+// Fire Day (TickTick primary, Taskwarrior offline fallback)
+app.get("/api/fire/day", async (req, res) => {
+  const { start, end, label } = getDayRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "ticktick";
+
+  // Try TickTick FIRST (primary cloud source)
+  try {
+    const raw = await ticktickListProjectTasks();
+    const filtered = raw
+      .filter((task) => !task.isCompleted && !task.completedTime)
+      .filter((task) => taskInRange(task, start, end))
+      .map((task) => {
+        const due = parseTickTickDue(task);
+        return {
+          id: task.id,
+          title: task.title || "(no title)",
+          tags: task.tags || [],
+          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          domain: detectDomainFromTags(task.tags),
+          overdue: due ? due < start : false
+        };
+      });
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+  } catch (tickErr) {
+    // TickTick failed, try Taskwarrior as offline fallback
+    source = "taskwarrior";
+    error = tickErr?.message || String(tickErr);
+    try {
+      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+      if (!ok) throw new Error(taskError || "task-export-failed");
+
+      const filtered = twTasks
+        .filter((task) => String(task.status || "").toLowerCase() === "pending")
+        .filter((task) => fireTaskInRange(task, start, end, true))
+        .map((task) => normalizeFireTask(task, start));
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (twErr) {
+      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    }
+  }
+
+  return res.json({
+    ok: tasks.length > 0 || !error,
+    source,
+    date: label,
+    tasks,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
+});
+
+app.get("/fire/day", (req, res) => {
+  const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+  return res.redirect(302, `/api/fire/day${query}`);
+});
+
+app.get("/fire/week", (req, res) => {
+  const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+  return res.redirect(302, `/api/fire/week${query}`);
+});
+
+app.get("/fired", (req, res) => {
+  const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+  return res.redirect(302, `/api/fire/day${query}`);
+});
+
+app.get("/firew", (req, res) => {
+  const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+  return res.redirect(302, `/api/fire/week${query}`);
+});
+
+// Fire Week Range (for next week planning UI)
+app.get("/api/fire/week-range", (req, res) => {
+  try {
+    const dateParam = req.query?.date;
+    const date = dateParam ? new Date(dateParam) : new Date();
+
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+
+    const { start, end, week, rangeLabel } = getWeekRangeLocal(date);
+
+    // Calculate week dates for calendar display
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      days.push({
+        date: d.toISOString().split('T')[0],
+        label: d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        dayOfWeek: d.getDay()
+      });
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      rangeLabel,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      days
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 
 // Game map export (local markdown)
 app.post("/api/game/export", (req, res) => {
@@ -2412,6 +3939,151 @@ app.post("/api/game/export", (req, res) => {
   }
 });
 
+// List saved Focus Maps
+app.get("/api/game/focus/list", (req, res) => {
+  try {
+    const domain = String(req.query?.domain || "").trim().toUpperCase();
+    const month = String(req.query?.month || "").trim();
+
+    const focusDir = resolveGameExportDir("focus");
+    if (!focusDir || !fs.existsSync(focusDir)) {
+      return res.json({ ok: true, maps: [] });
+    }
+
+    const files = fs.readdirSync(focusDir)
+      .filter(f => f.endsWith('.md'))
+      .map(filename => {
+        const filepath = path.join(focusDir, filename);
+        const stat = fs.statSync(filepath);
+
+        // Extract domain and phase from filename
+        const parts = filename.replace('.md', '').split('_');
+        const fileDomain = parts[0]?.toUpperCase() || '';
+        const filePhase = parts[2]?.toLowerCase() || '';
+
+        return {
+          filename,
+          path: filepath,
+          domain: fileDomain,
+          phase: filePhase,
+          modified: stat.mtime
+        };
+      })
+      .filter(map => {
+        // Filter by domain if specified
+        if (domain && map.domain !== domain) return false;
+        // Filter by month/phase if specified
+        if (month && !map.filename.toLowerCase().includes(month.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => b.modified - a.modified); // Most recent first
+
+    return res.json({ ok: true, maps: files });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Load a specific Focus Map
+app.get("/api/game/focus/load", (req, res) => {
+  try {
+    const filepath = String(req.query?.path || "").trim();
+    if (!filepath) {
+      return res.status(400).json({ ok: false, error: "missing path" });
+    }
+
+    // Security: ensure path is within Focus directory
+    const focusDir = resolveGameExportDir("focus");
+    const normalized = path.normalize(filepath);
+    if (!normalized.startsWith(focusDir)) {
+      return res.status(403).json({ ok: false, error: "invalid path" });
+    }
+
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ ok: false, error: "file not found" });
+    }
+
+    const content = fs.readFileSync(filepath, "utf8");
+    return res.json({ ok: true, content, path: filepath });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Get Focus State (auto-save draft per domain)
+app.get("/api/game/focus/state", (req, res) => {
+  try {
+    const focusDir = resolveGameExportDir("focus");
+    const stateFile = path.join(focusDir, ".focus-state.json");
+
+    if (!fs.existsSync(stateFile)) {
+      // Return empty state for all domains
+      return res.json({
+        ok: true,
+        states: {
+          BODY: { domain: "BODY", month: "current", habits: "", routines: "", additions: "", eliminations: "", lastUpdated: null },
+          BEING: { domain: "BEING", month: "current", habits: "", routines: "", additions: "", eliminations: "", lastUpdated: null },
+          BALANCE: { domain: "BALANCE", month: "current", habits: "", routines: "", additions: "", eliminations: "", lastUpdated: null },
+          BUSINESS: { domain: "BUSINESS", month: "current", habits: "", routines: "", additions: "", eliminations: "", lastUpdated: null }
+        }
+      });
+    }
+
+    const states = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+    return res.json({ ok: true, states });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Save Focus State (auto-save draft)
+app.post("/api/game/focus/state", (req, res) => {
+  try {
+    const domain = String(req.body?.domain || "").trim().toUpperCase();
+    const month = String(req.body?.month || "current").trim();
+    const habits = String(req.body?.habits || "").trim();
+    const routines = String(req.body?.routines || "").trim();
+    const additions = String(req.body?.additions || "").trim();
+    const eliminations = String(req.body?.eliminations || "").trim();
+
+    if (!domain || !["BODY", "BEING", "BALANCE", "BUSINESS"].includes(domain)) {
+      return res.status(400).json({ ok: false, error: "invalid domain" });
+    }
+
+    const focusDir = resolveGameExportDir("focus");
+    ensureDir(focusDir);
+    const stateFile = path.join(focusDir, ".focus-state.json");
+
+    // Load existing states
+    let states = {};
+    if (fs.existsSync(stateFile)) {
+      try {
+        states = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+      } catch (e) {
+        // Ignore parse errors, start fresh
+      }
+    }
+
+    // Update state for this domain
+    states[domain] = {
+      domain,
+      month,
+      habits,
+      routines,
+      additions,
+      eliminations,
+      lastUpdated: new Date().toISOString()
+    };
+
+    // Write back to file
+    fs.writeFileSync(stateFile, JSON.stringify(states, null, 2), "utf8");
+
+    return res.json({ ok: true, domain, lastUpdated: states[domain].lastUpdated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 // Voice session export (local markdown)
 app.post("/api/voice/export", (req, res) => {
   try {
@@ -2479,10 +4151,23 @@ app.post("/api/core4", async (req, res) => {
       return res.status(400).json({ ok: false, error: "missing subtask" });
     }
 
-    const mapped = mapCore4Subtask(subtask);
     const todayKey = new Date().toISOString().split("T")[0];
+    const current = ensureCore4Today();
+    if (!current || typeof current[subtask] === "undefined") {
+      return res.status(400).json({ ok: false, error: "unknown subtask" });
+    }
+    let requestedValue = null;
+    if (typeof req.body?.value !== "undefined") {
+      const raw = req.body.value;
+      if (raw === true || raw === "true" || raw === 1 || raw === "1") requestedValue = 1;
+      if (raw === false || raw === "false" || raw === 0 || raw === "0") requestedValue = 0;
+    }
+    const nextValue = requestedValue !== null ? requestedValue : (current[subtask] >= 1 ? 0 : 1);
+    const mapped = mapCore4Subtask(subtask);
+    let bridgeTotal = null;
+    let bridgeOk = false;
 
-    if (BRIDGE_URL && mapped) {
+    if (BRIDGE_URL && mapped && nextValue >= 1 && current[subtask] < 1) {
       const payload = {
         id: `core4-${todayKey}-${subtask}`,
         ts: new Date().toISOString(),
@@ -2500,17 +4185,61 @@ app.post("/api/core4", async (req, res) => {
       if (logRes && logRes.ok !== false) {
         const todayRes = await bridgeFetch("/bridge/core4/today");
         if (todayRes && todayRes.ok !== false) {
-          return res.json({ ok: true, total: todayRes.total || 0, source: "bridge" });
+          bridgeTotal = todayRes.total || 0;
+          bridgeOk = true;
         }
       }
     }
 
-    const data = updateCore4Subtask(subtask);
+    const data = updateCore4Subtask(subtask, nextValue);
     if (!data) {
       return res.status(400).json({ ok: false, error: "unknown subtask" });
     }
     const total = getCore4Total(data);
-    return res.json({ ok: true, data, total, source: "local" });
+    const taskwarrior = await syncCore4Taskwarrior(subtask, nextValue);
+    return res.json({
+      ok: true,
+      data,
+      total,
+      bridge_total: bridgeTotal,
+      source: bridgeOk ? "bridge+local" : "local",
+      taskwarrior,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Journal entry (local markdown)
+app.post("/api/journal", (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    const subtask = String(req.body?.subtask || "").trim().toLowerCase();
+    const taskUuid = String(req.body?.task_uuid || "").trim();
+    const taskLabel = String(req.body?.task_label || "").trim();
+    const rawTags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+    const tags = rawTags
+      .map((tag) => normalizeTaskTag(tag))
+      .filter(Boolean);
+    if (!text) {
+      return res.status(400).json({ ok: false, error: "missing text" });
+    }
+    ensureDir(CORE4_JOURNAL_DIR);
+    const filepath = journalEntryPath(subtask);
+    const now = new Date().toISOString();
+    const fm = [
+      "---",
+      `title: Core4 Journal`,
+      `created: ${now}`,
+      ...(taskUuid ? [`task_uuid: ${taskUuid}`] : []),
+      `task: ${taskLabel || subtask || "core4"}`,
+      ...(tags.length ? ["tags:", ...tags.map((tag) => `  - ${tag}`)] : []),
+      "---",
+      "",
+    ];
+    const md = [...fm, text, ""].join("\n");
+    fs.writeFileSync(filepath, md, "utf8");
+    return res.json({ ok: true, path: filepath });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -2519,15 +4248,23 @@ app.post("/api/core4", async (req, res) => {
 // Core4 today (local JSON)
 app.get("/api/core4/today", async (_req, res) => {
   try {
+    const data = ensureCore4Today();
+    const localTotal = getCore4Total(data);
+    let bridgeTotal = null;
     if (BRIDGE_URL) {
       const todayRes = await bridgeFetch("/bridge/core4/today");
       if (todayRes && todayRes.ok !== false) {
-        return res.json({ ok: true, total: todayRes.total || 0, source: "bridge" });
+        bridgeTotal = todayRes.total || 0;
       }
     }
-    const data = ensureCore4Today();
-    const total = getCore4Total(data);
-    return res.json({ ok: true, data, total, source: "local" });
+    return res.json({
+      ok: true,
+      data,
+      total: bridgeTotal ?? localTotal,
+      local_total: localTotal,
+      bridge_total: bridgeTotal,
+      source: bridgeTotal != null ? "bridge+local" : "local",
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -2597,6 +4334,7 @@ app.get("/api/taskwarrior/tasks", (req, res) => {
         tags: task.tags || [],
         project: task.project || "",
         due: task.due || "",
+        scheduled: task.scheduled || "",
         modified: task.modified || "",
         end: task.end || "",
       }));
@@ -2621,10 +4359,12 @@ app.post("/api/taskwarrior/add", async (req, res) => {
       const description = String(t?.description || "").trim();
       if (!description) continue;
       const due = String(t?.due || "").trim();
+      const scheduled = String(t?.scheduled || "").trim();
       const project = String(t?.project || "").trim();
       const tags = Array.isArray(t?.tags) ? t.tags : [];
       const args = ["add", description];
       if (due) args.push(`due:${due}`);
+      if (scheduled) args.push(`scheduled:${scheduled}`);
       if (project) args.push(`project:${project}`);
       tags
         .map((tag) => String(tag || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, ""))
@@ -2816,6 +4556,526 @@ app.get("/api/generals/latest", (req, res) => {
       excerpt: info.excerpt,
       updated_at: new Date(latest.mtimeMs).toISOString(),
       path: latest.path,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// ============================================================================
+// GENERAL'S TENT - STRATEGIC INTELLIGENCE API
+// ============================================================================
+// Complete synthesis system for strategic weekly reflection
+//
+// Architecture:
+// 1. Domain States: Load/save/update domain-state JSON
+// 2. Synthesis Engines: Cross-domain, Temporal, Pipeline analysis
+// 3. Component Data: Return & Report, Lessons, Corrections, Targets
+// 4. Persistence: Save weekly Tent sessions to vault
+// ============================================================================
+
+/**
+ * Initialize domain states (generate if not exist)
+ * POST /api/tent/init
+ */
+app.post("/api/tent/init", async (req, res) => {
+  try {
+    const generated = [];
+    const errors = [];
+
+    for (const domain of DOMAINS) {
+      const existing = loadDomainState(domain);
+      if (existing) {
+        console.log(`[/api/tent/init] ${domain} state already exists, skipping`);
+        continue;
+      }
+
+      try {
+        const state = generateInitialDomainState(domain);
+        const saved = saveDomainState(domain, state);
+
+        if (saved) {
+          generated.push(domain);
+        } else {
+          errors.push({ domain, error: "Save failed" });
+        }
+      } catch (err) {
+        errors.push({ domain, error: String(err) });
+      }
+    }
+
+    return res.json({
+      ok: errors.length === 0,
+      generated,
+      errors,
+      message:
+        generated.length > 0
+          ? `Generated ${generated.length} domain states`
+          : "All domain states already exist",
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * Get domain state for a single domain
+ * GET /api/tent/state/:domain
+ */
+app.get("/api/tent/state/:domain", (req, res) => {
+  try {
+    const domain = String(req.params.domain || "").toUpperCase();
+    const state = loadDomainState(domain);
+
+    if (!state) {
+      return res.status(404).json({
+        ok: false,
+        error: `Domain state not found: ${domain}`,
+      });
+    }
+
+    return res.json({ ok: true, domain, state });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * Get all domain states
+ * GET /api/tent/states
+ */
+app.get("/api/tent/states", (req, res) => {
+  try {
+    const states = getAllDomainStates();
+    return res.json({
+      ok: true,
+      states,
+      count: Object.keys(states).length,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * SYNTHESIS ENGINE #1: Cross-Domain Pattern Recognition
+ * GET /api/tent/synthesis/domains?week=YYYY-Wxx
+ */
+app.get("/api/tent/synthesis/domains", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    if (Object.keys(states).length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "No domain states found. Run POST /api/tent/init first.",
+      });
+    }
+
+    const synthesis = synthesizeCrossDomain(states);
+
+    return res.json({
+      ok: true,
+      week,
+      synthesis,
+      domains_analyzed: Object.keys(states),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * SYNTHESIS ENGINE #2: Temporal Cascade Analysis
+ * GET /api/tent/synthesis/temporal?week=YYYY-Wxx
+ */
+app.get("/api/tent/synthesis/temporal", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    if (Object.keys(states).length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "No domain states found. Run POST /api/tent/init first.",
+      });
+    }
+
+    const synthesis = synthesizeTemporalCascade(states);
+
+    return res.json({
+      ok: true,
+      week,
+      synthesis,
+      domains_analyzed: Object.keys(states),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * SYNTHESIS ENGINE #3: Pipeline Flow Diagnosis
+ * GET /api/tent/synthesis/pipeline?week=YYYY-Wxx
+ */
+app.get("/api/tent/synthesis/pipeline", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    if (Object.keys(states).length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "No domain states found. Run POST /api/tent/init first.",
+      });
+    }
+
+    const synthesis = synthesizePipelineFlow(states);
+
+    return res.json({
+      ok: true,
+      week,
+      synthesis,
+      domains_analyzed: Object.keys(states),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * COMPLETE SYNTHESIS: All 3 engines combined
+ * GET /api/tent/synthesis/complete?week=YYYY-Wxx
+ */
+app.get("/api/tent/synthesis/complete", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    if (Object.keys(states).length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "No domain states found. Run POST /api/tent/init first.",
+      });
+    }
+
+    const crossDomain = synthesizeCrossDomain(states);
+    const temporal = synthesizeTemporalCascade(states);
+    const pipeline = synthesizePipelineFlow(states);
+
+    return res.json({
+      ok: true,
+      week,
+      synthesis: {
+        cross_domain: crossDomain,
+        temporal_cascade: temporal,
+        pipeline_flow: pipeline,
+      },
+      domains_analyzed: Object.keys(states),
+      overall_scores: {
+        domain_balance: crossDomain.overall_balance,
+        cascade_alignment: temporal.overall_alignment,
+        pipeline_health: pipeline.overall_health,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * COMPONENT #1: Return & Report (auto-populated intelligence)
+ * GET /api/tent/component/return-report?week=YYYY-Wxx
+ */
+app.get("/api/tent/component/return-report", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    if (Object.keys(states).length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "No domain states found.",
+      });
+    }
+
+    const crossDomain = synthesizeCrossDomain(states);
+    const temporal = synthesizeTemporalCascade(states);
+    const pipeline = synthesizePipelineFlow(states);
+
+    // Build Return & Report data structure
+    const component = {
+      week,
+      domain_synthesis: {
+        patterns: crossDomain.patterns,
+        domain_health: crossDomain.domain_health,
+        insights: crossDomain.insights,
+        overall_balance: crossDomain.overall_balance,
+      },
+      temporal_synthesis: {
+        cascade_health: temporal.cascade_health,
+        blockers: temporal.blockers,
+        frame_shifts: temporal.frame_shifts,
+        overall_alignment: temporal.overall_alignment,
+      },
+      pipeline_synthesis: {
+        health: pipeline.pipeline_health,
+        issues: pipeline.issues,
+        flow: pipeline.flow,
+        overall_health: pipeline.overall_health,
+      },
+      weekly_metrics: {
+        core4: {},
+        fire_hits: {},
+        war_stacks: { active: 0, completed: 0, by_domain: {} },
+      },
+    };
+
+    // Aggregate weekly metrics
+    for (const domain of DOMAINS) {
+      const state = states[domain];
+      if (!state) continue;
+
+      component.weekly_metrics.core4[domain] = state.core4?.week_total || 0;
+      component.weekly_metrics.fire_hits[domain] = {
+        total: state.fire?.hits?.length || 0,
+        completed: state.fire?.hits?.filter((h) => h.completed).length || 0,
+        completion: state.fire?.completion || 0,
+      };
+
+      const activeWS = state.war_stacks?.filter((ws) => ws.status === "active") || [];
+      const completedWS = state.war_stacks?.filter((ws) => ws.status === "completed") || [];
+
+      component.weekly_metrics.war_stacks.active += activeWS.length;
+      component.weekly_metrics.war_stacks.completed += completedWS.length;
+      component.weekly_metrics.war_stacks.by_domain[domain] = {
+        active: activeWS.length,
+        completed: completedWS.length,
+      };
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      component,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * COMPONENT #2: Lessons Learned (auto + manual)
+ * GET /api/tent/component/lessons?week=YYYY-Wxx
+ */
+app.get("/api/tent/component/lessons", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    const crossDomain = synthesizeCrossDomain(states);
+    const temporal = synthesizeTemporalCascade(states);
+
+    const component = {
+      week,
+      auto_lessons: [],
+      voice_insights: [],
+      fire_reflections: [],
+      manual_notes: "",
+    };
+
+    // Generate auto-lessons from synthesis
+    crossDomain.insights.forEach((insight) => {
+      if (insight.severity === "positive" || insight.severity === "high") {
+        component.auto_lessons.push({
+          pattern: insight.type,
+          evidence: insight.description,
+          source: "cross_domain_synthesis",
+        });
+      }
+    });
+
+    temporal.frame_shifts.forEach((shift) => {
+      component.auto_lessons.push({
+        pattern: `${shift.domain} Frame shift: ${shift.new_status}`,
+        evidence: `Frame shifted ${shift.days_ago} days ago`,
+        source: "temporal_cascade_analysis",
+      });
+    });
+
+    // Extract VOICE insights
+    for (const domain of DOMAINS) {
+      const state = states[domain];
+      if (!state || !state.voice?.latest_strike) continue;
+
+      component.voice_insights.push({
+        domain,
+        session: state.voice.latest_session,
+        strike: state.voice.latest_strike,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      component,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * COMPONENT #3: Course Correction (strategic pivots)
+ * GET /api/tent/component/corrections?week=YYYY-Wxx
+ */
+app.get("/api/tent/component/corrections", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    const crossDomain = synthesizeCrossDomain(states);
+    const temporal = synthesizeTemporalCascade(states);
+    const pipeline = synthesizePipelineFlow(states);
+
+    const component = {
+      week,
+      frame_shift_triggers: temporal.frame_shifts,
+      cascade_corrections: temporal.blockers,
+      domain_corrections: [],
+      pipeline_corrections: pipeline.issues,
+      recommended_targets: {
+        next_week_fire: {},
+        next_month_focus: {},
+      },
+      manual_corrections: "",
+    };
+
+    // Generate domain corrections from insights
+    crossDomain.insights.forEach((insight) => {
+      if (insight.severity === "high" || insight.severity === "medium") {
+        component.domain_corrections.push({
+          domain: insight.type,
+          issue: insight.description,
+          correction: insight.recommendation,
+          why: `Cross-domain pattern detected: ${insight.type}`,
+        });
+      }
+    });
+
+    // Generate recommended targets
+    for (const domain of DOMAINS) {
+      const state = states[domain];
+      if (!state) continue;
+
+      const currentFireHits = state.fire?.hits?.length || 0;
+      const currentCore4 = state.core4?.week_total || 0;
+
+      // Recommend balanced Fire Hits (reduce if overloaded, increase if underutilized)
+      let recommendedFireHits = 4;
+      if (currentCore4 >= 6) recommendedFireHits = 3; // Reduce if overemphasis
+      if (currentCore4 <= 3) recommendedFireHits = 4; // Maintain if underutilized
+
+      component.recommended_targets.next_week_fire[domain] = recommendedFireHits;
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      component,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * COMPONENT #4: New Targets (cascade-aligned)
+ * GET /api/tent/component/targets?week=YYYY-Wxx
+ */
+app.get("/api/tent/component/targets", (req, res) => {
+  try {
+    const week = String(req.query.week || isoWeekString());
+    const states = getAllDomainStates();
+
+    const component = {
+      week,
+      focus_targets: {},
+      fire_targets: {},
+      war_stacks_needed: [],
+      manual_targets: "",
+    };
+
+    // Generate Focus targets (monthly/quarterly) from Freedom Maps
+    for (const domain of DOMAINS) {
+      const state = states[domain];
+      if (!state) continue;
+
+      component.focus_targets[domain] = {
+        quarter: state.focus?.quarter || getCurrentQuarter(),
+        mission: state.focus?.mission || "unknown",
+        alignment: `Freedom "${state.freedom?.ipw || "unknown"}"`,
+      };
+
+      // Suggest Fire targets for next week (from War Stacks)
+      const activeWarStacks = state.war_stacks?.filter((ws) => ws.status === "active") || [];
+      component.fire_targets[domain] = activeWarStacks.map((ws) => ws.title);
+
+      // Detect War Stacks needed
+      if (state.voice?.session_count > 0 && activeWarStacks.length === 0) {
+        component.war_stacks_needed.push({
+          domain,
+          title: `${domain} Daily Foundation`,
+          why: `${state.voice.session_count} VOICE sessions need execution channel`,
+          suggested_hits: [
+            "Extract from latest VOICE session",
+            "Daily practice (from VOICE insights)",
+            "Weekly review",
+            "Monthly integration",
+          ],
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      component,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/**
+ * Save weekly Tent session to vault
+ * POST /api/tent/save-weekly
+ */
+app.post("/api/tent/save-weekly", (req, res) => {
+  try {
+    const week = String(req.body.week || isoWeekString());
+    const markdown = String(req.body.markdown || "");
+
+    if (!markdown) {
+      return res.status(400).json({ ok: false, error: "No markdown content provided" });
+    }
+
+    const tentDir = path.join(getVaultDir(), "Alpha_Tent");
+    if (!fs.existsSync(tentDir)) {
+      fs.mkdirSync(tentDir, { recursive: true });
+    }
+
+    const filename = `tent_${week}.md`;
+    const filePath = path.join(tentDir, filename);
+
+    fs.writeFileSync(filePath, markdown, "utf8");
+
+    return res.json({
+      ok: true,
+      week,
+      file: path.relative(getVaultDir(), filePath),
+      message: "Weekly Tent session saved",
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });

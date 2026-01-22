@@ -1,100 +1,163 @@
 # AOS Hub
 
-**AlphaOS Hub** - Central infrastructure for the AlphaOS ecosystem
+Single control surface for AlphaOS services, scripts, and centres.
 
-## Components
+## Core Entry Points
 
-### 1. Index Node (HTTP Server)
-HTTP server serving `menu.yaml` for AlphaOS Command Center navigation.
+- `aosctl` — unified dispatcher (menu + status + doctor + component routing)
+- `hubctl` — alias to `aosctl`
+- `nodectl` — Index Node operator (status/health/open/dev/autoreload)
+- `indexctl` — Index Node systemd install/env/health
+- `routerctl` — Router bot control
+- `bridgectl` — Bridge service control
+- `syncvaultctl` — Vault + rclone sync control
+- `firectl` — Fire tooling wrapper (bot + installers)
+- `envctl` — Environment manager (`~/.env` service files)
+- `aos-aliasctl` — Alias manager (multi‑shell)
 
-**Location:** `index-node/`
-**Service:** `aos-index.service`
-**Port:** 8799 (default)
-
-**Start:**
-```bash
-cd ~/aos-hub/index-node
-node server.js
-```
-
-### 2. Router Bot (Telegram Router)
-Telegram bot with pluggable extension system for AlphaOS operations.
-
-**Location:** `router/`
-**Service:** `aos-router.service`
-**Architecture:** Hub-and-spoke pattern (router + extensions)
-
-**Start:**
-```bash
-cd ~/aos-hub/router
-python router_bot.py
-```
-
-**Extensions:**
-- Door Centre (Hot List, War Stacks, 4P Flow)
-- Game Centre (Fire Maps, Frame Maps, General's Tent)
-- System (git sync, backups, health checks)
-
-## Installation
-
-### 1. Clone Repository
-```bash
-git clone https://github.com/nimmsel23/aos-hub.git ~/aos-hub
-```
-
-### 2. Install Dependencies
-
-**Index Node:**
-```bash
-cd ~/aos-hub/index-node
-npm install
-```
-
-**Router Bot:**
-```bash
-cd ~/aos-hub/router
-pip install -r requirements.txt
-```
-
-### 3. Configure
-
-**Index Node:**
-Edit `menu.yaml` to customize navigation menu
-
-**Router Bot:**
-Edit `config.yaml` with your Telegram credentials and extension settings
-
-### 4. Install systemd Services (Optional)
+## Quick Start
 
 ```bash
-ln -s ~/aos-hub/systemd/aos-index.service ~/.config/systemd/user/
-ln -s ~/aos-hub/systemd/aos-router.service ~/.config/systemd/user/
+# Menu (Gum if available)
+aosctl
 
-systemctl --user enable --now aos-index.service
-systemctl --user enable --now aos-router.service
+aosctl menu
+
+aosctl status
+
+aosctl ping
+
+aosctl doctor
+
+# Index UI
+aosctl index status
+nodectl open
+nodectl dev
+
+# Router / Bridge
+aosctl router status
+aosctl bridge status
+
+# Sync
+aosctl sync status
+syncctl status
+
+# Env / Aliases
+aosctl env list
+aosctl alias ui
 ```
 
-## Documentation
+## Command Map (What To Type)
 
-- **Index Node:** See `index-node/README.md`
-- **Router Bot:** See `router/README.md` and `router/ARCHITECTURE.md`
+- **One‑stop menu**: `aosctl` or `hubctl`
+- **Status (no logs + heartbeat ping)**: `aosctl status`
+- **Heartbeat ping only**: `aosctl ping`
+- **System health**: `aosctl doctor`
+- **Index UI**: `nodectl` (or `aosctl index status`)
+- **Router Bot**: `routerctl`
+- **Bridge**: `bridgectl`
+- **Vault/Sync**: `syncvaultctl` or `syncctl`
+- **Env manager**: `envctl` or `aosctl env`
+- **Alias manager**: `aos-aliasctl` or `aosctl alias`
 
-## Integration with AlphaOS-Vault
+## Aliases (Zsh)
 
-Both components integrate with the AlphaOS-Vault for:
-- Reading/Writing Hot Lists (Door Centre)
-- Creating War Stacks (Door Centre)
-- Managing Fire Maps (Game Centre)
-- Accessing VOICE sessions
-- Syncing with git
+Defined in `~/.dotfiles/config/zsh/system-aliases.zsh`:
 
-**Vault Location:** `~/AlphaOs-Vault/` or `~/Dokumente/AlphaOs-Vault/`
+```bash
+alias aos='~/aos-hub/aos'
+alias aosctl='~/aos-hub/aosctl'
+alias hubctl='~/aos-hub/aosctl'
+alias syncctl='~/aos-hub/scripts/syncvaultctl'
+alias vaultctl='~/aos-hub/scripts/syncvaultctl'
+alias vaultct='~/aos-hub/scripts/syncvaultctl'
+alias indexctl='~/aos-hub/scripts/indexctl'
+alias bridgectl='~/aos-hub/bridgectl'
+alias routerctl='~/aos-hub/routerctl'
+alias nodectl='~/aos-hub/nodectl'
+```
 
-## License
+If `~/aos-hub` is already in `PATH`, aliases are optional but provide consistent names.
 
-MIT License
+## Services & Units
 
-## Links
+- Index Node: `alphaos-index.service`
+- Index auto‑reload watchers:
+  - `alphaos-index-menu.path` (watches `menu.yaml`)
+  - `alphaos-index-public.path` (watches `public/` assets)
+- Restart helper: `alphaos-index-restart.service`
 
-- **AlphaOS-Vault:** https://github.com/nimmsel23/AlphaOs-Vault (private)
-- **Dotfiles:** https://github.com/nimmsel23/dotfiles
+Status examples:
+
+```bash
+systemctl --user status alphaos-index.service
+systemctl --user status alphaos-index-menu.path alphaos-index-public.path
+```
+
+## Index Node (Port 8799)
+
+- Working dir: `~/aos-hub/index-node`
+- Service file: `~/.config/systemd/user/alphaos-index.service`
+- Health: `http://127.0.0.1:8799/health`
+- Menu: `http://127.0.0.1:8799/menu`
+- Service runs `npm run dev` (nodemon) for live reload
+
+Hot‑reload control:
+
+```bash
+nodectl autoreload on
+nodectl autoreload off
+```
+
+Dev vs service:
+- `nodectl dev` runs `npm run dev` in the foreground (no systemd)
+- `nodectl start|stop|restart` controls the systemd service
+
+## Env Management (`envctl`)
+
+`envctl` manages service‑specific env files under `~/.env/`.
+
+Common files:
+
+- `~/.env/aos.env`
+- `~/.env/tele.env`
+- `~/.env/alphaos-index.env`
+
+Examples:
+
+```bash
+envctl list
+envctl get tele
+envctl set tele TELEGRAM_BOT_TOKEN <token>
+envctl edit tele
+```
+
+## Alias Management (`aos-aliasctl`)
+
+Multi‑shell alias manager for zsh/fish/bash configs.
+
+```bash
+aos-aliasctl ui
+```
+
+## Paths
+
+- Index Node: `~/aos-hub/index-node`
+- Scripts: `~/aos-hub/scripts`
+- Systemd units: `~/.config/systemd/user/`
+
+## Troubleshooting
+
+- Port 8799 stuck: `nodectl fix`
+- Index unit: `indexctl status`
+- Full health: `aosctl doctor`
+- Quick status: `aosctl status`
+- Heartbeat ping: `aosctl ping`
+- Env issues: `envctl doctor`
+
+## Notes
+
+- `aosctl` defaults to Gum menu when available; otherwise prints help.
+- `hubctl` is intentionally the same as `aosctl` so either name works.
+- `nodectl` is index‑only, but can surface router/bridge/index doctors in `nodectl all`.
+- `aosctl status` performs a heartbeat ping via `routerctl heartbeat ping`.

@@ -1,0 +1,62 @@
+{
+  "name": "tent-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "high",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "General's Tent Centre development (Weekly review, summaries)",
+  "description": "Specialist for General's Tent (weekly review centre). Consolidates all 4 domains (BODY/BEING/BALANCE/BUSINESS) for strategic weekly reflection. Currently in development, needs enhancement before standalone deployment.",
+  "components": {
+    "index_node": [
+      "public/game/tent.html (in development)"
+    ],
+    "gas": [
+      "game_tent.gs (main logic)",
+      "tent_weekly_review.gs (review flow)",
+      "Game_Tent_Index.html"
+    ],
+    "bridge": [
+      "/bridge/tent/summary (save weekly summary)"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Alpha_Tent/ (weekly summaries)",
+      "~/AlphaOS-Vault/Alpha_Core4/ (Core4 data for review)"
+    ]
+  },
+  "triggers": [
+    "General's Tent",
+    "Tent Centre",
+    "Weekly review",
+    "Weekly summary"
+  ],
+  "capabilities": [
+    "Develop General's Tent UI (index-node + gas)",
+    "Build weekly review flow (consolidate all domains)",
+    "Implement summary export to vault",
+    "Integrate Core4 weekly data",
+    "Integrate Game Maps (Frame/Freedom/Focus/Fire)",
+    "Integrate Door Centre (completed War Stacks)",
+    "Create standalone deployment (future - like fruits-standalone)"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md"
+  ],
+  "test_prompts": [
+    "Build General's Tent weekly review interface",
+    "Consolidate Core4 + Game Maps + Door War Stacks into single review view",
+    "Export Tent summary to vault markdown",
+    "Plan standalone Tent Centre deployment (like fruits-standalone)"
+  ],
+  "notes": [
+    "General's Tent = weekly review consolidating all 4 domains",
+    "Currently in development (needs enhancement before standalone)",
+    "Integrates: Core4 (28-or-Die), Game Maps (Frame/Fire), Door (War Stacks)",
+    "Future: tent-standalone/ with clasp deployment",
+    "Weekly summaries stored in ~/AlphaOS-Vault/Alpha_Tent/",
+    "tent_weekly_review.gs handles review flow logic"
+  ]
+}

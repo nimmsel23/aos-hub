@@ -1,0 +1,6 @@
+[Unit]
+Description=Daily user backup of /home/alpha/aos-hub
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aos-hub-backup-daily.sh

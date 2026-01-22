@@ -52,6 +52,30 @@ The core bot is a simple URL router that fetches centre links from the local Alp
    python router_bot.py
    ```
 
+## routerctl (systemd user + heartbeat)
+
+`routerctl` manages a systemd *user* unit for the router and optional heartbeat timers.
+
+- Default `ROUTER_DIR` is the directory that contains `routerctl` (so it works from any CWD).
+- `.env` must be a *file* (not a directory), otherwise the systemd unit will fail to load `EnvironmentFile`.
+- If you already keep a shared env like `~/.env/aos.env`, `routerctl unit` will include it as an optional `EnvironmentFile` (recommended).
+- If you use `tele` CLI with `~/.env/tele.env`, `routerctl unit` will also include it as an optional `EnvironmentFile`.
+
+Common commands:
+```bash
+./routerctl unit
+./routerctl edit-env
+./routerctl enable
+./routerctl restart
+./routerctl status
+./routerctl heartbeat install
+```
+
+Install into `PATH` (optional):
+```bash
+./routerctl install-cli
+```
+
 ## Configuration
 
 **Environment Variables:**
@@ -94,13 +118,40 @@ extensions:
 - `/war` or `/warstack` - Start War Stack creation bot (DOOR Pillar - strategic weekly planning)
 - Depends on loaded extensions (see `/help` for full list)
 
+## Command Routing Cheatsheet
+
+**How a command is resolved:**
+1. **Core handler** (always): `/start`, `/menu`, `/reload`, `/help`, `/health`, `/commands`
+2. **Extension handler** (if enabled in `config.yaml`): e.g. `/war`, `/facts`, `/fit`
+3. **Dynamic router** (fallback): any other `/command` is looked up via Index API (`/api/centres`)
+
+**Key rule:** if an extension is enabled, its commands are excluded from the dynamic router to avoid double replies or "Unknown command" responses.
+
+**Enable extensions:**
+```yaml
+extensions:
+  - door_flow
+  - fruits_daily
+  - core4_actions
+```
+
+**Example mapping:**
+- `/war` (extension) -> Door Flow API or War Stack trigger
+- `/voice` (dynamic) -> URL from Index Node `menu.yaml`
+
 ## Extensions
 
 Extensions are optional modules that add functionality beyond URL routing.
 
 **Available Extensions:**
-- `warstack_commands` - War Stack creation trigger (/war, /warstack) ✅ **Active**
-- `core4_actions` - Core4 Taskwarrior shortcuts (/fit, /fue, etc.) ⚠️ **Available (disabled by default)**
+- `door_flow` - Integrated War Stack flow via local Index Node Door API (/war, /warstack, answers in chat)
+- `warstack_commands` - External War Stack bot trigger (/war, /warstack) via Telegram link
+- `firemap_commands` - Local Fire Map trigger (/fire, /fireweek)
+- `core4_actions` - Core4 Taskwarrior shortcuts (/fit, /fue, etc.), supports `/fit <text>` journal note via Index Node
+
+**Door Flow vs. War Stack Trigger (choose one):**
+- `door_flow` uses the local Index Node (`/api/door/warstack/*`) and runs the full War Stack Q&A inside this bot chat.
+- `warstack_commands` only sends a link to a separate War Stack bot; no local API calls.
 
 **Creating Extensions:**
 See `extensions/base.py` for the Extension base class and `ARCHITECTURE.md` for details.
@@ -114,6 +165,8 @@ See `extensions/base.py` for the Extension base class and `ARCHITECTURE.md` for 
   - `__init__.py` - Extension loader
 - `.env` - Environment variables (create from `.env.example`)
 - `requirements.txt` - Python dependencies
+- `python-warstack-bot/` - Separate War Stack bot repo (external, referenced by warstack_commands)
+- `python-firemap-bot/` - Separate Fire Map bot repo (external, referenced by firemap_commands)
 
 ## Docs
 

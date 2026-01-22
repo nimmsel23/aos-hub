@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><?= mapTitle ?></title>
+  <?!= include('style'); ?>
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="active">
+    <div class="loading-ring"></div>
+    <div class="loading-title">Facing the Facts</div>
+    <div class="loading-subtitle">Daily Raw Fact – No Illusions</div>
+  </div>
+
+  <header>
+    <h1><?= mapTitle ?></h1>
+    <div class="subtitle"><?= mapSubtitle ?></div>
+  </header>
+
+  <main class="container" id="content"></main>
+
+  <footer>
+    <button id="exportBtn" class="export-button" style="display:none;">
+      🍎 Export Complete Map to Drive
+    </button>
+    <p class="footer-note">αOS Fruits Centre • Raw Facts for Dominion • 2025</p>
+  </footer>
+
+  <?!= include('client'); ?>
+
+</body>
+</html>

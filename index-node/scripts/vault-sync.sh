@@ -23,16 +23,18 @@ case "$MODE" in
     # Remote → Local, keep local overwritten/deleted files in a dated local backup folder
     BACKUP_DIR="${LOCAL_BACKUP}/pull-${STAMP}"
     mkdir -p "$BACKUP_DIR"
-    exec rclone sync "$REMOTE" "$LOCAL" \
+    exec rclone copy "$REMOTE" "$LOCAL" \
       --create-empty-src-dirs \
+      --update \
       $RCLONE_FLAGS \
       --backup-dir "$BACKUP_DIR"
     ;;
   push)
     # Local → Remote, keep remote-overwritten/deleted files in a dated remote backup folder
     BACKUP_DIR="${REMOTE_BACKUP}/push-${STAMP}"
-    exec rclone sync "$LOCAL" "$REMOTE" \
+    exec rclone copy "$LOCAL" "$REMOTE" \
       --create-empty-src-dirs \
+      --update \
       $RCLONE_FLAGS \
       --backup-dir "$BACKUP_DIR"
     ;;

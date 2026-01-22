@@ -1,8 +1,8 @@
 # GAS HQ TODO / Open Points
 
 ## Fix/Decide
-- `dailyReview()`: currently calls `CONFIG.LAPTOP_URL + /daily-review-data`. Requires laptop endpoint; else it sends “Data Unavailable”. Decide: add endpoint or disable timer.
-- `weeklyFireMapAutomation()`: calls `CONFIG.LAPTOP_URL + /trigger/weekly-firemap`. Requires laptop endpoint; else disable.
+- `dailyReview()`: calls Bridge `GET /bridge/daily-review-data`. If missing/unreachable it sends “Data Unavailable”.
+- `weeklyFireMapAutomation()`: calls Bridge `POST /bridge/trigger/weekly-firemap`. Requires Bridge firemap trigger env; else disable.
 - Status UI shows “Checking” if GAS cannot reach Bridge via funnel. Ensure `AOS_BRIDGE_URL=https://ideapad.tail7a15d6.ts.net/bridge` and that the URL is externally reachable from GAS; otherwise accept hb fallback.
 - External Centre Links (dots/buttons): set Script Props for URLs or hide/mute missing ones to avoid “Missing URL”.
 

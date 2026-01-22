@@ -1,12 +1,16 @@
 [Unit]
 Description=AOS Hub - Router Bot (Telegram router with extensions)
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=alpha
-WorkingDirectory=/home/alpha/aos-hub/router
-ExecStart=/usr/bin/python /home/alpha/aos-hub/router/router_bot.py
+Group=alpha
+EnvironmentFile=-/etc/alphaos-hub/env
+EnvironmentFile=-/etc/alphaos-hub/router.env
+EnvironmentFile=-/etc/alphaos-hub/telegram.env
+ExecStart=/usr/bin/bash -lc 'cd "$AOS_HUB_DIR/router" && exec /usr/bin/python router_bot.py'
 Restart=on-failure
 RestartSec=10
 

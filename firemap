@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# firemap - Simple Fire Map management CLI
+#
+# Usage:
+#   firemap sync              # Convert all Fire Maps of current week to Taskwarrior
+#   firemap sync --dry-run    # Show what would be synced
+#   firemap list              # Show all Fire Maps
+#   firemap status            # Show current week status
+#   firemap print daily|weekly # Print Fire bot output (same grouping as /fire)
+#   firemap send  daily|weekly # Send Fire bot output (same as /fire)
+#   firemap test [text]       # Send a test message via the Fire bot sender
+#   firemap help              # Show this help
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYNC_SCRIPT_DEFAULT="$SCRIPT_DIR/scripts/utils/fire-to-tasks.sh"
+SYNC_SCRIPT="${AOS_FIRE_TO_TASKS:-$SYNC_SCRIPT_DEFAULT}"
+FIREBOT_PY_DEFAULT="$SCRIPT_DIR/python-firemap-bot/firemap_bot.py"
+FIREBOT_PY="${AOS_FIREBOT_SCRIPT:-$FIREBOT_PY_DEFAULT}"
+PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
+
+detect_fire_dir() {
+    local candidates=()
+    if [[ -n "${AOS_FIRE_DIR:-}" ]]; then
+        candidates+=("$AOS_FIRE_DIR")
+    fi
+    if [[ -n "${AOS_VAULT_DIR:-}" ]]; then
+        candidates+=("$AOS_VAULT_DIR/Game/Fire" "$AOS_VAULT_DIR/GAME/Fire")
+    fi
+    candidates+=(
+        "$HOME/AlphaOS-Vault/Game/Fire"
+        "$HOME/AlphaOS-Vault/GAME/Fire"
+        "$HOME/AlphaOs-Vault/Game/Fire"
+        "$HOME/AlphaOs-Vault/GAME/Fire"
+        "$HOME/Dokumente/AlphaOS-Vault/Game/Fire"
+        "$HOME/Dokumente/AlphaOS-Vault/GAME/Fire"
+        "$HOME/Dokumente/AlphaOs-Vault/Game/Fire"
+        "$HOME/Dokumente/AlphaOs-Vault/GAME/Fire"
+    )
+    for d in "${candidates[@]}"; do
+        if [[ -n "$d" && -d "$d" ]]; then
+            echo "$d"
+            return 0
+        fi
+    done
+    echo "${candidates[0]:-$HOME/AlphaOS-Vault/Game/Fire}"
+}
+
+FIRE_DIR="$(detect_fire_dir)"
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[✓]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+log_error() { echo -e "${RED}[✗]${NC} $1"; }
+
+show_help() {
+    cat << EOF
+firemap - Fire Map Management CLI
+
+USAGE:
+    firemap <command> [options]
+
+COMMANDS:
+    sync [--dry-run]    Sync current week's Fire Maps to Taskwarrior
+    list                List all Fire Maps
+    status              Show current week Fire Map status
+    print daily|weekly  Print Fire bot output (same grouping as Telegram)
+    send  daily|weekly  Send Fire bot output (sender configured in python-firemap-bot)
+    test [text]         Send a test message via the Fire bot sender
+    help                Show this help
+
+EXAMPLES:
+    # Sync all Fire Maps for current week
+    firemap sync
+
+    # Dry run to see what would be synced
+    firemap sync --dry-run
+
+    # Check status
+    firemap status
+
+    # Print what /fire would send
+    firemap print daily
+    firemap print weekly
+
+    # Send (same as /fire)
+    firemap send daily
+    firemap send weekly
+
+    # Test (sender wiring)
+    firemap test "hello"
+
+ENV:
+    AOS_FIRE_DIR=/path/to/Fire              # override Fire maps dir
+    AOS_VAULT_DIR=/path/to/AlphaOS-Vault    # used to derive Fire dir
+    AOS_FIRE_TO_TASKS=/path/to/fire-to-tasks.sh
+    AOS_FIREBOT_SCRIPT=/path/to/firemap_bot.py
+    AOS_PYTHON_BIN=python
+
+EOF
+}
+
+get_current_week() {
+    date +%V
+}
+
+get_current_year() {
+    date +%Y
+}
+
+cmd_sync() {
+    local DRY_RUN=""
+    if [[ "${1:-}" == "--dry-run" ]]; then
+        DRY_RUN="--dry-run"
+        log_warn "DRY RUN MODE - No tasks will be created"
+    fi
+
+    local KW=$(get_current_week)
+    local YEAR=$(get_current_year)
+
+    log_info "Syncing Fire Maps for KW$KW $YEAR..."
+
+    local FIRE_MAPS=("$FIRE_DIR"/FIRE_MAP_*_KW${KW}_${YEAR}.md)
+
+    if [[ ! -e "${FIRE_MAPS[0]}" ]]; then
+        log_error "No Fire Maps found for KW$KW $YEAR"
+        log_info "Expected pattern: $FIRE_DIR/FIRE_MAP_*_KW${KW}_${YEAR}.md"
+        exit 1
+    fi
+
+    local COUNT=0
+    for map in "${FIRE_MAPS[@]}"; do
+        if [[ -f "$map" ]]; then
+            local DOMAIN=$(basename "$map" | sed -E 's/FIRE_MAP_([A-Z]+)_KW.*\.md/\1/')
+            log_info "Processing $DOMAIN..."
+
+            if "$SYNC_SCRIPT" $DRY_RUN "$map"; then
+                ((COUNT++))
+            else
+                log_error "Failed to sync $DOMAIN Fire Map"
+            fi
+        fi
+    done
+
+    echo ""
+    if [[ -n "$DRY_RUN" ]]; then
+        log_success "DRY RUN: Would have synced $COUNT Fire Maps"
+    else
+        log_success "Synced $COUNT Fire Maps to Taskwarrior"
+        log_info "View tasks: task +fire +hit list"
+    fi
+}
+
+cmd_list() {
+    log_info "Available Fire Maps:"
+    echo ""
+
+    if [[ ! -d "$FIRE_DIR" ]]; then
+        log_error "Fire Maps directory not found: $FIRE_DIR"
+        exit 1
+    fi
+
+    local MAPS=($(ls -t "$FIRE_DIR"/FIRE_MAP_*.md 2>/dev/null))
+
+    if [[ ${#MAPS[@]} -eq 0 ]]; then
+        log_warn "No Fire Maps found"
+        exit 0
+    fi
+
+    for map in "${MAPS[@]}"; do
+        local FILENAME=$(basename "$map")
+        local DOMAIN=$(echo "$FILENAME" | sed -E 's/FIRE_MAP_([A-Z]+)_KW([0-9]+)_([0-9]+)\.md/\1/')
+        local KW=$(echo "$FILENAME" | sed -E 's/FIRE_MAP_([A-Z]+)_KW([0-9]+)_([0-9]+)\.md/\2/')
+        local YEAR=$(echo "$FILENAME" | sed -E 's/FIRE_MAP_([A-Z]+)_KW([0-9]+)_([0-9]+)\.md/\3/')
+
+        echo "  • KW$KW $YEAR - $DOMAIN"
+    done
+}
+
+cmd_status() {
+    local KW=$(get_current_week)
+    local YEAR=$(get_current_year)
+
+    log_info "Fire Map Status - KW$KW $YEAR"
+    echo ""
+
+    local DOMAINS=("BODY" "BEING" "BALANCE" "BUSINESS")
+    local FOUND=0
+
+    for domain in "${DOMAINS[@]}"; do
+        local MAP="$FIRE_DIR/FIRE_MAP_${domain}_KW${KW}_${YEAR}.md"
+        if [[ -f "$MAP" ]]; then
+            log_success "$domain Fire Map exists"
+            ((FOUND++))
+        else
+            log_warn "$domain Fire Map missing"
+        fi
+    done
+
+    echo ""
+    if [[ $FOUND -eq 4 ]]; then
+        log_success "All 4 Fire Maps found for KW$KW"
+        log_info "Run 'firemap sync' to create Taskwarrior tasks"
+    else
+        log_warn "Only $FOUND/4 Fire Maps found for KW$KW"
+    fi
+
+    # Check Taskwarrior
+    echo ""
+    log_info "Taskwarrior Fire Tasks:"
+    local TASK_COUNT=$(task +fire +hit status:pending count 2>/dev/null || echo "0")
+    if [[ $TASK_COUNT -gt 0 ]]; then
+        log_info "$TASK_COUNT fire tasks in Taskwarrior"
+        echo ""
+        task +fire +hit status:pending 2>/dev/null || true
+    else
+        log_warn "No fire tasks in Taskwarrior yet"
+    fi
+}
+
+need_firebot() {
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 || { log_error "python not found: $PYTHON_BIN"; exit 1; }
+    [[ -f "$FIREBOT_PY" ]] || { log_error "fire bot not found: $FIREBOT_PY"; exit 1; }
+}
+
+cmd_print() {
+    local scope="${1:-}"
+    case "$scope" in
+        daily|weekly) ;;
+        *) log_error "Usage: firemap print daily|weekly"; exit 1 ;;
+    esac
+    need_firebot
+    "$PYTHON_BIN" "$FIREBOT_PY" print --scope "$scope"
+}
+
+cmd_send() {
+    local scope="${1:-}"
+    case "$scope" in
+        daily|weekly) ;;
+        *) log_error "Usage: firemap send daily|weekly"; exit 1 ;;
+    esac
+    need_firebot
+    "$PYTHON_BIN" "$FIREBOT_PY" "$scope"
+}
+
+cmd_test() {
+    need_firebot
+    local text="${*:-}"
+    "$PYTHON_BIN" "$FIREBOT_PY" test --text "${text:-🔥 firemap test ($(date +%F_%H:%M))}"
+}
+
+# Main
+case "${1:-help}" in
+    sync)
+        shift
+        cmd_sync "$@"
+        ;;
+    list)
+        cmd_list
+        ;;
+    status)
+        cmd_status
+        ;;
+    print)
+        shift
+        cmd_print "${1:-}"
+        ;;
+    send)
+        shift
+        cmd_send "${1:-}"
+        ;;
+    test)
+        shift || true
+        cmd_test "$@"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        log_error "Unknown command: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

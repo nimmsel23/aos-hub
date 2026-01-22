@@ -11,6 +11,7 @@ Collection of utility scripts for AlphaOS Door Centre, Core4, and TickTick integ
 ```
 scripts/
 ├── hot-list/          # Hot List markdown creation (DEPRECATED)
+├── taskwarrior/       # Taskwarrior hooks + snapshots (ACTIVE)
 ├── war-stack/         # War Stack CLI automation (ACTIVE)
 ├── ticktick/          # TickTick API integration (ACTIVE)
 ├── automation/        # File watchers & lifecycle (DEPRECATED)
@@ -20,6 +21,43 @@ scripts/
 ---
 
 ## Active Scripts
+
+### nodectl ✅
+
+**Purpose:** Index Node operator (status, health, open, autoreload, dev helpers)
+
+**Notes:**
+- `+nodectl` is a convenience symlink to `aos-hub/scripts/nodectl`
+- `nodectl dev` runs in the foreground (Ctrl+C to stop)
+- `nodectl` or `nodectl all` prints a full summary (monitor + doctor)
+
+**Use Cases:**
+- Monitor Index Node service + logs
+- Start/stop/restart UI node
+- Open local/Tailscale UI quickly
+- Toggle autoreload watchers (menu/public)
+- Run foreground dev (nodemon) outside systemd
+
+**Examples:**
+```bash
+nodectl                 # full status + doctor summary
+nodectl monitor         # service + logs + health + tailscale
+nodectl dev             # foreground npm run dev (no systemd)
+nodectl autoreload on   # enable menu/public watchers
+nodectl fix             # kill port 8799 + restart service
+nodectl open            # open best URL (tailscale preferred)
+```
+
+### taskwarrior/ ✅
+
+**Purpose:** Local Taskwarrior integration glue (hooks + export snapshots)
+
+**Scripts:**
+- `on-add.alphaos.py` - Hook (task add)
+- `on-modify.alphaos.py` - Hook (task modify/done)
+- `export-snapshot.sh` - Write JSON export snapshot (for bots/UIs)
+
+---
 
 ### war-stack/ ✅
 
@@ -55,6 +93,18 @@ scripts/
 
 ---
 
+### Fire tooling ✅
+
+**Engine:** `python-firemap-bot/firemap.py` (Taskwarrior → Markdown-formatted text messages)
+
+**Bot:** `python-firemap-bot/firemap_bot.py` (sends `/fire` style snapshots)
+
+**Wrappers:**
+- `scripts/firectl` — wrapper + installers: `doctor`, `fix`, `status/logs`, `setup-reports`, `setup-systemd`
+- `firemap` (repo root) — legacy sync (`firemap sync`) + new `firemap print/send` for the same output as the bot
+
+---
+
 ## Deprecated Scripts
 
 ### hot-list/ ⚠️
@@ -82,6 +132,7 @@ scripts/
 
 | Script | Status | Replacement | Keep? |
 |--------|--------|-------------|-------|
+| `taskwarrior/export-snapshot.sh` | ✅ Active | - | YES |
 | `war_stack_create.sh` | ✅ Active | - | YES |
 | `ticktick_sync.py` | ✅ Active | - | YES |
 | `door_uuid_sync.py` | ✅ Active | - | YES |
@@ -154,5 +205,5 @@ cd ~/aos-hub/scripts/ticktick
 
 ---
 
-**Last Updated:** 2026-01-02
+**Last Updated:** 2026-01-10
 **Maintainer:** alpha

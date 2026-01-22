@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# aos-syncctl — Gum UI for AlphaOS rclone targets (*.env)
+# - list/create/edit targets
+# - pick rclone remote path via `rclone lsf` browser
+# - enable/disable systemd timers per target (optional)
+# ============================================================
+
+DOTFILES_DIR="${AOS_DOTFILES:-$HOME/.dotfiles}"
+CONF_DIR="${DOTFILES_DIR}/config/aos/sync.d"
+SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
+
+# Template unit names you likely already use; adjust if needed:
+UNIT_TIMER_TEMPLATE="aos-sync@.timer"
+UNIT_SERVICE_TEMPLATE="aos-sync@.service"
+
+require() { command -v "$1" >/dev/null 2>&1; }
+
+need_gum() {
+  if ! require gum; then
+    echo "gum fehlt. Install: pacman -S gum  (oder yay -S gum)" >&2
+    exit 1
+  fi
+}
+
+ensure_dirs() {
+  mkdir -p "$CONF_DIR"
+  mkdir -p "$SYSTEMD_USER_DIR"
+}
+
+# ---------- env IO ----------
+env_path_for() { echo "${CONF_DIR}/$1.env"; }
+
+list_targets() {
+  ensure_dirs
+  (cd "$CONF_DIR" && ls -1 *.env 2>/dev/null | sed 's/\.env$//' || true)
+}
+
+load_env() {
+  local file="$1"
+  set -a
+  # shellcheck disable=SC1090
+  source "$file"
+  set +a
+}
+
+write_env_key() {
+  local file="$1" key="$2" value="$3"
+  mkdir -p "$(dirname "$file")"
+  touch "$file"
+
+  # If key exists, replace; else append.
+  if grep -qE "^${key}=" "$file"; then
+    # preserve quotes if user typed them; we write as single-quoted for safety where needed
+    sed -i -E "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    printf "%s=%s\n" "$key" "$value" >>"$file"
+  fi
+}
+
+quote_s() { printf "'%s'" "${1//\'/\'\\\'\'}"; }  # single-quote safe
+
+# ---------- rclone remote browser ----------
+pick_rclone_remote() {
+  # returns e.g. "gdrive:" (with colon)
+  local remotes
+  remotes="$(rclone listremotes 2>/dev/null || true)"
+  if [[ -z "$remotes" ]]; then
+    gum style --foreground 196 "No rclone remotes found. Run: rclone config"
+    return 1
+  fi
+  printf "%s" "$remotes" | gum choose --header "Select rclone remote"
+}
+
+pick_rclone_path_under() {
+  # input: remote like "gdrive:"
+  local remote="$1"
+  local path="" choice=""
+  while true; do
+    local base="${remote}${path}"
+    # list directories only, with trailing slash
+    local dirs
+    dirs="$(rclone lsf "$base" --dirs-only 2>/dev/null || true)"
+
+    # menu options
+    local opts=()
+    opts+=("✅ Use this: ${base}")
+    opts+=("⬆️  Up")
+    opts+=("✍️  Enter path manually")
+    opts+=("📋 Set from clipboard")
+    if [[ -n "$dirs" ]]; then
+      while IFS= read -r d; do
+        [[ -z "$d" ]] && continue
+        opts+=("📁 ${d}")
+      done <<<"$dirs"
+    fi
+
+    choice="$(printf "%s\n" "${opts[@]}" | gum choose --header "Browse: ${base}")"
+
+    case "$choice" in
+      "✅ Use this: "*)
+        echo "${base}"
+        return 0
+        ;;
+      "⬆️  Up")
+        # remove last segment
+        path="${path%/}"
+        path="${path%/*}"
+        [[ -n "$path" ]] && path="${path}/"
+        ;;
+      "✍️  Enter path manually")
+        local manual
+        manual="$(gum input --header "Enter path under ${remote} (no leading slash)" --placeholder "AlphaOS/Centres/Alpha_Voice")"
+        manual="${manual#/}"
+        [[ -n "$manual" ]] && manual="${manual%/}/"
+        path="$manual"
+        ;;
+      "📋 Set from clipboard")
+        local clip=""
+        if require wl-paste; then clip="$(wl-paste || true)"; fi
+        if [[ -z "$clip" ]] && require xclip; then clip="$(xclip -o -selection clipboard || true)"; fi
+        clip="${clip//$'\r'/}"
+        clip="${clip//$'\n'/}"
+        if [[ "$clip" == *:* ]]; then
+          # if clipboard includes remote prefix, accept whole
+          echo "$clip"
+          return 0
+        else
+          clip="${clip#/}"
+          [[ -n "$clip" ]] && clip="${clip%/}"
+          echo "${remote}${clip}"
+          return 0
+        fi
+        ;;
+      "📁 "*)
+        local dir="${choice#📁 }"
+        path="${path}${dir}"
+        ;;
+      *)
+        ;;
+    esac
+  done
+}
+
+# ---------- systemd helpers ----------
+systemd_timer_name() { echo "aos-sync@${1}.timer"; }
+systemd_service_name() { echo "aos-sync@${1}.service"; }
+
+enable_target_timer() {
+  local target="$1" at="$2"
+  # This assumes template units already exist. If not, you have to install them (bootstrapper).
+  # We only set an override for schedule if at is given.
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  systemctl --user enable --now "$(systemd_timer_name "$target")"
+  if [[ -n "$at" ]]; then
+    # Create override for OnCalendar with specific time (daily)
+    local dropin="${SYSTEMD_USER_DIR}/$(systemd_timer_name "$target").d"
+    mkdir -p "$dropin"
+    cat >"${dropin}/override.conf" <<EOF
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* ${at}:00
+Persistent=true
+EOF
+    systemctl --user daemon-reload
+    systemctl --user restart "$(systemd_timer_name "$target")"
+  fi
+}
+
+disable_target_timer() {
+  local target="$1"
+  systemctl --user disable --now "$(systemd_timer_name "$target")" >/dev/null 2>&1 || true
+}
+
+# ---------- target creation ----------
+create_target() {
+  local target
+  target="$(gum input --header "New target name" --placeholder "voice" )"
+  target="$(echo "$target" | tr -cd 'a-zA-Z0-9_-')"
+  [[ -z "$target" ]] && return 0
+
+  local file
+  file="$(env_path_for "$target")"
+  if [[ -f "$file" ]]; then
+    gum style --foreground 214 "Target exists: $target"
+    return 0
+  fi
+
+  write_env_key "$file" "AOS_TARGET" "$(quote_s "$target")"
+  write_env_key "$file" "AOS_REMOTE" "$(quote_s "gdrive:AlphaOS/Centres/Alpha_${target^}")"
+  write_env_key "$file" "AOS_LOCAL" "$(quote_s "$HOME/AlphaOS/${target^}/drive_mirror")"
+  write_env_key "$file" "AOS_MODE" "$(quote_s "bisync")"
+  write_env_key "$file" "AOS_LOG_DIR" "$(quote_s "$HOME/AlphaOS/${target^}/logs")"
+  write_env_key "$file" "AOS_LOG_FILE" "\$AOS_LOG_DIR/rclone.log"
+  write_env_key "$file" "AOS_POST_HOOK" "$(quote_s "")"
+
+  gum style --foreground 46 "Created: $file"
+}
+
+edit_target() {
+  local target="$1"
+  local file; file="$(env_path_for "$target")"
+  [[ -f "$file" ]] || { gum style --foreground 196 "Missing: $file"; return 0; }
+
+  load_env "$file"
+
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Set AOS_REMOTE (browse rclone)" \
+      "Set AOS_REMOTE (manual input)" \
+      "Set AOS_LOCAL" \
+      "Set AOS_MODE (sync/bisync)" \
+      "Set AOS_LOG_DIR" \
+      "Set AOS_POST_HOOK" \
+      "Show file" \
+      "Back" \
+      | gum choose --header "Edit target: ${target}")"
+
+    case "$choice" in
+      "Set AOS_REMOTE (browse rclone)")
+        if ! require rclone; then gum style --foreground 196 "rclone missing"; continue; fi
+        local remote base
+        remote="$(pick_rclone_remote)" || continue
+        base="$(pick_rclone_path_under "$remote")" || continue
+        write_env_key "$file" "AOS_REMOTE" "$(quote_s "$base")"
+        ;;
+      "Set AOS_REMOTE (manual input)")
+        local v
+        v="$(gum input --header "AOS_REMOTE" --value "${AOS_REMOTE:-}" --placeholder "gdrive:AlphaOS/Centres/Alpha_Voice")"
+        [[ -n "$v" ]] && write_env_key "$file" "AOS_REMOTE" "$(quote_s "$v")"
+        ;;
+      "Set AOS_LOCAL")
+        local v
+        v="$(gum input --header "AOS_LOCAL" --value "${AOS_LOCAL:-}" --placeholder "$HOME/AlphaOS/Voice/drive_mirror")"
+        [[ -n "$v" ]] && write_env_key "$file" "AOS_LOCAL" "$(quote_s "$v")"
+        ;;
+      "Set AOS_MODE (sync/bisync)")
+        local v
+        v="$(printf "sync\nbisync\n" | gum choose --header "AOS_MODE")"
+        write_env_key "$file" "AOS_MODE" "$(quote_s "$v")"
+        ;;
+      "Set AOS_LOG_DIR")
+        local v
+        v="$(gum input --header "AOS_LOG_DIR" --value "${AOS_LOG_DIR:-}" --placeholder "$HOME/AlphaOS/Voice/logs")"
+        [[ -n "$v" ]] && write_env_key "$file" "AOS_LOG_DIR" "$(quote_s "$v")"
+        ;;
+      "Set AOS_POST_HOOK")
+        local v
+        v="$(gum input --header "AOS_POST_HOOK (optional)" --value "${AOS_POST_HOOK:-}" --placeholder "/path/to/hook.py")"
+        write_env_key "$file" "AOS_POST_HOOK" "$(quote_s "$v")"
+        ;;
+      "Show file")
+        gum pager <"$file"
+        ;;
+      "Back") break ;;
+    esac
+
+    # reload after edits
+    load_env "$file"
+  done
+}
+
+manage_target() {
+  local target="$1"
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Edit target (.env)" \
+      "Enable systemd timer" \
+      "Disable systemd timer" \
+      "Back" \
+      | gum choose --header "Target: ${target}")"
+
+    case "$choice" in
+      "Edit target (.env)") edit_target "$target" ;;
+      "Enable systemd timer")
+        local at
+        at="$(gum input --header "Daily time HH:MM (optional)" --placeholder "03:30")"
+        enable_target_timer "$target" "$at"
+        gum style --foreground 46 "Enabled timer: $(systemd_timer_name "$target")"
+        ;;
+      "Disable systemd timer")
+        disable_target_timer "$target"
+        gum style --foreground 214 "Disabled timer: $(systemd_timer_name "$target")"
+        ;;
+      "Back") break ;;
+    esac
+  done
+}
+
+main_menu() {
+  need_gum
+  ensure_dirs
+
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Targets: select/manage" \
+      "Targets: create new" \
+      "Open targets folder" \
+      "Quit" \
+      | gum choose --header "aos-syncctl")"
+
+    case "$choice" in
+      "Targets: select/manage")
+        local targets
+        targets="$(list_targets)"
+        if [[ -z "$targets" ]]; then
+          gum style --foreground 214 "No targets yet. Create one."
+          continue
+        fi
+        local t
+        t="$(printf "%s\n" "$targets" | gum choose --header "Select target")"
+        [[ -n "$t" ]] && manage_target "$t"
+        ;;
+      "Targets: create new") create_target ;;
+      "Open targets folder")
+        gum style --foreground 45 "$CONF_DIR"
+        ;;
+      "Quit") exit 0 ;;
+    esac
+  done
+}
+
+main_menu
+

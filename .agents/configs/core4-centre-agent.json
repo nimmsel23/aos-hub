@@ -1,0 +1,72 @@
+{
+  "name": "core4-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "critical",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Core4 Centre development (28-or-Die tracking, Taskwarrior↔TickTick integration)",
+  "description": "Complete specialist for Core4 Centre (AlphaOS PILLAR #2: THE CORE - 4 Domains). Manages 28-or-Die daily tracking, Taskwarrior↔TickTick sync, Core4 TTY utility, and future Journaling Modules per habit.",
+  "components": {
+    "index_node": [
+      "/api/core4/* (toggle subtask, today totals)",
+      "core4-tty.js (terminal utility)",
+      "public/core4/ (future UI)"
+    ],
+    "gas": [
+      "core4.gs (main logic)",
+      "Core4_Index.html"
+    ],
+    "bridge": [
+      "/bridge/core4/log (log Core4 event)",
+      "/bridge/core4/today (today's totals)",
+      "/bridge/core4/week?week=YYYY-Wxx (weekly JSON)"
+    ],
+    "bots": [
+      "router/extensions/core4_actions.py (Taskwarrior shortcuts - disabled by default)"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json (weekly JSON)",
+      "~/.local/share/alphaos/task_export.json (Taskwarrior export)",
+      "~/.local/share/alphaos/task_sync_map.json (UUID bridge for TickTick)"
+    ]
+  },
+  "triggers": [
+    "Core4",
+    "28-or-Die",
+    "Core4 tracker",
+    "Taskwarrior sync",
+    "TickTick",
+    "Daily habits"
+  ],
+  "capabilities": [
+    "Develop Core4 tracking UI (28-or-Die daily completion)",
+    "Implement Taskwarrior↔TickTick sync (UUID bridge)",
+    "Build Core4 TTY utility enhancements",
+    "Create weekly Core4 JSON exports",
+    "Debug bridge Core4 endpoints",
+    "Plan future Journaling Modules per habit",
+    "Integrate Core4 with General's Tent (weekly summaries)"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/bridge/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md"
+  ],
+  "test_prompts": [
+    "Core4 toggle isn't saving to bridge - debug the data flow",
+    "Implement Taskwarrior→TickTick sync with UUID mapping",
+    "Design Journaling Module for BODY domain habits (training log)",
+    "Weekly Core4 JSON export is missing data - trace the issue"
+  ],
+  "notes": [
+    "28-or-Die = 7 subtasks per domain × 4 domains = 28 daily checkboxes",
+    "Taskwarrior↔TickTick sync via UUID bridge (task_sync_map.json)",
+    "Core4 TTY = terminal utility for quick Core4 interaction",
+    "Weekly JSON format: core4_week_YYYY-Wxx.json",
+    "Future: Journaling Module per habit (not yet implemented)",
+    "Bridge handles data flow between UI and vault"
+  ]
+}

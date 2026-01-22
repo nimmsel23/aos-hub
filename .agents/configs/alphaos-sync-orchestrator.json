@@ -1,0 +1,58 @@
+{
+  "name": "alphaos-sync-orchestrator",
+  "version": "1.0.0",
+  "category": "infrastructure",
+  "priority": "high",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Wurmloch management (rclone + systemd sync between local and cloud)",
+  "description": "Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/AlphaOS-Vault (local) and GDrive (cloud). Handles pull/push/bisync modes, systemd timers, mount operations.",
+  "components": {
+    "scripts": [
+      "index-node/scripts/vault-sync.sh (pull, push, bisync modes)"
+    ],
+    "systemd": [
+      "alphaos-vault-sync-pull.timer (daily pull)",
+      "alphaos-vault-sync-pull.service",
+      "alphaos-vault-sync-push.timer (daily push)",
+      "alphaos-vault-sync-push.service"
+    ],
+    "rclone": [
+      "rclone mount (GDrive → ~/AlphaOS-Vault)",
+      "rclone config (remote: gdrive)"
+    ]
+  },
+  "triggers": [
+    "Vault sync",
+    "rclone",
+    "Sync not working",
+    "GDrive mount",
+    "systemd vault sync"
+  ],
+  "capabilities": [
+    "Debug rclone sync issues",
+    "Manage systemd timers (pull/push)",
+    "Handle mount operations",
+    "Implement bisync (bidirectional)",
+    "Resolve sync conflicts",
+    "Monitor sync health"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/scripts/vault-sync.sh",
+    "/home/alpha/aos-hub/systemd/"
+  ],
+  "test_prompts": [
+    "Vault sync not running - check systemd timers",
+    "rclone mount failing - debug GDrive connection",
+    "Sync conflicts after bidirectional changes - resolve"
+  ],
+  "notes": [
+    "vault-sync.sh modes: pull (cloud→local), push (local→cloud), bisync (bidirectional)",
+    "Daily timers: pull (morning), push (evening)",
+    "rclone mount enables real-time cloud access",
+    "GAS writes to Drive, rclone syncs to local vault",
+    "Bidirectional sync can cause conflicts (requires resolution strategy)"
+  ]
+}

@@ -4,7 +4,7 @@
 
 ### 1. Install Dependencies
 ```bash
-cd /home/alpha/.dotfiles/dev/alphaos-router
+cd ~/aos-hub/router
 pip install -r requirements.txt
 ```
 
@@ -59,14 +59,14 @@ Expected output:
 
 ### Development (Terminal)
 ```bash
-cd /home/alpha/.dotfiles/dev/alphaos-router
+cd ~/aos-hub/router
 python router_bot.py
 ```
 
 ### Background (tmux)
 ```bash
 tmux new -s router-bot
-cd /home/alpha/.dotfiles/dev/alphaos-router
+cd ~/aos-hub/router
 python router_bot.py
 # Detach: Ctrl+B, D
 ```
@@ -81,9 +81,9 @@ After=network.target
 [Service]
 Type=simple
 User=alpha
-WorkingDirectory=/home/alpha/.dotfiles/dev/alphaos-router
-EnvironmentFile=/home/alpha/.dotfiles/dev/alphaos-router/.env
-ExecStart=/usr/bin/python3 /home/alpha/.dotfiles/dev/alphaos-router/router_bot.py
+WorkingDirectory=/home/alpha/aos-hub/router
+EnvironmentFile=/home/alpha/aos-hub/router/.env
+ExecStart=/usr/bin/python3 /home/alpha/aos-hub/router/router_bot.py
 Restart=on-failure
 RestartSec=10
 
@@ -210,7 +210,7 @@ Send `/help` to bot - it will list loaded extensions.
 
 ### Update Dependencies
 ```bash
-cd /home/alpha/.dotfiles/dev/alphaos-router
+cd ~/aos-hub/router
 pip install --upgrade -r requirements.txt
 ```
 

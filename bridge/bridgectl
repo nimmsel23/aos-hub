@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+SERVICE_NAME="aos-bridge.service"
+SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
+SERVICE_PATH_SYSTEM="$ROOT_DIR/systemd/$SERVICE_NAME"
+if [[ -f "$SERVICE_PATH_USER" ]]; then
+  SERVICE_PATH="$SERVICE_PATH_USER"
+else
+  SERVICE_PATH="$SERVICE_PATH_SYSTEM"
+fi
+USER_SERVICE_DIR="$HOME/.config/systemd/user"
+HOST="${AOS_BRIDGE_HOST:-127.0.0.1}"
+PORT="${AOS_BRIDGE_PORT:-8080}"
+BASE_URL="http://${HOST}:${PORT}"
+ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+TS_PATH="${AOS_BRIDGE_TAILSCALE_PATH:-/bridge}"
+TS_TARGET="${AOS_BRIDGE_TAILSCALE_TARGET:-http://127.0.0.1:${PORT}}"
+BRIDGE_TOKEN="${AOS_BRIDGE_TOKEN:-}"
+BRIDGE_TOKEN_HEADER="${AOS_BRIDGE_TOKEN_HEADER:-X-Bridge-Token}"
+SYNCVAULTCTL_BIN="${SYNCVAULTCTL_BIN:-$ROOT_DIR/scripts/syncvaultctl}"
+
+msg() { printf "%s\n" "$*"; }
+warn() { printf "WARN: %s\n" "$*" >&2; }
+die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+has_gum() { command -v gum >/dev/null 2>&1; }
+
+ui_title() {
+  if has_gum; then
+    gum style --bold --border normal --padding "1 2" "bridgectl"
+  else
+    msg "bridgectl"
+  fi
+}
+
+choose() {
+  if has_gum; then
+    gum choose "$@"
+  else
+    msg "Choose one:"
+    select opt in "$@"; do echo "$opt"; break; done
+  fi
+}
+
+curl_json() {
+  if has_cmd curl; then
+    if [[ -n "$BRIDGE_TOKEN" ]]; then
+      curl -fsS -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" "$1"
+    else
+      curl -fsS "$1"
+    fi
+    return
+  fi
+  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - <<'PY'
+import os
+import sys
+import urllib.request
+
+headers = {}
+token = os.environ.get("AOS_BRIDGE_TOKEN", "")
+header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
+if token:
+    headers[header] = token
+req = urllib.request.Request(sys.argv[1], headers=headers)
+with urllib.request.urlopen(req) as r:
+    sys.stdout.write(r.read().decode("utf-8"))
+PY
+}
+
+curl_json_post() {
+  if has_cmd curl; then
+    if [[ -n "$BRIDGE_TOKEN" ]]; then
+      curl -fsS -X POST -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" "$1"
+    else
+      curl -fsS -X POST "$1"
+    fi
+    return
+  fi
+  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - "$1" <<'PY'
+import os
+import sys
+import urllib.request
+
+headers = {"Content-Type": "application/json"}
+token = os.environ.get("AOS_BRIDGE_TOKEN", "")
+header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
+if token:
+    headers[header] = token
+req = urllib.request.Request(sys.argv[1], data=b"{}", headers=headers, method="POST")
+with urllib.request.urlopen(req) as r:
+    sys.stdout.write(r.read().decode("utf-8"))
+PY
+}
+
+install_deps() {
+  if ! has_cmd pacman; then
+    die "pacman not found. Install python-aiohttp manually."
+  fi
+  msg "Installing python-aiohttp (Arch)..."
+  sudo pacman -S python-aiohttp
+}
+
+link_service() {
+  mkdir -p "$USER_SERVICE_DIR"
+  if [[ -e "$USER_SERVICE_DIR/$SERVICE_NAME" ]]; then
+    msg "Service already linked: $USER_SERVICE_DIR/$SERVICE_NAME"
+    return
+  fi
+  ln -s "$SERVICE_PATH" "$USER_SERVICE_DIR/$SERVICE_NAME"
+  msg "Linked service: $USER_SERVICE_DIR/$SERVICE_NAME"
+}
+
+systemctl_user() {
+  systemctl --user "$@"
+}
+
+status() {
+  msg "Bridge status:"
+  if has_cmd python; then
+    python - <<'PY' || true
+import importlib.util
+print("python:", "ok")
+spec = importlib.util.find_spec("aiohttp")
+print("aiohttp:", "ok" if spec else "missing")
+PY
+  else
+    warn "python not found"
+  fi
+
+  if has_cmd systemctl; then
+    systemctl_user status "$SERVICE_NAME" --no-pager || true
+  else
+    warn "systemctl not found"
+  fi
+}
+
+health() {
+  msg "Bridge health:"
+  curl_json "$BASE_URL/health" || warn "health check failed"
+}
+
+debug() {
+  health
+  msg ""
+  msg "Core4 today:"
+  curl_json "$BASE_URL/bridge/core4/today" || warn "core4/today failed"
+}
+
+flush_queue() {
+  msg "Bridge queue flush:"
+  curl_json_post "$BASE_URL/bridge/queue/flush" || warn "queue flush failed"
+}
+
+sync_push() {
+  msg "Bridge sync push:"
+  local suffix=""
+  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
+    suffix="?dry_run=1"
+  fi
+  curl_json_post "$BASE_URL/bridge/sync/push${suffix}" || warn "sync push failed"
+}
+
+sync_pull() {
+  msg "Bridge sync pull:"
+  local suffix=""
+  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
+    suffix="?dry_run=1"
+  fi
+  curl_json_post "$BASE_URL/bridge/sync/pull${suffix}" || warn "sync pull failed"
+}
+
+syncvaultctl_cmd() {
+  if [[ -x "$SYNCVAULTCTL_BIN" ]]; then
+    echo "$SYNCVAULTCTL_BIN"
+    return 0
+  fi
+  if has_cmd syncvaultctl; then
+    echo "syncvaultctl"
+    return 0
+  fi
+  return 1
+}
+
+run_syncvaultctl() {
+  local cmd
+  if ! cmd="$(syncvaultctl_cmd)"; then
+    warn "syncvaultctl not found"
+    return 1
+  fi
+  "$cmd" "$@"
+}
+
+tailscale_status() {
+  if ! has_cmd tailscale; then
+    warn "tailscale not installed"
+    return
+  fi
+  msg "Tailscale status:"
+  tailscale status || true
+  msg ""
+  msg "Tailscale IPs:"
+  tailscale ip -4 || true
+  tailscale ip -6 || true
+  msg ""
+  msg "Tailscale serve status:"
+  tailscale serve status || true
+  msg ""
+  msg "Tailscale funnel status:"
+  tailscale funnel status || true
+  if has_cmd systemctl; then
+    systemctl status tailscaled --no-pager || true
+  fi
+}
+
+tailscale_serve_bridge() {
+  if ! has_cmd tailscale; then
+    warn "tailscale not installed"
+    return
+  fi
+  msg "Tailscale serve (tailnet-only):"
+  msg "  path:   $TS_PATH"
+  msg "  target: $TS_TARGET"
+  tailscale serve --bg --set-path "$TS_PATH" "$TS_TARGET"
+  msg ""
+  tailscale serve status || true
+}
+
+tailscale_funnel_bridge() {
+  if ! has_cmd tailscale; then
+    warn "tailscale not installed"
+    return
+  fi
+  msg "Tailscale funnel (public):"
+  msg "  path:   $TS_PATH"
+  msg "  target: $TS_TARGET"
+  tailscale funnel --bg --set-path "$TS_PATH" "$TS_TARGET"
+  msg ""
+  tailscale funnel status || true
+}
+
+doctor() {
+  status
+  msg ""
+  tailscale_status
+  msg ""
+  health
+}
+
+menu() {
+  ui_title
+  local action
+  action="$(choose \
+    "status" "health" "debug" \
+    "flush" \
+    "sync push" "sync pull" "sync push (dry-run)" "sync pull (dry-run)" \
+    "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" "syncvaultctl advanced" \
+    "env" \
+    "start" "stop" "restart" "logs" "enable" \
+    "serve" "funnel" "tailscale" \
+    "doctor" "quit")"
+
+  case "$action" in
+    status) status ;;
+    health) health ;;
+    debug) debug ;;
+    flush) flush_queue ;;
+    "sync push") sync_push ;;
+    "sync pull") sync_pull ;;
+    "sync push (dry-run)") sync_push --dry-run ;;
+    "sync pull (dry-run)") sync_pull --dry-run ;;
+    "syncvaultctl menu") run_syncvaultctl menu ;;
+    "syncvaultctl status") run_syncvaultctl status ;;
+    "syncvaultctl sync") run_syncvaultctl sync ;;
+    "syncvaultctl pull") run_syncvaultctl pull ;;
+    "syncvaultctl advanced") run_syncvaultctl advanced ;;
+    env) "${EDITOR:-nano}" "$ENV_FILE" ;;
+    start) systemctl_user start "$SERVICE_NAME" ;;
+    stop) systemctl_user stop "$SERVICE_NAME" ;;
+    restart) systemctl_user restart "$SERVICE_NAME" ;;
+    logs) journalctl --user -u "$SERVICE_NAME" -f ;;
+    enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
+    serve) tailscale_serve_bridge ;;
+    funnel) tailscale_funnel_bridge ;;
+    tailscale) tailscale_status ;;
+    doctor) doctor ;;
+    quit) exit 0 ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+Usage: bridgectl <command>
+
+Commands:
+  menu           Interactive menu (gum)
+  status         Show service + python/aiohttp status
+  health         GET /health
+  debug          Health + core4/today
+  flush          Flush queued task operations
+  sync-push      POST /bridge/sync/push [--dry-run]
+  sync-pull      POST /bridge/sync/pull [--dry-run]
+  syncvaultctl   Run syncvaultctl (repo or PATH)
+  env            Edit bridge env file
+  install-deps   Install python-aiohttp (Arch)
+  link-service   Link systemd user service
+  enable         Enable + start service
+  start          Start service
+  stop           Stop service
+  restart        Restart service
+  logs           Follow service logs
+  serve          tailscale serve --set-path /bridge -> 8080 (tailnet-only)
+  funnel         tailscale funnel --set-path /bridge -> 8080 (public)
+  tailscale      Show tailscale status + IPs
+  doctor         Run status + tailscale + health
+EOF
+}
+
+cmd="${1:-menu}"
+case "$cmd" in
+  menu) menu ;;
+  status) status ;;
+  health) health ;;
+  debug) debug ;;
+  flush) flush_queue ;;
+  sync-push) sync_push "${2:-}" ;;
+  sync-pull) sync_pull "${2:-}" ;;
+  syncvaultctl) shift; run_syncvaultctl "$@" ;;
+  env) "${EDITOR:-nano}" "$ENV_FILE" ;;
+  install-deps) install_deps ;;
+  link-service) link_service ;;
+  enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
+  start) systemctl_user start "$SERVICE_NAME" ;;
+  stop) systemctl_user stop "$SERVICE_NAME" ;;
+  restart) systemctl_user restart "$SERVICE_NAME" ;;
+  logs) journalctl --user -u "$SERVICE_NAME" -f ;;
+  serve) tailscale_serve_bridge ;;
+  funnel) tailscale_funnel_bridge ;;
+  tailscale) tailscale_status ;;
+  doctor) doctor ;;
+  -h|--help|help) usage ;;
+  *) usage; exit 1 ;;
+esac

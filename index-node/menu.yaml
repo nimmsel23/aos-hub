@@ -1,47 +1,83 @@
 {
   "links": [
     {
-      "label": "Fruits/Fact MAPS",
-      "cmd": "facts",
-      "url": "/facts"
+      "label": "Anatomie GPT",
+      "cmd": "anatomie-gpt",
+      "url": "https://chatgpt.com/g/g-p-688e4388100081919eb91b8542b3fc4e-anatomie/project"
+    },
+
+    {
+      "label": "Body GPT",
+      "cmd": "body",
+      "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
     },
     {
-      "label": "Core4 TTY",
-      "cmd": "core4",
-      "url": "/core4"
+      "label": "Being GPT",
+      "cmd": "being",
+      "url": "https://chatgpt.com/g/g-p-67e3d1630b648191a2b0b4cd86845604-being/project"
     },
     {
-      "label": "Voice Centre",
+      "label": "Balance GPT",
+      "cmd": "balance",
+      "url": "https://chatgpt.com/g/g-p-688e44efc0d48191b78ff20fab6e0b7d-balance-gpt/project"
+    },
+    {
+      "label": "Business GPT",
+      "cmd": "business",
+      "url": "https://chatgpt.com/g/g-p-6885264861708191aaa1a5c6a1be0317-business-gpt/project"
+    },
+
+    {
+      "label": "Voice GPT",
+      "cmd": "voice-gpt",
+      "url": "https://chatgpt.com/g/g-p-67fec7da91c4819188e88874c4449caf-voice/project"
+    },
+    {
+      "label": "Voice",
       "cmd": "voice",
       "url": "/voice"
     },
+
     {
-      "label": "Door Centre",
+      "label": "Door GPT",
+      "cmd": "door-gpt",
+      "url": "https://chatgpt.com/g/g-p-687e99f6e520819181ee8d0f3ffcce4c-door/project"
+    },
+    {
+      "label": "Door",
       "cmd": "door",
       "url": "/door"
     },
+
     {
-      "label": "Game Centre",
+      "label": "Game GPT",
+      "cmd": "game-gpt",
+      "url": "https://chatgpt.com/g/g-p-687e83a3bf4881919795221dc8f190d8-game/project"
+    },
+    {
+      "label": "Game",
       "cmd": "game",
       "url": "/game"
     },
+
+
     {
-      "label": "FRAME Centre",
+      "label": "FRAME",
       "cmd": "frame",
       "url": "/game/frame"
     },
     {
-      "label": "Freedom Centre",
+      "label": "Freedom",
       "cmd": "freedom",
       "url": "/game/freedom"
     },
     {
-      "label": "Focus Centre",
+      "label": "Focus",
       "cmd": "focus",
       "url": "/game/focus"
     },
     {
-      "label": "Fire Centre",
+      "label": "Fire",
       "cmd": "fire",
       "url": "/game/fire"
     },
@@ -50,10 +86,22 @@
       "cmd": "tent",
       "url": "/game/tent"
     },
+
+    {
+      "label": "Fruits/Fact MAPS",
+      "cmd": "facts",
+      "url": "/facts"
+    },
     {
       "label": "Creator King Assets",
       "cmd": "king",
       "url": "/king"
-    }
+    },
+
+    {
+    "label": "Syncthing",
+     "cmd": "syncthing",
+     "url": "http://127.0.0.1:8384/"
+     }
   ]
 }

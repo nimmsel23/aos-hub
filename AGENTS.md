@@ -1,0 +1,42 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+- `index-node/` is the local HQ web UI + API server (Node.js, port `8799`).
+- `router/` is the Telegram router bot (aiogram) and extensions.
+- `bridge/` is the aiohttp service (Core4/Fruits/Tent/task routing, port `8080`, optional token auth).
+- `gas/` holds the Apps Script fallback HQ snapshot.
+- `python-warstack-bot/` and `python-firemap-bot/` are auxiliary bots.
+- `scripts/` and `systemd/` provide operational tooling and units.
+- `DOCS/` keeps project notes and cheatsheets.
+
+## Build, Test, and Development Commands
+- `cd index-node && npm install && npm start` starts the HQ server.
+- `cd index-node && npm run dev` runs the HQ server with nodemon.
+- `cd router && pip install -r requirements.txt && python router_bot.py` runs the Telegram router.
+- `cd bridge && python app.py --host 0.0.0.0 --port 8080` runs the bridge.
+- `./scripts/aos-doctor` or `./hubctl doctor` produces a multi-service health report.
+- `./router/routerctl status` and `./bridge/bridgectl health` check service status.
+
+## Coding Style & Naming Conventions
+- Follow component-specific guides in `index-node/AGENTS.md`, `router/AGENTS.md`, `bridge/AGENTS.md`, and `gas/AGENTS.md`.
+- Node.js code uses 2-space indentation and double quotes; keep pages lowercase with hyphenated names.
+- Keep handlers small and stateless in router/bridge code; return JSON errors on invalid payloads.
+- `index-node/menu.yaml` is the single source of truth for centre routes; do not hardcode URLs.
+
+## Testing Guidelines
+- No automated test suite is configured; rely on smoke checks.
+- Example checks: `curl http://127.0.0.1:8799/health` and `curl http://127.0.0.1:8080/bridge/core4/today`.
+- For public access, use Tailscale funnel on `/bridge` and set GAS `LAPTOP_URL` to `https://<host>.ts.net/bridge`.
+- Telegram Mini App URL: `https://ideapad.tail7a15d6.ts.net/tele.html` (BotFather domain: `https://ideapad.tail7a15d6.ts.net`).
+- Prefer `bridge/selftest.py` when port binding is unavailable.
+
+## Commit & Pull Request Guidelines
+- Commit messages are short and imperative (e.g., “Fix Door Hot List title parsing”).
+- PRs should include a concise summary, affected components/routes, and screenshots for UI changes.
+
+## Configuration & Secrets
+- Use `.env` files for the router and `systemd/alphaos-hub.env.example` for service env layout.
+- Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.
+- Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
+- Keep secrets out of git; document required vars in component READMEs or AGENTS.
+- To send messages/links/blocks to your phone, run `tele <text>` from the shell.

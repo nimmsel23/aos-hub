@@ -11,7 +11,8 @@ Use this when the session focus is **GAS HQ only**.
 
 ## Entry Points
 
-- `gas/alphaos_single_project.gs` (`doGet` + inline renderer)
+- `gas/entrypoints.gs` (`doGet` + `doPost`)
+- `gas/index_inline.gs` (inline renderer)
 - `gas/Index.html` (HQ UI)
 - `gas/Index_client.html` (HQ logic)
 - `gas/door.gs` / `gas/core4.gs` / `gas/fruits.gs`
@@ -34,7 +35,11 @@ Use this when the session focus is **GAS HQ only**.
 - `CHAT_ID`, `TELEGRAM_BOT_TOKEN`
 - `WARSTACK_TELEGRAM` (set `1` to enable push)
 - `WARSTACK_BOT_TOKEN`
-- `AOS_BRIDGE_URL`
+- `AOS_BRIDGE_URL` (preferred Bridge API base; include `/bridge`)
+- `AOS_BRIDGE_TOKEN` (optional, header auth)
+- `AOS_PUBLIC_ROOT_URL` (optional; host root without `/bridge`)
+- `WATCHDOG_BOT_TOKEN` (watchdog alerts/debug)
+- `WATCHDOG_CHAT_ID` (watchdog target)
 - `TICKTICK_TOKEN`
 - `TICKTICK_INBOX_PROJECT_ID`
 
@@ -42,3 +47,7 @@ Use this when the session focus is **GAS HQ only**.
 
 - Update `gas/README.md` if flows change.
 - Redeploy GAS WebApp.
+
+## Setup Helpers (Script Properties)
+
+- `setupCentreUrls_(urlMap)` sets missing centre URLs without overwriting existing props.

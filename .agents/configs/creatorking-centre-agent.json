@@ -1,0 +1,77 @@
+{
+  "name": "creatorking-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "medium",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "CreatorKing Centre (OUTSIDE AlphaOS - Creator King Assets Map)",
+  "description": "Specialist for CreatorKing Centre - a SEPARATE DIMENSION outside AlphaOS. Manages daily Creator King Assets Map via standalone GAS app (clasp deployed) with own Telegram bot (polling), daily 08:00 questions, 20:00 Gemini insights. NOT integrated into main AlphaOS flow.",
+  "components": {
+    "index_node": [
+      "Link only (not integrated)"
+    ],
+    "gas": [
+      "creatorking-standalone/ (clasp deployed):",
+      "  - Code.js (main logic + bot polling)",
+      "  - client.html (web UI)",
+      "  - creatorcentre.html (centre template)",
+      "  - questions.html (questions panel)",
+      "  - style.html (styles)",
+      "  - appsscript.json",
+      "  - .clasp.json (deployed)"
+    ],
+    "bots": [
+      "Own Telegram bot (polling, not webhook)",
+      "  - Daily 08:00 question via trigger",
+      "  - Reply-aware storage (last_question tracking)",
+      "  - 20:00 Gemini insights queue"
+    ],
+    "data": [
+      "Drive: AlphaOS/Centres/Alpha_CreatorKing/",
+      "  - creatorking_store.json (answers, users, assets, logs)"
+    ]
+  },
+  "triggers": [
+    "CreatorKing",
+    "Creator King Centre",
+    "CKA",
+    "Creator assets"
+  ],
+  "capabilities": [
+    "Develop CreatorKing standalone app (gas/creatorking-standalone/)",
+    "Debug Telegram bot (polling mode, daily triggers)",
+    "Implement question rotation + answer capture",
+    "Build Gemini AI analysis integration (20:00 insights)",
+    "Export assets to Drive markdown",
+    "Deploy via clasp",
+    "Debug helpers (ck_debugInfo, ck_pollOnceDebug, etc.)"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/DOCS/creatorking-centre.md",
+    "/home/alpha/aos-hub/gas/creatorking-standalone/"
+  ],
+  "references": [
+    "DOCS/creatorking-centre.md",
+    "gas/creatorking-standalone/Code.js"
+  ],
+  "test_prompts": [
+    "CreatorKing bot isn't sending daily 08:00 questions - debug polling",
+    "Add new Creator assets questions to creatorking_store.json",
+    "Gemini insights not sending at 20:00 - check trigger",
+    "Deploy creatorking-standalone updates via clasp"
+  ],
+  "notes": [
+    "⚠️ SEPARATE DIMENSION - NOT part of AlphaOS proper",
+    "Own Telegram bot with polling (not webhook)",
+    "Script Properties: TELEGRAM_BOT_TOKEN, TG_DEFAULT_CHAT_ID, GEMINI_API_KEY",
+    "Daily flow: 08:00 question → user replies → 20:00 Gemini insights",
+    "Reply-aware: bot tracks last_question to know which question user answered",
+    "Storage: Drive creatorking_store.json (not AlphaOS-Vault)",
+    ".clasp.json present (deployed via clasp)",
+    "Debug helpers: ck_debugInfo(), ck_pollOnceDebug(), ck_debugClearLast(), etc.",
+    "pollForUpdates runs every 5 minutes to check Telegram"
+  ]
+}

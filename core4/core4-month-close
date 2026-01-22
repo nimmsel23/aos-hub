@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CORE4_BIN="${CORE4_BIN:-$HOME/bin/core4}"
+
+if [[ ! -x "$CORE4_BIN" ]]; then
+  echo "core4-month-close: core4 not found: $CORE4_BIN" >&2
+  exit 127
+fi
+
+# Close previous month (run on the 1st).
+year="$(date +%Y)"
+month="$(date +%m)"
+
+if [[ "$month" == "01" ]]; then
+  year="$((year - 1))"
+  month="12"
+else
+  month="$(printf '%02d' "$((10#$month - 1))")"
+fi
+
+exec "$CORE4_BIN" finalize-month "${year}-${month}"

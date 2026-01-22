@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="aos"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+die() { echo "[$APP] $*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+$APP — AlphaOS frontdoor (stable bash overview)
+
+Usage:
+  $APP menu                         # gum menu (if available)
+  $APP sync <subcommand> [...]      # sync stack (runner + ui)
+  $APP router <subcommand> [...]    # router bot control (routerctl)
+  $APP alias <subcommand> [...]     # multi-shell alias manager (aos-alias)
+
+Sync subcommands:
+  $APP sync menu                    # gum UI (aos-syncctl)
+  $APP sync list                    # list targets
+  $APP sync run <target> [...]      # run sync now (aos-sync)
+  $APP sync enable <target> --at HH:MM
+  $APP sync disable <target>
+  $APP sync status <target>
+  $APP sync logs <target>
+  $APP sync doctor <target>
+
+Examples:
+  $APP menu
+  $APP sync menu
+  $APP sync list
+  $APP sync enable voice --at 03:30
+  $APP router status
+  $APP alias ui
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+# ---- gum top menu ----
+menu() {
+  have gum || die "gum not found. Install gum OR use: aos sync / aos router / aos alias"
+
+  local choice
+  choice="$(printf "%s\n" \
+    "Sync: manage targets (aos-syncctl)" \
+    "Sync: list targets" \
+    "Router: control bot (routerctl)" \
+    "Aliases: manage (aos-alias)" \
+    "Help" \
+    "Quit" \
+    | gum choose --header "AlphaOS — aos")"
+
+  case "$choice" in
+    "Sync: manage targets (aos-syncctl)")
+      exec aos-syncctl
+      ;;
+    "Sync: list targets")
+      exec aos-sync list
+      ;;
+    "Router: control bot (routerctl)")
+      exec routerctl
+      ;;
+    "Aliases: manage (aos-alias)")
+      exec aos-alias ui
+      ;;
+    "Help") usage ;;
+    "Quit") exit 0 ;;
+    *) exit 0 ;;
+  esac
+}
+
+# ---- sync wrapper ----
+sync_cmd() {
+  local sub="${1:-}"; shift || true
+
+  case "$sub" in
+    menu|ui)
+      have aos-syncctl || die "aos-syncctl not found in PATH"
+      exec aos-syncctl "$@"
+      ;;
+    list)
+      # list targets = list *.env files
+      local dir="${AOS_DOTFILES:-$HOME/.dotfiles}/config/aos/sync.d"
+      if [[ -d "$dir" ]]; then
+        (cd "$dir" && ls -1 *.env 2>/dev/null | sed 's/\.env$//' || true)
+      fi
+      ;;
+    run|enable|disable|status|logs|doctor)
+      have aos-sync || die "aos-sync not found in PATH"
+      exec aos-sync "$sub" "$@"
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      die "Unknown sync subcommand: $sub (try: aos sync help)"
+      ;;
+  esac
+}
+
+router_cmd() {
+  have routerctl || die "routerctl not found in PATH"
+  exec routerctl "$@"
+}
+
+alias_cmd() {
+  have aos-alias || die "aos-alias not found in PATH"
+  exec aos-alias "${@:-ui}"
+}
+
+case "$cmd" in
+  menu) menu ;;
+  sync) sync_cmd "$@" ;;
+  router) router_cmd "$@" ;;
+  alias) alias_cmd "$@" ;;
+  help|-h|--help|"") usage ;;
+  *)
+    echo "[$APP] Unknown command: $cmd" >&2
+    usage
+    exit 1
+    ;;
+esac

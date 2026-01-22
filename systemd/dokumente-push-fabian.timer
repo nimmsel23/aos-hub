@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Dokumente push to fabian
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+Persistent=true
+Unit=dokumente-push-fabian.service
+
+[Install]
+WantedBy=timers.target

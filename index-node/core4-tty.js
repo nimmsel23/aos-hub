@@ -348,7 +348,9 @@ class Core4TrackerTTY {
     const meta = this.subtaskMeta(subtask);
     if (!meta) return;
 
+    const domainTag = String(meta.domain || "").toLowerCase();
     const tags = [meta.label];
+    if (domainTag) tags.push(domainTag);
 
     const task = this.findTaskwarriorTask(tags);
     if (value >= 1) {

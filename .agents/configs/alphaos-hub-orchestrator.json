@@ -1,0 +1,80 @@
+{
+  "name": "alphaos-hub-orchestrator",
+  "version": "1.0.0",
+  "category": "meta",
+  "priority": "critical",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Overall aos-hub coordination (menu.yaml, server health, cross-centre routing, clasp deployments)",
+  "description": "Meta-orchestrator for complete aos-hub ecosystem. Coordinates all centres, manages menu.yaml (Single Source of Truth), monitors service health, handles clasp deployments, ensures API contracts between components. The general that coordinates all specialists.",
+  "components": {
+    "all": [
+      "index-node/ (full stack)",
+      "gas/ (full stack)",
+      "router/ (full stack)",
+      "bridge/ (full stack)",
+      "python-*-bot/ (all bots)",
+      "systemd/ (all services)",
+      "scripts/ (all scripts)"
+    ],
+    "config": [
+      "index-node/menu.yaml (Single Source of Truth for centre routes)",
+      "router/config.yaml (extension configs)",
+      "bridge/.env (bridge config)",
+      "gas/appsscript.json (GAS manifest)",
+      "gas/*-standalone/.clasp.json (standalone deployments)"
+    ]
+  },
+  "triggers": [
+    "aos-hub not working",
+    "menu.yaml",
+    "Centre routing",
+    "Server health",
+    "clasp deployment",
+    "Hub architecture",
+    "Cross-centre issue"
+  ],
+  "capabilities": [
+    "Coordinate all centre agents",
+    "Manage menu.yaml (centre route registry)",
+    "Monitor service health (index-node, bridge, router, bots)",
+    "Debug cross-centre data flow",
+    "Handle clasp deployments (standalone apps)",
+    "Ensure API contracts between components",
+    "Orchestrate multi-component features",
+    "Run aos-doctor health checks"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "Task"],
+  "data_sources": [
+    "/home/alpha/aos-hub/CLAUDE.md",
+    "/home/alpha/aos-hub/AGENTS.md",
+    "/home/alpha/aos-hub/index-node/menu.yaml",
+    "/home/alpha/aos-hub/scripts/aos-doctor"
+  ],
+  "references": [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "index-node/menu.yaml"
+  ],
+  "dependencies": [
+    "All centre agents",
+    "All infrastructure agents"
+  ],
+  "test_prompts": [
+    "Run complete aos-hub health check",
+    "menu.yaml centre routes not loading - debug",
+    "Deploy fruits-standalone updates via clasp",
+    "Cross-centre feature: War Stack Hits → Fire Map integration"
+  ],
+  "notes": [
+    "Meta-orchestrator coordinates all specialists",
+    "menu.yaml is Single Source of Truth for centre routes",
+    "Never hardcode URLs in components (always use menu.yaml)",
+    "aos-doctor provides unified health report",
+    "clasp used for standalone deployments (fruits, creatorking, future: door, tent)",
+    "Understands complete Hub-and-Spoke architecture",
+    "Delegates to specialist agents for component-specific work",
+    "Ensures data flow integrity across all 4 layers (PC, Cloud, Data, Notification)"
+  ]
+}

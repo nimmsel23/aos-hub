@@ -1,0 +1,113 @@
+{
+  "name": "game-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "critical",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Game Centre development + operations (Strategic Maps: Frame→IPW→Freedom→Focus→Fire)",
+  "description": "Complete specialist for Game Centre ecosystem. Manages strategic navigation through Map hierarchy (Frame→IPW→Freedom→Focus→Fire→Daily Game). Understands index-node, gas, python-firemap-bot, and Map cascade principles.",
+  "components": {
+    "index_node": [
+      "/api/game/* (chapters, export)",
+      "public/game/fire.html",
+      "public/game/tent.html",
+      "public/game/*.js|css"
+    ],
+    "gas": [
+      "game_main.gs (entry)",
+      "game_fire.gs (Fire Map)",
+      "game_focus.gs (Focus Map)",
+      "game_frame.gs (Frame Map)",
+      "game_freedom.gs (Freedom Map)",
+      "game_tent.gs (General's Tent)",
+      "game_shared.gs (shared utilities)",
+      "Game_Fire_*.html",
+      "Game_Focus_*.html",
+      "Game_Frame_*.html",
+      "Game_Freedom_*.html",
+      "Game_Tent_*.html"
+    ],
+    "bots": [
+      "python-firemap-bot/firemap_bot.py (Fire Map snapshots from Taskwarrior)",
+      "router/extensions/firemap_commands.py (Telegram trigger)"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Game/Frame/ (Where am I now?)",
+      "~/AlphaOS-Vault/Game/IPW/ (10-year Ideal Parallel World)",
+      "~/AlphaOS-Vault/Game/Freedom/ (Annual vision)",
+      "~/AlphaOS-Vault/Game/Focus/ (Monthly mission)",
+      "~/AlphaOS-Vault/Game/Fire/ (Weekly war - 4×4 Hits)",
+      "~/AlphaOS-Vault/Alpha_Tent/ (Weekly summaries)"
+    ]
+  },
+  "triggers": [
+    "Game Centre",
+    "Frame Map",
+    "Fire Map",
+    "Freedom Map",
+    "Focus Map",
+    "Strategic Maps",
+    "General's Tent",
+    "IPW",
+    "Map cascade",
+    "Where am I now"
+  ],
+  "capabilities": [
+    "Develop Game Centre web UI (index-node + gas)",
+    "Build Map creation interfaces (Frame/Freedom/Focus/Fire)",
+    "Implement Map cascade logic (Frame change → update downstream)",
+    "Debug python-firemap-bot (daily/weekly/listen modes)",
+    "Create General's Tent weekly review tools",
+    "Export Maps to vault markdown",
+    "Integrate Fire Map with War Stacks (4 Hits)",
+    "Build Taskwarrior → Fire Map snapshot pipeline",
+    "Extend router firemap_commands extension"
+  ],
+  "tools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Grep",
+    "Glob",
+    "Task"
+  ],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md",
+    "/home/alpha/aos-hub/python-firemap-bot/AGENTS.md",
+    "/home/alpha/aos-hub/router/AGENTS.md",
+    "/home/alpha/aos-hub/DOCS/gas/fire.md",
+    "/home/alpha/aos-hub/DOCS/gas/frame.md",
+    "/home/alpha/aos-hub/DOCS/gas/freedom.md",
+    "/home/alpha/aos-hub/DOCS/gas/focus.md",
+    "/home/alpha/aos-hub/DOCS/gas/tent.md"
+  ],
+  "references": [
+    "index-node/AGENTS.md",
+    "gas/AGENTS.md",
+    "python-firemap-bot/AGENTS.md"
+  ],
+  "dependencies": [
+    "door-centre-agent (War Stacks → Fire Map integration)",
+    "alphaos-router-system-agent (firemap_commands extension)"
+  ],
+  "test_prompts": [
+    "Show me the Map hierarchy and cascade principle (Frame determines downstream)",
+    "python-firemap-bot isn't sending snapshots - debug the daily/weekly modes",
+    "Frame Map changed - what downstream Maps need updating?",
+    "Integrate War Stack Hits into Fire Map (4×4 weekly Hits)",
+    "Build General's Tent weekly review interface"
+  ],
+  "notes": [
+    "Maps Hierarchy: Frame → IPW → Freedom (annual) → Focus (monthly) → Fire (weekly) → Daily Game",
+    "Cascade Principle: Frame change affects all downstream Maps (must check and update)",
+    "Fire Map = 4 War Stacks × 4 Hits each = 16 weekly Hits",
+    "python-firemap-bot has 3 modes: daily, weekly, listen",
+    "General's Tent = weekly review (consolidates all domains)",
+    "game_shared.gs contains shared utilities across Game Centre",
+    "IPW = Ideal Parallel World (10-year vision per domain)"
+  ]
+}

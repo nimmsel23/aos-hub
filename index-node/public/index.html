@@ -18,10 +18,37 @@
       <div class="doc-grid" id="docGrid"></div>
     </aside>
     <main class="menu-panel">
+      <section class="core4-panel">
+        <div class="core4-head">
+          <div class="core4-title">Core4 Daily</div>
+          <div class="core4-total" id="core4Total">0.0/4.0</div>
+        </div>
+        <div class="core4-grid" id="core4Grid"></div>
+      </section>
       <div class="grid" id="menuGrid">
         <div class="loading">Loading…</div>
       </div>
     </main>
+    <aside class="gpt-panel">
+      <div class="gpt-title">GPT</div>
+      <div class="gpt-grid" id="gptGrid">
+        <div class="loading">Loading…</div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="core4-modal" id="core4Modal" aria-hidden="true">
+    <div class="core4-modal-card">
+      <div class="core4-modal-head">
+        <div class="core4-modal-title" id="core4ModalTitle">Core4 Journal</div>
+        <button class="core4-modal-close" id="core4ModalClose" type="button">x</button>
+      </div>
+      <textarea id="core4JournalInput" placeholder="Quick journal note..."></textarea>
+      <div class="core4-modal-actions">
+        <button id="core4JournalDone" type="button">Done</button>
+        <span class="core4-journal-status" id="core4JournalStatus"></span>
+      </div>
+    </div>
   </div>
 
 </body>

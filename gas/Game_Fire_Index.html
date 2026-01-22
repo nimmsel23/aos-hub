@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Fire Maps – Daily & Weekly</title>
+  <?!= include('Game_Fire_Style'); ?>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-title">FIRE MAPS</div>
+    <div class="hero-subtitle">Daily & Weekly Strict To-Do Lists</div>
+    <div id="token-status" class="token-status">Token: —</div>
+  </header>
+
+  <section class="controls">
+    <div class="token-form">
+      <input id="token-input" type="text" placeholder="TickTick Token">
+      <input id="project-input" type="text" placeholder="Project ID (z.B. inbox)">
+      <button class="primary" onclick="saveToken()">Token speichern</button>
+    </div>
+    <div class="token-hint">Token wird projektweit gespeichert · Daily = heute, Weekly = Mo–So der aktuellen Woche.</div>
+    <div class="control-row">
+      <button onclick="refreshDaily()">Daily neu laden</button>
+      <button onclick="refreshWeekly()">Weekly neu laden</button>
+    </div>
+  </section>
+
+  <section class="tabs">
+    <button id="tab-daily" class="tab active" onclick="switchTab('daily')">Daily Fire Map</button>
+    <button id="tab-weekly" class="tab" onclick="switchTab('weekly')">Weekly Fire Map</button>
+  </section>
+
+  <!-- Legacy-style capture form so Fire entries können ohne bestehende TickTick Tasks gezündet werden -->
+  <section class="capture">
+    <header class="map-header">
+      <div class="map-title">Fire Capture (Weekly + Daily Eingabe)</div>
+      <div class="map-date subtle">Woche: <span id="capture-week">—</span></div>
+      <div class="map-date">Entry: <input id="capture-date" type="date"></div>
+    </header>
+    <input id="week" type="hidden" value="">
+    <div class="capture-grid">
+      <div class="capture-panel">
+        <h2>BODY</h2>
+        <textarea id="body_weekly" placeholder="Structured Blaze (4 Strikes):\n- 3x Krafttraining\n- 1x Wandern"></textarea>
+        <textarea id="body_daily" placeholder="Daily Ignition: z.B. Sauna / Mobility / Schlaf"></textarea>
+        <button onclick="saveDomain('Body')">Ignite</button>
+      </div>
+      <div class="capture-panel">
+        <h2>BEING</h2>
+        <textarea id="being_weekly" placeholder="Weekly Strikes (4):\n- Dantian\n- Memoirs"></textarea>
+        <textarea id="being_daily" placeholder="Daily Ignition: Meditation / Voice Log"></textarea>
+        <button onclick="saveDomain('Being')">Ignite</button>
+      </div>
+      <div class="capture-panel">
+        <h2>BALANCE</h2>
+        <textarea id="balance_weekly" placeholder="Weekly Strikes (4):\n- Social\n- Headman"></textarea>
+        <textarea id="balance_daily" placeholder="Daily Ignition: People / Partner / Integration"></textarea>
+        <button onclick="saveDomain('Balance')">Ignite</button>
+      </div>
+      <div class="capture-panel">
+        <h2>BUSINESS</h2>
+        <textarea id="business_weekly" placeholder="Structured Blaze (4):\n- Vitaltrainer\n- Creator King"></textarea>
+        <textarea id="business_daily" placeholder="Daily Ignition: Lernen / Shipping / Outreach"></textarea>
+        <button onclick="saveDomain('Business')">Ignite</button>
+      </div>
+    </div>
+    <div class="capture-note">Ignite erstellt ein Markdown-Log (Journal/Review), protokolliert im Sheet und schickt Weekly/Daily Strikes nach TickTick.</div>
+  </section>
+
+  <section id="daily-map" class="map visible">
+    <header class="map-header">
+      <div class="map-title">Daily Fire Map</div>
+      <div class="map-date" id="daily-date">—</div>
+    </header>
+    <div id="daily-content" class="domains"></div>
+    <div id="daily-empty" class="empty">Keine heutigen Tasks gefunden.</div>
+  </section>
+
+  <section id="weekly-map" class="map">
+    <header class="map-header">
+      <div class="map-title">Weekly Fire Map</div>
+      <div class="map-date" id="weekly-week">—</div>
+    </header>
+    <div id="weekly-content" class="domains"></div>
+    <div id="weekly-empty" class="empty">Keine Tasks für diese Woche gefunden.</div>
+    <div id="weekly-calendar" class="week-grid"></div>
+    <div id="weekly-gcal" class="gcal-embed hidden">
+      <iframe id="weekly-gcal-frame" title="GCal Week" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <script>
+    window.FIRE_GCAL_URL = <?= JSON.stringify(gcalUrl || '') ?>;
+  </script>
+  <?!= include('Game_Fire_Client'); ?>
+</body>
+</html>

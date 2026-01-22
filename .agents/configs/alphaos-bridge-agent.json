@@ -1,0 +1,64 @@
+{
+  "name": "alphaos-bridge-agent",
+  "version": "1.0.0",
+  "category": "infrastructure",
+  "priority": "high",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Bridge service operations (bridge/app.py, Port 8080)",
+  "description": "Specialist for aiohttp bridge service. Manages Tailscale↔GAS connection, Core4/Fruits/Tent/Task/WarStack endpoints, queue management, sync operations. Non-throwing handler patterns.",
+  "components": {
+    "bridge": [
+      "app.py (aiohttp server)",
+      "bridgectl (CLI wrapper)",
+      "selftest.py (in-process tests)",
+      ".env (vault dirs, GAS webhook, tokens)"
+    ],
+    "endpoints": [
+      "/health",
+      "/bridge/core4/* (log, today, week)",
+      "/bridge/fruits/answer",
+      "/bridge/tent/summary",
+      "/bridge/task/* (operation, execute)",
+      "/bridge/warstack/draft",
+      "/bridge/queue/flush",
+      "/bridge/sync/* (push, pull)"
+    ],
+    "systemd": [
+      "aos-bridge.service"
+    ]
+  },
+  "triggers": [
+    "Bridge not working",
+    "Bridge 8080",
+    "Tailscale connection",
+    "Bridge sync",
+    "Bridge queue"
+  ],
+  "capabilities": [
+    "Debug bridge endpoints",
+    "Handle queue flush operations",
+    "Manage Tailscale↔GAS connection",
+    "Implement new bridge endpoints",
+    "Debug sync operations (rclone)",
+    "Run selftest when port unavailable"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/bridge/AGENTS.md",
+    "/home/alpha/aos-hub/bridge/README.md"
+  ],
+  "test_prompts": [
+    "Bridge /bridge/core4/log returning 400 - debug invalid payload",
+    "Queue not flushing - check bridgectl flush",
+    "Tailscale connection to GAS failing - debug"
+  ],
+  "notes": [
+    "Non-throwing handlers (never crash on bad input)",
+    "bridgectl: health, flush, debug, tailscale commands",
+    "selftest.py for verification when port blocked",
+    "/bridge/queue/flush is POST-only (GET returns 405)",
+    "Tailscale enables remote GAS access to bridge"
+  ]
+}

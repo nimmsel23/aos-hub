@@ -1,0 +1,121 @@
+   <!-- WAR STACK -->
+    <div id="panel-warstack" class="tool-panel">
+      <h2>War Stack Generator</h2>
+      <p>
+        Definiere Kontext + 4 Hits.<br>
+        Ein Hit ist ein Schlag ins Bewusstsein, der einen klaren <strong>Fact</strong> hinterlässt.<br>
+        Jeder Hit besteht aus: Fact (Result), Obstacle, Strike (Action) &amp; Responsibility.
+      </p>
+      <p><small>Autosave läuft im Hintergrund (Drafts → 0-Drafts).</small></p>
+      <div id="warstack-step-indicator" style="margin:10px 0;color:#9aa3c0;">
+        Room 1/5: Door
+      </div>
+
+      <form id="warform">
+        <div class="war-room" data-step="1">
+          <h3>Room 1: Door</h3>
+          <label for="wtitle">Title *</label>
+          <input id="wtitle" required placeholder="Titel des War Stack">
+
+          <label for="wdomain">Domain *</label>
+          <select id="wdomain" required>
+            <option value="">Domain wählen</option>
+            <option>Body</option>
+            <option>Being</option>
+            <option>Balance</option>
+            <option>Business</option>
+          </select>
+
+          <label for="wsub">Sub-Domain</label>
+          <input id="wsub" placeholder="Sub-Domain">
+
+          <label for="wdoor">Domino Door *</label>
+          <textarea id="wdoor" required placeholder="Welche eine Door wird alles ins Rollen bringen?"></textarea>
+        </div>
+
+        <div class="war-room" data-step="2">
+          <h3>Room 2: Trigger &amp; Narrative</h3>
+          <label for="wtrigger">Trigger *</label>
+          <textarea id="wtrigger" required placeholder="Welche Person / welches Event hat diese Door ausgelöst?"></textarea>
+
+          <label for="wnarr">Narrative *</label>
+          <textarea id="wnarr" required placeholder="Welche Story erzählst du dir über diese Door?"></textarea>
+
+          <label for="wval">Validation *</label>
+          <textarea id="wval" required placeholder="Warum ist es notwendig, diese Door zu öffnen?"></textarea>
+
+          <label for="wimpact">Impact *</label>
+          <textarea id="wimpact" required placeholder="Wie verändert sich dein Leben / Business, wenn die Door aufgeht?"></textarea>
+
+          <label for="wcons">Consequences *</label>
+          <textarea id="wcons" required placeholder="Was passiert, wenn die Door geschlossen bleibt?"></textarea>
+        </div>
+
+        <div class="war-room" data-step="3">
+          <h3>Room 3: Hits (4)</h3>
+          <div class="hit">
+            <strong>Hit 1</strong>
+            <textarea id="h1f" placeholder="Fact (Result deines Strikes)"></textarea>
+            <textarea id="h1o" placeholder="Obstacle (Was steht im Weg?)"></textarea>
+            <textarea id="h1s" placeholder="Strike (Welche Aktion setzt du?)"></textarea>
+            <input id="h1r" placeholder="Responsibility (Wer trägt sie?)">
+          </div>
+
+          <div class="hit">
+            <strong>Hit 2</strong>
+            <textarea id="h2f" placeholder="Fact (Result deines Strikes)"></textarea>
+            <textarea id="h2o" placeholder="Obstacle (Was steht im Weg?)"></textarea>
+            <textarea id="h2s" placeholder="Strike (Welche Aktion setzt du?)"></textarea>
+            <input id="h2r" placeholder="Responsibility (Wer trägt sie?)">
+          </div>
+
+          <div class="hit">
+            <strong>Hit 3</strong>
+            <textarea id="h3f" placeholder="Fact (Result deines Strikes)"></textarea>
+            <textarea id="h3o" placeholder="Obstacle (Was steht im Weg?)"></textarea>
+            <textarea id="h3s" placeholder="Strike (Welche Aktion setzt du?)"></textarea>
+            <input id="h3r" placeholder="Responsibility (Wer trägt sie?)">
+          </div>
+
+          <div class="hit">
+            <strong>Hit 4</strong>
+            <textarea id="h4f" placeholder="Fact (Result deines Strikes)"></textarea>
+            <textarea id="h4o" placeholder="Obstacle (Was steht im Weg?)"></textarea>
+            <textarea id="h4s" placeholder="Strike (Welche Aktion setzt du?)"></textarea>
+            <input id="h4r" placeholder="Responsibility (Wer trägt sie?)">
+          </div>
+        </div>
+
+        <div class="war-room" data-step="4">
+          <h3>Room 4: Insights &amp; Lessons</h3>
+          <label for="wins">Insights *</label>
+          <textarea id="wins" required placeholder="Welche Erkenntnisse sind dir klar geworden?"></textarea>
+
+          <label for="wless">Lessons Learned *</label>
+          <textarea id="wless" required placeholder="Was ist die wichtigste Lesson aus diesem War Stack?"></textarea>
+        </div>
+
+        <div class="war-room" data-step="5">
+          <h3>Room 5: Commit</h3>
+          <p>
+            Prüfe deine Inputs. Wenn du abschließt, werden Markdown + Taskwarrior
+            erstellt und der Draft wird gelöscht.
+          </p>
+        </div>
+
+        <div class="warstack-nav" style="display:flex;gap:12px;align-items:center;margin-top:12px;">
+          <button type="button" id="war-prev">Zurück</button>
+          <button type="button" id="war-next">Weiter</button>
+          <button type="submit" id="war-submit">War Stack generieren &amp; speichern</button>
+        </div>
+      </form>
+
+      <pre id="waroutput" style="display:none;"></pre>
+      <button type="button" onclick="copyFromPre('waroutput')">War Stack kopieren</button>
+    </div>
+
+    <style>
+      .war-room { display: none; }
+      .war-room.is-active { display: block; }
+      .warstack-nav button { margin-top: 0; }
+    </style>

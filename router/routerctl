@@ -4,7 +4,7 @@ set -euo pipefail
 # ============================================================
 # routerctl — AlphaOS Router + Heartbeat Manager (Arch/yay/gum)
 # ============================================================
-# Source of Truth: ~/.dotfiles/bin/routerctl
+# Source of Truth: this file (repo-local). Optional: install a symlink into PATH.
 #
 # Changelog:
 # - 0.3.0: Router v2 (Dumb Core + Extensions), config.yaml support
@@ -16,20 +16,21 @@ ROUTERCTL_VERSION="0.3.0"
 # =========================
 # Repo paths
 # =========================
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 
 # =========================
 # Router (aiogram bot)
 # =========================
 ROUTER_NAME="${ROUTER_NAME:-alphaos-router}"
-ROUTER_DIR="${ROUTER_DIR:-$PWD}"
+ROUTER_DIR="${ROUTER_DIR:-$SCRIPT_DIR}"
 PY_ENTRY="${PY_ENTRY:-router_bot.py}"
 
 USE_VENV="${USE_VENV:-0}"           # 0 = system python, 1 = venv (optional)
 VENV_DIR="${VENV_DIR:-$ROUTER_DIR/.venv}"
 
 ENV_FILE="${ENV_FILE:-$ROUTER_DIR/.env}"
+AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
+TELE_ENV_FILE="${TELE_ENV_FILE:-$HOME/.env/tele.env}"
 SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 UNIT_FILE="$SYSTEMD_DIR/$ROUTER_NAME.service"
 
@@ -37,7 +38,7 @@ UNIT_FILE="$SYSTEMD_DIR/$ROUTER_NAME.service"
 # Heartbeat (fixed GAS WebApp URL)
 # =========================
 HB_NAME="${HB_NAME:-alphaos-heartbeat}"
-HB_URL="${HB_URL:-https://script.google.com/macros/s/AKfycbx2aqTxCVyyIuXG5qTI_OgUybwGUX8f0ftufI6ZzRqbG66p137XJ5kXEMbg9IF-_PXV/exec}"
+HB_URL="${HB_URL:-https://script.google.com/macros/s/AKfycbysk1LEX9r05qiKKvNevayAc8OSESqItpWDbKhepBJjOdEcx8Cav4MGVqyCXsjcv9Chmw/exec}"
 HB_HOST="${HB_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 HB_BOOT_DELAY="${HB_BOOT_DELAY:-30s}"
 HB_INTERVAL="${HB_INTERVAL:-2min}"
@@ -70,6 +71,50 @@ abs_path() {
   [[ "$p" = /* ]] && echo "$p" || echo "$PWD/$p"
 }
 
+install_path_hint() {
+  local target="$1"
+  local dir; dir="$(dirname -- "$target")"
+  ui_info "Installed: $target"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *)
+      ui_info "Note: $dir is not in PATH. Add to shell rc, e.g.:"
+      ui_info "  export PATH=\"$dir:\$PATH\""
+      ;;
+  esac
+}
+
+install_cli() {
+  local bin_dir="${ROUTERCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/routerctl"
+  local src="$SCRIPT_DIR/routerctl"
+  mkdir -p "$bin_dir" 2>/dev/null || {
+    ui_err "Cannot create bin dir: $bin_dir"
+    ui_info "Set ROUTERCTL_BIN_DIR to a writable directory, e.g.:"
+    ui_info "  ROUTERCTL_BIN_DIR=$ROUTER_DIR/.bin ./routerctl install-cli"
+    exit 1
+  }
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    ui_err "Refusing to overwrite non-symlink: $dst"
+    ui_info "Move it away first, then re-run: routerctl install-cli"
+    exit 1
+  fi
+  ln -sf "$src" "$dst"
+  ui_ok "Symlinked routerctl into PATH."
+  install_path_hint "$dst"
+}
+
+uninstall_cli() {
+  local bin_dir="${ROUTERCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/routerctl"
+  if [[ -L "$dst" ]]; then
+    rm -f "$dst"
+    ui_ok "Removed: $dst"
+    return 0
+  fi
+  ui_info "Nothing to remove at: $dst"
+}
+
 system_python() {
   local py=""
   py="$(command -v python 2>/dev/null || true)"
@@ -94,12 +139,23 @@ choose() {
 }
 
 # Normalize defaults so `routerctl` works from any CWD.
-if [[ ! -f "$ROUTER_DIR/$PY_ENTRY" && "$ROUTER_DIR" == "$PWD" && -f "$DOTFILES_DIR/dev/alphaos-router/$PY_ENTRY" ]]; then
-  ROUTER_DIR="$DOTFILES_DIR/dev/alphaos-router"
-fi
 ROUTER_DIR="$(abs_path "$ROUTER_DIR")"
 VENV_DIR="$(abs_path "${VENV_DIR:-$ROUTER_DIR/.venv}")"
 ENV_FILE="$(abs_path "${ENV_FILE:-$ROUTER_DIR/.env}")"
+[[ -n "${AOS_ENV_FILE:-}" ]] && AOS_ENV_FILE="$(abs_path "${AOS_ENV_FILE:-$HOME/.env/aos.env}")"
+TELE_ENV_FILE="$(abs_path "${TELE_ENV_FILE:-$HOME/.env/tele.env}")"
+if [[ -d "$ENV_FILE" ]]; then
+  if [[ -f "$ENV_FILE/aos.env" ]]; then
+    ENV_FILE="$ENV_FILE/aos.env"
+  elif [[ -f "$ENV_FILE/router.env" ]]; then
+    ENV_FILE="$ENV_FILE/router.env"
+  else
+    ENV_FILE="$ENV_FILE/router.env"
+  fi
+fi
+if [[ -z "${ROUTER_CONFIG:-}" && -f "$ROUTER_DIR/config.yaml" ]]; then
+  ROUTER_CONFIG="$ROUTER_DIR/config.yaml"
+fi
 
 # =========================
 # Arch deps
@@ -152,10 +208,23 @@ python_exec() {
 # =========================
 write_env_file() {
   if [[ -f "$ENV_FILE" ]]; then return 0; fi
+  mkdir -p "$(dirname -- "$ENV_FILE")"
   cat >"$ENV_FILE" <<'EOF'
 # Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=
+# TELEGRAM_BOT_TOKEN=   # optional if TELE_ENV_FILE already provides it (e.g. ~/.env/tele.env)
 ALLOWED_USER_ID=
+
+# Fruits daily overrides (optional)
+# FRUITS_API_BASE=http://127.0.0.1:8799
+# FRUITS_WEB_URL=http://127.0.0.1:8799/facts
+# FRUITS_DEFAULT_CHAT_ID=
+# FRUITS_DAILY_HOUR=7
+# FRUITS_DAILY_MINUTE=0
+# FRUITS_TIMEZONE=Europe/Vienna
+
+# Bridge health overrides (optional)
+# BRIDGE_HEALTH_URL=http://100.76.197.55:8080/health
+# BRIDGE_HEALTH_TIMEOUT=3
 
 # Router Configuration (optional - config.yaml is preferred)
 # ROUTER_CONFIG=/path/to/custom/config.yaml
@@ -170,6 +239,14 @@ write_unit() {
   ensure_venv
 
   local py; py="$(python_exec)"
+  local tele_env_line=""
+  local aos_env_line=""
+  if [[ -n "${AOS_ENV_FILE:-}" && "$AOS_ENV_FILE" != "$ENV_FILE" ]]; then
+    aos_env_line="EnvironmentFile=-$AOS_ENV_FILE"
+  fi
+  if [[ -n "${TELE_ENV_FILE:-}" && "$TELE_ENV_FILE" != "$ENV_FILE" ]]; then
+    tele_env_line="EnvironmentFile=-$TELE_ENV_FILE"
+  fi
 
   cat >"$UNIT_FILE" <<EOF
 [Unit]
@@ -180,7 +257,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$ROUTER_DIR
+$aos_env_line
+$tele_env_line
 EnvironmentFile=$ENV_FILE
+${ROUTER_CONFIG:+Environment=ROUTER_CONFIG=$ROUTER_CONFIG}
 ExecStart=$py $PY_ENTRY
 Restart=on-failure
 RestartSec=2
@@ -198,6 +278,44 @@ EOF
 
   systemctl --user daemon-reload
   ui_ok "Wrote unit: $UNIT_FILE"
+}
+
+unit_candidates() {
+  printf '%s\n' "$UNIT_FILE"
+}
+
+unit_choose_path() {
+  local paths=()
+  mapfile -t paths < <(unit_candidates)
+  if [[ ${#paths[@]} -eq 1 ]]; then
+    echo "${paths[0]}"
+    return
+  fi
+  if has_gum; then
+    gum choose "${paths[@]}"
+  else
+    ui_info "Select unit file:"
+    select p in "${paths[@]}"; do echo "$p"; break; done
+  fi
+}
+
+unit_edit() {
+  local path
+  path="$(unit_choose_path)"
+  if [[ ! -f "$path" ]]; then
+    ui_info "Unit not found; creating: $UNIT_FILE"
+    write_unit
+    path="$UNIT_FILE"
+  fi
+  "${EDITOR:-nano}" "$path"
+  systemctl --user daemon-reload
+  ui_ok "Reloaded systemd user daemon."
+}
+
+unit_path() {
+  local path
+  path="$(unit_choose_path)"
+  ui_info "Unit path: $path"
 }
 
 start_svc()   { systemctl --user start    "$ROUTER_NAME.service"; ui_ok "Router started."; }
@@ -310,6 +428,8 @@ doctor() {
   ui_info "PY_ENTRY   : $PY_ENTRY"
   ui_info "USE_VENV   : $USE_VENV"
   ui_info "ENV_FILE   : $ENV_FILE"
+  ui_info "AOS_ENV    : ${AOS_ENV_FILE:-}"
+  ui_info "TELE_ENV   : $TELE_ENV_FILE"
   ui_info "UNIT_FILE  : $UNIT_FILE"
 
   ui_info "HB_NAME    : $HB_NAME"
@@ -328,6 +448,78 @@ doctor() {
   if [[ "$USE_VENV" == "1" ]]; then
     ensure_venv
     [[ -x "$VENV_DIR/bin/python" ]] || { ui_err "venv python missing"; exit 1; }
+  fi
+
+  # =========================
+  # Router-specific checks
+  # =========================
+  env_has_var() {
+    local file="$1"
+    local key="$2"
+    [[ -f "$file" ]] || return 1
+    grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}=[[:space:]]*[^[:space:]#]+" "$file"
+  }
+
+  if [[ -e "$ENV_FILE" && ! -f "$ENV_FILE" ]]; then
+    ui_err "ENV_FILE exists but is not a file: $ENV_FILE"
+  elif [[ -f "$ENV_FILE" ]]; then
+    ui_ok ".env present."
+  else
+    ui_info ".env missing (run: routerctl edit-env)"
+  fi
+
+  local token_source=""
+  if env_has_var "$ENV_FILE" "TELEGRAM_BOT_TOKEN"; then
+    token_source="$ENV_FILE"
+  elif [[ -n "${AOS_ENV_FILE:-}" ]] && env_has_var "$AOS_ENV_FILE" "TELEGRAM_BOT_TOKEN"; then
+    token_source="$AOS_ENV_FILE"
+  elif env_has_var "$TELE_ENV_FILE" "TELEGRAM_BOT_TOKEN"; then
+    token_source="$TELE_ENV_FILE"
+  fi
+  if [[ -n "$token_source" ]]; then
+    ui_ok "TELEGRAM_BOT_TOKEN set (from: $token_source)"
+  else
+    ui_info "TELEGRAM_BOT_TOKEN missing/empty (set in: $ENV_FILE or $TELE_ENV_FILE)"
+  fi
+
+  local cfg_path=""
+  if [[ -n "${ROUTER_CONFIG:-}" ]]; then
+    cfg_path="$(abs_path "$ROUTER_CONFIG")"
+  else
+    cfg_path="$ROUTER_DIR/config.yaml"
+  fi
+
+  if [[ -f "$cfg_path" ]]; then
+    ui_ok "Config present: $cfg_path"
+    # Best-effort parse without yaml deps.
+    local index_base="" index_path=""
+    index_base="$(grep -E '^[[:space:]]*base:[[:space:]]*' "$cfg_path" | head -n 1 | sed -E "s/^[[:space:]]*base:[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^['\"]//; s/['\"]$//")"
+    index_path="$(grep -E '^[[:space:]]*path:[[:space:]]*' "$cfg_path" | head -n 1 | sed -E "s/^[[:space:]]*path:[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^['\"]//; s/['\"]$//")"
+    index_path="${index_path:-/api/centres}"
+
+    if [[ -n "$index_base" ]]; then
+      local url="${index_base%/}${index_path}"
+      if curl -fsS -o /dev/null "$url" >/dev/null 2>&1; then
+        ui_ok "Index API reachable: $url"
+      else
+        ui_info "Index API not reachable: $url"
+      fi
+    else
+      ui_info "Index API base not found in config (index_api.base)."
+    fi
+  else
+    ui_info "Config missing: $cfg_path"
+  fi
+
+  local py; py="$(python_exec)"
+  if "$py" - <<'PY' >/dev/null 2>&1
+import importlib.util
+assert importlib.util.find_spec("aiogram")
+PY
+  then
+    ui_ok "Python dep OK: aiogram"
+  else
+    ui_info "Python dep missing: aiogram"
   fi
 
   # soft checks (no exit):
@@ -358,6 +550,7 @@ menu() {
   local action
   action="$(choose \
     "install" "deps" "unit" \
+    "unit edit" "unit path" \
     "edit-env" \
     "start" "stop" "restart" "status" "logs" \
     "enable" "disable" \
@@ -368,6 +561,8 @@ menu() {
     install)  install_all ;;
     deps)     install_deps ;;
     unit)     write_unit ;;
+    "unit edit") unit_edit ;;
+    "unit path") unit_path ;;
     edit-env) edit_env ;;
     start)    start_svc ;;
     stop)     stop_svc ;;
@@ -402,11 +597,18 @@ AlphaOS Router v2: Dumb Core + Extension System
 Usage:
   routerctl                # interactive menu
   routerctl version
+  routerctl install-cli    # symlink into ~/.local/bin/routerctl
+  routerctl uninstall-cli  # remove symlink from ~/.local/bin/routerctl
 
 Router:
   routerctl install        # full setup (deps + unit + enable)
   routerctl deps           # install system dependencies
   routerctl unit           # generate systemd user unit
+  routerctl unit enable    # generate unit + enable service
+  routerctl unit start     # generate unit + start service
+  routerctl unit restart   # generate unit + restart service
+  routerctl unit-edit      # open unit file (auto-pick)
+  routerctl unit-path      # show unit file path
   routerctl edit-env       # edit .env (bot token)
   routerctl start|stop|restart|status|logs
   routerctl enable|disable
@@ -445,9 +647,25 @@ main() {
   case "${1:-}" in
     -h|--help|help) print_help; exit 0 ;;
     version) echo "$ROUTERCTL_VERSION" ;;
+    install-cli) install_cli ;;
+    uninstall-cli) uninstall_cli ;;
     install)  install_all ;;
     deps)     install_deps ;;
-    unit)     write_unit ;;
+    unit)
+      case "${2:-}" in
+        "" ) write_unit ;;
+        enable) write_unit; enable_svc ;;
+        start) write_unit; start_svc ;;
+        restart) write_unit; restart_svc ;;
+        *)
+          ui_err "Unknown unit subcommand: ${2:-}"
+          print_help
+          exit 1
+          ;;
+      esac
+      ;;
+    unit-edit) unit_edit ;;
+    unit-path) unit_path ;;
     edit-env) edit_env ;;
     start)    start_svc ;;
     stop)     stop_svc ;;

@@ -1,0 +1,192 @@
+<script>
+  const state = { data: null, answers: {} };
+
+  function showOverlay(on, title = '') {
+    const overlay = document.getElementById('loading-overlay');
+    if (!overlay) return;
+    if (title) {
+      const t = overlay.querySelector('.loading-title');
+      if (t) t.textContent = title;
+    }
+    overlay.classList.toggle('active', !!on);
+  }
+
+  function randEmoji() {
+    const e = (state.data && state.data.emojis) || [];
+    return e.length ? e[Math.floor(Math.random() * e.length)] : '🍎';
+  }
+
+  function boot() {
+    showOverlay(true, 'Loading Facts...');
+    google.script.run
+      .withSuccessHandler(p => {
+        state.data = p;
+        state.answers = p.answers || {};
+        render();
+        setTimeout(() => showOverlay(false), 900);
+      })
+      .withFailureHandler(err => {
+        console.error(err);
+        alert('Fehler beim Laden der Facts');
+        showOverlay(false);
+      })
+      .fruits_getAllData();
+  }
+
+  function render() {
+    const data = state.data;
+    if (!data) return;
+    const allAnswers = state.answers || {};
+    const pendingSkip = data.skipped && data.skipped.question;
+    const container = document.getElementById('content');
+    container.innerHTML = '';
+
+    const sections = Object.keys(data.questions);
+
+    let currentFound = false;
+    let allDone = true;
+
+    for (const section of sections) {
+      const secDiv = document.createElement('div');
+      secDiv.className = 'section';
+
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
+      secDiv.appendChild(header);
+
+      for (const q of data.questions[section]) {
+        const qDiv = document.createElement('div');
+        qDiv.className = 'question';
+
+        if (allAnswers[q]) {
+          if (allAnswers[q] === '_geskippt_') {
+            allDone = false;
+            qDiv.classList.add('skipped');
+            qDiv.innerHTML = `<strong>${q}</strong><br><br><em>Geskippt – bitte später beantworten.</em>`;
+
+            const textarea = document.createElement('textarea');
+            textarea.placeholder = 'Antwort nachholen...';
+            textarea.rows = 6;
+            qDiv.appendChild(textarea);
+
+            const saveSkippedBtn = document.createElement('button');
+            saveSkippedBtn.textContent = 'Geskippte Frage beantworten';
+            saveSkippedBtn.onclick = () => {
+              const ans = textarea.value.trim();
+              if (!ans) {
+                alert('Bitte Antwort eingeben, um den Skip zu schließen.');
+                return;
+              }
+              google.script.run
+                .withSuccessHandler(res => {
+                  if (res && res.ok === false) {
+                    alert(res.error || 'Speichern fehlgeschlagen.');
+                    return;
+                  }
+                  boot();
+                })
+                .fruits_saveAnswer(section, q, ans);
+            };
+            qDiv.appendChild(saveSkippedBtn);
+          } else {
+            qDiv.classList.add('answered');
+            qDiv.innerHTML = `<strong>${q}</strong><br><br>${allAnswers[q].replace(/\n/g, '<br>')}`;
+          }
+        } else {
+          allDone = false;
+
+          if (!currentFound) {
+            currentFound = true;
+            qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${q} ${randEmoji()}</strong>`;
+
+            const textarea = document.createElement('textarea');
+            textarea.placeholder = "Raw & Honest Facts – no illusions...";
+            textarea.rows = 10;
+            qDiv.appendChild(textarea);
+
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = "FACT – Save";
+            saveBtn.onclick = () => {
+              const ans = textarea.value.trim();
+              if (!ans) {
+                alert("Keine Antwort – du kannst skippen oder ehrlich sein.");
+                return;
+              }
+              google.script.run
+                .withSuccessHandler(res => {
+                  if (res && res.ok === false) {
+                    alert(res.error || 'Speichern fehlgeschlagen.');
+                    return;
+                  }
+                  boot();
+                })
+                .fruits_saveAnswer(section, q, ans);
+            };
+            qDiv.appendChild(saveBtn);
+
+            const skipBtn = document.createElement('button');
+            skipBtn.textContent = "Skip (später nachholen)";
+            skipBtn.style.background = "#666";
+            skipBtn.style.marginLeft = "10px";
+            if (pendingSkip) {
+              skipBtn.disabled = true;
+              skipBtn.title = 'Ein Skip ist noch offen – bitte zuerst beantworten.';
+              skipBtn.style.opacity = '0.6';
+              skipBtn.style.cursor = 'not-allowed';
+            }
+            skipBtn.onclick = () => {
+              if (pendingSkip) {
+                alert('Du hast bereits eine Frage geskipped. Bitte beantworte sie zuerst.');
+                return;
+              }
+              if (confirm("Diese Frage überspringen? Du kannst später zurück.")) {
+                google.script.run
+                  .withSuccessHandler(res => {
+                    if (res && res.ok === false) {
+                      alert(res.error || 'Skip fehlgeschlagen.');
+                      return;
+                    }
+                    boot();
+                  })
+                  .fruits_saveAnswer(section, q, '_geskippt_');
+              }
+            };
+            qDiv.appendChild(skipBtn);
+          } else {
+            qDiv.innerHTML = `<em>${q}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
+          }
+        }
+
+        secDiv.appendChild(qDiv);
+      }
+      container.appendChild(secDiv);
+    }
+
+    if (allDone || Object.keys(allAnswers).length > 0) {
+      const exportBtn = document.getElementById('exportBtn');
+      exportBtn.style.display = 'block';
+      exportBtn.onclick = exportAll;
+    }
+  }
+
+  function exportAll() {
+    showOverlay(true, 'Exportiere Map...');
+    google.script.run
+      .withSuccessHandler(res => {
+        showOverlay(false);
+        alert(`Export gespeichert:\n${res.name}\n${res.url}`);
+      })
+      .withFailureHandler(err => {
+        showOverlay(false);
+        console.error(err);
+        alert('Export fehlgeschlagen.');
+      })
+      .fruits_exportCompleteMap();
+  }
+
+  window.addEventListener('load', () => {
+    setTimeout(() => showOverlay(false), 1200);
+    boot();
+  });
+</script>

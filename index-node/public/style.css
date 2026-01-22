@@ -17,7 +17,8 @@ body {
   font-family: 'Courier New', monospace, sans-serif;
   text-align: center;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 100vh;
 }
 
@@ -25,7 +26,7 @@ body {
   max-width: 1400px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 220px minmax(0, 1fr) 220px;
   gap: 28px;
   align-items: start;
 }
@@ -49,6 +50,226 @@ body {
 
 .menu-panel {
   z-index: 1;
+}
+
+.core4-panel {
+  border: 1px solid rgba(0, 255, 0, 0.45);
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  background: rgba(0, 0, 0, 0.65);
+  box-shadow: 0 0 16px rgba(0, 255, 0, 0.2);
+  text-align: left;
+}
+
+.core4-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: rgba(0, 255, 0, 0.8);
+  font-size: 0.75em;
+}
+
+.core4-total {
+  color: rgba(0, 255, 255, 0.75);
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+
+.core4-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.core4-btn {
+  border: 1px solid rgba(0, 255, 0, 0.5);
+  border-radius: 12px;
+  padding: 10px 8px;
+  background: rgba(0, 15, 0, 0.6);
+  color: rgba(160, 255, 160, 0.9);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+.core4-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 255, 255, 0.7);
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.25);
+}
+
+.core4-btn.is-done {
+  background: rgba(0, 40, 0, 0.8);
+  border-color: #0f0;
+  color: #0f0;
+  box-shadow: 0 0 18px rgba(0, 255, 0, 0.4);
+}
+
+.core4-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+#core4JournalInput {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid rgba(0, 255, 0, 0.4);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #b9ffb9;
+  font-family: "Courier New", monospace, sans-serif;
+  font-size: 0.9em;
+  outline: none;
+}
+
+#core4JournalInput:focus {
+  border-color: rgba(0, 255, 255, 0.7);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+}
+
+.core4-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+  padding: 18px;
+}
+
+.core4-modal.is-open {
+  display: flex;
+}
+
+.core4-modal-card {
+  width: min(620px, 100%);
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(0, 255, 0, 0.45);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 0 28px rgba(0, 255, 0, 0.25);
+}
+
+.core4-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.core4-modal-title {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.8em;
+  color: rgba(0, 255, 0, 0.8);
+}
+
+.core4-modal-close {
+  border: 1px solid rgba(0, 255, 0, 0.4);
+  background: transparent;
+  color: rgba(0, 255, 0, 0.8);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.core4-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+#core4JournalDone {
+  border: 1px solid rgba(0, 255, 0, 0.6);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 20, 0, 0.7);
+  color: #9cff9c;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75em;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#core4JournalDone:hover {
+  border-color: rgba(0, 255, 255, 0.7);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+}
+
+#core4JournalDone:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.core4-journal-status {
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(0, 255, 0, 0.7);
+}
+
+.core4-journal-status[data-state="error"] {
+  color: rgba(255, 120, 120, 0.9);
+}
+
+.gpt-panel {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 1;
+  text-align: right;
+}
+
+.gpt-title {
+  font-size: 0.75em;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: rgba(0, 255, 255, 0.75);
+}
+
+.gpt-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.gpt-card {
+  color: #8ff;
+  font-size: 0.9em;
+  text-decoration: none;
+  padding: 14px 12px;
+  border: 2px solid rgba(0, 255, 255, 0.7);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(0, 18, 20, 0.7), rgba(0, 0, 0, 0.9));
+  box-shadow: 0 0 18px rgba(0, 255, 255, 0.25), inset 0 0 30px rgba(0, 255, 255, 0.08);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: transform, box-shadow;
+}
+
+.gpt-card:hover {
+  transform: translateY(-3px);
+  border-color: #9ff;
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
 }
 
 .chapter-page {
@@ -168,8 +389,9 @@ pointer-events: none;
 /* ---------- GRID ---------- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(18px, 2.5vw, 34px);
+  align-items: stretch;
   margin-top: 0;
   position: relative;
   z-index: 1;
@@ -226,10 +448,21 @@ pointer-events: none;
   }
   .doc-panel {
     position: static;
-    order: 2;
+    order: 3;
   }
   .menu-panel {
     order: 1;
+  }
+  .gpt-panel {
+    position: static;
+    order: 2;
+    text-align: left;
+  }
+  .core4-grid {
+    grid-template-columns: repeat(2, minmax(110px, 1fr));
+  }
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -244,21 +477,50 @@ pointer-events: none;
 /* ---------- MENU LINKS ---------- */
 #menuGrid a {
 color: #0f0;
-font-size: 1.5em;
+font-size: 1.25em;
 text-decoration: none;
-padding: 40px 20px;
+padding: 28px 18px;
 border: 3px solid #0f0;
 border-radius: 20px;
 display: block;
-background: transparent;
-box-shadow: 0 0 15px #0f0;
-transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+background: linear-gradient(145deg, rgba(0, 20, 0, 0.55), rgba(0, 0, 0, 0.85));
+box-shadow: 0 0 18px rgba(0, 255, 0, 0.35), inset 0 0 40px rgba(0, 255, 0, 0.08);
+position: relative;
+overflow: hidden;
+min-height: 110px;
+transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
 will-change: transform, box-shadow;
 }
 
+#menuGrid a::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 15%, rgba(0, 255, 180, 0.18), transparent 50%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+#menuGrid a::after {
+  content: "";
+  position: absolute;
+  inset: -60% -40%;
+  background: linear-gradient(120deg, transparent 40%, rgba(0, 255, 255, 0.18), transparent 60%);
+  transform: translateY(40%) rotate(8deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
 #menuGrid a:hover {
-transform: scale(1.05) translateY(-8px);
-box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
+transform: translateY(-8px) scale(1.03);
+box-shadow: 0 0 45px rgba(0, 255, 0, 0.65), 0 0 70px rgba(0, 255, 255, 0.45);
+background: linear-gradient(145deg, rgba(0, 35, 0, 0.7), rgba(0, 0, 0, 0.9));
+}
+
+#menuGrid a:hover::after {
+  opacity: 1;
+  transform: translateY(10%) rotate(8deg);
 }
 
 /* ---------- GLITCH EFFECTS ---------- */
@@ -312,4 +574,46 @@ box-shadow: 0 0 50px #0f0, 0 0 70px #0ff;
 
 #menuGrid.glitching a::after {
   display: none;
+}
+
+@media (max-width: 720px) {
+  body {
+    padding: 30px 14px;
+  }
+  .core4-panel {
+    padding: 14px 14px;
+  }
+  .core4-grid {
+    gap: 8px;
+  }
+  .core4-btn {
+    font-size: 0.75em;
+    padding: 8px 6px;
+  }
+  #core4JournalInput {
+    min-height: 90px;
+    font-size: 0.85em;
+  }
+  #menuGrid a {
+    font-size: 1.05em;
+    padding: 20px 14px;
+    border-width: 2px;
+    border-radius: 16px;
+    min-height: 92px;
+  }
+}
+
+@media (max-width: 520px) {
+  body {
+    padding: 24px 12px;
+  }
+  .core4-grid {
+    grid-template-columns: repeat(2, minmax(90px, 1fr));
+  }
+  #menuGrid a {
+    font-size: 0.98em;
+    padding: 16px 12px;
+    min-height: 78px;
+    box-shadow: 0 0 14px rgba(0, 255, 0, 0.3), inset 0 0 26px rgba(0, 255, 0, 0.08);
+  }
 }

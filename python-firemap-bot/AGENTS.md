@@ -9,6 +9,6 @@
 - On-demand: router `/fire` should trigger it locally.
 
 ## Output Behavior
-- Prefers `tele` (`AOS_TELE_BIN`) for Telegram delivery.
-- Falls back to Telegram API if `AOS_FIREMAP_BOT_TOKEN` + `AOS_FIREMAP_CHAT_ID` are set.
+- Prefers Telegram Bot API (`AOS_FIREMAP_BOT_TOKEN` + `AOS_FIREMAP_CHAT_ID`) for delivery.
+- Falls back to `tele` (`AOS_TELE_BIN`) only if API send fails or API config is missing.
 - No local vault writes by default (output is messages).

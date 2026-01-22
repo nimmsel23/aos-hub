@@ -74,7 +74,7 @@ Python bot’s phased flow.
 - Splits long markdown into chunks and sends all parts.
 
 ## Props (expected)
-- Bridge URL/Auth (AOS_BRIDGE_URL/BRIDGE_URL/LAPTOP_URL + AOS_BRIDGE_TOKEN/BRIDGE_TOKEN).
+- Bridge URL/Auth (`AOS_BRIDGE_URL` canonical; legacy `BRIDGE_URL`/`LAPTOP_WEBHOOK_URL`/`LAPTOP_URL` + `AOS_BRIDGE_TOKEN`/`BRIDGE_TOKEN`).
 - WARSTACK_BOT_TOKEN (if Tele push), WARSTACK_TELEGRAM flag.
 - CHAT_ID for Tele push.
 

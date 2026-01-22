@@ -141,6 +141,7 @@ def main() -> int:
         send_tele(payload)
 
     # Return task unchanged
+    # Note: on-exit.alphaos.py will trigger task_export.json update automatically
     sys.stdout.write(raw)
     return 0
 

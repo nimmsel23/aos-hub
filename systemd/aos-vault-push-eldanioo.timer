@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily AlphaOS Vault push to eldanioo
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=aos-vault-push-eldanioo.service
+
+[Install]
+WantedBy=timers.target

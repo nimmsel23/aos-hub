@@ -1,0 +1,18 @@
+[Unit]
+Description=AlphaOS Bridge (aiohttp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alpha
+Group=alpha
+EnvironmentFile=-/etc/alphaos-hub/env
+EnvironmentFile=-/etc/alphaos-hub/bridge.env
+EnvironmentFile=-/etc/alphaos-hub/telegram.env
+ExecStart=/usr/bin/bash -lc 'cd "$AOS_HUB_DIR/bridge" && exec /usr/bin/python app.py --host 0.0.0.0 --port 8080'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

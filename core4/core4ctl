@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CORE4_BIN="${CORE4_BIN:-$HOME/bin/core4}"
+HUB_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
+UNIT_SRC_DIR="${HUB_DIR}/systemd"
+UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+  cat <<'EOF'
+core4ctl
+
+Convenience wrapper around `core4` plus optional systemd timer templates.
+
+Commands
+  status                         Show quick Core4 status + scores
+  menu                           Gum menu (if available)
+  build                          Rebuild week/day artifacts (prints nothing on success)
+  export-daily [--days N]         Regenerate rolling `core4_daily.csv`
+  prune [--keep-weeks N]          Prune local event files older than the window
+  finalize-month [YYYY-MM]        Write `core4_YYYY-MM.csv` (month close; idempotent)
+  install-timers                 Copy systemd user units to ~/.config/systemd/user
+
+Notes
+  - Timers are only installed (copied), not enabled automatically.
+  - Enable manually:
+      systemctl --user daemon-reload
+      systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer
+EOF
+}
+
+need_core4() {
+  if [[ ! -x "$CORE4_BIN" ]]; then
+    echo "core4ctl: core4 not found/executable: $CORE4_BIN" >&2
+    exit 127
+  fi
+}
+
+cmd_status() {
+  need_core4
+  echo "core4ctl status"
+  echo ""
+  echo "- core4: $CORE4_BIN"
+  echo "- vault: ${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+  echo ""
+  "$CORE4_BIN" -d --quiet || true
+  "$CORE4_BIN" -w --quiet || true
+  echo ""
+  if [[ -d "$HOME/AlphaOS-Vault/Core4/.core4/events" ]]; then
+    echo "events (local):"
+    find "$HOME/AlphaOS-Vault/Core4/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
+  fi
+  if [[ -f "$HOME/AlphaOS-Vault/Core4/core4_daily.csv" ]]; then
+    echo "daily csv: $HOME/AlphaOS-Vault/Core4/core4_daily.csv"
+  fi
+}
+
+cmd_build() {
+  need_core4
+  "$CORE4_BIN" -w --quiet >/dev/null
+  "$CORE4_BIN" -d --quiet >/dev/null
+}
+
+cmd_menu() {
+  if ! have gum; then
+    usage
+    return 0
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    usage
+    return 0
+  fi
+  need_core4
+
+  while true; do
+    local choice
+    choice="$(
+      printf "%s\n" \
+        "Status" \
+        "Build (rebuild day/week)" \
+        "Export daily CSV (56d)" \
+        "Prune events (keep 8w)" \
+        "Finalize month (YYYY-MM)" \
+        "Install timers (copy units)" \
+        "Exit" \
+        | gum choose --header "Core4 — core4ctl"
+    )" || return 0
+
+    case "$choice" in
+      "Status") cmd_status ;;
+      "Build (rebuild day/week)") cmd_build ;;
+      "Export daily CSV (56d)") "$CORE4_BIN" export-daily --days=56 >/dev/null && echo "ok" ;;
+      "Prune events (keep 8w)") "$CORE4_BIN" prune-events --keep-weeks=8 ;;
+      "Finalize month (YYYY-MM)")
+        local m
+        m="$(date +%Y-%m)"
+        if have gum; then
+          m="$(printf "%s" "$m" | gum input --prompt "Month (YYYY-MM): " --value "$m")" || continue
+        fi
+        "$CORE4_BIN" finalize-month "$m"
+        ;;
+      "Install timers (copy units)") cmd_install_timers ;;
+      "Exit") return 0 ;;
+    esac
+    echo ""
+  done
+}
+
+cmd_install_timers() {
+  mkdir -p "$UNIT_DST_DIR"
+  for f in core4-daily.service core4-daily.timer core4-prune.service core4-prune.timer core4-month-close.service core4-month-close.timer; do
+    if [[ ! -f "$UNIT_SRC_DIR/$f" ]]; then
+      echo "core4ctl: missing unit template: $UNIT_SRC_DIR/$f" >&2
+      exit 1
+    fi
+    cp -f "$UNIT_SRC_DIR/$f" "$UNIT_DST_DIR/$f"
+  done
+  echo "Installed units to $UNIT_DST_DIR"
+  echo "Next:"
+  echo "  systemctl --user daemon-reload"
+  echo "  systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer"
+}
+
+case "${1:-}" in
+  ""|-h|--help|help) usage ;;
+  menu) cmd_menu ;;
+  status) cmd_status ;;
+  build) cmd_build ;;
+  export-daily)
+    need_core4
+    exec "$CORE4_BIN" export-daily "${@:2}"
+    ;;
+  prune|prune-events)
+    need_core4
+    exec "$CORE4_BIN" prune-events "${@:2}"
+    ;;
+  finalize-month|seal-month|month-close)
+    need_core4
+    exec "$CORE4_BIN" finalize-month "${@:2}"
+    ;;
+  finalize-week|seal-week)
+    need_core4
+    exec "$CORE4_BIN" finalize-week "${@:2}"
+    ;;
+  install-timers) cmd_install_timers ;;
+  *)
+    echo "core4ctl: unknown command: $1" >&2
+    usage
+    exit 2
+    ;;
+esac

@@ -1,0 +1,114 @@
+{
+  "name": "door-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "critical",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Door Centre development + operations (4P Flow: Potential→Plan→Production→Profit)",
+  "description": "Complete specialist for the Door Centre ecosystem. Understands both index-node implementation (Node.js API + web UI) and gas implementation (Apps Script + web app), plus python-warstack-bot and router extensions. Facilitates weekly tactical flow from idea capture to execution completion.",
+  "components": {
+    "index_node": [
+      "/api/door/* (flow, hotlist, doorwar, warstack)",
+      "public/door/index.html",
+      "public/door/*.js|css"
+    ],
+    "gas": [
+      "door.gs (main entry)",
+      "door_main.gs (core logic)",
+      "door_profit.gs (profit phase)",
+      "door_warstack.gs (war stack)",
+      "Door_Index.html",
+      "Door_HotList_Panel.html",
+      "Door_War_Panel.html",
+      "Door_WarStack_Panel.html",
+      "Door_HitList_Panel.html"
+    ],
+    "bots": [
+      "python-warstack-bot/warstack_bot.py (on-demand War Stack bot)",
+      "router/extensions/door_flow.py (Telegram extension)"
+    ],
+    "bridge": [
+      "/bridge/warstack/draft (draft persistence for /resume)"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Door/1-Potential/ (Hot List)",
+      "~/AlphaOS-Vault/Door/2-Plan/ (Door War)",
+      "~/AlphaOS-Vault/Door/War-Stacks/ (War Stacks)",
+      "~/AlphaOS-Vault/Door/3-Production/ (Hit List)",
+      "~/AlphaOS-Vault/Door/4-Profit/ (Profit reflections)"
+    ]
+  },
+  "triggers": [
+    "Door Centre",
+    "War Stack",
+    "Hot List",
+    "Door War",
+    "4P Flow",
+    "Potential phase",
+    "Plan phase",
+    "Production phase",
+    "Profit phase",
+    "Domino Door"
+  ],
+  "capabilities": [
+    "Develop Door Centre web UI (index-node + gas)",
+    "Create/debug War Stack flows (all 3 interfaces: Telegram, web, GAS)",
+    "Build Hot List capture interfaces",
+    "Implement Door War selection logic",
+    "Develop Hit List execution tracking",
+    "Create Profit phase reflection tools",
+    "Debug python-warstack-bot (idle timeout, /resume flow)",
+    "Extend router door_flow extension",
+    "Export markdown to vault (all 4P phases)",
+    "Integrate Taskwarrior for Hit creation",
+    "clasp deployment for standalone Door apps (future)"
+  ],
+  "tools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Grep",
+    "Glob",
+    "Task"
+  ],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/router/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md",
+    "/home/alpha/aos-hub/python-warstack-bot/AGENTS.md",
+    "/home/alpha/aos-hub/DOCS/gas/door-*.md",
+    "/home/alpha/aos-hub/index-node/menu.yaml"
+  ],
+  "references": [
+    "index-node/AGENTS.md",
+    "router/AGENTS.md",
+    "gas/AGENTS.md",
+    "python-warstack-bot/AGENTS.md",
+    "DOCS/gas/door-hotlist.md",
+    "DOCS/gas/door-war.md",
+    "DOCS/gas/door-warstack.md"
+  ],
+  "dependencies": [
+    "alphaos-bridge-agent (for /bridge/warstack/draft)",
+    "alphaos-router-system-agent (for door_flow extension)"
+  ],
+  "test_prompts": [
+    "Show me the Door Centre architecture (all 4P phases across index-node + gas + bots)",
+    "The War Stack bot isn't resuming after idle timeout - debug the /resume flow",
+    "Add a new field to Hot List items - implement in both index-node API and GAS",
+    "Door War selection isn't saving to vault - trace the data flow",
+    "Create a standalone Door Centre web app (like fruits-standalone) with clasp deployment"
+  ],
+  "notes": [
+    "War Stack has 3 independent interfaces: python-warstack-bot (Telegram), index-node web UI, GAS web app",
+    "All 3 interfaces output same format: Markdown in War-Stacks/ + Taskwarrior commands",
+    "python-warstack-bot has idle timeout (900s default) and /resume capability via bridge drafts",
+    "router door_flow extension triggers War Stack flow but doesn't create stacks itself",
+    "4P Flow: Potential (capture) → Plan (select + War Stack) → Production (execute Hits) → Profit (reflect)",
+    "Domino Doors = high-leverage actions that open multiple other doors",
+    "menu.yaml is Single Source of Truth for Door Centre route (/door)"
+  ]
+}

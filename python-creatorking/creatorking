@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""
+CreatorKing CLI (JSON store)
+
+Progressiver CLI-Fragebogen fuer die Creator King Assets Map.
+Speichert Antworten im JSON-Store, kompatibel mit GAS Standalone.
+"""
+from __future__ import annotations
+
+import json
+import os
+import random
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Any
+
+# -----------------------------------------------------------------------------
+# Konfiguration
+# -----------------------------------------------------------------------------
+STORE_JSON = Path(
+    os.environ.get(
+        "CREATORKING_STORE_JSON",
+        os.environ.get(
+            "CREATORKING_STORE",
+            os.path.expanduser(
+                "~/AlphaOS-Vault/AlphaOS/Centres/Alpha_CreatorKing/creatorking_store.json"
+            ),
+        ),
+    )
+)
+
+KING_EMOJIS: List[str] = ["C", "K", "K", "K", "*"]
+
+QUESTIONS: Dict[str, List[str]] = {
+    "1. Personal Interests": [
+        "I feel most alive (or at home) when I am doing:",
+        "When I was a kid, I dreamt of being, doing and having:",
+        "I love to give advice to others on:",
+        "If I am NOT doing this or incorporating this into my life, I feel a loss or a sense of being off balance:",
+        "What makes me feel great about myself as a person is:",
+        "What really excites me is:",
+        "What brings my energy down and makes me feel most tired and drained is:",
+        "I get a sense of satisfaction and fulfillment when I:",
+        "I feel like the luckiest person on the planet when I am:",
+        "When I am 90 years old, sitting in my rocking chair and looking back on my life, I will be thinking and feeling:",
+    ],
+    "2. Unique Talents & Expertise": [
+        "What unique experiences have I had?",
+        "What personal challenges have I overcome?",
+        "What professional challenges have I overcome?",
+        "What are some of my Natural talents or abilities that come to me with ease?",
+        "What seems like common sense to me, yet most people understand it? (I am shocked when other people don't know this, which seems like common sense to me)",
+        "What are my personal, unshakable strengths?",
+        "What are some weaknesses I have, or stuff I hate doing or need support on?",
+    ],
+    "3. Life Lessons": [
+        "What do I know is absolutely true about the world?",
+        "What do I know is absolutely true about myself?",
+        "How can my experiences enhance people's lives or serve them in a positive? What can I teach people that would change their lives?",
+        "How will people be affected or changes after I help them?",
+        "What message would I love for people to get from me or my products / services?",
+    ],
+    "4. Marketing My Passion": [
+        "List of possible topics I could teach on:",
+        "If I was to write a book, it would be on:",
+        "What specific groups of people or niche could I target?",
+        "In my opinion, what are people teaching INCORRECTLY? What is missing that people need to know in life?",
+        "What and how can I... Simplify things for people:",
+        "Increase Efficiency:",
+        "Deliver with ease:",
+        "Create loyalty and build on-going relationships with my customers:",
+    ],
+    "5. Environments": [
+        "Rate 1-11: speaking",
+        "Rate 1-11: writing",
+        "Rate 1-11: presenting on video",
+        "Rate 1-11: entertaining or networking",
+        "Rate 1-11: training others",
+        "Rate 1-11: working from home",
+        "Rate 1-11: working at a big company",
+        "Rate 1-11: working with small groups of people",
+        "Rate 1-11: working with large groups of people",
+        "Rate 1-11: traveling to different locations",
+        "Who are my ideal customers / clients (please describe in detail)? Common traits of my ideal customers / clients are:",
+        "My ideal customer / client seeks me out because:",
+        "What do my ideal customers / clients say when they recommend me or my services?",
+    ],
+    "6. Values & Inspiration": [
+        "My top 5 values are: (select up to 5 from list below + Other)",
+        "What excites me about the world?",
+        "What is worth standing up for or fighting for?",
+        "What kind of LEGACY would I want to leave in this world?",
+        "If I have or will have children, what would be the most important thing I would teach them?",
+        "What movie(s), or books, inspire me and why?",
+        "Whether real or imagined, describe the person that you admire most:",
+        "These 2 people have had a major input in my life. What is it about them, or what they did or said, or \"who they were\", that moves or influences me?",
+        "What do I do to keep myself going when I lose faith or hit a roadblock?",
+    ],
+    "7. Re-Invention of Self": [
+        "My mission in life is (can create more than one):",
+        "In one sentence, the greatest MESSAGE I could give the world is:",
+        "Write your future biography. Decide who you've become, what achievements you've made and how you have helped others and contributed to the world:",
+        "My vision for my life and business is:",
+        "Craft your bonding story or stories below (real, raw, heartfelt - use another sheet if needed):",
+    ],
+}
+
+SKIP_TOKEN = "!skip"
+
+
+def _ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _seed_store() -> Dict[str, Any]:
+    return {
+        "answers": {},
+        "users": {},
+        "assets": {},
+        "logs": [],
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+def load_store() -> Dict[str, Any]:
+    if not STORE_JSON.exists():
+        return _seed_store()
+    try:
+        data = json.loads(STORE_JSON.read_text(encoding="utf-8"))
+    except Exception:
+        return _seed_store()
+    if "answers" not in data:
+        data["answers"] = {}
+    if "users" not in data:
+        data["users"] = {}
+    if "assets" not in data:
+        data["assets"] = {}
+    if "logs" not in data:
+        data["logs"] = []
+    return data
+
+
+def save_store(store: Dict[str, Any]) -> None:
+    _ensure_parent(STORE_JSON)
+    store["updated_at"] = datetime.now().isoformat()
+    STORE_JSON.write_text(
+        json.dumps(store, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def load_answers(store: Dict[str, Any]) -> Dict[str, str]:
+    answers = {}
+    for q, entry in (store.get("answers") or {}).items():
+        if isinstance(entry, dict):
+            answers[q] = entry.get("answer", "")
+        else:
+            answers[q] = str(entry)
+    return answers
+
+
+def append_answer(store: Dict[str, Any], section: str, question: str, answer: str) -> None:
+    answers = store.get("answers", {})
+    previous = answers.get(question, {}) if isinstance(answers.get(question), dict) else {}
+    answers[question] = {
+        "answer": answer,
+        "section": section,
+        "source": "cli",
+        "chat_id": "",
+        "updated_at": datetime.now().isoformat(),
+    }
+    store["answers"] = answers
+    assets = store.get("assets", {})
+    assets[question] = {
+        "section": section,
+        "question": question,
+        "answer": answer,
+        "status": "draft",
+        "updated_at": datetime.now().isoformat(),
+    }
+    store["assets"] = assets
+    logs = store.get("logs", [])
+    logs.append(
+        {
+            "type": "answer",
+            "timestamp": datetime.now().isoformat(),
+            "section": section,
+            "question": question,
+            "answer": answer,
+            "source": "cli",
+            "chat_id": "",
+            "previous_answer": previous.get("answer") if isinstance(previous, dict) else "",
+        }
+    )
+    store["logs"] = logs
+    save_store(store)
+
+
+def _question_section(question: str) -> str:
+    for section, qs in QUESTIONS.items():
+        if question in qs:
+            return section
+    return ""
+
+
+def _has_fzf() -> bool:
+    return shutil.which("fzf") is not None
+
+
+def _select_existing_question(answers: Dict[str, str], store: Dict[str, Any]) -> str:
+    if not answers:
+        return ""
+    entries = []
+    for section, qs in QUESTIONS.items():
+        for q in qs:
+            if q in answers:
+                entry = store.get("answers", {}).get(q, {})
+                sec = entry.get("section") or section
+                entries.append(f"{sec} | {q}")
+    if not entries:
+        return ""
+    if _has_fzf():
+        proc = subprocess.run(
+            ["fzf", "--prompt", "CreatorKing> ", "--height", "40%"],
+            input="\n".join(entries),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return ""
+        line = (proc.stdout or "").strip()
+    else:
+        for idx, line in enumerate(entries, start=1):
+            print(f"{idx:02d}. {line}")
+        choice = input("Nummer waehlen (oder Enter fuer Abbruch): ").strip()
+        if not choice.isdigit():
+            return ""
+        idx = int(choice)
+        if idx < 1 or idx > len(entries):
+            return ""
+        line = entries[idx - 1]
+    parts = line.split(" | ", 1)
+    return parts[1] if len(parts) == 2 else line
+
+
+def cmd_creatorking() -> None:
+    print("CreatorKing CLI: Assets Map")
+    store = load_store()
+    save_store(store)
+
+    while True:
+        answers = load_answers(store)
+        mode = input("Modus: [n]ext, [e]dit (fzf), [q]uit > ").strip().lower() or "n"
+        if mode.startswith("q"):
+            return
+        if mode.startswith("e"):
+            question = _select_existing_question(answers, store)
+            if not question:
+                continue
+            section = _question_section(question)
+            current = answers.get(question, "")
+            print(f"\nAktuell:\n{question}\n└─ {current}")
+            emoji = random.choice(KING_EMOJIS)
+            ans = input(f"{emoji} Neue Antwort (leer = Abbruch): ").strip()
+            if not ans:
+                continue
+            append_answer(store, section, question, ans)
+            print(f"{emoji} Antwort gespeichert.")
+            continue
+
+        for section, qs in QUESTIONS.items():
+            left, right = random.choice(KING_EMOJIS), random.choice(KING_EMOJIS)
+            print(f"\n== {left} {section} {right} ==")
+
+            for q in qs:
+                if q in answers:
+                    print(f"{q}\n  -> {answers[q]}")
+                    continue
+
+                emoji = random.choice(KING_EMOJIS)
+                ans = input(f"{emoji} {q}\n> ").strip()
+                if not ans or ans.lower() == SKIP_TOKEN:
+                    print(f"{emoji} Uebersprungen. Starte das Skript erneut, um weiterzumachen.")
+                    return
+
+                append_answer(store, section, q, ans)
+                print(f"{emoji} Antwort gespeichert. Starte das Skript erneut, um weiterzumachen.")
+                return
+
+        print(f"Alle Fragen beantwortet. Datei: {STORE_JSON}")
+
+
+if __name__ == "__main__":
+    cmd_creatorking()

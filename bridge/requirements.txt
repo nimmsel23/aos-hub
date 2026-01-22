@@ -1,0 +1,3 @@
+# Optional: prefer system package on Arch
+# sudo pacman -S python-aiohttp
+aiohttp==3.9.5

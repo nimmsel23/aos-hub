@@ -1,0 +1,68 @@
+{
+  "name": "agent-name",
+  "version": "1.0.0",
+  "category": "centre|infrastructure|meta",
+  "priority": "critical|high|medium|low",
+  "status": "active|planned|deprecated",
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "purpose": "One-line purpose statement",
+  "description": "Detailed description of what this agent does",
+  "components": {
+    "index_node": [
+      "/api/example/*",
+      "public/example/"
+    ],
+    "gas": [
+      "example.gs",
+      "Example_*.html"
+    ],
+    "bots": [
+      "python-example-bot/example_bot.py",
+      "router extensions/example_extension"
+    ],
+    "bridge": [
+      "/bridge/example/*"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Example/"
+    ]
+  },
+  "triggers": [
+    "trigger keyword 1",
+    "trigger keyword 2",
+    "trigger phrase"
+  ],
+  "capabilities": [
+    "Capability 1",
+    "Capability 2"
+  ],
+  "tools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Grep",
+    "Glob"
+  ],
+  "data_sources": [
+    "/path/to/data/source1",
+    "/path/to/data/source2"
+  ],
+  "references": [
+    "component/AGENTS.md",
+    "DOCS/relevant-doc.md"
+  ],
+  "dependencies": [
+    "other-agent-name"
+  ],
+  "test_prompts": [
+    "Test prompt 1 that covers main use case",
+    "Test prompt 2 that covers edge case",
+    "Test prompt 3 that covers error handling"
+  ],
+  "notes": [
+    "Important note about this agent",
+    "Known limitations or gotchas"
+  ]
+}

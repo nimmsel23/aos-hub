@@ -1,0 +1,295 @@
+<script>
+// Simple client for Daily & Weekly Fire Maps
+const DOMAINS = ['body', 'being', 'balance', 'business', 'other'];
+
+function initFireCentre() {
+  loadTokenStatus();
+  initCaptureDate();
+  refreshDaily();
+  refreshWeekly();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initFireCentre);
+} else {
+  initFireCentre();
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-daily').classList.toggle('active', tab === 'daily');
+  document.getElementById('tab-weekly').classList.toggle('active', tab === 'weekly');
+  document.getElementById('daily-map').classList.toggle('visible', tab === 'daily');
+  document.getElementById('weekly-map').classList.toggle('visible', tab === 'weekly');
+}
+
+function loadTokenStatus() {
+  google.script.run
+    .withSuccessHandler(status => {
+      const el = document.getElementById('token-status');
+      el.textContent = status.hasToken
+        ? `Token aktiv · Project ${status.projectId}`
+        : 'Kein TickTick Token gesetzt';
+    })
+    .withFailureHandler(err => {
+      document.getElementById('token-status').textContent = 'Token-Check fehlgeschlagen: ' + err.message;
+    })
+    .getTokenStatus();
+}
+
+function saveToken() {
+  const token = document.getElementById('token-input').value.trim();
+  const projectId = document.getElementById('project-input').value.trim();
+  if (!token) return alert('Bitte TickTick Token eintragen.');
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      alert(msg);
+      loadTokenStatus();
+    })
+    .withFailureHandler(err => alert(err.message || err))
+    .saveTickTickToken(token, projectId);
+}
+
+function initCaptureDate() {
+  const input = document.getElementById('capture-date');
+  if (!input) return;
+  if (!input.value) {
+    const today = new Date();
+    input.value = today.toISOString().slice(0, 10);
+  }
+  updateCaptureWeek(input.value);
+  input.addEventListener('change', (event) => {
+    updateCaptureWeek(event.target.value);
+  });
+}
+
+function updateCaptureWeek(dateValue) {
+  google.script.run
+    .withSuccessHandler(info => {
+      const weekEl = document.getElementById('capture-week');
+      const weekInput = document.getElementById('week');
+      if (weekEl) weekEl.textContent = info.week || '—';
+      if (weekInput) weekInput.value = info.week || '';
+    })
+    .withFailureHandler(err => {
+      console.error('Week info failed', err);
+    })
+    .fireGetWeekInfo(dateValue);
+}
+
+function saveDomain(domain) {
+  const lower = domain.toLowerCase();
+  const weekly = document.getElementById(`${lower}_weekly`)?.value.trim() || '';
+  const daily = document.getElementById(`${lower}_daily`)?.value.trim() || '';
+  const entryDate = document.getElementById('capture-date')?.value || '';
+  const week = document.getElementById('week')?.value || '';
+
+  if (!weekly && !daily) {
+    alert('Bitte Weekly oder Daily ausfuellen.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.ok) {
+        alert(`Ignite: ${domain} gespeichert.`);
+      } else {
+        alert('Ignite fehlgeschlagen.');
+      }
+    })
+    .withFailureHandler(err => alert(err.message || err))
+    .saveFireEntry({ domain, weekly, daily, week, entryDate });
+}
+
+function refreshDaily() {
+  google.script.run
+    .withSuccessHandler(renderDaily)
+    .withFailureHandler(err => alert('Daily-Fehler: ' + (err.message || err)))
+    .getDailyTasks();
+}
+
+function refreshWeekly() {
+  google.script.run
+    .withSuccessHandler(renderWeekly)
+    .withFailureHandler(err => alert('Weekly-Fehler: ' + (err.message || err)))
+    .getWeeklyTasks();
+}
+
+function renderDaily(data) {
+  document.getElementById('daily-date').textContent = data ? data.date : '—';
+  renderDomains('daily-content', 'daily-empty', data && data.tasks ? data.tasks : []);
+}
+
+function renderWeekly(data) {
+  document.getElementById('weekly-week').textContent = data ? data.week : '—';
+  renderDomains('weekly-content', 'weekly-empty', data && data.tasks ? data.tasks : []);
+  renderWeeklyCalendar(data);
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function getWeekDates() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(now);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+
+  const days = [];
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    days.push({ key, label });
+  }
+  return days;
+}
+
+function groupTasksByDate(tasks) {
+  return (tasks || []).reduce((acc, task) => {
+    const due = new Date(task.due || '');
+    if (isNaN(due.getTime())) return acc;
+    const key = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+    acc[key] = acc[key] || [];
+    acc[key].push(task);
+    return acc;
+  }, {});
+}
+
+function renderWeeklyCalendar(data) {
+  const grid = document.getElementById('weekly-calendar');
+  const gcal = document.getElementById('weekly-gcal');
+  const gcalFrame = document.getElementById('weekly-gcal-frame');
+  if (!grid) return;
+
+  const tasks = data && data.tasks ? data.tasks : [];
+  if (!tasks.length) {
+    grid.innerHTML = '';
+    if (window.FIRE_GCAL_URL) {
+      const url = normalizeEmbedUrl(window.FIRE_GCAL_URL);
+      if (gcalFrame) gcalFrame.src = url;
+      if (gcal) gcal.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (gcal) gcal.classList.add('hidden');
+
+  const grouped = groupTasksByDate(tasks);
+  const days = getWeekDates();
+  grid.innerHTML = days.map(day => {
+    const items = grouped[day.key] || [];
+    const list = items.length
+      ? items.map(task => `
+        <li class="week-task">
+          ${escapeHtml(task.title)}
+          <span>${escapeHtml((task.tags || []).join(', '))}</span>
+        </li>`).join('')
+      : '<li class="week-empty">—</li>';
+    return `
+      <div class="week-day">
+        <div class="week-day-title">${escapeHtml(day.label)}</div>
+        <ul class="week-day-list">${list}</ul>
+      </div>`;
+  }).join('');
+}
+
+function normalizeEmbedUrl(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const iframeMatch = value.match(/src=["']([^"']+)["']/i);
+  if (iframeMatch && iframeMatch[1]) {
+    return iframeMatch[1].replace(/&amp;/g, '&');
+  }
+  return value.replace(/&amp;/g, '&');
+}
+
+function renderDomains(containerId, emptyId, tasks) {
+  const container = document.getElementById(containerId);
+  const empty = document.getElementById(emptyId);
+  container.innerHTML = '';
+
+  if (!tasks || tasks.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const grouped = groupByDomain(tasks);
+  DOMAINS.forEach(domain => {
+    const list = grouped[domain] || [];
+    if (list.length === 0) return;
+    container.appendChild(buildDomainCard(domain, list));
+  });
+}
+
+function groupByDomain(tasks) {
+  return tasks.reduce((acc, task) => {
+    const domain = task.domain || 'other';
+    acc[domain] = acc[domain] || [];
+    acc[domain].push(task);
+    return acc;
+  }, {});
+}
+
+function buildDomainCard(domain, tasks) {
+  const card = document.createElement('div');
+  card.className = 'domain-card';
+  const title = document.createElement('div');
+  title.className = 'domain-title';
+  title.textContent = domain.toUpperCase();
+  card.appendChild(title);
+
+  const list = document.createElement('ul');
+  list.className = 'task-list';
+  tasks.forEach(task => list.appendChild(buildTask(task)));
+  card.appendChild(list);
+  return card;
+}
+
+function buildTask(task) {
+  const li = document.createElement('li');
+  li.className = 'task';
+
+  const title = document.createElement('div');
+  title.className = 'task-title';
+  title.textContent = task.title;
+
+  const meta = document.createElement('div');
+  meta.className = 'task-meta';
+  meta.textContent = task.due ? formatDue(task.due) : 'kein Due';
+
+  const btn = document.createElement('button');
+  btn.textContent = 'Done';
+  btn.onclick = () => completeTask(task.id);
+
+  li.appendChild(title);
+  li.appendChild(meta);
+  li.appendChild(btn);
+  return li;
+}
+
+function formatDue(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+function completeTask(id) {
+  if (!confirm('Task abschließen?')) return;
+  google.script.run
+    .withSuccessHandler(() => {
+      refreshDaily();
+      refreshWeekly();
+    })
+    .withFailureHandler(err => alert('Complete fehlgeschlagen: ' + (err.message || err)))
+    .completeTickTickTask(id);
+}
+</script>

@@ -11,6 +11,7 @@ modifying the core routing logic.
 import asyncio
 import logging
 import os
+import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_USER_ID = os.getenv("ALLOWED_USER_ID", "").strip()
 CONFIG_PATH = Path(os.getenv("ROUTER_CONFIG", "./config.yaml")).expanduser()
+GAS_WEBHOOK_URL = os.getenv("AOS_GAS_WEBHOOK_URL", "").strip()
 
 
 def require_token():
@@ -120,6 +122,8 @@ class IndexCache:
                     cmd = str(item.get("cmd", "")).strip().lstrip("/").lower()
                     label = str(item.get("label", "")).strip()
                     link = str(item.get("url", "")).strip()
+                    if link.startswith("/"):
+                        link = f"{self.api_base}{link}"
                     if cmd and label and link:
                         centres[cmd] = Centre(cmd, label, link)
 
@@ -137,11 +141,14 @@ class IndexCache:
 # Global state
 config = load_config()
 index_config = config.get("index_api", {})
+health_config = config.get("healthcheck", {})
 CACHE = IndexCache(
     api_base=index_config.get("base", "http://100.76.197.55:8799"),
     api_path=index_config.get("path", "/api/centres"),
     cache_ttl=int(index_config.get("cache_ttl", 60))
 )
+HEALTH_URL = os.getenv("BRIDGE_HEALTH_URL", str(health_config.get("url", "http://100.76.197.55:8080/health"))).strip()
+HEALTH_TIMEOUT = float(os.getenv("BRIDGE_HEALTH_TIMEOUT", health_config.get("timeout", 3)))
 dp = Dispatcher()
 extension_loader = None  # Will be initialized in main()
 
@@ -151,9 +158,6 @@ def menu_kb(centres: Dict[str, Centre], cols: int = 2):
     kb = InlineKeyboardBuilder()
     for cmd in sorted(centres.keys()):
         c = centres[cmd]
-        # Skip local-only URLs (start with /)
-        if c.url.startswith("/"):
-            continue
         kb.button(text=c.label, url=c.url)
     kb.adjust(cols)
     return kb.as_markup()
@@ -196,6 +200,25 @@ def list_extension_commands() -> str:
         lines.append("/war — launch War Stack bot")
         lines.append("/warstack — alias for /war")
 
+    # Door Flow extension
+    if "door_flow" in config.get("extensions", []):
+        lines.append("/war — start War Stack flow")
+        lines.append("/warstack — alias for /war")
+        lines.append("/door — open Door Centre link")
+
+    # Fruits Daily extension
+    if "fruits_daily" in config.get("extensions", []):
+        lines.append("/facts — Fruits Centre info")
+        lines.append("/fruits — alias for /facts")
+        lines.append("/next — send the next Fruits question")
+        lines.append("/skip — skip current Fruits question")
+        lines.append("/web — open Fruits Centre")
+
+    # Fire Map extension
+    if "firemap_commands" in config.get("extensions", []):
+        lines.append("/fire — run Fire Map (daily)")
+        lines.append("/fireweek — run Fire Map (weekly)")
+
     # Core4 Actions extension
     core_cfg = config.get("core4_actions", {})
     tags = core_cfg.get("tags", {}) if isinstance(core_cfg, dict) else {}
@@ -203,6 +226,72 @@ def list_extension_commands() -> str:
         lines.append(f"/{cmd} — Core4 done (+{tag})")
 
     return "\n".join(lines)
+
+
+def configured_extension_names(cfg: dict) -> set[str]:
+    """Collect extension module names from config."""
+    ext_list = cfg.get("extensions", [])
+    if not isinstance(ext_list, list):
+        return set()
+    return {str(name).strip() for name in ext_list if str(name).strip()}
+
+
+def loaded_extension_names() -> set[str]:
+    """Collect extension module names that actually loaded."""
+    if not extension_loader:
+        return set()
+    names: set[str] = set()
+    for ext in extension_loader.extensions:
+        module = ext.__class__.__module__
+        if module.startswith("extensions."):
+            names.add(module.split(".")[-1])
+    return names
+
+
+def warstack_help_note(cfg: dict, ext_names: set[str] | None = None) -> str:
+    """Describe which War Stack mode is active, if any."""
+    if ext_names is None:
+        ext_names = configured_extension_names(cfg)
+
+    if "door_flow" in ext_names and "warstack_commands" in ext_names:
+        return (
+            "War Stack mode: door_flow + warstack_commands both enabled "
+            "(choose one to avoid confusion)"
+        )
+    if "door_flow" in ext_names:
+        return "War Stack mode: door_flow (local Index Node Door API)"
+    if "warstack_commands" in ext_names:
+        return "War Stack mode: warstack_commands (external bot link)"
+    return ""
+
+
+def extension_command_set(cfg: dict, ext_names: set[str] | None = None) -> set[str]:
+    """Collect commands reserved by enabled extensions."""
+    commands: set[str] = set()
+    if ext_names is None:
+        ext_names = configured_extension_names(cfg)
+    else:
+        ext_names = {str(name).strip() for name in ext_names if str(name).strip()}
+
+    if "warstack_commands" in ext_names:
+        commands.update({"war", "warstack"})
+
+    if "door_flow" in ext_names:
+        commands.update({"war", "warstack", "door"})
+
+    if "fruits_daily" in ext_names:
+        commands.update({"facts", "fruits", "next", "skip", "web", "start"})
+
+    if "core4_actions" in ext_names:
+        core_cfg = cfg.get("core4_actions", {})
+        tags = core_cfg.get("tags", {}) if isinstance(core_cfg, dict) else {}
+        if isinstance(tags, dict):
+            for cmd in tags.keys():
+                cmd_name = str(cmd).strip().lstrip("/")
+                if cmd_name:
+                    commands.add(cmd_name)
+
+    return commands
 
 
 @dp.message(Command("menu"))
@@ -257,16 +346,21 @@ async def help_command(m: Message):
     ext_info = f"\n\nLoaded extensions: {', '.join(ext_names)}" if ext_names else ""
     ext_cmds = list_extension_commands()
     ext_cmds_block = f"\n\nExtension commands:\n{ext_cmds}" if ext_cmds else ""
+    loaded_names = loaded_extension_names()
+    warstack_note = warstack_help_note(config, loaded_names or None)
+    warstack_note_block = f"\n\n{warstack_note}" if warstack_note else ""
 
     await m.answer(
         "αOS Router Help\n\n"
         "/menu or /commands — show all centres from the Index\n"
         "/reload — refresh centre list\n"
+        "/health — check bridge/laptop health\n"
         "/help — this help message\n\n"
         "Dynamic commands (from Index API):\n"
         "Type /voice /door /fire /frame etc. to get centre URLs.\n"
         "Available commands are whatever the Index menu currently serves."
         f"{ext_cmds_block}"
+        f"{warstack_note_block}"
         f"{ext_info}"
     )
 
@@ -291,6 +385,33 @@ async def reload_command(m: Message):
     )
 
 
+@dp.message(Command("health"))
+async def health_command(m: Message):
+    """Handle /health command."""
+    if not allowed(m.from_user.id):
+        return
+
+    if not HEALTH_URL:
+        await m.answer("⚠️ Health URL not configured.")
+        return
+
+    logger.info(f"/health from user {m.from_user.id}")
+    timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            started = time.monotonic()
+            async with session.get(HEALTH_URL) as response:
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                status = response.status
+                text = await response.text()
+                msg = f"🟢 Bridge health OK\nHTTP {status} • {elapsed_ms}ms"
+                if text:
+                    msg += f"\n\n{text[:800]}"
+                await m.answer(msg)
+    except Exception as exc:
+        await m.answer(f"🔴 Bridge health failed\n{HEALTH_URL}\n{exc}")
+
+
 @dp.message(F.text.regexp(r"^/(.+)$"))
 async def route_command(m: Message):
     """Handle dynamic routing for centre commands."""
@@ -301,7 +422,9 @@ async def route_command(m: Message):
     cmd = m.text.strip().lstrip("/").split()[0].lower()
 
     # Skip known commands (handled by other handlers)
-    if cmd in ("start", "menu", "reload", "help"):
+    if cmd in ("start", "menu", "reload", "help", "health", "commands"):
+        return
+    if cmd in extension_command_set(config, loaded_extension_names()):
         return
 
     logger.info(f"Routing /{cmd} from user {m.from_user.id}")
@@ -328,6 +451,32 @@ async def route_command(m: Message):
     )
 
 
+async def send_startup_ping():
+    """Send one-time startup ping to GAS (triggers Bridge check + Telegram notification)."""
+    if not GAS_WEBHOOK_URL:
+        logger.info("Startup ping skipped: AOS_GAS_WEBHOOK_URL not configured")
+        return
+
+    try:
+        # Send ping to GAS webhook (GAS orchestrates the rest)
+        hostname = socket.gethostname()
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            payload = {
+                "kind": "router_startup",
+                "status": "online",
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                "host": hostname
+            }
+            async with session.post(GAS_WEBHOOK_URL, json=payload) as response:
+                if response.status == 200:
+                    logger.info(f"Startup ping sent to GAS: {GAS_WEBHOOK_URL}")
+                else:
+                    logger.warning(f"GAS ping failed: HTTP {response.status}")
+    except Exception as exc:
+        logger.warning(f"Startup ping failed: {exc}")
+
+
 async def main():
     """Main bot entry point."""
     require_token()
@@ -345,6 +494,9 @@ async def main():
         await extension_loader.load_extensions(extension_names)
     else:
         logger.info("No extensions configured (dumb router mode)")
+
+    # Send startup ping to GAS
+    await send_startup_ping()
 
     # Start polling
     try:

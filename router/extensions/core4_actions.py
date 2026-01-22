@@ -7,25 +7,29 @@ task with the matching tag as done.
 
 Example:
   /fit → task +core4 +fitness due:today done
+  /fit Felt strong today → also saves journal note via Index Node API
 
 Configuration in config.yaml:
   core4_actions:
+    api_base: http://127.0.0.1:8799
     tags:
       fit: fitness
       fue: fuel
       med: meditation
-      mem: memory
+      mem: memoirs
       par: partner
       pos: posterity
-      dis: discipline
-      dec: decision
+      dis: discover
+      dec: declare
 """
 
 import asyncio
 import json
 import logging
+import os
 from typing import Dict
 
+import aiohttp
 from aiogram.filters import Command
 from aiogram.types import Message
 
@@ -47,16 +51,26 @@ class Core4ActionsExtension(Extension):
         """
         super().__init__(bot, dp, config)
         self.tag_map: Dict[str, str] = config.get("tags", {})
+        api_base = os.getenv("CORE4_API_BASE") or config.get("api_base", "http://127.0.0.1:8799")
+        self.api_base = str(api_base).rstrip("/")
+        self._session: aiohttp.ClientSession | None = None
         if not self.tag_map:
             logger.warning("Core4ActionsExtension: No tags configured")
 
     async def setup(self) -> None:
         """Register Core4 command handlers."""
+        self._session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=5)
+        )
         # Register handlers for each tag
         for cmd, tag in self.tag_map.items():
             self._register_core4_handler(cmd, tag)
 
         logger.info(f"Core4ActionsExtension: Registered {len(self.tag_map)} commands")
+
+    async def teardown(self) -> None:
+        if self._session:
+            await self._session.close()
 
     def _register_core4_handler(self, cmd: str, tag: str) -> None:
         """Register a handler for a Core4 command.
@@ -69,7 +83,43 @@ class Core4ActionsExtension(Extension):
         async def core4_done(m: Message):
             """Mark Core4 task as done."""
             result = await self._mark_task_done_by_tag(tag)
+            note = self._extract_note(m)
+            if note:
+                journal_status = await self._save_journal(tag, note)
+                result = f"{result}\n{journal_status}"
             await m.answer(result)
+
+    def _extract_note(self, m: Message) -> str:
+        text = (m.text or "").strip()
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            return ""
+        return parts[1].strip()
+
+    async def _save_journal(self, tag: str, note: str) -> str:
+        payload = {
+            "text": note,
+            "source": "telegram-core4",
+            "subtask": tag,
+        }
+        data = await self._api_post("/api/journal", payload)
+        if data and data.get("ok"):
+            return "📝 Journal saved."
+        return "⚠️ Journal save failed."
+
+    async def _api_post(self, path: str, payload: dict) -> dict | None:
+        if not self._session:
+            return None
+        url = f"{self.api_base}{path}"
+        try:
+            async with self._session.post(url, json=payload) as resp:
+                data = await resp.json(content_type=None)
+                if resp.status >= 400:
+                    return {"ok": False, "error": data or f"HTTP {resp.status}"}
+                return data if isinstance(data, dict) else {"ok": True}
+        except Exception as exc:
+            logger.error(f"Core4ActionsExtension API error: {exc}")
+            return None
 
     async def _mark_task_done_by_tag(self, tag: str) -> str:
         """Mark a Taskwarrior task as done by tag.

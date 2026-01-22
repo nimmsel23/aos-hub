@@ -562,103 +562,22 @@
   </section>
 
   <section class="grid">
-    <!-- LEFT: Return & Report + Maps -->
+    <!-- LEFT: Weekly Overview -->
     <div class="card">
       <div class="hd">
-        <h2>🗺 Return & Report</h2>
-        <p class="mini">Latest Intel from your Maps</p>
+        <h2>🏛️ General's Tent</h2>
+        <p class="mini" id="tentWeek">Week Loading...</p>
       </div>
       <div class="bd">
-        <div class="ritual">
-          <div class="rit">
-            <h3>Component #1</h3>
-            <p>
-              <b>Return & Report</b> — brutal honesty. Are you on track or off track?
-              The maps do not lie.
-            </p>
-          </div>
-          <div class="rit">
-            <h3>Chain of Command</h3>
-            <p>
-              Day → Week → Month → Year. Your review sets the tone.
-              Your correction decides the outcome.
-            </p>
-          </div>
-        </div>
-
-        <div style="height:14px"></div>
-
-        <div class="maps">
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Frame Map</div>
-              <div class="meta" id="meta_frame">—</div>
-            </div>
-            <div class="entry" id="frame">(lädt...)</div>
-            <div class="linkrow">
-              <a id="link_frame" href="#" target="_blank">→ Frame Centre</a>
-            </div>
-          </div>
-
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Freedom Map</div>
-              <div class="meta" id="meta_freedom">—</div>
-            </div>
-            <div class="entry" id="freedom">(lädt...)</div>
-            <div class="linkrow">
-              <a id="link_freedom" href="#" target="_blank">→ Freedom Centre</a>
-            </div>
-          </div>
-
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Focus Map</div>
-              <div class="meta" id="meta_focus">—</div>
-            </div>
-            <div class="entry" id="focus">(lädt...)</div>
-            <div class="linkrow">
-              <a id="link_focus" href="#" target="_blank">→ Focus Centre</a>
-            </div>
-          </div>
-
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Fire Map</div>
-              <div class="meta" id="meta_fire">—</div>
-            </div>
-            <div class="entry" id="fire">(lädt...)</div>
-            <div class="linkrow">
-              <a id="link_fire" href="#" target="_blank">→ Fire Centre</a>
-            </div>
-          </div>
-
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Voice Stack</div>
-              <div class="meta" id="meta_voice">—</div>
-            </div>
-            <div class="entry" id="voice">(lädt...)</div>
-            <div class="linkrow">
-              <a id="link_voice" href="#" target="_blank">→ Voice Centre</a>
-            </div>
-          </div>
-
-          <div class="mapbox">
-            <div class="maphead">
-              <div class="name">Alpha Odyssey</div>
-              <div class="meta">Wake Up • Take A Knee • Have It All • Be Free</div>
-            </div>
-            <div class="entry">
-              <em>
-                The Code → The Fact Maps → The Voice → The Core → The Door → The Game.
-                The Tent is where the Game becomes inevitable.
-              </em>
-            </div>
-            <div class="linkrow">
-              <a href="#" onclick="scrollToId('notesCard');return false;">→ Continue Ritual</a>
-            </div>
-          </div>
+        <div class="rit">
+          <h3>Directive</h3>
+          <p>
+            The General's Tent is your weekly council. Review the week's battles,
+            extract lessons, correct course, and set new targets.
+          </p>
+          <p style="margin-top:12px;font-size:12px;color:rgba(234,220,245,0.6);">
+            💡 For pipeline intelligence & backend synthesis, see the <a href="#pipelineDebug" onclick="scrollToId('pipelineDebug');return false;" style="color:rgba(189,147,249,0.8);text-decoration:underline;">Pipeline Debug</a> section below.
+          </p>
         </div>
       </div>
     </div>
@@ -729,7 +648,6 @@
               </div>
             </div>
 
-            <button class="btn" type="button" onclick="saveLocalScores()">Save Scores (local)</button>
           </div>
         </div>
       </div>
@@ -828,7 +746,7 @@
         <div>
           <div class="notehead">
             <div class="k">Component #2 — Lessons Learned</div>
-            <div class="s">What worked / What didn’t</div>
+            <div class="s">What worked / What didn't</div>
           </div>
           <textarea id="lessons" placeholder="What did the week teach you? What pattern repeats? What cross-domain principle can you apply for exponential growth?"></textarea>
         </div>
@@ -849,17 +767,104 @@
           <textarea id="targets" placeholder="List the new targets. Keep them aligned: Focus (month) → Freedom (year)."></textarea>
         </div>
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-          <button class="btn" type="button" onclick="saveLocalNotes()">Save Notes (local)</button>
-          <button class="btn" type="button" onclick="copyWeeklyReport()">Copy Weekly Report (md)</button>
-          <button class="btn" type="button" onclick="saveWeeklyReport()">Save Weekly Report (server)</button>
-        </div>
       </div>
     </div>
   </section>
 
+  <!-- PIPELINE DEBUG SECTION -->
+  <section class="card" id="pipelineDebug" style="margin-top:24px;border:2px solid rgba(189,147,249,0.3);">
+    <div class="hd">
+      <h2>🔬 Pipeline Intelligence (Debug)</h2>
+      <p class="mini">Backend synthesis for Telegram reports & monitoring</p>
+    </div>
+    <div class="bd">
+      <div style="margin-bottom:18px;padding:12px;background:rgba(189,147,249,0.1);border-radius:8px;border-left:3px solid rgba(189,147,249,0.5);">
+        <div style="font-size:12px;color:rgba(234,220,245,0.8);line-height:1.6;">
+          <strong>ℹ️ About this section:</strong> This data is synthesized by the backend for automated Telegram reports and system monitoring.
+          It's not part of your manual Tent workflow - it's the intelligence engine running in the background.
+        </div>
+      </div>
+
+      <!-- Component #1: Return & Report Intelligence -->
+      <details style="margin-bottom:18px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;color:rgba(187,134,252,0.95);padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+          📊 Component #1: Return & Report Intelligence
+        </summary>
+        <div style="padding:16px;background:rgba(0,0,0,0.15);border-radius:8px;margin-top:8px;">
+          <!-- Domain Health Matrix -->
+          <div style="marginBottom: 16px;">
+            <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(187,134,252,0.95);font-weight:950;">📊 DOMAIN HEALTH MATRIX</h3>
+            <div id="domainHealthMatrix" style="font-family:monospace;font-size:12px;line-height:1.6;color:rgba(234,220,245,0.80);background:rgba(0,0,0,0.25);padding:12px;border-radius:12px;border:1px solid rgba(187,134,252,0.15);">
+              Loading domain health...
+            </div>
+          </div>
+
+          <div style="height:14px"></div>
+
+          <!-- Strategic Intelligence Alerts -->
+          <div id="strategicIntelligence" style="display:none;">
+            <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,92,138,0.95);font-weight:950;">🚨 STRATEGIC INTELLIGENCE</h3>
+            <div id="intelligenceAlerts"></div>
+            <div style="height:12px"></div>
+          </div>
+
+          <!-- Pipeline Blockages -->
+          <div id="pipelineSection" style="display:none;">
+            <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,209,102,0.95);font-weight:950;">⚠️ PIPELINE BLOCKAGES</h3>
+            <div id="pipelineBlockages"></div>
+            <div style="height:12px"></div>
+          </div>
+
+          <!-- Cascade Alignment -->
+          <div style="marginBottom: 16px;">
+            <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(99,255,219,0.95);font-weight:950;">📈 CASCADE ALIGNMENT</h3>
+            <div id="cascadeAlignment" style="font-family:monospace;font-size:12px;line-height:1.6;color:rgba(234,220,245,0.80);background:rgba(0,0,0,0.25);padding:12px;border-radius:12px;border:1px solid rgba(187,134,252,0.15);">
+              Loading cascade health...
+            </div>
+          </div>
+
+          <!-- Weekly Metrics Summary -->
+          <div style="marginBottom: 8px;">
+            <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(215,180,106,0.95);font-weight:950;">📦 WEEKLY METRICS</h3>
+            <div id="weeklyMetrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;"></div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Component #2: Lessons Synthesis -->
+      <details style="margin-bottom:18px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;color:rgba(99,255,219,0.95);padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+          🧠 Component #2: Lessons Synthesis
+        </summary>
+        <div style="padding:16px;background:rgba(0,0,0,0.15);border-radius:8px;margin-top:8px;">
+          <div id="debugLessonsContent">Loading lessons synthesis...</div>
+        </div>
+      </details>
+
+      <!-- Component #3: Corrections Synthesis -->
+      <details style="margin-bottom:18px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;color:rgba(255,92,138,0.95);padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+          ⚠️ Component #3: Corrections Synthesis
+        </summary>
+        <div style="padding:16px;background:rgba(0,0,0,0.15);border-radius:8px;margin-top:8px;">
+          <div id="debugCorrectionsContent">Loading corrections synthesis...</div>
+        </div>
+      </details>
+
+      <!-- Component #4: Targets Synthesis -->
+      <details style="margin-bottom:8px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;color:rgba(189,147,249,0.95);padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+          🎯 Component #4: Targets Synthesis
+        </summary>
+        <div style="padding:16px;background:rgba(0,0,0,0.15);border-radius:8px;margin-top:8px;">
+          <div id="debugTargetsContent">Loading targets synthesis...</div>
+        </div>
+      </details>
+    </div>
+  </section>
+
   <footer>
-    αOS • General’s Tent • Chapter 41 • Alpha Odyssey
+    αOS • General's Tent • Chapter 41 • Alpha Odyssey
   </footer>
 </main>
 
@@ -1012,27 +1017,508 @@
     setLinks();
 
     document.getElementById("weekPill").textContent = "🗓 Week: " + isoWeekString();
-    document.getElementById("stampPill").textContent = "⏳ Updated: " + new Date().toLocaleString('de-DE');
+    document.getElementById("tentWeek").textContent = isoWeekString();
+    setUpdatedStamp();
 
-    const types = ["frame","freedom","focus","fire","voice"];
-    types.forEach(async (type) => {
-      try {
-        const res = await fetch(`/api/generals/latest?type=${encodeURIComponent(type)}`, { cache: "no-store" });
-        const data = await res.json();
-        renderRow(type, data);
-      } catch (_) {
-        const box = document.getElementById(type);
-        const meta = document.getElementById("meta_" + type);
-        if (box) box.innerHTML = "<em>Feed nicht verfügbar</em>";
-        if (meta) meta.textContent = "—";
-      }
-    });
+    // Load new Tent Intelligence
+    loadTentIntelligence();
 
     restoreLocal();
     wireScoreLive();
     wireAutosave();
     initTerminal();
     loadTasks();
+  }
+
+  async function loadTentIntelligence() {
+    try {
+      const week = isoWeekString();
+      const res = await fetch(`/api/tent/component/return-report?week=${week}`, { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error(`API returned ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (!data.ok || !data.component) {
+        throw new Error("Invalid response format");
+      }
+
+      const component = data.component;
+
+      // Render Domain Health Matrix
+      renderDomainHealthMatrix(component);
+
+      // Render Strategic Intelligence
+      renderStrategicIntelligence(component);
+
+      // Render Pipeline Blockages
+      renderPipelineBlockages(component);
+
+      // Render Cascade Alignment
+      renderCascadeAlignment(component);
+
+      // Render Weekly Metrics
+      renderWeeklyMetrics(component);
+
+    } catch (err) {
+      console.error("Failed to load Tent Intelligence (Component #1):", err);
+
+      // Show error in UI
+      const matrix = document.getElementById("domainHealthMatrix");
+      if (matrix) {
+        matrix.innerHTML = `<span style="color:rgba(255,92,138,0.8);">⚠️ Failed to load intelligence: ${err.message}</span><br><br><em style="font-size:11px;">Make sure domain-states are initialized:<br><code>curl -X POST http://127.0.0.1:8799/api/tent/init</code></em>`;
+      }
+
+      const cascade = document.getElementById("cascadeAlignment");
+      if (cascade) {
+        cascade.innerHTML = `<em style="color:rgba(255,92,138,0.7);">Data unavailable</em>`;
+      }
+    }
+
+    // Component #2: Lessons (Debug section)
+    try {
+      const week = isoWeekString();
+      const res = await fetch(`/api/tent/component/lessons?week=${week}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const data = await res.json();
+      if (data.ok && data.component) {
+        renderLessonsDebug(data.component);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err) {
+      console.error('Failed to load Lessons:', err);
+      document.getElementById('debugLessonsContent').innerHTML = '<div style="color:rgba(255,92,138,0.7);font-size:12px;">⚠️ Failed to load lessons</div>';
+    }
+
+    // Component #3: Corrections (Debug section)
+    try {
+      const week = isoWeekString();
+      const res = await fetch(`/api/tent/component/corrections?week=${week}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const data = await res.json();
+      if (data.ok && data.component) {
+        renderCorrectionsDebug(data.component);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err) {
+      console.error('Failed to load Corrections:', err);
+      document.getElementById('debugCorrectionsContent').innerHTML = '<div style="color:rgba(255,92,138,0.7);font-size:12px;">⚠️ Failed to load corrections</div>';
+    }
+
+    // Component #4: Targets (Debug section)
+    try {
+      const week = isoWeekString();
+      const res = await fetch(`/api/tent/component/targets?week=${week}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const data = await res.json();
+      if (data.ok && data.component) {
+        renderTargetsDebug(data.component);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err) {
+      console.error('Failed to load Targets:', err);
+      document.getElementById('debugTargetsContent').innerHTML = '<div style="color:rgba(255,92,138,0.7);font-size:12px;">⚠️ Failed to load targets</div>';
+    }
+  }
+
+  function renderDomainHealthMatrix(component) {
+    const metrics = component.weekly_metrics || {};
+    const domainSynthesis = component.domain_synthesis || {};
+    const domainHealth = domainSynthesis.domain_health || {};
+
+    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
+
+    // Voice count map (from synthesis or hardcoded)
+    const voiceMap = { 'BODY': 6, 'BEING': 4, 'BALANCE': 8, 'BUSINESS': 6 };
+
+    let html = '';
+    html += '<div style="color:rgba(234,220,245,0.65);font-size:11px;margin-bottom:8px;">Domain    V→D→F  Core4  Status</div>';
+    html += '<div style="border-bottom:1px solid rgba(187,134,252,0.15);margin-bottom:6px;"></div>';
+
+    domains.forEach(domain => {
+      const voiceCount = voiceMap[domain] || 0;
+      const core4 = (metrics.core4 || {})[domain] || 0;
+      const fireData = (metrics.fire_hits || {})[domain] || {};
+      const fireHits = fireData.total || 0;
+      const warStacks = ((metrics.war_stacks || {}).by_domain || {})[domain] || {};
+      const wsActive = warStacks.active || 0;
+
+      // Status indicator
+      let status, statusColor;
+      if (wsActive > 0 && fireHits > 0 && core4 >= 6) {
+        status = '🟢 STRONG';
+        statusColor = 'rgba(99,255,219,0.9)';
+      } else if (wsActive > 0 || fireHits > 0 || core4 >= 4) {
+        status = '🟡 PARTIAL';
+        statusColor = 'rgba(255,209,102,0.9)';
+      } else {
+        status = '🔴 BLOCKED';
+        statusColor = 'rgba(255,92,138,0.9)';
+      }
+
+      html += `<div style="margin-bottom:4px;">`;
+      html += `<span style="display:inline-block;width:70px;">${domain}</span>`;
+      html += `<span style="display:inline-block;width:45px;text-align:center;">${voiceCount}→${wsActive}→${fireHits}</span>`;
+      html += `<span style="display:inline-block;width:50px;text-align:center;">${core4}/7</span>`;
+      html += `<span style="color:${statusColor};font-weight:bold;">${status}</span>`;
+      html += `</div>`;
+    });
+
+    document.getElementById("domainHealthMatrix").innerHTML = html;
+  }
+
+  function renderStrategicIntelligence(component) {
+    const insights = (component.domain_synthesis || {}).insights || [];
+
+    if (insights.length === 0) {
+      document.getElementById("strategicIntelligence").style.display = 'none';
+      return;
+    }
+
+    document.getElementById("strategicIntelligence").style.display = 'block';
+
+    let html = '';
+    insights.slice(0, 3).forEach(insight => {
+      const severityEmoji = {
+        'high': '🔴',
+        'medium': '🟡',
+        'low': '🟢'
+      }[insight.severity] || '⚪';
+
+      const severityColor = {
+        'high': 'rgba(255,92,138,0.9)',
+        'medium': 'rgba(255,209,102,0.9)',
+        'low': 'rgba(99,255,219,0.9)'
+      }[insight.severity] || 'rgba(234,220,245,0.7)';
+
+      html += `<div style="background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:10px;margin-bottom:8px;border-left:3px solid ${severityColor};">`;
+      html += `<div style="color:${severityColor};font-weight:bold;font-size:11px;margin-bottom:4px;">${severityEmoji} ${insight.type.toUpperCase().replace(/_/g, ' ')}</div>`;
+      html += `<div style="font-size:12px;color:rgba(234,220,245,0.85);margin-bottom:6px;">${insight.description}</div>`;
+      html += `<div style="font-size:11px;color:rgba(234,220,245,0.65);font-style:italic;">→ ${insight.recommendation}</div>`;
+      html += `</div>`;
+    });
+
+    document.getElementById("intelligenceAlerts").innerHTML = html;
+  }
+
+  function renderPipelineBlockages(component) {
+    const issues = (component.pipeline_synthesis || {}).issues || [];
+
+    if (issues.length === 0) {
+      document.getElementById("pipelineSection").style.display = 'none';
+      return;
+    }
+
+    document.getElementById("pipelineSection").style.display = 'block';
+
+    let html = '';
+    issues.slice(0, 2).forEach(issue => {
+      html += `<div style="background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:10px;margin-bottom:8px;border-left:3px solid rgba(255,209,102,0.9);">`;
+      html += `<div style="color:rgba(255,209,102,0.95);font-weight:bold;font-size:11px;margin-bottom:4px;">${issue.domain} ${issue.stage.toUpperCase().replace(/_/g, '→')}</div>`;
+      html += `<div style="font-size:12px;color:rgba(234,220,245,0.85);margin-bottom:6px;">${issue.description}</div>`;
+      html += `<div style="font-size:11px;color:rgba(99,255,219,0.8);">✅ ${issue.correction}</div>`;
+      html += `</div>`;
+    });
+
+    document.getElementById("pipelineBlockages").innerHTML = html;
+  }
+
+  function renderCascadeAlignment(component) {
+    const cascade = (component.temporal_synthesis || {}).cascade_health || {};
+    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
+
+    let html = '';
+    html += '<div style="color:rgba(234,220,245,0.65);font-size:11px;margin-bottom:8px;">Fire→Focus→Freedom→Frame</div>';
+    html += '<div style="border-bottom:1px solid rgba(187,134,252,0.15);margin-bottom:6px;"></div>';
+
+    domains.forEach(domain => {
+      const domainCascade = cascade[domain] || {};
+      const ff = domainCascade.fire_to_focus || 'unknown';
+      const ff2 = domainCascade.focus_to_freedom || 'unknown';
+      const ff3 = domainCascade.freedom_to_frame || 'unknown';
+
+      const emojiMap = {
+        'aligned': '🟢',
+        'partial': '🟡',
+        'blocked': '🔴',
+        'unknown': '⚪'
+      };
+
+      const e1 = emojiMap[ff] || '⚪';
+      const e2 = emojiMap[ff2] || '⚪';
+      const e3 = emojiMap[ff3] || '⚪';
+
+      html += `<div style="margin-bottom:4px;">`;
+      html += `<span style="display:inline-block;width:80px;">${domain}</span>`;
+      html += `<span style="display:inline-block;width:30px;text-align:center;">${e1}</span>`;
+      html += `<span style="display:inline-block;width:30px;text-align:center;">${e2}</span>`;
+      html += `<span style="display:inline-block;width:30px;text-align:center;">${e3}</span>`;
+      html += `<span style="display:inline-block;width:30px;text-align:center;">⚪</span>`;
+      html += `</div>`;
+    });
+
+    document.getElementById("cascadeAlignment").innerHTML = html;
+  }
+
+  function renderWeeklyMetrics(component) {
+    const metrics = component.weekly_metrics || {};
+
+    const metricBoxes = [
+      {
+        label: 'Core4 Total',
+        value: Object.values(metrics.core4 || {}).reduce((a, b) => a + b, 0),
+        max: 28,
+        color: 'rgba(187,134,252,0.9)'
+      },
+      {
+        label: 'Fire Hits',
+        value: Object.values(metrics.fire_hits || {}).reduce((a, b) => a + (b.completed || 0), 0),
+        max: Object.values(metrics.fire_hits || {}).reduce((a, b) => a + (b.total || 0), 0) || 16,
+        color: 'rgba(255,92,138,0.9)'
+      },
+      {
+        label: 'War Stacks',
+        value: (metrics.war_stacks || {}).active || 0,
+        max: null,
+        color: 'rgba(255,209,102,0.9)'
+      }
+    ];
+
+    let html = '';
+    metricBoxes.forEach(box => {
+      html += `<div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:10px;text-align:center;">`;
+      html += `<div style="font-size:11px;color:rgba(234,220,245,0.65);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">${box.label}</div>`;
+      html += `<div style="font-size:22px;font-weight:bold;color:${box.color};">`;
+      if (box.max) {
+        html += `${box.value}/${box.max}`;
+      } else {
+        html += `${box.value}`;
+      }
+      html += `</div>`;
+      html += `</div>`;
+    });
+
+    document.getElementById("weeklyMetrics").innerHTML = html;
+  }
+
+  // ============================================================
+  // Component #2: Lessons (Debug)
+  // ============================================================
+  function renderLessonsDebug(component) {
+    const crossDomain = (component.cross_domain_lessons || []).slice(0, 3);
+    const temporal = (component.temporal_lessons || []).slice(0, 2);
+    const pipeline = (component.pipeline_lessons || []).slice(0, 2);
+
+    if (crossDomain.length === 0 && temporal.length === 0 && pipeline.length === 0) {
+      document.getElementById('debugLessonsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No patterns detected yet</em>';
+      return;
+    }
+
+    let html = '';
+
+    // Cross-Domain Lessons
+    if (crossDomain.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">🌐 Cross-Domain Patterns</div>';
+      crossDomain.forEach(lesson => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.pattern)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.lesson)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    // Temporal Lessons
+    if (temporal.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">⏳ Temporal Cascade Insights</div>';
+      temporal.forEach(lesson => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.insight)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.recommendation)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    // Pipeline Lessons
+    if (pipeline.length > 0) {
+      html += '<div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">⚡ Pipeline Flow Lessons</div>';
+      pipeline.forEach(lesson => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.stage)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.lesson)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('lessonsContent').innerHTML = html;
+  }
+
+  // ============================================================
+  // Component #3: Corrections
+  // ============================================================
+  function renderCorrections(component) {
+    const urgent = (component.urgent_corrections || []).slice(0, 5);
+    const domainCorrections = component.domain_corrections || {};
+    const pipelineCorrections = (component.pipeline_corrections || []).slice(0, 3);
+
+    if (urgent.length === 0 && Object.keys(domainCorrections).length === 0 && pipelineCorrections.length === 0) {
+      document.getElementById('correctionsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No corrections needed</em>';
+      return;
+    }
+
+    let html = '';
+
+    // Urgent Corrections (High Priority)
+    if (urgent.length > 0) {
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.9);margin-bottom:6px;">🚨 Urgent Corrections</div>';
+      urgent.forEach(correction => {
+        const severityColor = {
+          'high': 'rgba(255,92,138,0.9)',
+          'medium': 'rgba(255,209,102,0.9)',
+          'low': 'rgba(99,255,219,0.9)'
+        }[correction.severity] || 'rgba(234,220,245,0.7)';
+
+        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-left:3px solid ${severityColor};border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:4px;">${safeText(correction.issue)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.7);margin-bottom:4px;">${safeText(correction.description)}</div>`;
+        html += `<div style="color:${severityColor};font-size:11px;">✓ ${safeText(correction.action)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    // Domain-Specific Corrections
+    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
+    const hasAnyDomainCorrections = domains.some(d => (domainCorrections[d] || []).length > 0);
+
+    if (hasAnyDomainCorrections) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">📊 Domain Corrections</div>';
+
+      domains.forEach(domain => {
+        const corrections = (domainCorrections[domain] || []).slice(0, 2);
+        if (corrections.length > 0) {
+          html += `<div style="margin-left:8px;margin-bottom:8px;">`;
+          html += `<div style="font-size:11px;font-weight:600;color:rgba(234,220,245,0.8);margin-bottom:4px;">${domain}</div>`;
+          corrections.forEach(c => {
+            html += `<div style="margin-left:8px;padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;font-size:11px;line-height:1.4;margin-bottom:4px;">`;
+            html += `<div style="color:rgba(234,220,245,0.9);">${safeText(c.correction)}</div>`;
+            html += `</div>`;
+          });
+          html += `</div>`;
+        }
+      });
+      html += '</div>';
+    }
+
+    // Pipeline Corrections
+    if (pipelineCorrections.length > 0) {
+      html += '<div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">⚡ Pipeline Fixes</div>';
+      pipelineCorrections.forEach(correction => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(correction.stage)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(correction.fix)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('correctionsContent').innerHTML = html;
+  }
+
+  // ============================================================
+  // Component #4: Targets
+  // ============================================================
+  function renderTargets(component) {
+    const nextWeekTargets = component.next_week_targets || {};
+    const recommendedWarStacks = (component.recommended_war_stacks || []).slice(0, 3);
+    const focusAdjustments = (component.focus_adjustments || []).slice(0, 3);
+    const fireHitSuggestions = (component.fire_hit_suggestions || []).slice(0, 4);
+
+    if (Object.keys(nextWeekTargets).length === 0 &&
+        recommendedWarStacks.length === 0 &&
+        focusAdjustments.length === 0 &&
+        fireHitSuggestions.length === 0) {
+      document.getElementById('targetsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No targets generated yet</em>';
+      return;
+    }
+
+    let html = '';
+
+    // Next Week Targets by Domain
+    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
+    const hasAnyTargets = domains.some(d => (nextWeekTargets[d] || []).length > 0);
+
+    if (hasAnyTargets) {
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.9);margin-bottom:6px;">🎯 Next Week Focus</div>';
+
+      domains.forEach(domain => {
+        const targets = (nextWeekTargets[domain] || []).slice(0, 2);
+        if (targets.length > 0) {
+          html += `<div style="margin-left:8px;margin-bottom:8px;">`;
+          html += `<div style="font-size:11px;font-weight:600;color:rgba(234,220,245,0.8);margin-bottom:4px;">${domain}</div>`;
+          targets.forEach(target => {
+            html += `<div style="margin-left:8px;padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;font-size:11px;line-height:1.4;margin-bottom:4px;">`;
+            html += `<div style="color:rgba(234,220,245,0.9);">→ ${safeText(target)}</div>`;
+            html += `</div>`;
+          });
+          html += `</div>`;
+        }
+      });
+      html += '</div>';
+    }
+
+    // Recommended War Stacks
+    if (recommendedWarStacks.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.8);margin-bottom:6px;">⚔️ War Stack Recommendations</div>';
+      recommendedWarStacks.forEach(ws => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:8px 10px;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,92,138,0.4);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:3px;">${safeText(ws.title)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.7);font-size:11px;">${safeText(ws.reason)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    // Focus Adjustments
+    if (focusAdjustments.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">📍 Focus Adjustments</div>';
+      focusAdjustments.forEach(adj => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(adj)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    // Fire Hit Suggestions
+    if (fireHitSuggestions.length > 0) {
+      html += '<div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">🔥 Fire Hits for Next Week</div>';
+      fireHitSuggestions.forEach(hit => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(hit)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('targetsContent').innerHTML = html;
   }
 
   function restoreLocal() {
@@ -1053,7 +1539,7 @@
     updateScoreDisplays();
   }
 
-  function saveLocalScores() {
+  function saveLocalScores(silent = false) {
     const payload = {
       coreScore:  numVal("coreScore"),
       coreMax:    numVal("coreMax"),
@@ -1066,10 +1552,10 @@
     };
     localStorage.setItem(LS.prefix + LS.scores, JSON.stringify(payload));
     updateScoreDisplays();
-    flash("Scores saved (local).");
+    if (!silent) flash("Scores saved (local).");
   }
 
-  function saveLocalNotes() {
+  function saveLocalNotes(silent = false) {
     const payload = {
       lessons: document.getElementById("lessons").value || "",
       correction: document.getElementById("correction").value || "",
@@ -1078,7 +1564,7 @@
       ts: new Date().toISOString()
     };
     localStorage.setItem(LS.prefix + LS.notes, JSON.stringify(payload));
-    flash("Notes saved (local).");
+    if (!silent) flash("Notes saved (local).");
   }
 
   function resetLocal() {
@@ -1118,94 +1604,91 @@
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener("input", () => {
-        try {
-          const notes = {
-            lessons: document.getElementById("lessons").value || "",
-            correction: document.getElementById("correction").value || "",
-            targets: document.getElementById("targets").value || "",
-            week: isoWeekString(),
-            ts: new Date().toISOString()
-          };
-          localStorage.setItem(LS.prefix + LS.notes, JSON.stringify(notes));
-        } catch (_) {}
+        try { saveLocalNotes(true); } catch (_) {}
+      });
+      el.addEventListener("blur", () => {
+        saveWeeklyReport(true);
+      });
+    });
+    ["coreScore","coreMax","stackScore","stackMax","doorScore","doorMax"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", () => {
+        try { saveLocalScores(true); } catch (_) {}
+      });
+      el.addEventListener("blur", () => {
+        saveWeeklyReport(true);
       });
     });
   }
 
-  function copyWeeklyReport() {
+  function buildWeeklyReportMarkdown() {
     const week = isoWeekString();
-    const scores = JSON.parse(localStorage.getItem(LS.prefix + LS.scores) || "{}");
-    const notes  = JSON.parse(localStorage.getItem(LS.prefix + LS.notes) || "{}");
+    const scores = {
+      coreScore: numVal("coreScore"),
+      coreMax: numVal("coreMax") ?? 28,
+      stackScore: numVal("stackScore"),
+      stackMax: numVal("stackMax") ?? 7,
+      doorScore: numVal("doorScore"),
+      doorMax: numVal("doorMax") ?? 21
+    };
+    const notes = {
+      lessons: document.getElementById("lessons").value || "",
+      correction: document.getElementById("correction").value || "",
+      targets: document.getElementById("targets").value || ""
+    };
+    const hasScores = [scores.coreScore, scores.stackScore, scores.doorScore].some(v => v != null);
+    const hasNotes = [notes.lessons, notes.correction, notes.targets].some(v => v.trim());
+    if (!hasScores && !hasNotes) return { week, markdown: "" };
 
     const md =
-`# General's Tent — ${week}
+`# General's Tent - ${week}
 
-## Component #1 — Return & Report
-- Core: ${scores.coreScore ?? "__"} / ${scores.coreMax ?? 28}
-- Stack: ${scores.stackScore ?? "__"} / ${scores.stackMax ?? 7}
-- Door: ${scores.doorScore ?? "__"} / ${scores.doorMax ?? 21}
+## Component #1 - Return & Report
+- Core: ${scores.coreScore ?? "__"} / ${scores.coreMax}
+- Stack: ${scores.stackScore ?? "__"} / ${scores.stackMax}
+- Door: ${scores.doorScore ?? "__"} / ${scores.doorMax}
 
-## Component #2 — Lessons Learned
+## Component #2 - Lessons Learned
 ${(notes.lessons || "_empty_").trim()}
 
-## Component #3 — Course Correction
+## Component #3 - Course Correction
 ${(notes.correction || "_empty_").trim()}
 
-## Component #4 — New Targets
+## Component #4 - New Targets
 ${(notes.targets || "_empty_").trim()}
 
 ---
 Alpha Odyssey • Chapter 41
 `;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(md).then(() => flash("Weekly report copied (md)."))
-      .catch(() => alert(md));
-    } else {
-      alert(md);
-    }
+    return { week, markdown: md };
   }
 
-  async function saveWeeklyReport() {
-    const week = isoWeekString();
-    const scores = JSON.parse(localStorage.getItem(LS.prefix + LS.scores) || "{}");
-    const notes  = JSON.parse(localStorage.getItem(LS.prefix + LS.notes) || "{}");
+  function setUpdatedStamp() {
+    const el = document.getElementById("stampPill");
+    if (!el) return;
+    el.textContent = "⏳ Updated: " + new Date().toLocaleString('de-DE');
+  }
 
-    const md =
-`# General's Tent — ${week}
-
-## Component #1 — Return & Report
-- Core: ${scores.coreScore ?? "__"} / ${scores.coreMax ?? 28}
-- Stack: ${scores.stackScore ?? "__"} / ${scores.stackMax ?? 7}
-- Door: ${scores.doorScore ?? "__"} / ${scores.doorMax ?? 21}
-
-## Component #2 — Lessons Learned
-${(notes.lessons || "_empty_").trim()}
-
-## Component #3 — Course Correction
-${(notes.correction || "_empty_").trim()}
-
-## Component #4 — New Targets
-${(notes.targets || "_empty_").trim()}
-
----
-Alpha Odyssey • Chapter 41
-`;
+  async function saveWeeklyReport(silent = false) {
+    const payload = buildWeeklyReportMarkdown();
+    if (!payload.markdown) return;
 
     try {
       const res = await fetch("/api/generals/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markdown: md, week })
+        body: JSON.stringify({ markdown: payload.markdown, week: payload.week })
       });
       const data = await res.json();
       if (data && data.ok) {
-        flash("Weekly report saved.");
-      } else {
+        if (silent) setUpdatedStamp();
+        else flash("Weekly report saved.");
+      } else if (!silent) {
         flash("Save failed.");
       }
     } catch (_) {
-      flash("Save failed.");
+      if (!silent) flash("Save failed.");
     }
   }
 

@@ -1,0 +1,411 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AOS_DOTFILES="${AOS_DOTFILES:-$HOME/.dotfiles}"
+CONF_DIR="$AOS_DOTFILES/config/aos/sync.d"
+LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/aos-sync-locks"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  aos-sync menu
+  aos-sync list
+  aos-sync run <target> [--dry] [--mode sync|bisync] [--resync]
+  aos-sync enable <target> [--at HH:MM]
+  aos-sync disable <target>
+  aos-sync status <target>
+  aos-sync logs <target> [--follow]
+  aos-sync doctor <target>
+
+Targets live in:
+  ~/.dotfiles/config/aos/sync.d/<target>.env
+USAGE
+}
+
+die(){ echo "aos-sync: $*" >&2; exit 1; }
+info(){ echo "aos-sync: $*"; }
+
+have_gum(){ command -v gum >/dev/null 2>&1; }
+have_fzf(){ command -v fzf >/dev/null 2>&1; }
+
+# ------------------------------
+# Danger banners
+# ------------------------------
+show_danger_banner_bisync() {
+  local msg="BISYNC is bidirectional and can overwrite files. Proceed only if you understand the risk."
+  if have_gum; then
+    gum style --border thick --border-foreground 208 --foreground 208 --padding "1 2" \
+      "⚠️  DANGER: BISYNC" "" "$msg" >/dev/stderr
+  else
+    echo "========================================" >&2
+    echo "⚠️  DANGER: BISYNC" >&2
+    echo "$msg" >&2
+    echo "========================================" >&2
+  fi
+}
+
+show_danger_banner_resync() {
+  local msg="BISYNC --resync rebuilds state and may cause data loss. Use only as last resort."
+  if have_gum; then
+    gum style --border thick --border-foreground 196 --foreground 196 --padding "1 2" \
+      "⛔ DANGER: BISYNC --resync" "" "$msg" >/dev/stderr
+  else
+    echo "========================================" >&2
+    echo "⛔ DANGER: BISYNC --resync" >&2
+    echo "$msg" >&2
+    echo "========================================" >&2
+  fi
+}
+
+confirm() {
+  local prompt="$1"
+  if have_gum; then
+    gum confirm "$prompt"
+  else
+    read -r -p "$prompt [y/N] " ans
+    [[ "$ans" =~ ^[Yy]$ ]]
+  fi
+}
+
+load_target() {
+  local target="$1"
+  local f="$CONF_DIR/$target.env"
+  [[ -f "$f" ]] || die "Missing target config: $f"
+  # shellcheck disable=SC1090
+  source "$f"
+  [[ -n "${AOS_REMOTE:-}" ]] || die "AOS_REMOTE missing in $f"
+  [[ -n "${AOS_LOCAL:-}"  ]] || die "AOS_LOCAL missing in $f"
+  mkdir -p "$LOCK_DIR"
+  mkdir -p "${AOS_LOG_DIR:-$HOME/.cache/aos-sync}"
+}
+
+lock_run() {
+  local target="$1"
+  local lock="$LOCK_DIR/$target.lock"
+  exec 9>"$lock"
+  flock -n 9 || die "Another sync is already running for target: $target"
+}
+
+rclone_cmd() {
+  local mode="$1"
+  local dry="$2"
+  local resync="$3"
+
+  local common=(
+    --fast-list
+    --log-file "${AOS_LOG_FILE:-$AOS_LOG_DIR/rclone.log}"
+    --log-level INFO
+  )
+
+  [[ "$dry" == "1" ]] && common+=(--dry-run)
+
+  case "$mode" in
+    sync)
+      rclone sync "$AOS_REMOTE" "$AOS_LOCAL" "${common[@]}"
+      ;;
+    bisync)
+      [[ "$resync" == "1" ]] && common+=(--resync)
+      rclone bisync "$AOS_REMOTE" "$AOS_LOCAL" "${common[@]}"
+      ;;
+    *)
+      die "Unknown mode: $mode"
+      ;;
+  esac
+}
+
+post_hook() {
+  local hook="${AOS_POST_HOOK:-}"
+  [[ -z "$hook" ]] && return 0
+  if [[ -x "$hook" ]]; then
+    "$hook"
+  else
+    echo "aos-sync: post-hook not executable, skipping: $hook" >&2
+  fi
+}
+
+write_timer_override() {
+  local target="$1"
+  local hhmm="$2"
+
+  [[ "$hhmm" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]] || die "Invalid time format: $hhmm (expected HH:MM)"
+
+  local hh="${hhmm%%:*}"
+  local mm="${hhmm##*:}"
+
+  local override_dir="$HOME/.config/systemd/user/aos-sync@${target}.timer.d"
+  local override_file="$override_dir/override.conf"
+  mkdir -p "$override_dir"
+
+  cat >"$override_file" <<OVR
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* ${hh}:${mm}:00
+Persistent=true
+OVR
+
+  info "Wrote override: $override_file"
+}
+
+cmd_run() {
+  local target="$1"; shift
+  local dry=0
+  local resync=0
+  local mode="${AOS_MODE:-sync}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry) dry=1; shift ;;
+      --mode) mode="$2"; shift 2 ;;
+      --resync) resync=1; shift ;;
+      *) die "Unknown arg: $1" ;;
+    esac
+  done
+
+  load_target "$target"
+  lock_run "$target"
+
+  if [[ "$mode" == "bisync" ]]; then
+    if [[ "$resync" == "1" ]]; then
+      show_danger_banner_resync
+      confirm "Proceed with BISYNC --resync for '$target'?" || die "Cancelled"
+    else
+      show_danger_banner_bisync
+      confirm "Proceed with BISYNC for '$target'?" || die "Cancelled"
+    fi
+  fi
+
+  echo "=== AOS SYNC RUN ==="
+  echo "target:  $target"
+  echo "mode:    $mode"
+  echo "resync:  $resync"
+  echo "remote:  $AOS_REMOTE"
+  echo "local:   $AOS_LOCAL"
+  echo "dry:     $dry"
+  echo "log:     ${AOS_LOG_FILE:-$AOS_LOG_DIR/rclone.log}"
+  echo "===================="
+
+  rclone_cmd "$mode" "$dry" "$resync"
+  post_hook
+
+  echo "OK: sync complete for $target"
+}
+
+cmd_status() {
+  local target="$1"
+  systemctl --user status "aos-sync@$target.service" --no-pager || true
+  systemctl --user status "aos-sync@$target.timer" --no-pager || true
+}
+
+cmd_logs() {
+  local target="$1"; shift || true
+  local follow=0
+  [[ "${1:-}" == "--follow" ]] && follow=1
+
+  load_target "$target"
+  local lf="${AOS_LOG_FILE:-$AOS_LOG_DIR/rclone.log}"
+  [[ -f "$lf" ]] || die "No log file found: $lf"
+
+  if [[ "$follow" == "1" ]]; then
+    tail -n 200 -f "$lf"
+  else
+    tail -n 200 "$lf"
+  fi
+}
+
+cmd_enable() {
+  local target="$1"; shift || true
+  local at=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --at) at="$2"; shift 2 ;;
+      *) die "Unknown arg: $1" ;;
+    esac
+  done
+
+  if [[ -n "$at" ]]; then
+    write_timer_override "$target" "$at"
+  fi
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now "aos-sync@$target.timer"
+  info "Enabled timer: aos-sync@$target.timer"
+  systemctl --user list-timers "aos-sync@${target}.timer" --no-pager || true
+}
+
+cmd_disable() {
+  local target="$1"
+  systemctl --user disable --now "aos-sync@$target.timer" || true
+  info "Disabled timer: aos-sync@$target.timer"
+}
+
+cmd_doctor() {
+  local target="$1"
+  load_target "$target"
+
+  echo "=== AOS SYNC DOCTOR ==="
+  echo "target: $target"
+  echo "remote: $AOS_REMOTE"
+  echo "local:  $AOS_LOCAL"
+  echo "mode:   ${AOS_MODE:-sync}"
+  echo "log:    ${AOS_LOG_FILE:-$AOS_LOG_DIR/rclone.log}"
+  echo "hook:   ${AOS_POST_HOOK:-<none>}"
+  echo "gum:    $(have_gum && echo yes || echo no)"
+  echo "fzf:    $(have_fzf && echo yes || echo no)"
+  echo "======================="
+
+  command -v rclone >/dev/null || die "rclone missing"
+
+  echo "[1] rclone lsf remote…"
+  if rclone lsf "$AOS_REMOTE" --max-depth 1 >/dev/null 2>&1; then
+    echo "OK: remote reachable"
+  else
+    echo "FAIL: remote not reachable. Run: rclone config" >&2
+    return 1
+  fi
+
+  echo "[2] local directory…"
+  mkdir -p "$AOS_LOCAL"
+  [[ -d "$AOS_LOCAL" ]] && echo "OK: local exists" || die "local not a directory"
+
+  echo "[3] log directory…"
+  mkdir -p "${AOS_LOG_DIR:-$HOME/.cache/aos-sync}"
+  echo "OK: log dir exists"
+
+  echo "[4] post-hook…"
+  if [[ -n "${AOS_POST_HOOK:-}" ]]; then
+    if [[ -x "$AOS_POST_HOOK" ]]; then
+      echo "OK: hook is executable"
+    else
+      echo "WARN: hook set but not executable: $AOS_POST_HOOK" >&2
+    fi
+  else
+    echo "OK: no hook"
+  fi
+
+  echo "[5] systemd units…"
+  systemctl --user list-unit-files | grep -q "aos-sync@\.service" && echo "OK: template service present" || echo "WARN: template service not found"
+  systemctl --user list-unit-files | grep -q "aos-sync@\.timer" && echo "OK: template timer present" || echo "WARN: template timer not found"
+
+  echo "Doctor complete."
+}
+
+cmd_list() {
+  ls -1 "$CONF_DIR" 2>/dev/null | sed 's/\.env$//' || true
+}
+
+pick_target() {
+  local targets
+  targets="$(ls -1 "$CONF_DIR" 2>/dev/null | sed 's/\.env$//' || true)"
+  [[ -n "$targets" ]] || die "No targets found in $CONF_DIR"
+
+  if have_gum; then
+    printf "%s\n" $targets | gum choose --header="Select target"
+  elif have_fzf; then
+    printf "%s\n" $targets | fzf --prompt="Target> "
+  else
+    echo "Select target:"
+    select t in $targets; do
+      [[ -n "${t:-}" ]] && { echo "$t"; return 0; }
+    done
+  fi
+}
+
+pick_action() {
+  local actions=(
+    "Run now (sync)"
+    "Run now (bisync)"
+    "Run now (bisync --resync)"
+    "Enable timer (default)"
+    "Enable timer (set time)"
+    "Doctor"
+    "Status"
+    "Logs (tail)"
+    "Logs (follow)"
+    "Exit"
+  )
+
+  if have_gum; then
+    printf "%s\n" "${actions[@]}" | gum choose --header="Action"
+  elif have_fzf; then
+    printf "%s\n" "${actions[@]}" | fzf --prompt="Action> "
+  else
+    echo "Choose action:"
+    select a in "${actions[@]}"; do
+      [[ -n "${a:-}" ]] && { echo "$a"; return 0; }
+    done
+  fi
+}
+
+ask_time_hhmm() {
+  local t
+  if have_gum; then
+    t="$(gum input --prompt 'Time (HH:MM): ' --placeholder '03:30')"
+  else
+    read -r -p "Time (HH:MM): " t
+  fi
+
+  [[ "$t" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]] || die "Invalid time: $t"
+  echo "$t"
+}
+
+cmd_menu() {
+  local target action
+  target="$(pick_target)" || exit 0
+
+  while true; do
+    action="$(pick_action)" || exit 0
+    case "$action" in
+      "Run now (sync)")
+        cmd_run "$target" --mode sync
+        ;;
+      "Run now (bisync)")
+        cmd_run "$target" --mode bisync
+        ;;
+      "Run now (bisync --resync)")
+        cmd_run "$target" --mode bisync --resync
+        ;;
+      "Enable timer (default)")
+        cmd_enable "$target"
+        ;;
+      "Enable timer (set time)")
+        local t; t="$(ask_time_hhmm)"
+        cmd_enable "$target" --at "$t"
+        ;;
+      "Doctor")
+        cmd_doctor "$target"
+        ;;
+      "Status")
+        cmd_status "$target"
+        ;;
+      "Logs (tail)")
+        cmd_logs "$target"
+        ;;
+      "Logs (follow)")
+        cmd_logs "$target" --follow
+        ;;
+      "Exit")
+        break
+        ;;
+    esac
+  done
+}
+
+main() {
+  [[ $# -ge 1 ]] || { usage; exit 1; }
+  local cmd="$1"; shift
+
+  case "$cmd" in
+    menu)    cmd_menu ;;
+    list)    cmd_list ;;
+    run)     [[ $# -ge 1 ]] || die "run needs <target>"; cmd_run "$@" ;;
+    enable)  [[ $# -ge 1 ]] || die "enable needs <target>"; cmd_enable "$@" ;;
+    disable) [[ $# -ge 1 ]] || die "disable needs <target>"; cmd_disable "$1" ;;
+    status)  [[ $# -ge 1 ]] || die "status needs <target>"; cmd_status "$1" ;;
+    logs)    [[ $# -ge 1 ]] || die "logs needs <target>"; cmd_logs "$@" ;;
+    doctor)  [[ $# -ge 1 ]] || die "doctor needs <target>"; cmd_doctor "$1" ;;
+    *) usage; die "Unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,10 @@
+[Unit]
+Description=AlphaOS Sync Timer (%i)
+
+[Timer]
+# default schedule (override per-target with --at)
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=AlphaOS Sync (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.dotfiles/bin/aos-sync run %i

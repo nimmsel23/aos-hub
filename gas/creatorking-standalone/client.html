@@ -1,0 +1,379 @@
+<script>
+let data = null;
+let activeSection = null;
+let activeQuestion = null;
+
+function qs(id) { return document.getElementById(id); }
+
+function randEmoji() {
+  const arr = (data && data.emojis && data.emojis.length) ? data.emojis : ['👑'];
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function hideLoader() {
+  const overlay = qs('loading-overlay');
+  if (overlay) setTimeout(() => overlay.classList.remove('active'), 600);
+}
+
+// ================================
+// MODAL
+// ================================
+function openModal(section, question, existingAnswer = '') {
+  activeSection = section;
+  activeQuestion = question;
+
+  const overlay = qs('active-modal');
+  const secEl = qs('modal-section');
+  const qEl = qs('modal-question');
+  const modalBody = overlay.querySelector('.modal-body');
+
+  // cleanup prior hint/special
+  const existingHint = modalBody.querySelector('.question-hint');
+  if (existingHint) existingHint.remove();
+
+  const existingSpecial = modalBody.querySelector('.special-input');
+  if (existingSpecial) existingSpecial.remove();
+
+  // reset textarea
+  const ta = qs('modal-answer');
+  ta.style.display = 'block';
+  ta.value = '';
+  const exportBtn = qs('modal-export');
+  exportBtn.style.display = existingAnswer ? 'inline-flex' : 'none';
+
+  secEl.textContent = `${randEmoji()} ${section}`;
+  qEl.textContent = question;
+
+  // hint
+  if (data.hints && data.hints[question]) {
+    const hintDiv = document.createElement('div');
+    hintDiv.className = 'question-hint';
+    hintDiv.innerHTML = `<em>${data.hints[question]}</em>`;
+    modalBody.insertBefore(hintDiv, qEl.nextSibling);
+  }
+
+  let inputElement;
+
+  if (question.startsWith('Rate 1-11:')) {
+    // Rating Slider
+    const currentValue = existingAnswer ? (parseInt(existingAnswer, 10) || 6) : 6;
+
+    const specialDiv = document.createElement('div');
+    specialDiv.className = 'special-input rating-input';
+    specialDiv.innerHTML = `
+      <div style="margin: 20px 0; text-align: center;">
+        <input type="range" min="1" max="11" value="${currentValue}" class="rating-slider" style="width: 100%;">
+        <div style="font-size: 32px; font-weight: 900; margin-top: 12px; color: var(--accent);">
+          <span class="rating-value">${currentValue}</span><span style="font-size: 18px; color: #aaa;"> / 11</span>
+        </div>
+      </div>`;
+    modalBody.insertBefore(specialDiv, ta);
+
+    const slider = specialDiv.querySelector('.rating-slider');
+    const valueSpan = specialDiv.querySelector('.rating-value');
+    slider.oninput = () => valueSpan.textContent = slider.value;
+
+    ta.style.display = 'none';
+    inputElement = slider;
+  }
+  else if (question.includes('My top 5 values are:')) {
+    // Values Checkboxes
+    const specialDiv = document.createElement('div');
+    specialDiv.className = 'special-input values-select';
+    specialDiv.style.margin = '20px 0';
+
+    const savedValues = existingAnswer
+      ? existingAnswer.split(',').map(v => v.trim()).filter(Boolean)
+      : [];
+
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:16px;">';
+    (data.valuesList || []).forEach(value => {
+      const checked = savedValues.includes(value) ? 'checked' : '';
+      html += `
+        <label style="display:flex;align-items:center;font-size:15px;">
+          <input type="checkbox" class="value-checkbox" value="${value}" ${checked}>
+          <span style="margin-left:8px;">${value}</span>
+        </label>`;
+    });
+    html += '</div>';
+
+    const otherValues = savedValues.filter(v => !(data.valuesList || []).includes(v)).join(', ');
+    html += `
+      <div style="margin-top:16px;">
+        <label><strong>Other:</strong></label>
+        <input type="text" class="other-values"
+          placeholder="Add your own values (comma separated)"
+          style="width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #444;background:#000;color:#fff;"
+          value="${otherValues}">
+      </div>`;
+
+    specialDiv.innerHTML = html;
+    modalBody.insertBefore(specialDiv, ta);
+
+    // limit to 5
+    const checkboxes = specialDiv.querySelectorAll('.value-checkbox');
+    checkboxes.forEach(cb => {
+      cb.onchange = () => {
+        const checked = Array.from(checkboxes).filter(c => c.checked);
+        if (checked.length > 5) {
+          cb.checked = false;
+          alert('Max 5 values from the list!');
+        }
+      };
+    });
+
+    ta.style.display = 'none';
+    inputElement = specialDiv;
+  }
+  else {
+    // Normal textarea
+    ta.value = existingAnswer || '';
+    inputElement = ta;
+  }
+
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+
+  // keyboard shortcut
+  setTimeout(() => { if (inputElement && inputElement.focus) inputElement.focus(); }, 200);
+}
+
+function closeModal() {
+  const overlay = qs('active-modal');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('modal-open');
+  activeSection = null;
+  activeQuestion = null;
+}
+
+function bindModalActions() {
+  qs('modal-close').onclick = closeModal;
+  qs('modal-skip').onclick = closeModal;
+  qs('modal-export').onclick = exportCurrentAsset;
+
+  qs('active-modal').addEventListener('click', e => {
+    if (e.target === qs('active-modal')) closeModal();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && qs('active-modal').classList.contains('active')) closeModal();
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && qs('active-modal').classList.contains('active')) doSave();
+  });
+
+  qs('modal-save').onclick = doSave;
+}
+
+function getAnswerValue() {
+  if (!activeQuestion) return '';
+
+  if (activeQuestion.startsWith('Rate 1-11:')) {
+    const slider = document.querySelector('.rating-slider');
+    return slider ? String(slider.value) : '';
+  }
+  else if (activeQuestion.includes('My top 5 values are:')) {
+    const checked = Array.from(document.querySelectorAll('.value-checkbox:checked')).map(cb => cb.value);
+    const other = (document.querySelector('.other-values')?.value || '').trim();
+    const extras = other ? other.split(',').map(v => v.trim()).filter(Boolean) : [];
+    return [...checked, ...extras].join(', ');
+  }
+  else {
+    return (qs('modal-answer').value || '').trim();
+  }
+}
+
+function doSave() {
+  const answer = getAnswerValue();
+
+  // allow empty only for rating (but rating always has a value)
+  if (!answer && !activeQuestion.startsWith('Rate 1-11:')) {
+    alert('Please write something real. No empty answers.');
+    return;
+  }
+
+  const btn = qs('modal-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  google.script.run
+    .withSuccessHandler(result => {
+      btn.disabled = false;
+      btn.textContent = 'STRIKE – Save (Upsert)';
+
+      if (result && result.ok) {
+        const asset = result.assetUrl ? `\n\nAsset: ${result.assetUrl}` : '';
+        alert(`✅ Saved!${asset}\n\n🌌 Gemini Insight kommt heute um 20:00 per Telegram.`);
+      } else {
+        alert('Save failed: ' + (result?.error || 'unknown'));
+      }
+
+      closeModal();
+      load();
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false;
+      btn.textContent = 'STRIKE – Save (Upsert)';
+      alert('Error: ' + (err.message || err));
+    })
+    .upsertAndAnalyze(activeSection, activeQuestion, answer);
+}
+
+function exportCurrentAsset() {
+  if (!activeQuestion) return;
+  const btn = qs('modal-export');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  google.script.run
+    .withSuccessHandler(res => {
+      btn.disabled = false;
+      btn.textContent = 'Export Markdown';
+      if (res && res.ok && res.file && res.file.url) {
+        alert('Export complete!\n\n' + res.file.url);
+      } else {
+        alert('Export failed: ' + (res?.error || 'unknown'));
+      }
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false;
+      btn.textContent = 'Export Markdown';
+      alert('Export error: ' + (err.message || err));
+    })
+    .exportAssetToDrive(activeQuestion);
+}
+
+// ================================
+// RENDERING
+// ================================
+function render() {
+  const container = qs('content');
+  container.innerHTML = '';
+
+  const answers = data.answers || {};
+  let allDone = true;
+  let activePlaced = false;
+
+  const sections = data.sectionOrder || Object.keys(data.questions || {});
+  for (const section of sections) {
+    const qsArr = (data.questions || {})[section] || [];
+    const sec = document.createElement('div');
+    sec.className = 'section';
+
+    const head = document.createElement('div');
+    head.className = 'section-header';
+    head.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
+    sec.appendChild(head);
+
+    for (const q of qsArr) {
+      const qDiv = document.createElement('div');
+      qDiv.className = 'question';
+
+      const existing = String(answers[q] || '').trim();
+
+      if (existing) {
+        qDiv.classList.add('answered');
+        let displayText = existing;
+
+        if (q.startsWith('Rate 1-11:')) {
+          displayText = `<strong>${q}</strong><br><br><strong style="color: var(--accent); font-size: 24px;">${existing}/11</strong>`;
+        } else if (q.includes('My top 5 values are:')) {
+          displayText = `<strong>${q}</strong><br><br>${existing.split(',').map(v => `• ${v.trim()}`).join('<br>')}`;
+        }
+
+        qDiv.innerHTML = displayText.replace(/\n/g, '<br>');
+        qDiv.addEventListener('click', () => openModal(section, q, existing));
+        qDiv.title = 'Click to edit';
+      } else {
+        allDone = false;
+
+        if (!activePlaced) {
+          activePlaced = true;
+          qDiv.classList.add('active-teaser');
+          qDiv.innerHTML = `
+            <div class="teaser-pill">DAILY STRIKE</div>
+            <div class="teaser-q"><strong>${q}</strong></div>
+            <div class="teaser-sub">Tap to focus and answer</div>
+            <button type="button" class="open-focus">Open & Answer</button>
+          `;
+          setTimeout(() => openModal(section, q, ''), 300);
+          qDiv.querySelector('.open-focus').onclick = () => openModal(section, q, '');
+        } else {
+          qDiv.innerHTML = `<em>${q}<br><small>(unlocks after daily strike)</small></em>`;
+        }
+      }
+
+      sec.appendChild(qDiv);
+    }
+
+    container.appendChild(sec);
+  }
+
+  // Full AI Analysis Button (only when complete)
+  if (data.isComplete) {
+    const aiBtn = document.createElement('button');
+    aiBtn.id = 'full-ai-btn';
+    aiBtn.innerHTML = '🤖 Generate Full AI Creator King Analysis';
+    aiBtn.onclick = () => {
+      aiBtn.disabled = true;
+      aiBtn.textContent = 'Generating…';
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.ok && res.file && res.file.url) {
+            alert('🎯 Full AI Analysis complete!\n\n' + res.file.url);
+          } else {
+            alert('🎯 Full AI Analysis complete!\n\nCheck Drive → AI_Analysis');
+          }
+          aiBtn.remove();
+        })
+        .withFailureHandler(err => {
+          aiBtn.disabled = false;
+          aiBtn.textContent = '🤖 Generate Full AI Creator King Analysis';
+          alert('Error: ' + (err.message || err));
+        })
+        .generateFullAIAnalysis();
+    };
+    container.appendChild(aiBtn);
+  }
+
+  // Export button
+  const exportBtn = qs('exportBtn');
+  exportBtn.style.display = allDone ? 'block' : 'none';
+  exportBtn.onclick = exportAll;
+}
+
+function exportAll() {
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.ok && res.file && res.file.url) {
+        alert('Export complete!\n\n' + res.file.url);
+      } else {
+        alert('Export done.');
+      }
+    })
+    .withFailureHandler(err => alert('Export error: ' + (err.message || err)))
+    .exportAllToDrive();
+}
+
+function load() {
+  google.script.run
+    .withSuccessHandler(payload => {
+      data = payload;
+      qs('title').textContent = payload.title || 'Creator King';
+      qs('subtitle').textContent = payload.subtitle || '';
+      render();
+      hideLoader();
+    })
+    .withFailureHandler(err => {
+      alert('Load error: ' + (err.message || err));
+      hideLoader();
+    })
+    .getAllData();
+}
+
+window.addEventListener('load', () => {
+  bindModalActions();
+  load();
+});
+</script>

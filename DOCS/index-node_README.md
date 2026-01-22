@@ -1,1 +1,0 @@
-/home/alpha/αOS/aos-hub/index-node/README.md

@@ -18,7 +18,7 @@
 
 ## Props (expected)
 - Alpha_Door folder resolution via `door.gs`.
-- Bridge URL/Auth if task creation is enabled (AOS_BRIDGE_URL/BRIDGE_URL/LAPTOP_URL + AOS_BRIDGE_TOKEN/BRIDGE_TOKEN).
+- Bridge URL/Auth if task creation is enabled (`AOS_BRIDGE_URL` canonical; legacy `BRIDGE_URL`/`LAPTOP_WEBHOOK_URL`/`LAPTOP_URL` + `AOS_BRIDGE_TOKEN`/`BRIDGE_TOKEN`).
 - TickTick (optional) if you want a Door/Plan entry there (not implemented in GAS Door War yet).
 
 ## Smoke Checks (current)

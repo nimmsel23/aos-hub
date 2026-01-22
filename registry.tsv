@@ -1,0 +1,81 @@
+aos_ui	Interface	aos ui	pillar	manual	Dashboard UI
+door	THE DOOR	alphaos door	pillar	manual	Potential→Plan→Production→Profit
+game	THE GAME	alphaos game	pillar	manual	Frame/Freedom/Focus/Fire + General's Tent
+voice	THE VOICE	voice	pillar	manual	STOP→SUBMIT→STRUGGLE→STRIKE
+code	THE CODE	code-pillar	pillar	manual	Real/Raw/Relevant/Results
+core	THE CORE	core-pillar	pillar	manual	BODY/BEING/BALANCE/BUSINESS
+hot	Hot Capture	hot	tool	manual	Create HOT file
+hotlist	Hot List	hotlist	tool	manual	List HOT files
+hotopen	Hot Open	hotopen	tool	manual	Open HOT file
+document_with_gemini	Gemini Docs	document-with-gemini.py	python	dotfiles_bin	AI documentation with Gemini API
+ticktick_sync	TickTick Sync	ticktick_sync.py	python	dotfiles_bin	Taskwarrior ↔ TickTick sync
+alphaos_launcher	Python Launcher	alphaos-launcher	python	dotfiles_bin	Extended features (YAML/plugins)
+router_bot	Router Bot	router_bot.py	python	dotfiles_bin	Telegram AlphaOS Router Bot
+obsidian_tw_sync	Obsidian-TW Sync	obsidian_tw_sync.sh	python	dotfiles_bin	Obsidian ↔ Taskwarrior sync
+generals	General's Tent	generals	tool	manual	Strategic review (THE GAME)
+tent	General's Tent	tent	tool	manual	Alias for generals
+aosctl	AOS Control	aosctl	infra	manual	Unified hub/router/bridge/vault control
+aos_hub	AOS Hub	aosctl hub	infra	manual	Hub control (hubctl wrapper)
+aos_router	AOS Router	aosctl router	infra	manual	Router control (routerctl wrapper)
+aos_bridge	AOS Bridge	aosctl bridge	infra	manual	Bridge control (bridgectl wrapper)
+aos_vault	AOS Vault	aosctl vault	infra	manual	Vault sync control
+routerctl	Router Control	routerctl	infra	manual	Start/stop/logs router bot service
+aos_sync	AOS Sync	aos-sync	infra	manual	Rclone sync management (menu/run/enable)
+aos_syncctl	AOS SyncCtl	aos-syncctl	infra	manual	Sync control (systemd integration)
+door_watcher	Door Watcher	door_file_watcher.sh	infra	dotfiles_bin	Watch DOOR files for changes
+index_node	Index Node	node ~/aos-hub/index-node/server.js	infra	external	Local AlphaOS Index Server
+taskwarrior	Taskwarrior	task	cli	manual	Task management (alias: t)
+calcurse	Calcurse	calcurse	cli	manual	Calendar & scheduling (alias: c)
+alpha	alpha	/home/alpha/.dotfiles/bin/alpha-os/alpha	script	dotfiles_bin	
+frame	frame	frame	script	dotfiles_bin	
+freedom	freedom	freedom	script	dotfiles_bin	
+fruits	fruits	/home/alpha/.dotfiles/bin/alpha-os/fruits	script	dotfiles_bin	
+tent	tent	/home/alpha/.dotfiles/bin/alpha-os/tent	script	dotfiles_bin	
+focus	focus	focus	script	dotfiles_bin	
+fire	fire	fire	script	dotfiles_bin	
+git_push_notify	git-push-notify	git-push-notify	script	dotfiles_bin	
+setup_notifications	setup-notifications	/home/alpha/.dotfiles/bin/utils/setup-notifications	script	dotfiles_bin	
+auto_ytdl	auto-ytdl	/home/alpha/.dotfiles/bin/utils/auto-ytdl	script	dotfiles_bin	
+envctl	envctl	/home/alpha/.dotfiles/bin/utils/envctl	script	dotfiles_bin	
+tele	tele	tele	script	dotfiles_bin	
+claude_load_context	claude-load-context	claude-load-context	script	dotfiles_bin	
+warstack	warstack	warstack	script	dotfiles_bin	
+_v2auto_ytdl	.v2auto-ytdl	.v2auto-ytdl	script	dotfiles_bin	
+headman_90days_sh	headman_90Days.sh	headman_90Days.sh	script	dotfiles_bin	
+hot_to_md_sh	hot_to_md.sh	hot_to_md.sh	script	dotfiles_bin	
+obsidian_tw_sync_sh	obsidian_tw_sync.sh	obsidian_tw_sync.sh	script	dotfiles_bin	
+claude_context_generator	claude-context-generator	claude-context-generator	script	dotfiles_bin	
+obsidian_taskwarrior_sh	Obsidian-Taskwarrior.sh	Obsidian-Taskwarrior.sh	script	dotfiles_bin	
+alphaos_index_menu	alphaos-index-menu	alphaos-index-menu	script	dotfiles_bin	
+door_file_watcher_sh	door_file_watcher.sh	door_file_watcher.sh	script	dotfiles_bin	
+session_end_analyzer	session-end-analyzer	session-end-analyzer	script	dotfiles_bin	
+auto_doc_commit	auto-doc-commit	auto-doc-commit	script	dotfiles_bin	
+claude_session_end_pipeline	claude-session-end-pipeline	claude-session-end-pipeline	script	dotfiles_bin	
+document_with_gemini_py	document-with-gemini.py	document-with-gemini.py	python	dotfiles_bin	
+ticktick_sync_py	ticktick_sync.py	ticktick_sync.py	python	dotfiles_bin	
+alpha_obsidian_module_py	alpha_obsidian_module.py	alpha_obsidian_module.py	python	dotfiles_bin	
+claudewarrior	claudewarrior	claudewarrior	script	dotfiles_bin	
+claude_prompt_telegram_hook	claude-prompt-telegram-hook	claude-prompt-telegram-hook	script	dotfiles_bin	
+with_env	with-env	with-env	script	dotfiles_bin	
+agent_registry_sync	agent-registry-sync	agent-registry-sync	script	dotfiles_bin	
+ticktick_tag_watcher_py	ticktick_tag_watcher.py	ticktick_tag_watcher.py	python	dotfiles_bin	
+door_lifecycle_sh	door_lifecycle.sh	door_lifecycle.sh	script	dotfiles_bin	
+door_uuid_sync_py	door_uuid_sync.py	door_uuid_sync.py	python	dotfiles_bin	
+war_stack_create_sh	war_stack_create.sh	war_stack_create.sh	script	dotfiles_bin	
+git_sync_enforcer	git-sync-enforcer	git-sync-enforcer	script	dotfiles_bin	
+syncctl	syncctl	syncctl	script	dotfiles_bin	
+repo_auto_push	repo-auto-push	repo-auto-push	script	dotfiles_bin	
+vaultctl	vaultctl	vaultctl	script	dotfiles_bin	
+backupctl	backupctl	backupctl	script	dotfiles_bin	
+claude_compact_summary_hook	claude-compact-summary-hook	claude-compact-summary-hook	script	dotfiles_bin	
+syncvaultctl	syncvaultctl	syncvaultctl	script	dotfiles_bin	
+core4_voice	core4-voice	core4-voice	script	dotfiles_bin	
+aos_centres	aos-centres	aos-centres	script	dotfiles_bin	
+aos_swaylock_sh	aos-swaylock.sh	aos-swaylock.sh	script	dotfiles_bin	
+aos_desktop_boot_sh	aos-desktop-boot.sh	aos-desktop-boot.sh	script	dotfiles_bin	
+aos_open_obsidian_sh	aos-open-obsidian.sh	aos-open-obsidian.sh	script	dotfiles_bin	
+aos_index_dev_sh	aos-index-dev.sh	aos-index-dev.sh	script	dotfiles_bin	
+hypr_launch_or_focus_sh	hypr-launch-or-focus.sh	hypr-launch-or-focus.sh	script	dotfiles_bin	
+claude_last_response_telegram_hook	claude-last-response-telegram-hook	claude-last-response-telegram-hook	script	dotfiles_bin	
+alphaos_game	alphaos_game	alphaos_game	tool	fish_func	
+alphaos_war_create	alphaos_war_create	alphaos_war_create	tool	fish_func	

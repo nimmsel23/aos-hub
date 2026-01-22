@@ -1,0 +1,316 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AlphaOS Domain State",
+  "description": "Strategic state tracking for a single domain (BODY/BEING/BALANCE/BUSINESS) across all centres",
+  "type": "object",
+  "properties": {
+    "domain": {
+      "type": "string",
+      "enum": ["BODY", "BEING", "BALANCE", "BUSINESS"],
+      "description": "Domain identifier"
+    },
+    "version": {
+      "type": "string",
+      "description": "Schema version",
+      "default": "1.0.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp (ISO 8601)"
+    },
+    "week": {
+      "type": "string",
+      "pattern": "^\\d{4}-W\\d{2}$",
+      "description": "Current ISO week (YYYY-Wxx)"
+    },
+
+    "frame": {
+      "type": "object",
+      "description": "Frame Map - Current reality (yearly update)",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Markdown file path relative to vault (e.g., Game/Frame/BODY_frame.md)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Frame title/summary"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status phrase (e.g., 'Training inconsistent', 'Wien-Sanctuary achieved')"
+        },
+        "last_shift": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of last Frame shift"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last Frame Map update"
+        }
+      },
+      "required": ["file", "status"]
+    },
+
+    "freedom": {
+      "type": "object",
+      "description": "Freedom Map - 10-year IPW vision (annual update)",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Markdown file path"
+        },
+        "title": {
+          "type": "string",
+          "description": "Freedom vision title"
+        },
+        "ipw": {
+          "type": "string",
+          "description": "Ideal Parallel World description"
+        },
+        "alignment": {
+          "type": "string",
+          "enum": ["aligned", "partial", "blocked", "unknown"],
+          "description": "Alignment with current Frame"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["file", "ipw"]
+    },
+
+    "focus": {
+      "type": "object",
+      "description": "Focus Map - Monthly/Quarterly mission",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Markdown file path"
+        },
+        "title": {
+          "type": "string",
+          "description": "Focus mission title"
+        },
+        "mission": {
+          "type": "string",
+          "description": "Current mission statement"
+        },
+        "quarter": {
+          "type": "string",
+          "pattern": "^Q[1-4]-\\d{4}$",
+          "description": "Quarter (e.g., Q1-2026)"
+        },
+        "serves_freedom": {
+          "type": "boolean",
+          "description": "Does this Focus mission serve Freedom vision?"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["file", "mission"]
+    },
+
+    "fire": {
+      "type": "object",
+      "description": "Fire Map - Weekly execution (4 Hits)",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Markdown file path"
+        },
+        "week": {
+          "type": "string",
+          "pattern": "^\\d{4}-W\\d{2}$",
+          "description": "ISO week"
+        },
+        "hits": {
+          "type": "array",
+          "description": "4 Fire Hits for this week",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Hit title"
+              },
+              "taskwarrior_uuid": {
+                "type": "string",
+                "description": "Taskwarrior task UUID"
+              },
+              "completed": {
+                "type": "boolean",
+                "description": "Completion status"
+              }
+            },
+            "required": ["title", "completed"]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "completion": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Completion ratio (0.0-1.0)"
+        },
+        "serves_focus": {
+          "type": "boolean",
+          "description": "Do these Hits serve Focus mission?"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["week", "hits", "completion"]
+    },
+
+    "voice": {
+      "type": "object",
+      "description": "VOICE sessions - Mental mastery insights",
+      "properties": {
+        "latest_session": {
+          "type": "string",
+          "description": "Latest VOICE session file path"
+        },
+        "latest_strike": {
+          "type": "string",
+          "description": "Latest STRIKE from VOICE"
+        },
+        "session_count": {
+          "type": "integer",
+          "description": "Total VOICE sessions for this domain"
+        },
+        "integrated": {
+          "type": "boolean",
+          "description": "Are VOICE insights integrated into daily practice?"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+
+    "war_stacks": {
+      "type": "array",
+      "description": "Active War Stacks for this domain",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "War Stack markdown file path"
+          },
+          "title": {
+            "type": "string",
+            "description": "War Stack title"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "completed", "archived"],
+            "description": "War Stack status"
+          },
+          "hits_completed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "Number of 4 Hits completed"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["file", "title", "status"]
+      }
+    },
+
+    "core4": {
+      "type": "object",
+      "description": "Core4 weekly metrics",
+      "properties": {
+        "week_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "Total Core4 points this week (max 7 for this domain)"
+        },
+        "daily_streak": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current daily streak for this domain"
+        },
+        "trend": {
+          "type": "string",
+          "enum": ["improving", "stable", "declining"],
+          "description": "Trend analysis"
+        }
+      }
+    },
+
+    "synthesis": {
+      "type": "object",
+      "description": "Strategic synthesis insights",
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "description": "Detected patterns for this domain",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "description": "Current blockers preventing progress",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cascade_health": {
+          "type": "object",
+          "description": "Cascade alignment status",
+          "properties": {
+            "fire_to_focus": {
+              "type": "string",
+              "enum": ["aligned", "partial", "blocked"]
+            },
+            "focus_to_freedom": {
+              "type": "string",
+              "enum": ["aligned", "partial", "blocked"]
+            },
+            "freedom_to_frame": {
+              "type": "string",
+              "enum": ["aligned", "partial", "blocked"]
+            }
+          }
+        },
+        "pipeline_health": {
+          "type": "object",
+          "description": "VOICE→DOOR→FIRE pipeline status",
+          "properties": {
+            "voice_to_door": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Pipeline health (0.0-1.0)"
+            },
+            "door_to_fire": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["domain", "version", "updated_at", "week"]
+}

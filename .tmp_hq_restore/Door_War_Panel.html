@@ -1,0 +1,60 @@
+<div id="panel-doorwar" class="tool-panel">
+  <h2>Door War – Eisenhower Matrix</h2>
+  <p>
+    Deine Hot-Ideen werden unten als Karten geladen.<br>
+    Zieh sie per Drag &amp; Drop in die vier Quadranten. Quadrant 2 ist dein Königreich.
+  </p>
+
+  <!-- Backlog / Unsortiert -->
+  <div id="doorwar-backlog" class="doorwar-backlog">
+    <h3>Backlog / Unsortiert</h3>
+    <div class="doorwar-dropzone" data-quad="backlog"></div>
+  </div>
+
+  <div class="doorwar-grid">
+    <!-- Q1 -->
+    <div class="doorwar-quad">
+      <h3>Q1 – Urgent &amp; Important</h3>
+      <small>Feuerwehr – nur wenn es wirklich brennt.</small>
+      <div class="doorwar-dropzone" data-quad="q1"></div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="doorwar-quad">
+      <h3>Q2 – Not Urgent &amp; Important</h3>
+      <small>King-Quadrant – hier wählst du deine Domino Door.</small>
+      <div class="doorwar-dropzone" data-quad="q2"></div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="doorwar-quad">
+      <h3>Q3 – Urgent &amp; Not Important</h3>
+      <small>Noise – delegieren oder killen.</small>
+      <div class="doorwar-dropzone" data-quad="q3"></div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="doorwar-quad">
+      <h3>Q4 – Not Urgent &amp; Not Important</h3>
+      <small>Pure Sand – bewusst einsetzen oder eliminieren.</small>
+      <div class="doorwar-dropzone" data-quad="q4"></div>
+    </div>
+  </div>
+
+  <label for="doorwarchoice" style="margin-top:16px;display:block;">
+    Gewählte Domino Door (meist aus Q2)
+  </label>
+  <input id="doorwarchoice" placeholder="Welche Door wird es diese Woche?">
+  <input id="doorwarfileid" type="hidden" value="">
+  <input id="doorwarquad" type="hidden" value="">
+
+  <button type="button" onclick="generateDoorWarFromMatrix()">
+    Door War generieren &amp; speichern
+  </button>
+  <button type="button" onclick="doorWarToWarStack()">
+    → War Stack aus dieser Door bauen
+  </button>
+
+  <pre id="doorwaroutput"></pre>
+  <button type="button" onclick="copyFromPre('doorwaroutput')">Door War kopieren</button>
+</div>

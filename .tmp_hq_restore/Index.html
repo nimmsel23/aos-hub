@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>αOS Control Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'terminal-green': '#00ff00',
+            'terminal-amber': '#ffbf00',
+            'arch-blue': '#1793d1'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+<?!= HtmlService.createHtmlOutputFromFile('Index_style').getContent(); ?>
+  </style>
+</head>
+
+<body class="bg-gray-900 text-green-400 min-h-screen terminal-font">
+  <canvas id="matrix-rain"></canvas>
+  <header id="mainHeader" class="glass border-b border-green-500/30 p-4 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-3 min-w-[220px]">
+        <div class="w-8 h-8 bg-arch-blue rounded flex items-center justify-center">
+          <span class="text-white font-bold text-sm">αOS</span>
+        </div>
+        <h1 class="text-2xl font-bold text-terminal-green">αOS Control Center</h1>
+        <span class="text-xs bg-green-900/50 px-2 py-1 rounded text-green-300">v2.0.1-arch</span>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <div class="text-xs">
+          <span class="text-gray-400">uptime:</span>
+          <span id="uptime" class="text-terminal-amber">00:00:00</span>
+        </div>
+        <button onclick="toggleSection('mapsCentre')" class="p-2 hover:bg-gray-800 rounded transition-colors">MAPS</button>
+        <button onclick="openMap('KOMMANDO', 'door')" class="p-2 hover:bg-gray-800 rounded transition-colors">KOMMANDO</button>
+        <button onclick="openMap('DOOR CENTRE', 'door')" class="p-2 hover:bg-gray-800 rounded transition-colors">DOOR</button>
+        <button onclick="toggleSection('fruitsCentre')" class="p-2 hover:bg-gray-800 rounded transition-colors">FRUITS</button>
+        <button onclick="toggleTheme()" class="p-2 hover:bg-gray-800 rounded transition-colors">
+          <span id="theme-icon">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="homeShell">
+  <div class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1 space-y-6">
+      <div class="glass border border-green-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-terminal-green mb-3 flex items-center">
+          🔥 Hot List Quick Add
+        </h2>
+        <div class="space-y-3">
+          <input
+            type="text"
+            id="hotlist-input"
+            placeholder="Neue Idee eingeben..."
+            class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-green-400 placeholder-gray-500 focus:border-terminal-green focus:ring-1 focus:ring-terminal-green transition-colors"
+            onkeypress="handleHotListEnter(event)"
+          >
+          <button
+            onclick="addToHotList()"
+            class="w-full bg-green-600 hover:bg-green-700 text-black font-bold py-2 px-4 rounded transition-colors glow"
+          >
+            Add to Hot List
+          </button>
+        </div>
+      </div>
+
+      <div class="glass border border-blue-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-blue-400 mb-3 flex items-center">
+          ⚡ Core 4 Tracker
+        </h2>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="logCore4('body', 'fitness')" class="bg-red-600/20 border border-red-500 hover:bg-red-600/40 py-2 px-3 rounded text-red-400 text-sm transition-colors">🏃 Fitness</button>
+          <button onclick="logCore4('body', 'fuel')" class="bg-red-600/20 border border-red-500 hover:bg-red-600/40 py-2 px-3 rounded text-red-400 text-sm transition-colors">🥗 Fuel</button>
+          <button onclick="logCore4('being', 'meditation')" class="bg-purple-600/20 border border-purple-500 hover:bg-purple-600/40 py-2 px-3 rounded text-purple-400 text-sm transition-colors">🧘 Meditation</button>
+          <button onclick="logCore4('being', 'memoirs')" class="bg-purple-600/20 border border-purple-500 hover:bg-purple-600/40 py-2 px-3 rounded text-purple-400 text-sm transition-colors">📝 Memoirs</button>
+          <button onclick="logCore4('balance', 'person1')" class="bg-pink-600/20 border border-pink-500 hover:bg-pink-600/40 py-2 px-3 rounded text-pink-400 text-sm transition-colors">🤝 Person 1</button>
+          <button onclick="logCore4('balance', 'person2')" class="bg-pink-600/20 border border-pink-500 hover:bg-pink-600/40 py-2 px-3 rounded text-pink-400 text-sm transition-colors">🤝 Person 2</button>
+          <button onclick="logCore4('business', 'discover')" class="bg-yellow-600/20 border border-yellow-500 hover:bg-yellow-600/40 py-2 px-3 rounded text-yellow-400 text-sm transition-colors">📚 Discover</button>
+          <button onclick="logCore4('business', 'declare')" class="bg-yellow-600/20 border border-yellow-500 hover:bg-yellow-600/40 py-2 px-3 rounded text-yellow-400 text-sm transition-colors">📣 Declare</button>
+        </div>
+        <div class="mt-3 text-xs text-gray-400">
+          Heute: <span id="core4-today" class="text-terminal-amber">0.0/4.0</span> Punkte
+        </div>
+      </div>
+
+    </div>
+
+    <div class="lg:col-span-2 space-y-6">
+      <div class="glass border border-purple-500/30 rounded-lg p-4 fade-in">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <h2 class="text-xl font-bold text-purple-400 flex items-center">⚔️ Door War - Eisenhower Matrix</h2>
+          <button
+            type="button"
+            onclick="hqDoorWarReload()"
+            class="bg-purple-600/20 border border-purple-500 hover:bg-purple-600/40 px-3 py-1 rounded text-purple-300 text-xs transition-colors"
+          >
+            Reload Hot Ideas
+          </button>
+        </div>
+        <div class="text-xs text-gray-400 mb-3">
+          Zieh Hot-Ideen aus dem Backlog per Drag &amp; Drop in die Quadranten. Q2 ist dein Domino Door Kandidat.
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-1 bg-gray-900/30 border border-gray-700 rounded p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-gray-300 font-bold text-sm">Backlog / Unsortiert</h3>
+              <div class="text-xs text-gray-500"><span id="hq-doorwar-count">0</span></div>
+            </div>
+            <div
+              id="hq-doorwar-backlog"
+              class="hq-doorwar-dropzone min-h-[220px] space-y-2"
+              data-quad="backlog"
+            ></div>
+          </div>
+
+          <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-red-900/20 border border-red-500 rounded p-3">
+              <h3 class="text-red-400 font-bold text-sm mb-1">Q1: Urgent &amp; Important</h3>
+              <div class="text-xs text-red-200/70 mb-2">Feuerwehr – nur wenn es wirklich brennt.</div>
+              <div class="hq-doorwar-dropzone min-h-[160px] space-y-2" data-quad="q1"></div>
+            </div>
+            <div class="bg-green-900/20 border border-green-500 rounded p-3 glow">
+              <h3 class="text-green-400 font-bold text-sm mb-1">Q2: Not Urgent &amp; Important ⭐</h3>
+              <div class="text-xs text-green-200/70 mb-2">King Quadrant – wähle deine Domino Door.</div>
+              <div class="hq-doorwar-dropzone min-h-[160px] space-y-2" data-quad="q2"></div>
+            </div>
+            <div class="bg-yellow-900/20 border border-yellow-500 rounded p-3">
+              <h3 class="text-yellow-400 font-bold text-sm mb-1">Q3: Urgent &amp; Not Important</h3>
+              <div class="text-xs text-yellow-200/70 mb-2">Noise – delegieren oder killen.</div>
+              <div class="hq-doorwar-dropzone min-h-[160px] space-y-2" data-quad="q3"></div>
+            </div>
+            <div class="bg-gray-700/20 border border-gray-500 rounded p-3">
+              <h3 class="text-gray-300 font-bold text-sm mb-1">Q4: Not Important &amp; Not Urgent</h3>
+              <div class="text-xs text-gray-300/70 mb-2">Pure Sand – bewusst einsetzen oder eliminieren.</div>
+              <div class="hq-doorwar-dropzone min-h-[160px] space-y-2" data-quad="q4"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+          <input
+            id="hq-doorwarchoice"
+            placeholder="Gewählte Domino Door (meist aus Q2)"
+            class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-green-400 placeholder-gray-500 focus:border-terminal-green focus:ring-1 focus:ring-terminal-green transition-colors"
+          >
+          <button
+            type="button"
+            onclick="hqGenerateDoorWarFromMatrix()"
+            class="bg-purple-600 hover:bg-purple-700 text-black font-bold py-2 px-4 rounded transition-colors"
+          >
+            Door War speichern
+          </button>
+          <button
+            type="button"
+            onclick="hqDoorWarToWarStack()"
+            class="bg-green-600 hover:bg-green-700 text-black font-bold py-2 px-4 rounded transition-colors"
+          >
+            → War Stack aus dieser Door bauen
+          </button>
+        </div>
+
+        <input id="hq-doorwarfileid" type="hidden" value="">
+        <input id="hq-doorwarquad" type="hidden" value="">
+
+        <pre id="hq-doorwaroutput" class="mt-3 text-xs text-green-200 bg-black/40 border border-green-500/20 rounded p-3 whitespace-pre-wrap hidden"></pre>
+      </div>
+
+      <div class="glass border border-green-500/30 rounded-lg p-4 fade-in">
+        <h2 class="text-lg font-bold text-terminal-green mb-3 flex items-center">💻 αOS Terminal</h2>
+        <div class="bg-black rounded p-4 h-64 overflow-y-auto" id="terminal-output">
+          <div class="text-green-400 text-sm">
+            <div>user@arch-laptop:~$ <span class="cursor-blink">|</span></div>
+          </div>
+        </div>
+        <div class="mt-3 flex space-x-2">
+          <input
+            type="text"
+            id="terminal-input"
+            placeholder="Enter command..."
+            class="flex-1 bg-black border border-green-500 rounded px-3 py-2 text-green-400 placeholder-gray-600 focus:border-terminal-green focus:ring-1 focus:ring-terminal-green"
+            onkeypress="handleTerminalEnter(event)"
+          >
+          <button
+            onclick="executeCommand()"
+            class="bg-green-600 hover:bg-green-700 text-black font-bold py-2 px-4 rounded transition-colors"
+          >
+            Execute
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="glass border border-blue-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-blue-400" id="hot-list-count">5</div>
+          <div class="text-xs text-gray-400">Hot List Items</div>
+        </div>
+        <div class="glass border border-purple-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-purple-400" id="war-stacks-count">2</div>
+          <div class="text-xs text-gray-400">Active War Stacks</div>
+        </div>
+        <div class="glass border border-green-500/30 rounded-lg p-4 text-center fade-in">
+          <div class="text-2xl font-bold text-green-400" id="hits-count">8</div>
+          <div class="text-xs text-gray-400">Weekly Hits</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="max-w-7xl mx-auto px-6">
+    <div class="matrix-grid" id="menuGrid"></div>
+  </section>
+
+  </div>
+
+  <section id="mapsCentre" class="extra-section maps-centre hidden">
+    <div class="maps-header">
+      <h2>αOS Maps Centre</h2>
+      <div class="maps-subtitle">Rise • Execute • Focus • Dominate • Repeat</div>
+    </div>
+
+    <div class="maps-container">
+      <div class="maps-card" onclick="openMap('DOOR CENTRE', 'door')">
+        <div class="icon">🚪</div>
+        <h3>4P`s</h3>
+        <p>Potential • Plan • Production • Profit</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('VOICE', 'voice')">
+        <div class="icon">🗣️</div>
+        <h3>The Voice</h3>
+        <p>Stop • Submit • Struggle • Strike</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('FRAME', 'frame')">
+        <div class="icon">🗺️</div>
+        <h3>Frame Map</h3>
+        <p>The Pit of Reality – Where am I now?</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('FREEDOM', 'freedom')">
+        <div class="icon">🌅</div>
+        <h3>Freedom Map</h3>
+        <p>Your Ideal Parallel World – The peak in 10 years</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('FOCUS', 'focus')">
+        <div class="icon">🎯</div>
+        <h3>Focus Map</h3>
+        <p>Monthly Mission – Habits, Routines, Additions & Eliminations</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('FIRE', 'fire')">
+        <div class="icon">🔥</div>
+        <h3>Fire Map</h3>
+        <p>Weekly War – 4x4 Structured Blaze</p>
+      </div>
+
+      <div class="maps-card" onclick="openMap('TENT', 'tent')">
+        <div class="icon">⛺</div>
+        <h3>General's Tent</h3>
+        <p>Weekly Review – Return & Report</p>
+      </div>
+    </div>
+
+    <div class="maps-inline hidden" id="mapsInline">
+      <div class="maps-inline-bar">
+        <div>
+          <div class="maps-inline-title" id="mapsInlineTitle">Map View</div>
+          <div class="maps-inline-sub" id="mapsInlineSub">Inline</div>
+        </div>
+        <div class="maps-inline-actions">
+          <button type="button" class="maps-inline-btn" id="mapsInlineBack">Back to Maps</button>
+        </div>
+      </div>
+      <div class="maps-inline-body" id="mapsInlineBody"></div>
+    </div>
+  </section>
+
+  <section id="fruitsCentre" class="extra-section fruits-centre hidden">
+    <div id="fruits-overlay">
+      <div class="loading-ring"></div>
+      <div class="loading-title">Facing the Facts</div>
+      <div class="loading-subtitle">Daily Raw Fact - No Illusions</div>
+    </div>
+
+    <div class="fruits-header">
+      <h2 id="fruits-title">Fruit Fact Maps</h2>
+      <div class="subtitle" id="fruits-subtitle">Facing the Fruits of Reality - Raw Facts</div>
+    </div>
+
+    <div id="fruits-content"></div>
+
+    <button id="fruits-export" class="export-button" style="display:none;">
+      🍎 Export Complete Map to Drive
+    </button>
+    <div class="footer-note">αOS Fruits Centre • Raw Facts for Dominion • 2025</div>
+  </section>
+
+  <div id="actionDock" class="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-50">
+    <div id="centreToolbar" class="toolbar hidden">
+      <button class="toolbar-btn" onclick="openMap('Door Centre','door',{forceLink:false})">🚪 Door</button>
+      <button class="toolbar-btn" onclick="openMap('The Voice','voice',{forceLink:false})">🗣️ Voice</button>
+      <button class="toolbar-btn" onclick="openMap('Frame','frame',{forceLink:false})">🗺️ Frame</button>
+      <button class="toolbar-btn" onclick="openMap('Freedom','freedom',{forceLink:false})">🌅 Freedom</button>
+      <button class="toolbar-btn" onclick="openMap('Focus','focus',{forceLink:false})">🎯 Focus</button>
+      <button class="toolbar-btn" onclick="openMap('Fire','fire',{forceLink:false})">🔥 Fire</button>
+      <button class="toolbar-btn" onclick="openMap('Tent','tent',{forceLink:false})">⛺ Tent</button>
+      <button class="toolbar-btn" onclick="toggleSection('fruitsCentre')">🍎 Fruits</button>
+      <button class="toolbar-btn primary" onclick="backToHQ()">⬅️ HQ</button>
+    </div>
+    <button onclick="openGeneralsTent()" class="w-12 h-12 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="General's Tent - Weekly Review">🏛️</button>
+    <button onclick="triggerSync()" class="w-12 h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="Task Sync">🔄</button>
+    <button onclick="showNotifications()" class="w-12 h-12 bg-yellow-600 hover:bg-yellow-700 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110" title="Notifications">🔔</button>
+  </div>
+
+  <div id="toast" class="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg transform translate-x-full transition-transform duration-300">
+    <span id="toast-message"></span>
+  </div>
+
+  <div class="centre-dots" id="centreDots"></div>
+
+  <div id="maps-overlay">
+    <div class="loading-ring"></div>
+    <div id="maps-loading-title">Loading…</div>
+    <div class="loading-subtext">Preparing your map</div>
+  </div>
+
+  <template id="map-template-door"><?!= renderInlineMapHtml_('door'); ?></template>
+  <template id="map-template-voice"><?!= renderInlineMapHtml_('voice'); ?></template>
+  <template id="map-template-frame"><?!= renderInlineMapHtml_('frame'); ?></template>
+  <template id="map-template-freedom"><?!= renderInlineMapHtml_('freedom'); ?></template>
+  <template id="map-template-focus"><?!= renderInlineMapHtml_('focus'); ?></template>
+  <template id="map-template-fire"><?!= renderInlineMapHtml_('fire'); ?></template>
+  <template id="map-template-tent"><?!= renderInlineMapHtml_('tent'); ?></template>
+
+  
+  <script>
+    window.MAP_URLS = <?= JSON.stringify(mapUrls || {}) ?>;
+    window.APP_URL = <?= JSON.stringify(webAppUrl || '') ?>;
+  </script>
+  <?!= HtmlService.createHtmlOutputFromFile('hotlist_client').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('Index_client').getContent(); ?>
+
+</body>
+</html>

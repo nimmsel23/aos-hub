@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Creator King Centre</title>
+  <?!= include('style'); ?>
+</head>
+<body>
+
+  <div id="loading-overlay" class="active">
+    <div class="loading-ring"></div>
+    <div class="loading-text">Crafting Your Message…</div>
+    <div class="loading-subtext">DAILY ASSET IN BUSINESS DOMINION</div>
+  </div>
+
+  <header>
+    <h1 id="title">👑 Creator King Assets Map</h1>
+    <div class="subtitle" id="subtitle"></div>
+  </header>
+
+  <div class="container" id="content"></div>
+
+  <!-- ACTIVE QUESTION MODAL (Focus Pop-up) -->
+  <div id="active-modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-section">
+      <div class="modal-head">
+        <div class="modal-title" id="modal-section">👑 Creator King</div>
+        <button class="modal-close" id="modal-close" type="button" title="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-question" id="modal-question"></div>
+        <textarea id="modal-answer" rows="12" placeholder="Raw & Real – craft your message. No illusions."></textarea>
+
+        <div class="modal-actions">
+          <button id="modal-save" type="button">ASSET – Save (Upsert)</button>
+          <button id="modal-export" type="button" class="ghost">Export Markdown</button>
+          <button id="modal-skip" type="button" class="ghost">Not now</button>
+        </div>
+
+        <div class="modal-hint">Tip: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> saves. <kbd>Esc</kbd> closes.</div>
+      </div>
+    </div>
+  </div>
+
+  <button id="exportBtn" style="display:none;">👑 Export Complete Map to Drive (Markdown)</button>
+
+  <?!= include('client'); ?>
+</body>
+</html>

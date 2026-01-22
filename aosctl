@@ -1,0 +1,644 @@
+#!/usr/bin/env bash
+# aosctl - AOS Unified Control Interface
+# ========================================
+# Unified dispatcher for aos-hub components (index/router/bridge/sync/fire/centre/env/alias)
+
+set -euo pipefail
+
+APP="aosctl"
+AOSCTL_VERSION="1.1.2"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# If called via symlink from dotfiles, normalize to aos-hub
+if [[ "$SCRIPT_DIR" == *".dotfiles"* ]]; then
+  SCRIPT_DIR="$HOME/aos-hub"
+fi
+# If called via non-repo paths, prefer the repo checkout
+if [[ "$SCRIPT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  SCRIPT_DIR="$HOME/aos-hub"
+fi
+
+have() { command -v "$1" >/dev/null 2>&1; }
+msg() { printf "%s\n" "$*"; }
+warn() { printf "WARN: %s\n" "$*" >&2; }
+err() { printf "ERROR: %s\n" "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+resolve_bin() {
+  local primary="$1"; shift
+  if [[ -n "$primary" && -x "$primary" ]]; then
+    echo "$primary"; return 0
+  fi
+  for cand in "$@"; do
+    if [[ -n "$cand" && -x "$cand" ]]; then
+      echo "$cand"; return 0
+    fi
+  done
+  if have "$primary"; then
+    command -v "$primary"; return 0
+  fi
+  return 1
+}
+
+ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" || true)"
+BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
+INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
+SYNCVAULTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
+AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
+ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
+CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/core4/core4ctl" || true)"
+ENVCTL="$(resolve_bin "envctl" || true)"
+FIREMAP_BIN="$(resolve_bin "$SCRIPT_DIR/firemap" || true)"
+FIREMAP_SETUP="$(resolve_bin "$SCRIPT_DIR/scripts/setup-fire-map.sh" || true)"
+FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
+FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap-bot/firemap_bot.py" || true)"
+FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
+CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
+AOS_CENTRES="${AOS_CENTRES_CMD:-$HOME/αOS/bin/aos-centres}"
+RCLONE_RC_URL="${AOS_RCLONE_RC_URL:-http://127.0.0.1:5572/}"
+
+show_help() {
+  cat <<'__HELP__'
+aosctl - AOS Unified Control Interface
+=======================================
+
+USAGE:
+  aosctl <component> <action> [args...]
+  aosctl menu                # Gum menu (if available)
+  aosctl status              # Unified status (no logs) + heartbeat ping
+  aosctl ping                # Heartbeat ping (routerctl)
+  aosctl doctor              # Unified health check
+  aosctl version             # Show versions
+
+COMPONENTS:
+  hub         Index Node (Node.js server on :8799)
+  index       Index Node (alias for hub)
+  router      Router Bot (Telegram aiogram bot)
+  bridge      Bridge Service (aiohttp on :8080)
+  core4       Core4 tooling (scores/exports/timers)
+  vault       Vault & Domain Sync (syncvaultctl - git + rclone)
+  sync        Alias for vault
+  fire        Fire Map scheduling + sync
+  fruits      Fruits CLI (JSON store)
+  creatorking CreatorKing CLI (JSON store)
+  centre      Desktop centres (menu.yaml routing)
+  env         Environment manager (envctl)
+  alias       Alias manager (aos-aliasctl)
+  bot         Telegram bot debug/test (via Bridge → GAS)
+
+COMMON ACTIONS (per component):
+  start       Start the service
+  stop        Stop the service
+  restart     Restart the service
+  status      Show service status
+  logs        Show service logs
+  health      Health check (if supported)
+
+EXAMPLES:
+  aosctl menu
+  aosctl status
+  aosctl hub status
+  aosctl core4 status
+  aosctl router status
+  aosctl bridge logs
+  aosctl vault status
+  aosctl fire status
+  aosctl centre list
+  aosctl env list
+  aosctl alias ui
+
+COMPONENT-SPECIFIC COMMANDS:
+  aosctl centre add <title> <link> [cmd]
+  aosctl centre open <cmd|url>
+  aosctl centre boot
+  aosctl fire help
+  aosctl fruits           # run Fruits CLI
+  aosctl creatorking      # run CreatorKing CLI
+  aosctl bot send <bot> <text>    # send test message to GAS webhook via Bridge
+__HELP__
+}
+
+show_menu() {
+  if ! have gum; then
+    show_help
+    return 0
+  fi
+
+  local choices=()
+  [[ -n "$INDEXCTL" ]] && choices+=("Index: status")
+  [[ -n "$ROUTERCTL" ]] && choices+=("Router: status")
+  [[ -n "$BRIDGECTL" ]] && choices+=("Bridge: status")
+  [[ -n "$CORE4CTL" ]] && choices+=("Core4: status")
+  [[ -n "$SYNCVAULTCTL" ]] && choices+=("Vault: status")
+  [[ -n "$FIREMAP_BIN" ]] && choices+=("Fire: status")
+  [[ -n "$ENVCTL" ]] && choices+=("Env: list")
+  [[ -n "$ALIASCTL" ]] && choices+=("Aliases: ui")
+  choices+=("Status" "Ping" "Doctor" "Help" "Quit")
+
+  local choice
+  choice="$(printf "%s\n" "${choices[@]}" | gum choose --header "AlphaOS — aosctl")" || return 0
+
+  case "$choice" in
+    "Index: status") "$INDEXCTL" status ;;
+    "Router: status") "$ROUTERCTL" status ;;
+    "Bridge: status") "$BRIDGECTL" status ;;
+    "Core4: status") "$CORE4CTL" status ;;
+    "Vault: status") "$SYNCVAULTCTL" status ;;
+    "Fire: status") fire_cmd status ;;
+    "Env: list") env_cmd list ;;
+    "Aliases: ui") alias_cmd ui ;;
+    "Status") run_status ;;
+    "Ping") run_ping ;;
+    "Doctor") run_doctor ;;
+    "Help") show_help ;;
+    "Quit") return 0 ;;
+    *) return 0 ;;
+  esac
+}
+
+show_version() {
+  msg "aosctl version: v${AOSCTL_VERSION}"
+  msg ""
+  msg "Component versions:"
+
+  if [[ -n "$INDEXCTL" ]]; then
+    msg "  index:  $($INDEXCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  index:  not installed"
+  fi
+
+  if [[ -n "$ROUTERCTL" ]]; then
+    msg "  router: $($ROUTERCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  router: not installed"
+  fi
+
+  if [[ -n "$BRIDGECTL" ]]; then
+    msg "  bridge: $($BRIDGECTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  bridge: not installed"
+  fi
+
+  if [[ -n "$SYNCVAULTCTL" ]]; then
+    msg "  sync:   $($SYNCVAULTCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  sync:   not installed"
+  fi
+
+  if [[ -n "$ENVCTL" ]]; then
+    msg "  envctl: $($ENVCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  envctl: not installed"
+  fi
+
+  if [[ -n "$ALIASCTL" ]]; then
+    msg "  alias:  $($ALIASCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  alias:  not installed"
+  fi
+
+  if [[ -n "$CORE4CTL" ]]; then
+    msg "  core4:  $CORE4CTL"
+  else
+    msg "  core4:  not installed"
+  fi
+
+  msg ""
+}
+
+run_status() {
+  msg "AlphaOS status (no logs)"
+  msg ""
+
+  if [[ -n "$INDEXCTL" ]]; then
+    msg "=== indexctl ==="
+    "$INDEXCTL" status || true
+    msg ""
+  else
+    warn "indexctl not found"
+  fi
+
+  if [[ -n "$ROUTERCTL" ]]; then
+    msg "=== routerctl ==="
+    "$ROUTERCTL" status || true
+    msg ""
+  else
+    warn "routerctl not found"
+  fi
+
+  if [[ -n "$BRIDGECTL" ]]; then
+    msg "=== bridgectl ==="
+    "$BRIDGECTL" status || true
+    msg ""
+  else
+    warn "bridgectl not found"
+  fi
+
+  if [[ -n "$SYNCVAULTCTL" ]]; then
+    msg "=== syncvaultctl ==="
+    "$SYNCVAULTCTL" status || true
+    msg ""
+  else
+    warn "syncvaultctl not found"
+  fi
+
+  msg "=== rclone backend ==="
+  if have curl; then
+    if curl --max-time 1 -fsS "$RCLONE_RC_URL" >/dev/null 2>&1; then
+      msg "Status: rClone Backend is connected and working as expected"
+    else
+      msg "Status: rClone Backend unreachable"
+    fi
+    msg "Current IP Address: $RCLONE_RC_URL"
+    msg ""
+  else
+    warn "curl not found (cannot check rclone backend)"
+  fi
+
+  if [[ -n "$FIREMAP_BIN" ]]; then
+    msg "=== firemap ==="
+    "$FIREMAP_BIN" status || true
+    msg ""
+  else
+    warn "firemap not found"
+  fi
+
+  if [[ -n "$ENVCTL" ]]; then
+    msg "=== envctl ==="
+    "$ENVCTL" list || true
+    msg ""
+  else
+    warn "envctl not found"
+  fi
+
+  if [[ -n "$ALIASCTL" ]]; then
+    msg "=== aliasctl ==="
+    "$ALIASCTL" doctor 2>/dev/null || true
+    msg ""
+  else
+    warn "aos-aliasctl not found"
+  fi
+
+  if [[ -n "$CORE4CTL" ]]; then
+    msg "=== core4ctl ==="
+    "$CORE4CTL" status || true
+    msg ""
+  fi
+
+  if [[ -n "$ROUTERCTL" ]]; then
+    msg "=== heartbeat ==="
+    "$ROUTERCTL" heartbeat ping || true
+    msg ""
+  fi
+}
+
+run_ping() {
+  if [[ -n "$ROUTERCTL" ]]; then
+    "$ROUTERCTL" heartbeat ping || true
+  else
+    die "routerctl not found"
+  fi
+}
+
+run_doctor() {
+  if [[ -n "$AOS_DOCTOR" ]]; then
+    "$AOS_DOCTOR"
+    return 0
+  fi
+
+  msg "Running basic health checks..."
+  msg ""
+
+  if [[ -n "$INDEXCTL" ]]; then
+    msg "=== indexctl ==="
+    "$INDEXCTL" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "indexctl not found"
+  fi
+
+  if [[ -n "$ROUTERCTL" ]]; then
+    msg "=== routerctl ==="
+    "$ROUTERCTL" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "routerctl not found"
+  fi
+
+  if [[ -n "$BRIDGECTL" ]]; then
+    msg "=== bridgectl ==="
+    "$BRIDGECTL" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "bridgectl not found"
+  fi
+
+  if [[ -n "$SYNCVAULTCTL" ]]; then
+    msg "=== syncvaultctl ==="
+    "$SYNCVAULTCTL" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "syncvaultctl not found"
+  fi
+
+  if [[ -n "$FIREMAP_BIN" ]]; then
+    msg "=== firemap ==="
+    "$FIREMAP_BIN" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "firemap not found"
+  fi
+
+  msg "💡 For detailed diagnostics, install aos-doctor at:"
+  msg "   $SCRIPT_DIR/scripts/aos-doctor"
+}
+
+route_component() {
+  local component="$1"
+  shift || true
+
+  case "$component" in
+    hub|index)
+      [[ -n "$INDEXCTL" ]] || die "indexctl not found"
+      "$INDEXCTL" "$@"
+      ;;
+    core4)
+      core4_cmd "$@"
+      ;;
+    router)
+      [[ -n "$ROUTERCTL" ]] || die "routerctl not found"
+      "$ROUTERCTL" "$@"
+      ;;
+    bridge)
+      [[ -n "$BRIDGECTL" ]] || die "bridgectl not found"
+      "$BRIDGECTL" "$@"
+      ;;
+    vault|sync)
+      [[ -n "$SYNCVAULTCTL" ]] || die "syncvaultctl not found"
+      "$SYNCVAULTCTL" "$@"
+      ;;
+    env)
+      env_cmd "$@"
+      ;;
+    alias)
+      alias_cmd "$@"
+      ;;
+    *)
+      err "Unknown component: $component"
+      msg ""
+      msg "Available components: hub, index, router, bridge, core4, vault, sync, fire, centre, env, alias"
+      msg "Run 'aosctl help' for usage"
+      exit 1
+      ;;
+  esac
+}
+
+core4_cmd() {
+  [[ -n "$CORE4CTL" ]] || die "core4ctl not found (expected at ~/aos-hub/core4/core4ctl)"
+  local action="${1:-status}"
+  shift || true
+  case "$action" in
+    menu) "$CORE4CTL" menu ;;
+    status|build|install-timers) "$CORE4CTL" "$action" "$@" ;;
+    export-daily|daily-csv) "$CORE4CTL" export-daily "$@" ;;
+    prune|prune-events) "$CORE4CTL" prune "$@" ;;
+    finalize-month|seal-month|month-close) "$CORE4CTL" finalize-month "$@" ;;
+    finalize-week|seal-week) "$CORE4CTL" finalize-week "$@" ;;
+    ""|-h|--help|help) "$CORE4CTL" help ;;
+    *) die "Unknown core4 action: $action" ;;
+  esac
+}
+
+fire_cmd() {
+  local sub="${1:-}"
+  shift || true
+
+  case "$sub" in
+    menu)
+      [[ -n "$FIRECTL_BIN" ]] || die "firectl not found"
+      "$FIRECTL_BIN" menu
+      ;;
+    print|build|send)
+      [[ -n "$FIRECTL_BIN" ]] || die "firectl not found"
+      "$FIRECTL_BIN" "$sub" "$@"
+      ;;
+    setup-reports|setup-systemd|install-cli|uninstall-cli|doctor)
+      [[ -n "$FIRECTL_BIN" ]] || die "firectl not found"
+      "$FIRECTL_BIN" "$sub" "$@"
+      ;;
+
+    setup)
+      [[ -n "$FIREMAP_SETUP" ]] || die "firemap setup script missing"
+      "$FIREMAP_SETUP" "$@"
+      ;;
+    run|sync)
+      [[ -n "$FIREMAP_BIN" ]] || die "firemap not found"
+      "$FIREMAP_BIN" sync "$@"
+      ;;
+    status)
+      [[ -n "$FIREMAP_BIN" ]] || die "firemap not found"
+      "$FIREMAP_BIN" status
+      ;;
+    list)
+      [[ -n "$FIREMAP_BIN" ]] || die "firemap not found"
+      "$FIREMAP_BIN" list
+      ;;
+    enable)
+      systemctl --user enable --now alphaos-firemap-weekly.timer
+      ;;
+    disable)
+      systemctl --user disable --now alphaos-firemap-weekly.timer
+      ;;
+    start)
+      systemctl --user start alphaos-firemap-weekly.timer
+      ;;
+    stop)
+      systemctl --user stop alphaos-firemap-weekly.timer
+      ;;
+    logs)
+      journalctl --user -u alphaos-firemap-weekly.service -n 200 -f
+      ;;
+    bot-test)
+      [[ -n "$FIREMAP_BOT_PY" ]] || die "python firemap bot not found"
+      python "$FIREMAP_BOT_PY" test --text "${1:-}" ;;
+    ""|-h|--help|help)
+      cat <<'__FIRE__'
+aosctl fire — Fire tooling (daily/weekly bot output + Fire Map sync)
+
+Daily/Weekly (Taskwarrior → Telegram via `tele`):
+  aosctl fire menu
+  aosctl fire print daily|weekly
+  aosctl fire build daily|weekly
+  aosctl fire send  daily|weekly
+  aosctl fire setup-reports     # install TaskRC reports fired/firew
+  aosctl fire setup-systemd     # install + enable daily/weekly send timers
+
+Fire Map sync (legacy):
+  aosctl fire setup        # install Taskwarrior config + weekly timer
+  aosctl fire enable       # enable + start weekly timer
+  aosctl fire disable      # disable + stop weekly timer
+  aosctl fire start|stop   # start/stop weekly timer
+  aosctl fire status       # show Fire Map status (current week)
+  aosctl fire list         # list Fire Maps
+  aosctl fire run|sync     # sync Fire Maps to Taskwarrior now
+  aosctl fire logs         # follow weekly sync logs
+
+Firemap Python bot (direct Telegram API / optional tele):
+  aosctl fire bot-test "<text>"
+__FIRE__
+      ;;
+    *)
+      die "Unknown fire command: $sub"
+      ;;
+  esac
+}
+
+env_cmd() {
+  [[ -n "$ENVCTL" ]] || die "envctl not found"
+  "$ENVCTL" "$@"
+}
+
+alias_cmd() {
+  [[ -n "$ALIASCTL" ]] || die "aos-aliasctl not found"
+  "$ALIASCTL" "${@:-ui}"
+}
+
+fruits_cmd() {
+  [[ -n "$FRUITS_BIN" ]] || die "fruits CLI not found (set AOS_FRUITS_BIN or install $SCRIPT_DIR/python-fruits/fruits)"
+  "$FRUITS_BIN" "$@"
+}
+
+creatorking_cmd() {
+  [[ -n "$CREATORKING_BIN" ]] || die "creatorking CLI not found (set AOS_CREATORKING_BIN or install $SCRIPT_DIR/python-creatorking/creatorking)"
+  "$CREATORKING_BIN" "$@"
+}
+
+centre_cmd() {
+  local action="${1:-}"
+  shift || true
+
+  [[ -x "$AOS_CENTRES" ]] || die "aos-centres not found at: $AOS_CENTRES"
+
+  case "$action" in
+    add)
+      if [[ $# -lt 2 ]]; then
+        die "Usage: aosctl centre add <title> <link> [cmd]"
+      fi
+      "$AOS_CENTRES" add "$@"
+      ;;
+    open|boot|list|init)
+      "$AOS_CENTRES" "$action" "$@"
+      ;;
+    *)
+      die "Unknown centre action: $action"
+      ;;
+  esac
+}
+
+bot_cmd() {
+  local action="${1:-}"
+  shift || true
+
+  case "$action" in
+    send)
+      local bot="${1:-}"
+      shift || true
+      [[ -n "$bot" ]] || die "Usage: aosctl bot send <bot> <text>"
+      [[ $# -gt 0 ]] || die "Usage: aosctl bot send <bot> <text>"
+
+      local bot_upper
+      bot_upper="$(printf "%s" "$bot" | tr '[:lower:]' '[:upper:]')"
+
+      local webhook=""
+      local chat_id=""
+      local user_id=""
+      if [[ "$bot" == "hq" ]]; then
+        webhook="${AOS_GAS_WEBHOOK_URL:-}"
+        chat_id="${AOS_GAS_CHAT_ID:-}"
+        user_id="${AOS_GAS_USER_ID:-}"
+      else
+        webhook="$(eval "printf '%s' \"\${AOS_${bot_upper}_WEBHOOK_URL:-}\"")"
+        chat_id="$(eval "printf '%s' \"\${AOS_${bot_upper}_CHAT_ID:-}\"")"
+        user_id="$(eval "printf '%s' \"\${AOS_${bot_upper}_USER_ID:-}\"")"
+      fi
+
+      [[ -n "$webhook" ]] || die "Missing webhook URL for bot '$bot' (set AOS_${bot_upper}_WEBHOOK_URL or AOS_GAS_WEBHOOK_URL for hq)"
+
+      local bridge_url="${AOS_BRIDGE_URL:-http://127.0.0.1:8080/bridge}"
+      bridge_url="${bridge_url%/}"
+      local endpoint="${bridge_url}/telegram/send"
+
+      local token_header="${AOS_BRIDGE_TOKEN_HEADER:-X-Bridge-Token}"
+      local token="${AOS_BRIDGE_TOKEN:-}"
+
+      local text="$*"
+      local payload
+      payload="$(AOS_TELE_TEXT="$text" AOS_TELE_CHAT_ID="$chat_id" AOS_TELE_USER_ID="$user_id" AOS_TELE_WEBHOOK_URL="$webhook" \
+        python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "text": os.environ.get("AOS_TELE_TEXT", ""),
+    "chat_id": os.environ.get("AOS_TELE_CHAT_ID", ""),
+    "user_id": os.environ.get("AOS_TELE_USER_ID", ""),
+    "webhook_url": os.environ.get("AOS_TELE_WEBHOOK_URL", ""),
+}
+print(json.dumps(payload))
+PY
+      )"
+
+      if [[ -n "$token" ]]; then
+        curl -sS -X POST "$endpoint" \
+          -H "Content-Type: application/json" \
+          -H "$token_header: $token" \
+          -d "$payload"
+      else
+        curl -sS -X POST "$endpoint" \
+          -H "Content-Type: application/json" \
+          -d "$payload"
+      fi
+      echo ""
+      ;;
+    *)
+      die "Usage: aosctl bot send <bot> <text>"
+      ;;
+  esac
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    if have gum; then
+      show_menu
+    else
+      show_help
+    fi
+    exit 0
+  fi
+
+  local cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    menu) show_menu ;;
+    status) run_status ;;
+    ping) run_ping ;;
+    help|-h|--help) show_help ;;
+    version|-v|--version) show_version ;;
+    doctor|doc) run_doctor ;;
+    centre|centres|center|centers) centre_cmd "$@" ;;
+    hub|index|router|bridge|core4|vault|sync|env|alias) route_component "$cmd" "$@" ;;
+    fire) fire_cmd "$@" ;;
+    fruits) fruits_cmd "$@" ;;
+    creatorking) creatorking_cmd "$@" ;;
+    bot) bot_cmd "$@" ;;
+    *)
+      err "Unknown command: $cmd"
+      msg ""
+      msg "Run 'aosctl help' for usage"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

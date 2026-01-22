@@ -79,6 +79,7 @@ sudo systemctl start aos-index.service
 WorkingDirectory=%h/aos-hub/index-node
 Environment=HOST=0.0.0.0
 Environment=PORT=8799
+ExecStart=/usr/bin/npm run dev
 
 # Security Hardening
 ProtectSystem=strict
@@ -184,7 +185,7 @@ sudo systemctl restart aos-index.service
 
 ```bash
 # User services
-systemctl --user enable alphaos-index.service   # Start on login
+systemctl --user enable alphaos-index.service   # Start on boot (with linger)
 systemctl --user disable alphaos-index.service
 
 # For always-on (even when not logged in)

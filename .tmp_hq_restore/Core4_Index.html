@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>αOS — CORE4</title>
+    <style>
+      :root {
+        --bg: #070b12;
+        --card: rgba(255, 255, 255, 0.06);
+        --card2: rgba(255, 255, 255, 0.09);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --line: rgba(255, 255, 255, 0.14);
+        --green: #16a34a;
+        --blue: #2563eb;
+        --amber: #d97706;
+        --red: #dc2626;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+      a { color: inherit; }
+      .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+      .top {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 14px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      }
+      .title { font-weight: 900; letter-spacing: 1px; }
+      .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+      .pill {
+        font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line);
+        background: rgba(255,255,255,0.05);
+      }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 14px; }
+      .card { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 14px; }
+      .card h2 { margin: 0 0 10px; font-size: 14px; letter-spacing: 0.4px; }
+      .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      input[type="date"] {
+        padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+        background: rgba(255,255,255,0.06); color: var(--text);
+      }
+      .btn {
+        padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+        background: rgba(255,255,255,0.07); color: var(--text);
+        font-weight: 800; cursor: pointer;
+      }
+      .btn:hover { background: rgba(255,255,255,0.11); }
+      .btn.primary { border-color: rgba(37,99,235,0.6); background: rgba(37,99,235,0.18); }
+      .btn.primary:hover { background: rgba(37,99,235,0.28); }
+      .btn.danger { border-color: rgba(220,38,38,0.55); background: rgba(220,38,38,0.16); }
+      .btn.danger:hover { background: rgba(220,38,38,0.24); }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+      .domain {
+        border: 1px solid var(--line); border-radius: 14px; background: var(--card2); padding: 12px;
+      }
+      .domain .hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+      .domain .name { font-weight: 900; letter-spacing: 0.8px; }
+      .domain .hint { color: var(--muted); font-size: 12px; }
+      .habits { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+      .hbtn {
+        border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+        background: rgba(0,0,0,0.15); cursor: pointer; text-align: left;
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      }
+      .hbtn:hover { background: rgba(0,0,0,0.25); }
+      .hlabel { font-weight: 900; }
+      .hpoints { font-size: 12px; color: var(--muted); }
+      .stats { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .stat { padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); }
+      .stat .k { font-size: 11px; color: var(--muted); }
+      .stat .v { font-size: 16px; font-weight: 900; margin-top: 2px; }
+      .log { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; color: var(--muted); font-size: 12px; white-space: pre-wrap; }
+      .toast {
+        position: fixed; right: 16px; top: 16px; z-index: 9999;
+        border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+        background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+        transform: translateY(-20px); opacity: 0; transition: all 220ms ease;
+      }
+      .toast.on { transform: translateY(0); opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <div class="title">CORE4 • HABIT TRACKER</div>
+          <div class="sub">Backfill + Track (0.5 Punkte pro Habit)</div>
+        </div>
+        <div class="pill" id="weekPill">Week: —</div>
+      </div>
+
+      <div class="row">
+        <div class="controls">
+          <input id="date" type="date" />
+          <button class="btn" type="button" onclick="setToday()">Today</button>
+          <button class="btn primary" type="button" onclick="refresh()">Refresh</button>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Date</div>
+            <div class="v" id="dateLabel">—</div>
+          </div>
+          <div class="stat">
+            <div class="k">Points</div>
+            <div class="v" id="points">—</div>
+          </div>
+          <div class="stat">
+            <div class="k">Goal</div>
+            <div class="v">4/day</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="controls">
+          <button class="btn" type="button" onclick="showWeekSummary()">Week Summary</button>
+          <button class="btn" type="button" onclick="exportWeekSummary()">Export Summary → Drive</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h2>Log Habits</h2>
+        <div class="grid">
+          <div class="domain">
+            <div class="hd">
+              <div class="name">BODY</div>
+              <div class="hint">Fitness • Fuel</div>
+            </div>
+            <div class="habits">
+              <button class="hbtn" type="button" onclick="logHabit('body','fitness')"><span class="hlabel">🏋️ Fitness</span><span class="hpoints">+0.5</span></button>
+              <button class="hbtn" type="button" onclick="logHabit('body','fuel')"><span class="hlabel">🍽️ Fuel</span><span class="hpoints">+0.5</span></button>
+            </div>
+          </div>
+
+          <div class="domain">
+            <div class="hd">
+              <div class="name">BEING</div>
+              <div class="hint">Meditation • Memoirs</div>
+            </div>
+            <div class="habits">
+              <button class="hbtn" type="button" onclick="logHabit('being','meditation')"><span class="hlabel">🧘 Meditation</span><span class="hpoints">+0.5</span></button>
+              <button class="hbtn" type="button" onclick="logHabit('being','memoirs')"><span class="hlabel">📝 Memoirs</span><span class="hpoints">+0.5</span></button>
+            </div>
+          </div>
+
+          <div class="domain">
+            <div class="hd">
+              <div class="name">BALANCE</div>
+              <div class="hint">Person 1 • Person 2</div>
+            </div>
+            <div class="habits">
+              <button class="hbtn" type="button" onclick="logHabit('balance','person1')"><span class="hlabel">👥 Person 1</span><span class="hpoints">+0.5</span></button>
+              <button class="hbtn" type="button" onclick="logHabit('balance','person2')"><span class="hlabel">💑 Person 2</span><span class="hpoints">+0.5</span></button>
+            </div>
+          </div>
+
+          <div class="domain">
+            <div class="hd">
+              <div class="name">BUSINESS</div>
+              <div class="hint">Discover • Declare</div>
+            </div>
+            <div class="habits">
+              <button class="hbtn" type="button" onclick="logHabit('business','discover')"><span class="hlabel">🔍 Discover</span><span class="hpoints">+0.5</span></button>
+              <button class="hbtn" type="button" onclick="logHabit('business','declare')"><span class="hlabel">📣 Declare</span><span class="hpoints">+0.5</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="log" id="log">—</div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+      function pad2(n) { return String(n).padStart(2, "0"); }
+      function isoDateLocal(d) {
+        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+      }
+      function showToast(msg) {
+        const el = document.getElementById("toast");
+        el.textContent = String(msg || "");
+        el.classList.add("on");
+        window.setTimeout(() => el.classList.remove("on"), 1400);
+      }
+
+      function setToday() {
+        const today = isoDateLocal(new Date());
+        document.getElementById("date").value = today;
+        refresh();
+      }
+
+      function getSelectedDate() {
+        return String(document.getElementById("date").value || "").trim();
+      }
+
+      function renderDayState(state) {
+        document.getElementById("weekPill").textContent = "Week: " + (state.week || "—");
+        document.getElementById("dateLabel").textContent = state.date || "—";
+        document.getElementById("points").textContent = String(state.total ?? "—");
+
+        const lines = [];
+        if (Array.isArray(state.entries) && state.entries.length) {
+          state.entries
+            .slice()
+            .sort((a, b) => String(a.ts || "").localeCompare(String(b.ts || "")))
+            .forEach((e) => {
+              const t = (e.task || "").toUpperCase();
+              const d = (e.domain || "").toUpperCase();
+              const ts = (e.ts || "").replace("T", " ").replace("Z", "");
+              lines.push(`${ts} • ${d}:${t} • +${e.points || 0.5}`);
+            });
+        } else {
+          lines.push("No entries for this date.");
+        }
+        document.getElementById("log").textContent = lines.join("\n");
+      }
+
+      function refresh() {
+        const dateKey = getSelectedDate();
+        if (!dateKey) {
+          showToast("Pick a date");
+          return;
+        }
+        if (typeof google === "undefined" || !google.script || !google.script.run) {
+          showToast("Not running inside GAS");
+          return;
+        }
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) {
+              showToast((res && res.error) || "Load failed");
+              return;
+            }
+            renderDayState(res);
+          })
+          .withFailureHandler((err) => showToast(String(err || "Load error")))
+          .core4_getDayState(dateKey);
+      }
+
+      function logHabit(domain, task) {
+        const dateKey = getSelectedDate();
+        if (!dateKey) {
+          showToast("Pick a date first");
+          return;
+        }
+        if (typeof google === "undefined" || !google.script || !google.script.run) {
+          showToast("Not running inside GAS");
+          return;
+        }
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) {
+              showToast((res && res.error) || "Log failed");
+              return;
+            }
+            showToast("Logged");
+            refresh();
+          })
+          .withFailureHandler((err) => showToast(String(err || "Log error")))
+          .core4_logForDate(domain, task, dateKey);
+      }
+
+      function showWeekSummary() {
+        const dateKey = getSelectedDate();
+        if (!dateKey) return showToast("Pick a date first");
+        if (typeof google === "undefined" || !google.script || !google.script.run) return;
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) return showToast((res && res.error) || "Summary failed");
+            const totals = res.totals || {};
+            showToast(`Week total: ${totals.week_total || 0}/28`);
+          })
+          .withFailureHandler((err) => showToast(String(err || "Summary error")))
+          .core4_getWeekSummaryForDate(dateKey);
+      }
+
+      function exportWeekSummary() {
+        const dateKey = getSelectedDate();
+        if (!dateKey) return showToast("Pick a date first");
+        if (typeof google === "undefined" || !google.script || !google.script.run) return;
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) return showToast((res && res.error) || "Export failed");
+            showToast("Exported");
+          })
+          .withFailureHandler((err) => showToast(String(err || "Export error")))
+          .core4_exportWeekSummaryForDate(dateKey);
+      }
+
+      document.getElementById("date").addEventListener("change", () => refresh());
+      setToday();
+    </script>
+  </body>
+</html>
+

@@ -10,7 +10,7 @@
 ## Entry Points (current)
 - `hotlist_addWeb(idea, user)` — used by HQ Quick Add & Terminal.
 - Telegram WebApp → `webapp_handleHotListSubmission` → `hotlist_addWeb`.
-- Door Bot: `/hot <input>` should create the same Hotlist entry via Bridge/API.
+- Door Bot: `/hot <input>` handled in `hotlist_handleTelegramMessage_` (uses `HOTLIST_BOT_TOKEN` for replies).
 - Any direct GAS call to `hotlist_addWeb` (REST WebApp) is possible if exposed.
 
 ## Storage
@@ -32,7 +32,12 @@
 ## Props (expected)
 - `TICKTICK_TOKEN` (for TickTick sync)
 - `HOTLIST_TICKTICK_PROJECT_ID` (optional, fallback inbox)
+- `HOTLIST_BOT_TOKEN` (optional, for Hotlist Telegram debug/helper)
 - Alpha_Door folder is resolved via `door.gs` helpers.
+
+## Telegram Helper (optional)
+- `hotlist_sendTelegram_(text, chatId)` sends a debug/info message via `HOTLIST_BOT_TOKEN`.
+- Fallback uses `TELEGRAM_BOT_TOKEN` if the Hotlist token is not set.
 
 ## Smoke Checks
 1) HQ Quick Add: add idea → `.md` in `Alpha_Door/1-Potential`, JSON entry, Bridge-queued task, optional TickTick task.

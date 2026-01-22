@@ -1,12 +1,15 @@
 [Unit]
 Description=AOS Hub - Index Node (HTTP server for menu.yaml)
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=alpha
-WorkingDirectory=/home/alpha/aos-hub/index-node
-ExecStart=/usr/bin/node /home/alpha/aos-hub/index-node/server.js
+Group=alpha
+EnvironmentFile=-/etc/alphaos-hub/env
+EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env
+ExecStart=/usr/bin/bash -lc 'cd "$AOS_HUB_DIR/index-node" && exec /usr/bin/node server.js'
 Restart=on-failure
 RestartSec=10
 

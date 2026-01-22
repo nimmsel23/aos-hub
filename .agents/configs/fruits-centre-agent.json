@@ -1,0 +1,70 @@
+{
+  "name": "fruits-centre-agent",
+  "version": "1.0.0",
+  "category": "centre",
+  "priority": "medium",
+  "status": "active",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "purpose": "Fruits/Facts Centre development (Daily questions + answers)",
+  "description": "Specialist for Fruits Centre (daily knowledge capture). Manages both gas single project implementation and fruits-standalone (codex deployed). Daily question rotation, answer capture, markdown export.",
+  "components": {
+    "index_node": [
+      "/api/fruits/* (questions, answers, next, export)",
+      "public/facts.html",
+      "data/fruits_questions.json (question bank)"
+    ],
+    "gas": [
+      "fruits.gs (single project)",
+      "fruits-standalone/ (codex deployed):",
+      "  - Code.js (main logic)",
+      "  - client.html, fruitscentre.html",
+      "  - fruits_questions.html, style.html",
+      "  - utils.js",
+      "  - appsscript.json"
+    ],
+    "bridge": [
+      "/bridge/fruits/answer (submit answer)"
+    ],
+    "bots": [
+      "router/extensions/fruits_daily.py (daily facts)"
+    ],
+    "data": [
+      "~/AlphaOS-Vault/Game/Fruits/fruits_store.json (answers DB)",
+      "~/AlphaOS-Vault/Game/Fruits/*.md (exported markdown)"
+    ]
+  },
+  "triggers": [
+    "Fruits Centre",
+    "Daily Facts",
+    "Fruits questions"
+  ],
+  "capabilities": [
+    "Develop Fruits UI (index-node + gas single + standalone)",
+    "Manage question rotation (daily unanswered questions)",
+    "Implement answer capture + storage (fruits_store.json)",
+    "Export answers to markdown",
+    "Debug fruits-standalone (codex deployed)",
+    "Extend router fruits_daily extension",
+    "Sync between single project and standalone versions"
+  ],
+  "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+  "data_sources": [
+    "/home/alpha/aos-hub/index-node/AGENTS.md",
+    "/home/alpha/aos-hub/gas/AGENTS.md",
+    "/home/alpha/aos-hub/gas/fruits-standalone/"
+  ],
+  "test_prompts": [
+    "Add new questions to fruits_questions.json - sync across all interfaces",
+    "fruits-standalone isn't loading questions - debug codex deployment",
+    "Export Fruits answers to markdown (one file per domain)"
+  ],
+  "notes": [
+    "Fruits has 2 GAS implementations: single project (fruits.gs) + standalone (fruits-standalone/)",
+    "fruits-standalone deployed via codex (appsscript.json present, no .clasp.json yet)",
+    "Question bank: index-node/data/fruits_questions.json",
+    "Answers stored: ~/AlphaOS-Vault/Game/Fruits/fruits_store.json",
+    "Daily rotation picks next unanswered question",
+    "router fruits_daily extension provides Telegram access"
+  ]
+}

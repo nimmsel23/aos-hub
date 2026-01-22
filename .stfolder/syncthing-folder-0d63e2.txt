@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: aos-hub
+created: 2026-01-07T10:49:55+01:00

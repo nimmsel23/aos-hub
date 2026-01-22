@@ -1,0 +1,706 @@
+<script>
+const LS_PREFIX = 'voicecentre_';
+
+const TEXTAREA_IDS = [
+  'stopinput',
+  'submit_facts', 'submit_feelings', 'submit_focus', 'submit_fruit',
+  'struggleinput',
+  'strikeinput'
+];
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function activateTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav a[data-tab]').forEach(n => n.classList.remove('active'));
+
+  document.getElementById(tabId)?.classList.add('active');
+  document.querySelector(`nav a[data-tab="${tabId}"]`)?.classList.add('active');
+
+  updateSessionActionsVisibility();
+}
+
+function updateSessionActionsVisibility() {
+  const activeTab = document.querySelector('.tab.active');
+  const actions = document.querySelector('.session-actions');
+  if (!actions) return;
+  actions.style.display = (activeTab && activeTab.id === 'home') ? 'none' : 'flex';
+}
+
+function applyPhaseFocus(isOpen) {
+  document.body.classList.toggle('phase-focus', !!isOpen);
+}
+
+// Modal bridge: reuse any existing modal helpers, but always toggle
+// the "phase-focus" layout effect and route back to Home on close.
+(function initModalBridge() {
+  const baseOpen = typeof window.AOS_modalOpen === 'function' ? window.AOS_modalOpen : null;
+  const baseClose = typeof window.AOS_modalClose === 'function' ? window.AOS_modalClose : null;
+
+  function fallbackModalOpen(opts) {
+    opts = opts || {};
+    const overlay = document.getElementById('aosModalOverlay');
+    const titleEl = document.getElementById('aosModalTitle');
+    const subEl = document.getElementById('aosModalSub');
+    const bodyEl = document.getElementById('aosModalBody');
+    if (!overlay || !titleEl || !bodyEl) return false;
+
+    titleEl.textContent = opts.title || 'Modal';
+    if (subEl) subEl.textContent = opts.sub || '';
+    bodyEl.innerHTML = opts.html || '';
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    overlay._escHandler = (e) => { if (e.key === 'Escape') fallbackModalClose(); };
+    document.addEventListener('keydown', overlay._escHandler);
+
+    overlay._clickHandler = (e) => { if (e.target === overlay) fallbackModalClose(); };
+    overlay.addEventListener('click', overlay._clickHandler);
+    return true;
+  }
+
+  function fallbackModalClose() {
+    const overlay = document.getElementById('aosModalOverlay');
+    if (!overlay) return false;
+
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+
+    if (overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler);
+    if (overlay._clickHandler) overlay.removeEventListener('click', overlay._clickHandler);
+    overlay._escHandler = null;
+    overlay._clickHandler = null;
+    return true;
+  }
+
+  window.AOS_modalOpen = function wrappedModalOpen(opts) {
+    const overlay = document.getElementById('aosModalOverlay');
+    const opened = (baseOpen || fallbackModalOpen)(opts) !== false;
+    if (overlay && opened) applyPhaseFocus(true);
+  };
+
+  window.AOS_modalClose = function wrappedModalClose() {
+    const overlay = document.getElementById('aosModalOverlay');
+    const closed = (baseClose || fallbackModalClose)() !== false;
+    if (overlay && closed) applyPhaseFocus(false);
+    activateTab('home');
+  };
+})();
+
+function buildVoiceSessionMarkdown() {
+  const now = new Date();
+  const ts = now.toISOString().slice(0, 19).replace('T', ' ');
+  const dateLine = `Session: ${ts}`;
+
+  const stopInput = (document.getElementById('stopinput')?.value || '').trim();
+  const submitFacts = (document.getElementById('submit_facts')?.value || '').trim();
+  const submitFeel = (document.getElementById('submit_feelings')?.value || '').trim();
+  const submitFocus = (document.getElementById('submit_focus')?.value || '').trim();
+  const submitFruit = (document.getElementById('submit_fruit')?.value || '').trim();
+  const struggleInput = (document.getElementById('struggleinput')?.value || '').trim();
+  const strikeInput = (document.getElementById('strikeinput')?.value || '').trim();
+
+  const stopOutput = (document.getElementById('stopoutput')?.textContent || '').trim();
+  const submitOutput = (document.getElementById('submitoutput')?.textContent || '').trim();
+  const struggleOutput = (document.getElementById('struggleoutput')?.textContent || '').trim();
+  const strikeOutput = (document.getElementById('strikeoutput')?.textContent || '').trim();
+
+  const fence = (content) => content ? `**Generated Markdown:**\n\n\`\`\`md\n${content}\n\`\`\`\n\n` : '';
+
+  let md = `# The Voice Session – αOS\n\n_${dateLine}_\n\n---\n\n`;
+
+  md += `## STOP\n\n**Input:**\n\n${stopInput || '_leer_'}\n\n`;
+  md += fence(stopOutput);
+
+  md += `---\n\n## SUBMIT\n\n`;
+  md += `**FACTS:**\n\n${submitFacts || '_leer_'}\n\n`;
+  md += `**FEELINGS:**\n\n${submitFeel || '_leer_'}\n\n`;
+  md += `**FOCUS:**\n\n${submitFocus || '_leer_'}\n\n`;
+  md += `**FRUIT:**\n\n${submitFruit || '_leer_'}\n\n`;
+  md += fence(submitOutput);
+
+  md += `---\n\n## STRUGGLE\n\n**Input:**\n\n${struggleInput || '_leer_'}\n\n`;
+  md += fence(struggleOutput);
+
+  md += `---\n\n## STRIKE\n\n**Input:**\n\n${strikeInput || '_leer_'}\n\n`;
+  md += fence(strikeOutput);
+
+  md += `---\n\n_Generated via The Voice Centre · αOS_\n`;
+  return md;
+}
+
+function openSessionPreview() {
+  const md = buildVoiceSessionMarkdown();
+  const html = `
+    <div class="aos-modal-section">
+      <h3>Preview</h3>
+      <div class="markdown-body">${(typeof marked !== 'undefined') ? marked.parse(md) : `<pre>${escapeHtml(md)}</pre>`}</div>
+    </div>
+  `;
+  AOS_modalOpen({ title: 'Voice Session Preview', sub: 'Dynamisch aus deinen Feldern', html });
+}
+
+function downloadVoiceSession() {
+  const md = buildVoiceSessionMarkdown();
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const fname = 'VoiceSession_' + now.toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.md';
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function saveVoiceSessionToDrive() {
+  const md = buildVoiceSessionMarkdown();
+  const now = new Date();
+  const filename = 'VoiceSession_' + now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    alert('Drive-Sync ist in dieser Umgebung nicht verfügbar.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const url = res?.file?.url || res?.url || '';
+      const name = res?.file?.name || res?.name || 'Saved';
+      AOS_modalOpen({
+        title: 'Saved',
+        sub: name,
+        html: `
+          <div class="aos-modal-section">
+            <h3>Drive</h3>
+            <p>${url ? `<a href="${url}" target="_blank" rel="noopener">Open file</a>` : 'No URL returned'}</p>
+          </div>
+        `
+      });
+    })
+    .withFailureHandler(err => {
+      const msg = err?.message || String(err);
+      alert('Fehler beim Speichern in Drive:\n' + msg);
+    })
+    .saveVoiceSessionToDrive(md, filename);
+}
+
+function saveStep(tool, markdown) {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    alert('Drive-Sync nicht verfügbar.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const url = res?.file?.url || '';
+      const name = res?.file?.name || tool;
+      if (res?.ok) {
+        AOS_modalOpen({
+          title: 'Saved',
+          sub: name,
+          html: `
+            <div class="aos-modal-section">
+              <h3>Drive</h3>
+              <p>${url ? `<a href="${url}" target="_blank" rel="noopener">Open file</a>` : 'No URL returned'}</p>
+            </div>
+          `
+        });
+      } else {
+        alert('Fehler: ' + (res?.error || 'Unbekannt'));
+      }
+    })
+    .withFailureHandler(err => {
+      const msg = err?.message || String(err);
+      alert('Server-Fehler: ' + msg);
+    })
+    .VOI_saveStepWeb(tool, markdown);
+}
+
+function generateStep(step) {
+  let md = '';
+
+  if (step === 'submit') {
+    const facts = document.getElementById('submit_facts')?.value.trim() || '';
+    const feelings = document.getElementById('submit_feelings')?.value.trim() || '';
+    const focus = document.getElementById('submit_focus')?.value.trim() || '';
+    const fruit = document.getElementById('submit_fruit')?.value.trim() || '';
+
+    if (!facts && !feelings && !focus && !fruit) {
+      return alert('Submit or perish, brother. Fill the fields with truth.');
+    }
+
+    md = `# SUBMIT: Face the Abyss (Nietzsche/Stoic Fusion)\n\n` +
+         `**FACTS – Die nackte Realität (Stoic: Accept What Is)**\n${facts || '_No submission – weakness detected._'}\n\n` +
+         `**FEELINGS – Der innere Sturm (Nietzsche: Embrace the Chaos)**\n${feelings || '_No raw power – hiding from the will?_'}\n\n` +
+         `**FOCUS – Deine geistige Ausrichtung (Stoic: Reason Over Passion)**\n${focus || '_No direction – drifting like a slave?_'}\n\n` +
+         `**FRUIT – Die Ernte deines Willens (Nietzsche: Eternal Recurrence)**\n${fruit || '_Bitter harvest – ready to affirm it forever?_'}\n\n---\n\n` +
+         `> Stoic Reflection: "The obstacle is the way." – Marcus Aurelius. Submit to truth; it forges you.\n` +
+         `> Nietzschean Fire: Stare into the abyss; let it stare back and birth your strength.\n\n` +
+         `**Nächster Schritt:** Enter the STRUGGLE → Overcome.\n`;
+
+    const out = document.getElementById('submitoutput');
+    const wrapper = document.getElementById('submit-wrapper');
+    if (out) out.textContent = md;
+    if (wrapper) wrapper.style.display = 'block';
+
+    AOS_modalOpen({
+      title: 'SUBMIT',
+      sub: 'Generated',
+      html: `
+        <div class="aos-modal-section">
+          <h3>Output</h3>
+          <pre>${escapeHtml(md)}</pre>
+        </div>
+        <div class="aos-phase-actions">
+          <button type="button" class="aos-btn" onclick="AOS_modalClose()">Schließen</button>
+          <button type="button" class="aos-btn aos-btn-primary" onclick="saveStep('Submit', buildVoiceSessionMarkdown().match(/## SUBMIT[\s\S]*?(?=---\n\n## STRUGGLE|---\n\n_Generated)/)?.[0] || document.getElementById('submitoutput')?.textContent || '')">In Drive</button>
+        </div>
+      `
+    });
+
+    return;
+  }
+
+  const inputEl = document.getElementById(step + 'input');
+  if (!inputEl) return;
+
+  const input = inputEl.value.trim();
+  if (!input) return alert('Empty submission? Weakness. Fill it with fire.');
+
+  let reflection = '';
+  let philosophy = '';
+  let nextStep = '';
+
+  if (step === 'stop') {
+    reflection = '> Stoic Citadel claimed: "Freedom is the only worthy goal." – Epictetus. You\'ve paused; now submit.';
+    philosophy = 'Stoic Pause: Master impulses; control your judgments.';
+    nextStep = 'Submit';
+  } else if (step === 'struggle') {
+    reflection = '> Nietzschean Overcoming: "From the struggle emerges the Übermensch." Fight or perish.';
+    philosophy = 'Internal War: Embrace suffering; become what you must.';
+    nextStep = 'Strike';
+  } else if (step === 'strike') {
+    reflection = '> Stoic/Nietzschean Strike: "Act with virtue; affirm life eternally." Dominion awaits.';
+    philosophy = 'Unleashed Power: Will to action; eternal yes to fate.';
+  }
+
+  md = `# ${step.toUpperCase()}: ${philosophy}\n\n` +
+       `**Eingabe:**\n${input}\n\n` +
+       `**Reflection:**\n${reflection}\n\n` +
+       (nextStep ? `**Nächster Schritt:** ${nextStep} → Execute with power.\n` : 'Cycle complete: Affirm your results eternally.\n');
+
+  const out = document.getElementById(step + 'output');
+  const wrapper = document.getElementById(step + '-wrapper');
+  if (out) out.textContent = md;
+  if (wrapper) wrapper.style.display = 'block';
+
+  AOS_modalOpen({
+    title: step.toUpperCase(),
+    sub: 'Generated',
+    html: `
+      <div class="aos-modal-section">
+        <h3>Output</h3>
+        <pre>${escapeHtml(md)}</pre>
+      </div>
+      <div class="aos-phase-actions">
+        <button type="button" class="aos-btn" onclick="AOS_modalClose()">Schließen</button>
+        <button type="button" class="aos-btn aos-btn-primary" onclick="saveStep('${step.charAt(0).toUpperCase() + step.slice(1)}', document.getElementById('${step}output')?.textContent || '')">In Drive</button>
+      </div>
+    `
+  });
+}
+
+function restoreTextareas() {
+  TEXTAREA_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const saved = localStorage.getItem(LS_PREFIX + id);
+    if (saved !== null) el.value = saved;
+
+    el.addEventListener('input', () => {
+      try { localStorage.setItem(LS_PREFIX + id, el.value); }
+      catch (e) {}
+    });
+  });
+}
+
+function setupActiveToc() {
+  const container = document.getElementById('voice-markdown');
+  if (!container) return;
+
+  const headings = Array.from(container.querySelectorAll('h1, h2, h3'));
+  const links = Array.from(document.querySelectorAll('.toc a'));
+  if (!headings.length || !links.length) return;
+
+  const linkById = new Map();
+  links.forEach(a => {
+    const href = (a.getAttribute('href') || '').trim();
+    if (href.startsWith('#')) linkById.set(href.slice(1), a);
+  });
+
+  function setActive(id) {
+    links.forEach(a => a.classList.remove('active'));
+    const a = linkById.get(id);
+    if (a) a.classList.add('active');
+  }
+
+  function computeActive() {
+    const TOP_OFFSET = 120;
+    let best = null;
+
+    for (const h of headings) {
+      const r = h.getBoundingClientRect();
+      if (r.top <= TOP_OFFSET + 8 && r.bottom > 0) {
+        if (!best || r.top > best.top) best = { id: h.id, top: r.top };
+      }
+    }
+
+    if (!best) {
+      for (const h of headings) {
+        const r = h.getBoundingClientRect();
+        if (r.top > TOP_OFFSET && r.top < window.innerHeight) {
+          best = { id: h.id, top: r.top };
+          break;
+        }
+      }
+    }
+
+    if (best?.id) setActive(best.id);
+  }
+
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      computeActive();
+      ticking = false;
+    });
+  };
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  computeActive();
+}
+
+function buildToc() {
+  const container = document.getElementById('voice-markdown');
+  const tocList = document.getElementById('toc-list');
+  if (!container || !tocList) return;
+
+  tocList.innerHTML = '';
+
+  const headings = container.querySelectorAll('h1, h2, h3');
+  headings.forEach(h => {
+    const text = h.textContent.trim();
+    if (!text) return;
+
+    let id = h.id;
+    if (!id) {
+      id = text
+        .toLowerCase()
+        .replace(/[ä]/g, 'ae')
+        .replace(/[ö]/g, 'oe')
+        .replace(/[ü]/g, 'ue')
+        .replace(/[ß]/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      h.id = id;
+    }
+
+    const level = h.tagName === 'H1' ? 1 : h.tagName === 'H2' ? 2 : 3;
+
+    const li = document.createElement('li');
+    li.classList.add('level-' + level);
+
+    const a = document.createElement('a');
+    a.href = '#' + id;
+    a.textContent = text;
+
+    a.addEventListener('click', ev => {
+      ev.preventDefault();
+      activateTab('home');
+      const target = document.getElementById(id);
+      if (!target) return;
+      setTimeout(() => {
+        window.scrollTo({
+          top: target.getBoundingClientRect().top + window.scrollY - 90,
+          behavior: 'smooth'
+        });
+      }, 0);
+    });
+
+    li.appendChild(a);
+    tocList.appendChild(li);
+  });
+
+  setupActiveToc();
+}
+
+function openPhaseModal(phaseId) {
+  const phase = PHASES[phaseId];
+  if (!phase) return;
+
+  const html = phaseId === 'submit'
+    ? buildSubmitPhaseHtml_()
+    : buildSinglePhaseHtml_(phaseId);
+
+  AOS_modalOpen({
+    title: phase.title,
+    sub: '',   // optional: 1 Zeile Kicker, aber ohne HTML
+    html
+  });
+
+  setTimeout(() => {
+    document.querySelector('.aos-phase-input')?.focus();
+  }, 30);
+}
+
+
+function buildSinglePhaseHtml_(phaseId) {
+  const phase = PHASES[phaseId];
+  const id = phase.textareaId;
+  const src = document.getElementById(id);
+  const v = src ? src.value : '';
+
+  const lore = phase.subHtml
+    ? `
+      <details class="aos-lore" open>
+        <summary>Chapter</summary>
+        <div class="aos-lore-body">
+          <div class="markdown-body">${phase.subHtml}</div>
+        </div>
+      </details>
+    `
+    : '';
+
+  return `
+    <div class="aos-phase-wrap">
+      <div class="aos-phase-kicker">Phase Focus</div>
+      <div class="aos-phase-title">${phaseId.toUpperCase()}</div>
+
+      ${lore}
+
+      <div class="aos-phase-hint">Schreib roh. Kein “schön”. Nur wahr.</div>
+
+      <textarea class="aos-phase-input" id="aosPhaseInput" placeholder="Dein Text…">${escapeHtml(v)}</textarea>
+
+      <div class="aos-phase-actions">
+        <button type="button" class="aos-btn aos-btn-ghost" onclick="AOS_modalClose()">Schließen</button>
+        <button type="button" class="aos-btn" onclick="AOS_phaseSync('${id}')">Übernehmen</button>
+        <button type="button" class="aos-btn aos-btn-primary" onclick="AOS_phaseRun('${phaseId}')">Generieren</button>
+      </div>
+    </div>
+  `;
+}
+
+
+function buildSubmitPhaseHtml_() {
+  const facts = document.getElementById('submit_facts')?.value || '';
+  const feel  = document.getElementById('submit_feelings')?.value || '';
+  const focus = document.getElementById('submit_focus')?.value || '';
+  const fruit = document.getElementById('submit_fruit')?.value || '';
+
+  const lore = PHASES?.submit?.subHtml
+    ? `
+      <details class="aos-lore" open>
+        <summary>Chapter</summary>
+        <div class="aos-lore-body">
+          <div class="markdown-body">${PHASES.submit.subHtml}</div>
+        </div>
+      </details>
+    `
+    : '';
+
+  return `
+    <div class="aos-phase-wrap">
+      <div class="aos-phase-kicker">Phase Focus</div>
+      <div class="aos-phase-title">SUBMIT</div>
+
+      ${lore}
+
+      <div class="aos-modal-section">
+        <h3>FACTS</h3>
+        <textarea class="aos-phase-input" id="aosSubmitFacts" placeholder="Was ist objektiv wahr?">${escapeHtml(facts)}</textarea>
+      </div>
+
+      <div class="aos-modal-section">
+        <h3>FEELINGS</h3>
+        <textarea class="aos-phase-input" id="aosSubmitFeel" placeholder="Welche Emotionen toben?">${escapeHtml(feel)}</textarea>
+      </div>
+
+      <div class="aos-modal-section">
+        <h3>FOCUS</h3>
+        <textarea class="aos-phase-input" id="aosSubmitFocus" placeholder="Worauf war dein Geist gerichtet?">${escapeHtml(focus)}</textarea>
+      </div>
+
+      <div class="aos-modal-section">
+        <h3>FRUIT</h3>
+        <textarea class="aos-phase-input" id="aosSubmitFruit" placeholder="Welche Früchte erntest du?">${escapeHtml(fruit)}</textarea>
+      </div>
+
+      <div class="aos-phase-actions">
+        <button type="button" class="aos-btn aos-btn-ghost" onclick="AOS_modalClose()">Schließen</button>
+        <button type="button" class="aos-btn" onclick="AOS_submitSync()">Übernehmen</button>
+        <button type="button" class="aos-btn aos-btn-primary" onclick="AOS_submitRun()">Generieren</button>
+      </div>
+    </div>
+  `;
+}
+
+
+function AOS_phaseSync(targetId) {
+  const src = document.getElementById('aosPhaseInput');
+  const dst = document.getElementById(targetId);
+  if (!src || !dst) return;
+  dst.value = src.value;
+  try { localStorage.setItem(LS_PREFIX + targetId, dst.value); } catch(e) {}
+}
+
+function AOS_phaseRun(phaseId) {
+  const phase = PHASES[phaseId];
+  if (!phase || !phase.textareaId) return;
+  AOS_phaseSync(phase.textareaId);
+  generateStep(phaseId);
+}
+
+function AOS_submitSync() {
+  const facts = document.getElementById('aosSubmitFacts');
+  const feel = document.getElementById('aosSubmitFeel');
+  const focus = document.getElementById('aosSubmitFocus');
+  const fruit = document.getElementById('aosSubmitFruit');
+
+  const dstFacts = document.getElementById('submit_facts');
+  const dstFeel = document.getElementById('submit_feelings');
+  const dstFocus = document.getElementById('submit_focus');
+  const dstFruit = document.getElementById('submit_fruit');
+
+  if (facts && dstFacts) dstFacts.value = facts.value;
+  if (feel && dstFeel) dstFeel.value = feel.value;
+  if (focus && dstFocus) dstFocus.value = focus.value;
+  if (fruit && dstFruit) dstFruit.value = fruit.value;
+
+  try {
+    if (dstFacts) localStorage.setItem(LS_PREFIX + 'submit_facts', dstFacts.value);
+    if (dstFeel) localStorage.setItem(LS_PREFIX + 'submit_feelings', dstFeel.value);
+    if (dstFocus) localStorage.setItem(LS_PREFIX + 'submit_focus', dstFocus.value);
+    if (dstFruit) localStorage.setItem(LS_PREFIX + 'submit_fruit', dstFruit.value);
+  } catch(e) {}
+}
+
+function AOS_submitRun() {
+  AOS_submitSync();
+  generateStep('submit');
+}
+
+function initVoiceCentre() {
+  initTheme();
+  const vm = document.getElementById('voice-markdown');
+  if (vm && typeof voiceMarkdown === 'string') {
+    try { vm.innerHTML = (typeof marked !== 'undefined') ? marked.parse(voiceMarkdown) : voiceMarkdown; }
+    catch (e) { vm.textContent = voiceMarkdown; }
+  }
+
+  buildToc();
+
+  document.querySelectorAll('nav a[data-tab]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const tabId = a.dataset.tab;
+      if (!tabId) return;
+
+      // Always route back to home; phases happen in modal.
+      if (tabId === 'home') {
+        activateTab('home');
+        return;
+      }
+
+      activateTab('home');
+      openPhaseModal(tabId);
+    });
+  });
+
+  updateSessionActionsVisibility();
+
+  const zenBtn = document.getElementById('zenToggle');
+  if (zenBtn) {
+    zenBtn.addEventListener('click', () => {
+      document.body.classList.toggle('zen-mode');
+      zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen Mode';
+      activateTab('home');
+    });
+  }
+
+  restoreTextareas();
+
+  if (!window.__AOS_VOICE_COPY_BOUND) {
+    document.addEventListener('click', e => {
+      const btn = e.target;
+      if (!btn?.classList?.contains('copy-btn')) return;
+      const targetId = btn.getAttribute('data-target');
+      if (!targetId) return;
+
+      const pre = document.getElementById(targetId);
+      if (!pre) return;
+
+      const text = pre.textContent || '';
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          const old = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = old; }, 1000);
+        }).catch(() => alert('Konnte nicht automatisch kopieren.'));
+      } else {
+        alert('Clipboard API nicht verfügbar.');
+      }
+    });
+    window.__AOS_VOICE_COPY_BOUND = true;
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initVoiceCentre);
+} else {
+  initVoiceCentre();
+}
+
+function applyTheme(themeKey = 'obsidian') {
+  const body = document.body;
+
+  const keys = [
+    'obsidian','dawn','monk','aurora',
+    'copper','forestnight','inkgold',
+    'bloodred'
+  ];
+
+  body.classList.forEach(c => { if (c.startsWith('theme-')) body.classList.remove(c); });
+
+  const safe = keys.includes(themeKey) ? themeKey : 'obsidian';
+  body.classList.add(`theme-${safe}`);
+
+  const sel = document.getElementById('theme-select');
+  if (sel) sel.value = safe;
+
+  try { localStorage.setItem('voice_theme', safe); } catch (e) {}
+}
+
+function initTheme() {
+  let stored = 'obsidian';
+  try { stored = localStorage.getItem('voice_theme') || 'obsidian'; } catch (e) {}
+  applyTheme(stored);
+
+  document.getElementById('theme-select')
+    ?.addEventListener('change', e => applyTheme(e.target.value));
+}
+
+</script>

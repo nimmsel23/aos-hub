@@ -2,14 +2,17 @@
 """AlphaOS Taskwarrior on-modify hook.
 
 Sends JSON payloads to Telegram via `tele` for GAS Task Bridge.
+Triggers task_export.json update after task modifications.
 """
 
 import json
 import os
+import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 
 ENV_PATH = Path(os.path.expanduser("~/.config/alpha-os/hooks.env"))
@@ -33,6 +36,63 @@ def load_env(path: Path) -> None:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+TZ = ZoneInfo(os.environ.get("AOS_TZ", "Europe/Vienna"))
+
+def _date_from_core4_tag(tags: list[str]) -> date | None:
+    for t in tags:
+        m = re.fullmatch(r"core4_(\d{8})", str(t or "").strip().lower())
+        if not m:
+            continue
+        try:
+            return datetime.strptime(m.group(1), "%Y%m%d").date()
+        except Exception:
+            return None
+    return None
+
+def core4_ts_for_task(task: dict) -> str:
+    """Derive Core4 log timestamp.
+
+    For backfills we prefer the task's due date (date-level) to ensure the
+    Bridge writes into the correct ISO week/day. Fallback: now (UTC).
+    """
+    tags = [str(t).lower() for t in (task.get("tags") or [])]
+    tagged_day = _date_from_core4_tag(tags)
+    if tagged_day:
+        return datetime.combine(tagged_day, time(12, 0, 0), tzinfo=TZ).astimezone(timezone.utc).isoformat()
+
+    due = task.get("due")
+    if not due:
+        return now_iso()
+    try:
+        due_str = str(due).strip()
+        if not due_str:
+            return now_iso()
+        # Common Taskwarrior formats:
+        # - 20260113T000000Z
+        # - 20260113T000000
+        # - 2026-01-13T00:00:00Z
+        # - 2026-01-13
+        for fmt in (
+            "%Y%m%dT%H%M%SZ",
+            "%Y%m%dT%H%M%S",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d",
+        ):
+            try:
+                dt = datetime.strptime(due_str, fmt)
+                if fmt.endswith("Z"):
+                    dt = dt.replace(tzinfo=timezone.utc).astimezone(TZ)
+                else:
+                    dt = dt.replace(tzinfo=TZ)
+                dt = datetime.combine(dt.date(), time(12, 0, 0), tzinfo=TZ).astimezone(timezone.utc)
+                return dt.isoformat()
+            except ValueError:
+                continue
+    except Exception:
+        return now_iso()
+    return now_iso()
 
 
 def detect_domain(tags, project) -> str:
@@ -145,7 +205,7 @@ def main() -> int:
                 "domain": domain or "",
                 "task": habit or "core4",
                 "points": float(os.environ.get("AOS_CORE4_POINTS", "0.5")),
-                "ts": now_iso(),
+                "ts": core4_ts_for_task(task),
                 "source": "taskwarrior",
                 "user": {"id": task.get("uuid") or ""},
             }
@@ -174,6 +234,7 @@ def main() -> int:
     else:
         send_tele(payload)
 
+    # Note: on-exit.alphaos.py will trigger task_export.json update automatically
     sys.stdout.write(raw)
     return 0
 

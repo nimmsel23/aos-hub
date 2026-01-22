@@ -1,0 +1,8 @@
+[Unit]
+Description=Core4 prune old local events
+ConditionPathExists=%h/bin/core4
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/core4 prune-events --keep-weeks=8
+

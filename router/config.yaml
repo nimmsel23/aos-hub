@@ -2,46 +2,61 @@
 
 # Index API settings (local AlphaOS Index Node)
 index_api:
-  base: http://100.76.197.55:8799  # Tailscale IP
+  base: http://127.0.0.1:8799  # localhost (Mode A: Serve proxy)
   path: /api/centres
   cache_ttl: 60  # seconds
+
+# Bridge health check (optional)
+healthcheck:
+  url: http://127.0.0.1:8080/health
+  timeout: 3
 
 # Extensions to load (order matters)
 # Comment out to disable
 extensions:
-  - warstack_commands  # War Stack trigger (DOOR Pillar)
-  # - core4_actions    # Core4 Taskwarrior shortcuts (disabled for now)
+  # Choose one War Stack mode: door_flow (local) or warstack_commands (external)
+  - door_flow  # War Stack flow (DOOR Pillar)
+  - fruits_daily  # Daily Fruits facts
+  - firemap_commands  # Fire Map trigger (/fire)
+  # - warstack_commands  # External War Stack bot trigger
+  - core4_actions  # Core4 Taskwarrior shortcuts
 
 # Extension-specific configuration
 # (Will be passed to extension constructors)
 
-warstack_commands:
-  bot_username: "@YourWarStackBot"  # Replace with actual bot username
-  fallback_url: "https://t.me/YourWarStackBot"  # Direct link to bot
-  info_message: |
-    ⚔️ **War Stack Creation** (DOOR Pillar)
+door_flow:
+  api_base: http://127.0.0.1:8799
+  web_url: https://ideapad-1.tail7a15d6.ts.net/door
+  # allowed_user_ids: ["123456789"]
 
-    War Stacks = Strategische Wochen-Pläne für DOMINION
+# warstack_commands:
+#   bot_username: "@your_warstack_bot"
+#   fallback_url: "https://t.me/your_warstack_bot"
+#   info_message: "Custom message for /war command"
 
-    **Der Prozess:**
-    1️⃣ Domain wählen (BODY/BEING/BALANCE/BUSINESS)
-    2️⃣ Domino Door definieren
-    3️⃣ 4 strategische Hits planen (Fact/Obstacle/Strike)
-    4️⃣ Obsidian Notiz + Taskwarrior Tasks generieren
+firemap_commands:
+  python_bin: python3
+  script: python-firemap-bot/firemap_bot.py
+  daily_mode: daily
+  weekly_mode: weekly
 
-    **Output:**
-    ✅ Markdown Notiz in ~/AlphaOS-Vault/Weekly/
-    ✅ Taskwarrior Commands (ready to execute)
+fruits_daily:
+  api_base: http://127.0.0.1:8799
+  web_url: https://ideapad-1.tail7a15d6.ts.net/facts
+  daily_hour: 7
+  daily_minute: 0
+  timezone: Europe/Vienna
+  # default_chat_id: "123456789"
+  # allowed_user_ids: ["123456789"]
 
-    Klicke unten um zu starten:
-
-# core4_actions:
-#   tags:
-#     fit: fitness
-#     fue: fuel
-#     med: meditation
-#     mem: memory
-#     par: partner
-#     pos: posterity
-#     dis: discipline
-#     dec: decision
+core4_actions:
+  api_base: http://127.0.0.1:8799
+  tags:
+    fit: fitness
+    fue: fuel
+    med: meditation
+    mem: memoirs
+    par: partner
+    pos: posterity
+    dis: discover
+    dec: declare

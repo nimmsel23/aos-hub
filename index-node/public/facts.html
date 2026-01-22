@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fruit Fact Maps</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
+    :root {
+      --bg: #0b0f18;
+      --surface: #141a28;
+      --surface-elevated: #1e2536;
+      --text: #e8ebf5;
+      --text-muted: #9aa3c0;
+      --accent: #ff5e3a;
+      --accent-dark: #e04a2b;
+      --glow: rgba(255,94,58,0.3);
+      --success: #2d8a3f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(to bottom, #000, var(--bg));
+      padding: 60px 20px 50px;
+      text-align: center;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    h1 {
+      font-size: 46px;
+      font-weight: 800;
+      margin: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.8px;
+    }
+
+    .subtitle {
+      font-size: 20px;
+      margin-top: 16px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .container {
+      flex: 1;
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+
+    .section {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 36px;
+      margin-bottom: 48px;
+      border: 1px solid var(--surface-elevated);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+
+    .section-header {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+      margin-bottom: 32px;
+      letter-spacing: -0.4px;
+    }
+
+    .question {
+      background: var(--surface-elevated);
+      border-radius: 14px;
+      padding: 28px;
+      margin: 24px 0;
+      transition: all 0.3s ease;
+    }
+
+    .question.answered {
+      background: rgba(45,138,63,0.15);
+      border-left: 5px solid var(--success);
+    }
+
+    .question.skipped {
+      border-left: 5px solid #c89b41;
+      background: rgba(200,155,65,0.1);
+    }
+
+    .active-question {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      background: #000;
+      color: var(--text);
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 18px;
+      font-size: 18px;
+      font-family: inherit;
+      resize: vertical;
+      margin-top: 16px;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--glow);
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      font-size: 18px;
+      padding: 16px 36px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+      transform: translateY(-2px);
+    }
+
+    button.secondary {
+      background: #5c5c68;
+    }
+
+    button.secondary:hover {
+      background: #4b4b56;
+    }
+
+    .export-button {
+      background: var(--success);
+      font-size: 19px;
+      padding: 20px 48px;
+      margin: 60px auto;
+      display: block;
+      border-radius: 16px;
+    }
+
+    .export-button:hover {
+      background: #3da053;
+    }
+
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      opacity: 0.7;
+    }
+
+    /* Loading Overlay */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .loading-ring {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 8px solid rgba(255,94,58,0.15);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      animation: spin 1.2s linear infinite;
+      box-shadow: 0 0 40px var(--glow);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .loading-subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 38px; }
+      .subtitle { font-size: 17px; }
+      header { padding: 50px 20px 40px; }
+      .section { padding: 28px; margin-bottom: 36px; }
+      .active-question { font-size: 22px; }
+      textarea { min-height: 160px; font-size: 17px; }
+      button { font-size: 17px; padding: 14px 32px; }
+      .export-button { font-size: 17px; padding: 18px 36px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay" class="active">
+    <div class="loading-ring"></div>
+    <div class="loading-title">Facing the Facts</div>
+    <div class="loading-subtitle">Daily Raw Fact - No Illusions</div>
+  </div>
+
+  <header>
+    <h1 id="mapTitle">Fruit Fact Maps</h1>
+    <div class="subtitle" id="mapSubtitle">Facing the Fruits of Reality - Raw Facts</div>
+  </header>
+
+  <main class="container" id="content"></main>
+
+  <footer>
+    <button id="exportBtn" class="export-button" style="display:none;">
+      🍎 Export Complete Map to Vault
+    </button>
+    <p class="footer-note">AlphaOS Fruits Centre - Raw Facts for Dominion - 2025</p>
+  </footer>
+
+  <script>
+    const state = { data: null, answers: {} };
+
+    function showOverlay(on, title = '') {
+      const overlay = document.getElementById('loading-overlay');
+      if (!overlay) return;
+      if (title) {
+        const t = overlay.querySelector('.loading-title');
+        if (t) t.textContent = title;
+      }
+      overlay.classList.toggle('active', !!on);
+    }
+
+    function randEmoji() {
+      const e = (state.data && state.data.emojis) || [];
+      return e.length ? e[Math.floor(Math.random() * e.length)] : '🍎';
+    }
+
+    async function boot() {
+      showOverlay(true, 'Loading Facts...');
+      try {
+        const res = await fetch('/api/fruits', { cache: 'no-store' });
+        const payload = await res.json();
+        if (!payload || !payload.ok) throw new Error(payload?.error || 'Load failed');
+        state.data = payload;
+        state.answers = payload.answers || {};
+        render();
+        setTimeout(() => showOverlay(false), 900);
+      } catch (err) {
+        console.error(err);
+        alert('Fehler beim Laden der Facts');
+        showOverlay(false);
+      }
+    }
+
+    function render() {
+      const data = state.data;
+      if (!data) return;
+      const allAnswers = state.answers || {};
+      const pendingSkip = data.skipped && data.skipped.question;
+      const container = document.getElementById('content');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const mapTitle = document.getElementById('mapTitle');
+      const mapSubtitle = document.getElementById('mapSubtitle');
+      if (mapTitle && data.mapTitle) mapTitle.textContent = data.mapTitle;
+      if (mapSubtitle && data.mapSubtitle) mapSubtitle.textContent = data.mapSubtitle;
+      if (data.mapTitle) document.title = data.mapTitle;
+
+      const sections = Object.keys(data.questions || {});
+      let currentFound = false;
+      let allDone = true;
+
+      for (const section of sections) {
+        const secDiv = document.createElement('div');
+        secDiv.className = 'section';
+
+        const header = document.createElement('div');
+        header.className = 'section-header';
+        header.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
+        secDiv.appendChild(header);
+
+        for (const q of data.questions[section] || []) {
+          const qDiv = document.createElement('div');
+          qDiv.className = 'question';
+
+          if (allAnswers[q]) {
+            if (allAnswers[q] === '_geskippt_') {
+              allDone = false;
+              qDiv.classList.add('skipped');
+              qDiv.innerHTML = `<strong>${q}</strong><br><br><em>Geskippt - bitte spaeter beantworten.</em>`;
+
+              const textarea = document.createElement('textarea');
+              textarea.placeholder = 'Antwort nachholen...';
+              textarea.rows = 6;
+              qDiv.appendChild(textarea);
+
+              const saveSkippedBtn = document.createElement('button');
+              saveSkippedBtn.textContent = 'Geskippte Frage beantworten';
+              saveSkippedBtn.onclick = async () => {
+                const ans = textarea.value.trim();
+                if (!ans) {
+                  alert('Bitte Antwort eingeben, um den Skip zu schliessen.');
+                  return;
+                }
+                const ok = await saveAnswer(section, q, ans);
+                if (ok) boot();
+              };
+              qDiv.appendChild(saveSkippedBtn);
+            } else {
+              qDiv.classList.add('answered');
+              qDiv.innerHTML = `<strong>${q}</strong><br><br>${escapeHtml(allAnswers[q]).replace(/\n/g, '<br>')}`;
+            }
+          } else {
+            allDone = false;
+
+            if (!currentFound) {
+              currentFound = true;
+              qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${q} ${randEmoji()}</strong>`;
+
+              const textarea = document.createElement('textarea');
+              textarea.placeholder = 'Raw & Honest Facts - no illusions...';
+              textarea.rows = 10;
+              qDiv.appendChild(textarea);
+
+              const saveBtn = document.createElement('button');
+              saveBtn.textContent = 'FACT - Save';
+              saveBtn.onclick = async () => {
+                const ans = textarea.value.trim();
+                if (!ans) {
+                  alert('Keine Antwort - du kannst skippen oder ehrlich sein.');
+                  return;
+                }
+                const ok = await saveAnswer(section, q, ans);
+                if (ok) boot();
+              };
+              qDiv.appendChild(saveBtn);
+
+              const skipBtn = document.createElement('button');
+              skipBtn.textContent = 'Skip (spaeter nachholen)';
+              skipBtn.className = 'secondary';
+              skipBtn.style.marginLeft = '10px';
+              if (pendingSkip) {
+                skipBtn.disabled = true;
+                skipBtn.title = 'Ein Skip ist noch offen - bitte zuerst beantworten.';
+                skipBtn.style.opacity = '0.6';
+                skipBtn.style.cursor = 'not-allowed';
+              }
+              skipBtn.onclick = async () => {
+                if (pendingSkip) {
+                  alert('Du hast bereits eine Frage geskipped. Bitte beantworte sie zuerst.');
+                  return;
+                }
+                if (confirm('Diese Frage ueberspringen? Du kannst spaeter zurueck.')) {
+                  const ok = await skipAnswer(section, q);
+                  if (ok) boot();
+                }
+              };
+              qDiv.appendChild(skipBtn);
+            } else {
+              qDiv.innerHTML = `<em>${q}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
+            }
+          }
+
+          secDiv.appendChild(qDiv);
+        }
+        container.appendChild(secDiv);
+      }
+
+      if (allDone || Object.keys(allAnswers).length > 0) {
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+          exportBtn.style.display = 'block';
+          exportBtn.onclick = exportAll;
+        }
+      }
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+    }
+
+    async function saveAnswer(section, question, answer) {
+      try {
+        const res = await fetch('/api/fruits/answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ section, question, answer, source: 'webapp' })
+        });
+        const data = await res.json();
+        if (!data || !data.ok) {
+          alert(data?.error || 'Speichern fehlgeschlagen.');
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error(err);
+        alert('Speichern fehlgeschlagen.');
+        return false;
+      }
+    }
+
+    async function skipAnswer(section, question) {
+      try {
+        const res = await fetch('/api/fruits/skip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ section, question })
+        });
+        const data = await res.json();
+        if (!data || !data.ok) {
+          alert(data?.error || 'Skip fehlgeschlagen.');
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error(err);
+        alert('Skip fehlgeschlagen.');
+        return false;
+      }
+    }
+
+    async function exportAll() {
+      showOverlay(true, 'Exportiere Map...');
+      try {
+        const res = await fetch('/api/fruits/export', { method: 'POST' });
+        const data = await res.json();
+        if (!data || !data.ok) throw new Error(data?.error || 'Export failed');
+        showOverlay(false);
+        alert(`Export gespeichert:\n${data.name}\n${data.path}`);
+      } catch (err) {
+        showOverlay(false);
+        console.error(err);
+        alert('Export fehlgeschlagen.');
+      }
+    }
+
+    window.addEventListener('load', () => {
+      setTimeout(() => showOverlay(false), 1200);
+      boot();
+    });
+  </script>
+</body>
+</html>

@@ -9,6 +9,16 @@ Diese Notiz beschreibt **wie Taskwarrior im AlphaOS-System benutzt wird**, ohne 
 - **Domains sind Tags** (Body/Being/Balance/Business), damit Queries und Sync-Trigger eindeutig sind.
 - **TickTick Sync** nutzt Tags als Trigger/Identifier (mobile Oberfläche), ohne die lokale Wahrheit zu ersetzen.
 
+## Hooks (empfohlen)
+
+- `on-add`: neue Tasks → Payload an Bridge/GAS/tele (UUID-first)
+- `on-modify`: Änderungen + `done` → Payload an Bridge/GAS/tele; Core4 “done” → Core4 log
+- `on-exit`: nach jeder Taskwarrior-Command → Export-Snapshot aktualisieren (für UIs/Bots, optional Vault→Drive)
+
+Installer:
+- `scripts/setup-alpha-hooks.sh` (on-add/on-modify, existing)
+- `scripts/setup-alpha-on-exit-hook.sh` (on-exit Snapshot)
+
 ## Begriffe (AlphaOS)
 
 - **Domain**: `body | being | balance | business` (als Tags `+body/+being/+balance/+business`)
@@ -65,6 +75,50 @@ Für Bots/UIs ist ein JSON Snapshot hilfreich (schnell lesbar, kein `task export
 Tools:
 - `scripts/taskwarrior/export-snapshot.sh` (schreibt Snapshot + optional Vault-Copy)
 - `scripts/setup-task-export.sh` (systemd user timer für periodische Updates)
+ - `scripts/setup-alpha-on-exit-hook.sh` (Taskwarrior on-exit Hook; aktualisiert Snapshot nach jeder Task-Aktion)
+
+## GAS: Snapshot aus Drive lesen
+
+Wenn dein Vault nach Google Drive synchronisiert wird, kann GAS den Snapshot direkt aus dem Drive-Ordner `AlphaOS-Vault` lesen.
+
+**Empfehlung:** speichere die **File-ID** als Script Property, damit GAS nicht jedes Mal suchen muss.
+
+1) Einmalig File-ID finden (Ordner `AlphaOS-Vault` → `.alphaos` → `task_export.json`) und speichern:
+
+```js
+function aos_findTaskExportFileId_once_() {
+  const root = DriveApp.getFoldersByName("AlphaOS-Vault").next();
+  const alphaos = root.getFoldersByName(".alphaos").next();
+  const file = alphaos.getFilesByName("task_export.json").next();
+  const id = file.getId();
+  PropertiesService.getScriptProperties().setProperty("AOS_TASK_EXPORT_FILE_ID", id);
+  return id;
+}
+```
+
+2) Snapshot laden:
+
+```js
+function aos_loadTaskExport_() {
+  const id = PropertiesService.getScriptProperties().getProperty("AOS_TASK_EXPORT_FILE_ID");
+  const text = DriveApp.getFileById(id).getBlob().getDataAsString("UTF-8");
+  const tasks = JSON.parse(text);
+  return Array.isArray(tasks) ? tasks : [];
+}
+```
+
+**Datumsfelder aus Taskwarrior** sind oft im Format `YYYYMMDDTHHMMSSZ` (z.B. `20260104T102030Z`). Helper:
+
+```js
+function aos_twDate_(value) {
+  if (!value) return null;
+  const s = String(value);
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`) : new Date(s);
+}
+```
+
+Hinweis: falls der Drive-Ordner `.alphaos` bei dir anders heißt (z.B. ohne Punkt), passe den Namen im Finder an oder arbeite nur mit `AOS_TASK_EXPORT_FILE_ID`.
 
 ## Nützliche Queries (als Beispiele)
 
@@ -73,4 +127,3 @@ Tools:
 - Aktive War Stack Tasks: `task +warstack list`
 - Fire heute (Tag-basiert): `task +fire +hit +production due:today list` (wenn du `due` nutzt)
 - Core4 heute (Tag-basiert): `task +core4 due:today list`
-

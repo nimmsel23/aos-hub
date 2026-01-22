@@ -1,0 +1,219 @@
+<style>
+  :root {
+    --bg: #0b0f18;
+    --surface: #141a28;
+    --surface-elevated: #1e2536;
+    --text: #e8ebf5;
+    --text-muted: #9aa3c0;
+    --accent: #ff5e3a;
+    --accent-dark: #e04a2b;
+    --glow: rgba(255,94,58,0.3);
+    --success: #2d8a3f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: linear-gradient(to bottom, #000, var(--bg));
+    padding: 60px 20px 50px;
+    text-align: center;
+    border-bottom: 4px solid var(--accent);
+  }
+
+  h1 {
+    font-size: 46px;
+    font-weight: 800;
+    margin: 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.8px;
+  }
+
+  .subtitle {
+    font-size: 20px;
+    margin-top: 16px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .container {
+    flex: 1;
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 24px;
+  }
+
+  .section {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 36px;
+    margin-bottom: 48px;
+    border: 1px solid var(--surface-elevated);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+
+  .section-header {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    margin-bottom: 32px;
+    letter-spacing: -0.4px;
+  }
+
+  .question {
+    background: var(--surface-elevated);
+    border-radius: 14px;
+    padding: 28px;
+    margin: 24px 0;
+    transition: all 0.3s ease;
+  }
+
+  .question.answered {
+    background: rgba(45,138,63,0.15);
+    border-left: 5px solid var(--success);
+  }
+
+  .active-question {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    background: #000;
+    color: var(--text);
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 18px;
+    font-size: 18px;
+    font-family: inherit;
+    resize: vertical;
+    margin-top: 16px;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--glow);
+  }
+
+  button {
+    background: var(--accent);
+    color: white;
+    font-weight: 700;
+    font-size: 18px;
+    padding: 16px 36px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    background: var(--accent-dark);
+    transform: translateY(-2px);
+  }
+
+  .export-button {
+    background: var(--success);
+    font-size: 19px;
+    padding: 20px 48px;
+    margin: 60px auto;
+    display: block;
+    border-radius: 16px;
+  }
+
+  .export-button:hover {
+    background: #3da053;
+  }
+
+  footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .footer-note {
+    margin-top: 20px;
+    opacity: 0.7;
+  }
+
+  /* Loading Overlay */
+  #loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+
+  #loading-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .loading-ring {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 8px solid rgba(255,94,58,0.15);
+    border-top-color: var(--accent);
+    border-right-color: var(--accent);
+    animation: spin 1.2s linear infinite;
+    box-shadow: 0 0 40px var(--glow);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .loading-subtitle {
+    font-size: 16px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    h1 { font-size: 38px; }
+    .subtitle { font-size: 17px; }
+    header { padding: 50px 20px 40px; }
+    .section { padding: 28px; margin-bottom: 36px; }
+    .active-question { font-size: 22px; }
+    textarea { min-height: 160px; font-size: 17px; }
+    button { font-size: 17px; padding: 14px 32px; }
+    .export-button { font-size: 17px; padding: 18px 36px; }
+  }
+</style>

@@ -322,18 +322,41 @@ async function saveVision(ticktick) {
   if (!vision) return alert('Vision darf nicht leer sein.');
 
   const period = currentHorizon === '10Year' ? '2035' : new Date().getFullYear() + 1;
+  const now = new Date();
+  const timestamp = now.toISOString();
+  const dateFormatted = now.toLocaleDateString('de-DE');
+
+  // YAML Front Matter
+  const yamlFrontMatter = [
+    '---',
+    `domain: ${currentDomain}`,
+    `horizon: ${currentHorizon || '10Year'}`,
+    `period: ${period}`,
+    `date: ${dateFormatted}`,
+    `created: ${timestamp}`,
+    `type: freedom-map`,
+    `status: manifested`,
+    `tags:`,
+    `  - alphaos`,
+    `  - freedom`,
+    `  - ${currentDomain.toLowerCase()}`,
+    `  - ${currentHorizon || '10year'}`,
+    '---',
+    ''
+  ].join('\n');
+
   const header = [
     `# FREEDOM MAP – ${currentDomain}`,
     `**Horizon:** ${currentHorizon || '-'}`,
     `**Period:** ${period}`,
-    `**Date:** ${new Date().toLocaleDateString('de-DE')}`,
+    `**Date:** ${dateFormatted}`,
     '',
     '---',
     ''
   ].join('\n');
 
-  const body = `**Vision**\n${vision}`;
-  const markdown = header + body;
+  const body = `## VISION\n\n${vision}`;
+  const markdown = yamlFrontMatter + header + body;
   const title = `${currentDomain}_freedom_${period}`;
 
   try {

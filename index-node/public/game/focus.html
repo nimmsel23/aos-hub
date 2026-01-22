@@ -104,6 +104,121 @@
       }
     }
 
+    @media (max-width: 768px) {
+      nav {
+        padding: 15px 20px;
+        min-height: auto;
+        flex-direction: column;
+        gap: 15px;
+      }
+      nav a {
+        font-size: 24px;
+        letter-spacing: 3px;
+      }
+      nav .domain-tabs {
+        gap: 10px;
+        justify-content: center;
+      }
+      .domain-tab {
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+      .master-grid {
+        margin-top: 180px;
+        padding: 0 15px;
+      }
+      .focus-rite h2 {
+        font-size: 28px;
+        letter-spacing: 3px;
+      }
+      .focus-rite p {
+        font-size: 16px;
+      }
+      .mission-area {
+        padding: 30px 20px;
+      }
+      #missionTitle {
+        font-size: 24px;
+      }
+      .pillar h3 {
+        font-size: 22px;
+      }
+      textarea {
+        font-size: 16px;
+        min-height: 100px;
+      }
+      button {
+        padding: 14px 30px;
+        font-size: 16px;
+      }
+      .month-card {
+        min-width: 160px;
+        padding: 16px;
+      }
+      .month-card h2 {
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      nav {
+        padding: 12px 15px;
+      }
+      nav a {
+        font-size: 20px;
+        letter-spacing: 2px;
+      }
+      .domain-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+      .master-grid {
+        margin-top: 200px;
+        padding: 0 10px;
+      }
+      .focus-rite {
+        padding: 30px 20px;
+        margin: 40px auto;
+      }
+      .focus-rite h2 {
+        font-size: 22px;
+      }
+      .focus-rite p {
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .mission-area {
+        padding: 25px 15px;
+      }
+      #missionTitle {
+        font-size: 20px;
+      }
+      .pillar h3 {
+        font-size: 18px;
+      }
+      textarea {
+        font-size: 14px;
+        padding: 15px;
+      }
+      button {
+        padding: 12px 24px;
+        font-size: 14px;
+      }
+      .month-card {
+        min-width: 140px;
+        padding: 12px;
+      }
+      .month-card h2 {
+        font-size: 12px;
+      }
+      .chapter-wrapper {
+        padding: 25px 15px;
+      }
+      .chapter-title {
+        font-size: 24px;
+      }
+    }
+
     .tool-column { padding: 20px 0; }
 
     .container {
@@ -243,6 +358,73 @@
       padding: 22px;
       line-height: 1.8;
     }
+
+    .saved-maps-section {
+      background: var(--card);
+      padding: 30px;
+      border-radius: 20px;
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      margin: 40px 0;
+    }
+
+    .saved-maps-title {
+      color: var(--accent);
+      font-size: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+      letter-spacing: 3px;
+    }
+
+    .saved-maps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .saved-map-card {
+      background: var(--deep);
+      border: 2px solid #1a4a5e;
+      border-radius: 12px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .saved-map-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--glow-strong);
+      transform: translateY(-2px);
+    }
+
+    .saved-map-card h4 {
+      color: var(--accent);
+      font-size: 16px;
+      margin: 0 0 8px;
+    }
+
+    .saved-map-card p {
+      color: rgba(230, 245, 255, 0.7);
+      font-size: 12px;
+      margin: 4px 0;
+    }
+
+    .load-status {
+      text-align: center;
+      color: rgba(0, 229, 255, 0.7);
+      font-size: 14px;
+      margin: 15px 0;
+    }
+
+    @media (max-width: 768px) {
+      .saved-maps-section {
+        padding: 20px;
+      }
+      .saved-maps-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
   <script src="/vendor/marked/marked.min.js" defer></script>
 </head>
@@ -268,6 +450,12 @@
         <div class="pillar"><h3>ELIMINATIONS</h3><textarea id="eliminationsText" placeholder="Totgewicht verbrennen."></textarea></div>
         <button id="lockBtn" onclick="saveMission(false)">LOCK THIS MISSION</button>
         <button onclick="saveMission(true)">LOCK → TICKTICK</button>
+      </div>
+
+      <div class="saved-maps-section">
+        <h3 class="saved-maps-title">SAVED FOCUS MAPS</h3>
+        <div class="load-status" id="loadStatus">Loading saved maps...</div>
+        <div class="saved-maps-grid" id="savedMapsGrid"></div>
       </div>
 
       <div class="chapter-wrapper">
@@ -310,6 +498,8 @@
 <script>
 let currentMonth = 'current';
 let currentDomain = 'BODY';
+let autoSaveTimer = null;
+let focusStates = {}; // Store all domain states
 
 function updateActiveStates() {
   document.querySelectorAll('.month-card').forEach(c =>
@@ -326,16 +516,76 @@ function updateMissionTitle() {
 
 function selectMonth(month) {
   if (currentMonth === month) return;
+  saveCurrentDomainState(); // Save before switching
   currentMonth = month;
   updateActiveStates();
   updateMissionTitle();
+  loadCurrentDomainState(); // Load new month state
 }
 
 function selectDomain(domain) {
   if (currentDomain === domain) return;
+  saveCurrentDomainState(); // Save before switching
   currentDomain = domain;
   updateActiveStates();
   updateMissionTitle();
+  loadCurrentDomainState(); // Load new domain state
+}
+
+// Auto-save current domain state
+function saveCurrentDomainState() {
+  const state = {
+    domain: currentDomain,
+    month: currentMonth,
+    habits: document.getElementById('habitsText')?.value || '',
+    routines: document.getElementById('routinesText')?.value || '',
+    additions: document.getElementById('additionsText')?.value || '',
+    eliminations: document.getElementById('eliminationsText')?.value || ''
+  };
+
+  // Store locally
+  focusStates[currentDomain] = state;
+
+  // Debounced save to server
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => {
+    fetch('/api/game/focus/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    }).catch(err => console.error('Auto-save failed:', err));
+  }, 1000); // Save 1 second after last change
+}
+
+// Load current domain state
+function loadCurrentDomainState() {
+  const state = focusStates[currentDomain];
+  if (state) {
+    document.getElementById('habitsText').value = state.habits || '';
+    document.getElementById('routinesText').value = state.routines || '';
+    document.getElementById('additionsText').value = state.additions || '';
+    document.getElementById('eliminationsText').value = state.eliminations || '';
+  } else {
+    // Clear fields if no state
+    document.getElementById('habitsText').value = '';
+    document.getElementById('routinesText').value = '';
+    document.getElementById('additionsText').value = '';
+    document.getElementById('eliminationsText').value = '';
+  }
+}
+
+// Load all states from server on init
+async function loadAllStates() {
+  try {
+    const res = await fetch('/api/game/focus/state');
+    const data = await res.json();
+    if (data.ok && data.states) {
+      focusStates = data.states;
+      loadCurrentDomainState(); // Load current domain
+    }
+  } catch (err) {
+    console.error('Failed to load states:', err);
+  }
 }
 
 async function saveMission(ticktick) {
@@ -353,25 +603,48 @@ async function saveMission(ticktick) {
     ? new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
     : currentMonth.toUpperCase();
 
+  const now = new Date();
+  const timestamp = now.toISOString();
+  const dateFormatted = now.toLocaleDateString('de-DE');
+
+  // YAML Front Matter
+  const yamlFrontMatter = [
+    '---',
+    `domain: ${currentDomain}`,
+    `month: ${monthName}`,
+    `phase: ${currentMonth}`,
+    `date: ${dateFormatted}`,
+    `created: ${timestamp}`,
+    `type: focus-map`,
+    `status: locked`,
+    `tags:`,
+    `  - alphaos`,
+    `  - focus`,
+    `  - ${currentDomain.toLowerCase()}`,
+    `  - ${currentMonth}`,
+    '---',
+    ''
+  ].join('\n');
+
   const header = [
     `# FOCUS MAP – ${currentDomain}`,
     `**Month:** ${monthName}`,
     `**Phase:** ${currentMonth}`,
-    `**Date:** ${new Date().toLocaleDateString('de-DE')}`,
+    `**Date:** ${dateFormatted}`,
     '',
     '---',
     ''
   ].join('\n');
 
   const body = [
-    `**Habits**\n${h || '-'}`,
-    `**Routines**\n${r || '-'}`,
-    `**Additions**\n${a || '-'}`,
-    `**Eliminations**\n${e || '-'}`
+    `## HABITS\n${h}`,
+    `## ROUTINES\n${r}`,
+    `## ADDITIONS\n${a}`,
+    `## ELIMINATIONS\n${e}`
   ].join('\n\n');
 
-  const markdown = header + body;
-  const title = `${currentDomain}_focus_${monthName}`;
+  const markdown = yamlFrontMatter + header + body;
+  const title = `${currentDomain}_focus_${monthName.replace(/\s+/g, '_')}`;
 
   try {
     const res = await fetch('/api/game/export', {
@@ -383,6 +656,9 @@ async function saveMission(ticktick) {
     if (!data.ok) throw new Error(data.error || 'save failed');
     alert(`${currentDomain} ${monthName} → LOCKED`);
     document.querySelectorAll('textarea').forEach(t => t.value = '');
+
+    // Reload saved maps after saving
+    loadSavedMaps();
   } catch (err) {
     alert('Fehler beim Speichern: ' + err.message);
   }
@@ -444,21 +720,103 @@ Der Weg ist ebenso heilig wie der Gipfel.
   el.innerHTML = marked.parse(focusChapter);
 }
 
+async function loadSavedMaps() {
+  const statusEl = document.getElementById('loadStatus');
+  const gridEl = document.getElementById('savedMapsGrid');
+
+  try {
+    statusEl.textContent = 'Loading saved maps...';
+    const res = await fetch(`/api/game/focus/list?domain=${currentDomain}&month=${currentMonth}`);
+    const data = await res.json();
+
+    if (!data.ok || !data.maps || data.maps.length === 0) {
+      statusEl.textContent = 'No saved maps found for this domain/month.';
+      gridEl.innerHTML = '';
+      return;
+    }
+
+    statusEl.textContent = '';
+    gridEl.innerHTML = data.maps.map(map => `
+      <div class="saved-map-card" data-path="${map.path}">
+        <h4>${map.domain} – ${map.phase}</h4>
+        <p>Saved: ${new Date(map.modified).toLocaleDateString('de-DE')}</p>
+        <p>${map.filename}</p>
+      </div>
+    `).join('');
+
+    document.querySelectorAll('.saved-map-card').forEach(card => {
+      card.addEventListener('click', () => loadMapContent(card.dataset.path));
+    });
+  } catch (err) {
+    statusEl.textContent = 'Error loading maps: ' + err.message;
+    gridEl.innerHTML = '';
+  }
+}
+
+async function loadMapContent(filepath) {
+  try {
+    const res = await fetch(`/api/game/focus/load?path=${encodeURIComponent(filepath)}`);
+    const data = await res.json();
+
+    if (!data.ok || !data.content) {
+      alert('Failed to load map: ' + (data.error || 'unknown error'));
+      return;
+    }
+
+    // Parse markdown and extract fields
+    const content = data.content;
+
+    // Try new format (## HABITS) first
+    let habitsMatch = content.match(/##\s*HABITS\s*\n([^#]+)/i);
+    let routinesMatch = content.match(/##\s*ROUTINES\s*\n([^#]+)/i);
+    let additionsMatch = content.match(/##\s*ADDITIONS\s*\n([^#]+)/i);
+    let eliminationsMatch = content.match(/##\s*ELIMINATIONS\s*\n([^#]+)/i);
+
+    // Fallback to old format (**Habits**) for backwards compatibility
+    if (!habitsMatch) habitsMatch = content.match(/\*\*Habits\*\*\n([^*]+)/);
+    if (!routinesMatch) routinesMatch = content.match(/\*\*Routines\*\*\n([^*]+)/);
+    if (!additionsMatch) additionsMatch = content.match(/\*\*Additions\*\*\n([^*]+)/);
+    if (!eliminationsMatch) eliminationsMatch = content.match(/\*\*Eliminations\*\*\n([^*]+)/);
+
+    if (habitsMatch) document.getElementById('habitsText').value = habitsMatch[1].trim();
+    if (routinesMatch) document.getElementById('routinesText').value = routinesMatch[1].trim();
+    if (additionsMatch) document.getElementById('additionsText').value = additionsMatch[1].trim();
+    if (eliminationsMatch) document.getElementById('eliminationsText').value = eliminationsMatch[1].trim();
+
+    alert('Focus Map loaded successfully!');
+  } catch (err) {
+    alert('Error loading map content: ' + err.message);
+  }
+}
+
 window.addEventListener('load', () => {
   document.querySelectorAll('.month-card').forEach(card => {
-    card.addEventListener('click', () => selectMonth(card.dataset.month));
+    card.addEventListener('click', () => {
+      selectMonth(card.dataset.month);
+      loadSavedMaps();
+    });
   });
 
   document.querySelectorAll('nav .domain-tab').forEach(tab => {
-    tab.addEventListener('click', () => selectDomain(tab.dataset.domain));
+    tab.addEventListener('click', () => {
+      selectDomain(tab.dataset.domain);
+      loadSavedMaps();
+    });
   });
 
   const lockBtn = document.getElementById('lockBtn');
   if (lockBtn) lockBtn.addEventListener('click', () => saveMission(false));
 
+  // Auto-save on textarea changes
+  document.querySelectorAll('textarea').forEach(textarea => {
+    textarea.addEventListener('input', () => saveCurrentDomainState());
+  });
+
   updateActiveStates();
   updateMissionTitle();
   renderChapter34();
+  loadAllStates(); // Load all states from server
+  loadSavedMaps();
 });
 </script>
 
