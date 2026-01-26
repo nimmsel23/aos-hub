@@ -19,8 +19,10 @@ function setupTentProperties() {
     'BRIDGE_URL': 'https://ideapad.tail7a15d6.ts.net/bridge',  // Bridge via Funnel
     'INDEX_NODE_URL': 'https://ideapad.tail7a15d6.ts.net',     // Index Node via Funnel
 
-    // Vault
-    'VAULT_PATH': 'AlphaOS-Vault/Alpha_Tent',
+    // Vault (Google Drive root path, NOT local path)
+    // Local: ~/AlphaOS-Vault/Alpha_Tent
+    // Drive: Alpha_Tent (root folder, synced via rclone)
+    'VAULT_PATH': 'Alpha_Tent',
 
     // Centre URLs (optional, for links)
     'DOOR_CENTRE_URL': 'https://ideapad.tail7a15d6.ts.net/door',

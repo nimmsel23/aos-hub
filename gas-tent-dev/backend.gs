@@ -87,7 +87,7 @@ function cfg_() {
     },
     integration: {
       bridgeUrl: getProp_(PROP.BRIDGE_URL),
-      vaultPath: getProp_(PROP.VAULT_PATH, 'AlphaOS-Vault/Alpha_Tent')
+      vaultPath: getProp_(PROP.VAULT_PATH, 'Alpha_Tent')  // Google Drive root folder
     },
     centres: {
       door: getProp_(PROP.DOOR_CENTRE_URL),
