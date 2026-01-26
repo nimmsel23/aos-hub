@@ -38,6 +38,7 @@ function getTelegramConfig() {
 function getIntegrationConfig() {
   return {
     bridgeUrl: getProp_(PROP.BRIDGE_URL),
+    indexNodeUrl: getProp_(PROP.INDEX_NODE_URL),
     vaultPath: getProp_(PROP.VAULT_PATH, 'AlphaOS-Vault/Alpha_Tent'),
     doorCentreUrl: getProp_(PROP.DOOR_CENTRE_URL),
     gameCentreUrl: getProp_(PROP.GAME_CENTRE_URL)

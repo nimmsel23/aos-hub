@@ -22,8 +22,14 @@ tent_digest.gs
 ### 5. Integration
 telegram_bot.gs
 
-### 6. UI
+### 6. Debug Helpers (dev only)
+debug.gs
+
+### 7. UI
 Index.html
+
+## Setup Scripts (run in GAS editor, not deployed)
+SETUP_PROPERTIES.gs
 
 ## Do NOT Upload (documentation)
 README.md
@@ -33,5 +39,5 @@ QUICKSTART.md
 FILE_LIST.txt
 .claspignore
 
-## Total Files to Upload: 10
-## Total Size: ~110 KB
+## Total Files to Upload: 11 (.gs files) + 1 (.html)
+## Total Size: ~130 KB (with debug.gs)

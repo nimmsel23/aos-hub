@@ -9,13 +9,10 @@
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
+// Uses central cfg_() from config.gs
 
-const TENT_CONFIG = {
-  SHEET_NAME: 'TentReports',
-  TELEGRAM_BOT_TOKEN: PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN'),
-  TELEGRAM_CHAT_ID: PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID'),
-  INDEX_NODE_URL: 'http://127.0.0.1:8799', // via Bridge
-  BRIDGE_URL: PropertiesService.getScriptProperties().getProperty('BRIDGE_URL') || 'http://127.0.0.1:8080'
+const TENT_INTELLIGENCE_CONFIG = {
+  SHEET_NAME: 'TentReports'
 };
 
 // ============================================================================
@@ -27,10 +24,10 @@ const TENT_CONFIG = {
  */
 function getTentReportsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(TENT_CONFIG.SHEET_NAME);
+  let sheet = ss.getSheetByName(TENT_INTELLIGENCE_CONFIG.SHEET_NAME);
 
   if (!sheet) {
-    sheet = ss.insertSheet(TENT_CONFIG.SHEET_NAME);
+    sheet = ss.insertSheet(TENT_INTELLIGENCE_CONFIG.SHEET_NAME);
 
     // Header row
     sheet.appendRow([
@@ -167,11 +164,11 @@ function calculateOverallScore(component) {
 function fetchTentDataFromIndex(week) {
   // Try to reach Index Node via Bridge
   try {
-    const url = `${TENT_CONFIG.INDEX_NODE_URL}/api/tent/component/return-report?week=${week}`;
+    const url = `${cfg_().integration.indexNodeUrl || 'http://127.0.0.1:8799'}/api/tent/component/return-report?week=${week}`;
 
     // This won't work directly from GAS to localhost
     // Need to go through Bridge proxy
-    const bridgeUrl = `${TENT_CONFIG.BRIDGE_URL}/bridge/tent/fetch?week=${week}`;
+    const bridgeUrl = `${cfg_().integration.bridgeUrl}/bridge/tent/fetch?week=${week}`;
 
     const response = UrlFetchApp.fetch(bridgeUrl, {
       method: 'get',
@@ -350,8 +347,8 @@ function formatTentMessage(data) {
  * Send Telegram message
  */
 function sendTelegramMessage(text) {
-  const token = TENT_CONFIG.TELEGRAM_BOT_TOKEN;
-  const chatId = TENT_CONFIG.TELEGRAM_CHAT_ID;
+  const token = cfg_().telegram.botToken;
+  const chatId = cfg_().telegram.chatId;
 
   if (!token || !chatId) {
     Logger.log('❌ Telegram token or chat ID not configured');
