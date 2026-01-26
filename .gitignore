@@ -17,6 +17,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!index-node/lib/  # Exception: index-node lib is source code, not Python package
 lib64/
 parts/
 sdist/

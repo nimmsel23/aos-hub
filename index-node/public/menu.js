@@ -10,6 +10,7 @@ const core4JournalInput = document.getElementById("core4JournalInput");
 const core4JournalDone = document.getElementById("core4JournalDone");
 const core4JournalStatus = document.getElementById("core4JournalStatus");
 let core4JournalSubtask = "";
+let core4JournalLog = null;
 
 let lastHash = "";
 let hadError = false;
@@ -137,6 +138,7 @@ function renderCore4Buttons() {
     if (!btn || btn.disabled) return;
     const subtask = btn.dataset.subtask || "";
     if (!subtask) return;
+    void logCore4OnOpen(subtask);
     openJournalFor(subtask);
   });
 }
@@ -166,12 +168,18 @@ function wireCore4Journal() {
     core4JournalDone.disabled = true;
     try {
       const meta = core4TaskByKey[core4JournalSubtask] || null;
-      const core4Res = await fetch("/api/core4", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subtask: core4JournalSubtask, value: 1 }),
-      });
-      const core4Data = await core4Res.json().catch(() => ({}));
+      let core4Data =
+        core4JournalLog && core4JournalLog.subtask === core4JournalSubtask
+          ? core4JournalLog.data
+          : null;
+      if (!core4Data?.ok) {
+        const core4Res = await fetch("/api/core4", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subtask: core4JournalSubtask, value: 1 }),
+        });
+        core4Data = await core4Res.json().catch(() => ({}));
+      }
 
       const taskUuid = core4Data?.taskwarrior?.uuid || "";
       const res = await fetch("/api/journal", {
@@ -223,6 +231,26 @@ function wireCore4Journal() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeJournal();
   });
+}
+
+async function logCore4OnOpen(subtask) {
+  core4JournalLog = { subtask, data: null };
+  try {
+    const res = await fetch("/api/core4", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subtask, value: 1 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    core4JournalLog = { subtask, data };
+    if (data?.ok && data?.data) {
+      updateCore4UI(data.data, data.total);
+    } else {
+      await loadCore4Today();
+    }
+  } catch (_) {
+    core4JournalLog = { subtask, data: null };
+  }
 }
 
 function openJournalFor(subtask) {

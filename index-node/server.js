@@ -8,6 +8,8 @@ import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
 import { execFile, execFileSync } from "child_process";
 
+// Routers
+import gameRouter from "./routes/game.js";
 
 const app = express();
 
@@ -39,6 +41,8 @@ const CORE4_TW_SYNC = process.env.CORE4_TW_SYNC !== "0";
 const CORE4_JOURNAL_DIR =
   process.env.CORE4_JOURNAL_DIR ||
   path.join(getVaultDir(), "Alpha_Journal", "Entries");
+const BRIDGE_TOKEN = String(process.env.AOS_BRIDGE_TOKEN || "").trim();
+const BRIDGE_TOKEN_HEADER = String(process.env.AOS_BRIDGE_TOKEN_HEADER || "X-Bridge-Token").trim();
 const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
   .split(",")
   .map((tag) => tag.trim())
@@ -1735,10 +1739,14 @@ async function rcloneRc(command, payload = {}) {
 async function bridgeFetch(pathname, options = {}) {
   if (!BRIDGE_URL) return null;
   const url = `${BRIDGE_URL}${pathname}`;
+  const headers = { ...(options.headers || {}) };
+  if (BRIDGE_TOKEN && BRIDGE_TOKEN_HEADER) {
+    headers[BRIDGE_TOKEN_HEADER] = BRIDGE_TOKEN;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
     const data = await res.json().catch(() => ({}));
     return res.ok ? data : { ok: false, error: data?.error || `bridge ${res.status}` };
   } catch (err) {
@@ -2919,8 +2927,10 @@ app.get("/menu", (_req, res) => {
   }
 });
 
-// Centre routes
-app.get("/game", (_req, res) => res.redirect(302, "/game/"));
+// Mount routers
+app.use("/game", gameRouter);
+
+// Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
@@ -4246,25 +4256,33 @@ app.post("/api/journal", (req, res) => {
 });
 
 // Core4 today (local JSON)
-app.get("/api/core4/today", async (_req, res) => {
+app.get("/api/core4/today", async (req, res) => {
   try {
     const data = ensureCore4Today();
     const localTotal = getCore4Total(data);
     let bridgeTotal = null;
+    let bridgeInfo = null;
     if (BRIDGE_URL) {
       const todayRes = await bridgeFetch("/bridge/core4/today");
       if (todayRes && todayRes.ok !== false) {
         bridgeTotal = todayRes.total || 0;
+      } else {
+        bridgeInfo = todayRes;
       }
     }
-    return res.json({
+    const payload = {
       ok: true,
       data,
       total: bridgeTotal ?? localTotal,
       local_total: localTotal,
       bridge_total: bridgeTotal,
       source: bridgeTotal != null ? "bridge+local" : "local",
-    });
+    };
+    if (req.query && req.query.debug) {
+      payload.bridge_url = BRIDGE_URL || "";
+      payload.bridge_info = bridgeInfo;
+    }
+    return res.json(payload);
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -5181,5 +5199,5 @@ wss.on("connection", (ws, req) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`AlphaOS Index listening on http://${HOST}:${PORT}`);
+  console.log(`αOS Index listening on http://${HOST}:${PORT}`);
 });
