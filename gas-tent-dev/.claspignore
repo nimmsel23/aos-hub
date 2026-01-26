@@ -1,0 +1,8 @@
+# .claspignore - Files to exclude from clasp push
+
+README.md
+WHAT_IS_THIS.md
+DEPLOYMENT.md
+.claspignore
+.git
+.gitignore

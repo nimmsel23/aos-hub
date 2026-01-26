@@ -16,8 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Router Bot** | `router/AGENTS.md` | routerctl usage, extension patterns |
 | **Bridge** | `bridge/AGENTS.md` | bridgectl, selftest.py, handler patterns |
 | **GAS HQ** | `gas/AGENTS.md` | **Scope isolation** - work only in gas/ |
-| **War Stack Bot** | `python-warstack-bot/AGENTS.md` | Idle timeout, resume flow |
-| **Fire Map Bot** | `python-firemap-bot/AGENTS.md` | On-demand usage, tele fallback |
+| **War Stack Bot** | `python-warstack/AGENTS.md` | Idle timeout, resume flow |
+| **Fire Map Bot** | `python-firemap/AGENTS.md` | On-demand usage, tele fallback |
 
 **Pattern:** Each component has focused guidelines. This CLAUDE.md provides the high-level architecture, component AGENTS.md files provide detailed implementation notes.
 
@@ -155,7 +155,7 @@ All output same format:
 - Taskwarrior commands
 
 **Core4 Logging:**
-- UI → Bridge `/bridge/core4/log`
+- UI → Bridge `/bridge/python-python-core4/log`
 - Bridge writes JSON to `~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json`
 - Weekly summary exported to `~/AlphaOS-Vault/Alpha_Tent/`
 
@@ -288,7 +288,7 @@ systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 
 **Core4:**
 - `POST /api/core4` - Toggle subtask
-- `GET /api/core4/today` - Today's totals
+- `GET /api/python-python-core4/today` - Today's totals
 
 **Taskwarrior:**
 - `GET /api/taskwarrior/tasks?status=pending&tags=door` - Filtered tasks
@@ -301,9 +301,9 @@ systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 - `GET /health` - Bridge health
 
 **Core4:**
-- `POST /bridge/core4/log` - Log Core4 event
-- `GET /bridge/core4/today` - Today's totals
-- `GET /bridge/core4/week?week=YYYY-Wxx` - Weekly JSON
+- `POST /bridge/python-python-core4/log` - Log Core4 event
+- `GET /bridge/python-python-core4/today` - Today's totals
+- `GET /bridge/python-python-core4/week?week=YYYY-Wxx` - Weekly JSON
 
 **Fruits:**
 - `POST /bridge/fruits/answer` - Submit Fruits answer
@@ -444,8 +444,8 @@ journalctl -u aos-index -f             # If system service
 - `router/AGENTS.md` - Router bot patterns, extension system
 - `bridge/AGENTS.md` - Bridge patterns, non-throwing handlers
 - `gas/AGENTS.md` - **CRITICAL:** Scope isolation - do NOT edit other components in GAS session
-- `python-warstack-bot/AGENTS.md` - War Stack bot specific patterns
-- `python-firemap-bot/AGENTS.md` - Fire Map bot specific patterns
+- `python-warstack/AGENTS.md` - War Stack bot specific patterns
+- `python-firemap/AGENTS.md` - Fire Map bot specific patterns
 
 ## Future Directions
 

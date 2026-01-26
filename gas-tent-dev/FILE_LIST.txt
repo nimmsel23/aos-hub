@@ -1,0 +1,37 @@
+# General's Tent Centre - File List
+
+## Upload to GAS (in this order)
+
+### 1. Manifest
+appsscript.json
+
+### 2. Backend Core
+backend.gs
+config.gs
+webapp.gs
+
+### 3. TickTick Layer
+ticktick_functions.gs
+ticktick_fetch.gs
+
+### 4. Tent Logic
+tent_intelligence.gs
+tent_automation.gs
+tent_digest.gs
+
+### 5. Integration
+telegram_bot.gs
+
+### 6. UI
+Index.html
+
+## Do NOT Upload (documentation)
+README.md
+WHAT_IS_THIS.md
+DEPLOYMENT.md
+QUICKSTART.md
+FILE_LIST.txt
+.claspignore
+
+## Total Files to Upload: 10
+## Total Size: ~110 KB

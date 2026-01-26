@@ -1310,168 +1310,206 @@
   // Component #2: Lessons (Debug)
   // ============================================================
   function renderLessonsDebug(component) {
-    const crossDomain = (component.cross_domain_lessons || []).slice(0, 3);
-    const temporal = (component.temporal_lessons || []).slice(0, 2);
-    const pipeline = (component.pipeline_lessons || []).slice(0, 2);
+    const autoLessons = (component.auto_lessons || []).slice(0, 5);
+    const voiceInsights = (component.voice_insights || []).slice(0, 4);
+    const fireReflections = (component.fire_reflections || []).slice(0, 3);
 
-    if (crossDomain.length === 0 && temporal.length === 0 && pipeline.length === 0) {
+    if (autoLessons.length === 0 && voiceInsights.length === 0 && fireReflections.length === 0) {
       document.getElementById('debugLessonsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No patterns detected yet</em>';
       return;
     }
 
     let html = '';
 
-    // Cross-Domain Lessons
-    if (crossDomain.length > 0) {
+    // Auto-Generated Lessons
+    if (autoLessons.length > 0) {
       html += '<div style="margin-bottom:12px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">🌐 Cross-Domain Patterns</div>';
-      crossDomain.forEach(lesson => {
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">🧠 Auto-Generated Lessons</div>';
+      autoLessons.forEach(lesson => {
         html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
         html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.pattern)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.lesson)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.evidence)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.5);font-size:10px;margin-top:2px;">${safeText(lesson.source)}</div>`;
         html += `</div>`;
       });
       html += '</div>';
     }
 
-    // Temporal Lessons
-    if (temporal.length > 0) {
+    // VOICE Insights
+    if (voiceInsights.length > 0) {
       html += '<div style="margin-bottom:12px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">⏳ Temporal Cascade Insights</div>';
-      temporal.forEach(lesson => {
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">🗣️ VOICE Session Insights</div>';
+      voiceInsights.forEach(insight => {
         html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.insight)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.recommendation)}</div>`;
+        html += `<div style="color:rgba(215,180,106,0.9);font-weight:600;margin-bottom:3px;">${safeText(insight.domain)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.85);font-style:italic;">„${safeText(insight.strike || 'No strike yet')}"</div>`;
         html += `</div>`;
       });
       html += '</div>';
     }
 
-    // Pipeline Lessons
-    if (pipeline.length > 0) {
+    // Fire Reflections
+    if (fireReflections.length > 0) {
       html += '<div>';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">⚡ Pipeline Flow Lessons</div>';
-      pipeline.forEach(lesson => {
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.8);margin-bottom:6px;">🔥 Fire Map Reflections</div>';
+      fireReflections.forEach(reflection => {
         html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(lesson.stage)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(lesson.lesson)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(reflection)}</div>`;
         html += `</div>`;
       });
       html += '</div>';
     }
 
-    document.getElementById('lessonsContent').innerHTML = html;
+    document.getElementById('debugLessonsContent').innerHTML = html;
   }
 
   // ============================================================
-  // Component #3: Corrections
+  // Component #3: Corrections (Debug)
   // ============================================================
-  function renderCorrections(component) {
-    const urgent = (component.urgent_corrections || []).slice(0, 5);
-    const domainCorrections = component.domain_corrections || {};
-    const pipelineCorrections = (component.pipeline_corrections || []).slice(0, 3);
+  function renderCorrectionsDebug(component) {
+    const frameShifts = (component.frame_shift_triggers || []).slice(0, 3);
+    const cascadeCorrections = (component.cascade_corrections || []).slice(0, 3);
+    const domainCorrections = (component.domain_corrections || []).slice(0, 4);
+    const pipelineCorrections = (component.pipeline_corrections || []).slice(0, 4);
 
-    if (urgent.length === 0 && Object.keys(domainCorrections).length === 0 && pipelineCorrections.length === 0) {
-      document.getElementById('correctionsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No corrections needed</em>';
+    if (frameShifts.length === 0 && cascadeCorrections.length === 0 &&
+        domainCorrections.length === 0 && pipelineCorrections.length === 0) {
+      document.getElementById('debugCorrectionsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No corrections needed</em>';
       return;
     }
 
     let html = '';
 
-    // Urgent Corrections (High Priority)
-    if (urgent.length > 0) {
+    // Frame Shift Triggers (Highest Priority)
+    if (frameShifts.length > 0) {
       html += '<div style="margin-bottom:14px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.9);margin-bottom:6px;">🚨 Urgent Corrections</div>';
-      urgent.forEach(correction => {
-        const severityColor = {
-          'high': 'rgba(255,92,138,0.9)',
-          'medium': 'rgba(255,209,102,0.9)',
-          'low': 'rgba(99,255,219,0.9)'
-        }[correction.severity] || 'rgba(234,220,245,0.7)';
-
-        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-left:3px solid ${severityColor};border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:4px;">${safeText(correction.issue)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.7);margin-bottom:4px;">${safeText(correction.description)}</div>`;
-        html += `<div style="color:${severityColor};font-size:11px;">✓ ${safeText(correction.action)}</div>`;
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.9);margin-bottom:6px;">🚨 Frame Shift Triggers</div>';
+      frameShifts.forEach(shift => {
+        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-left:3px solid rgba(255,92,138,0.9);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:4px;">${safeText(shift.domain)} Frame Shift</div>`;
+        html += `<div style="color:rgba(234,220,245,0.7);margin-bottom:4px;">${shift.days_ago} days ago: ${safeText(shift.new_status)}</div>`;
+        html += `<div style="color:rgba(255,92,138,0.9);font-size:11px;">⚠️ Update Freedom/Focus/Fire cascade</div>`;
         html += `</div>`;
       });
       html += '</div>';
     }
 
     // Domain-Specific Corrections
-    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
-    const hasAnyDomainCorrections = domains.some(d => (domainCorrections[d] || []).length > 0);
-
-    if (hasAnyDomainCorrections) {
+    if (domainCorrections.length > 0) {
       html += '<div style="margin-bottom:12px;">';
       html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">📊 Domain Corrections</div>';
-
-      domains.forEach(domain => {
-        const corrections = (domainCorrections[domain] || []).slice(0, 2);
-        if (corrections.length > 0) {
-          html += `<div style="margin-left:8px;margin-bottom:8px;">`;
-          html += `<div style="font-size:11px;font-weight:600;color:rgba(234,220,245,0.8);margin-bottom:4px;">${domain}</div>`;
-          corrections.forEach(c => {
-            html += `<div style="margin-left:8px;padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;font-size:11px;line-height:1.4;margin-bottom:4px;">`;
-            html += `<div style="color:rgba(234,220,245,0.9);">${safeText(c.correction)}</div>`;
-            html += `</div>`;
-          });
-          html += `</div>`;
-        }
+      domainCorrections.forEach(c => {
+        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.2);border-left:3px solid rgba(189,147,249,0.5);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(215,180,106,0.9);font-weight:600;margin-bottom:3px;">${safeText(c.domain)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.8);margin-bottom:4px;">Issue: ${safeText(c.issue)}</div>`;
+        html += `<div style="color:rgba(99,255,219,0.9);font-size:11px;">✓ ${safeText(c.correction)}</div>`;
+        html += `</div>`;
       });
       html += '</div>';
     }
 
     // Pipeline Corrections
     if (pipelineCorrections.length > 0) {
-      html += '<div>';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">⚡ Pipeline Fixes</div>';
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">⚡ Pipeline Flow Fixes</div>';
       pipelineCorrections.forEach(correction => {
-        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);margin-bottom:3px;">• ${safeText(correction.stage)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">→ ${safeText(correction.fix)}</div>`;
+        const severityColor = {
+          'high': 'rgba(255,92,138,0.9)',
+          'medium': 'rgba(255,209,102,0.9)',
+          'low': 'rgba(99,255,219,0.9)'
+        }[correction.severity] || 'rgba(234,220,245,0.7)';
+
+        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.2);border-left:3px solid ${severityColor};border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:3px;">${safeText(correction.domain)} → ${safeText(correction.stage)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.7);margin-bottom:4px;">${safeText(correction.description)}</div>`;
+        html += `<div style="color:${severityColor};font-size:11px;">✓ ${safeText(correction.correction)}</div>`;
         html += `</div>`;
       });
       html += '</div>';
     }
 
-    document.getElementById('correctionsContent').innerHTML = html;
+    // Cascade Corrections
+    if (cascadeCorrections.length > 0) {
+      html += '<div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">📈 Cascade Alignment</div>';
+      cascadeCorrections.forEach(correction => {
+        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(correction)}</div>`;
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('debugCorrectionsContent').innerHTML = html;
   }
 
   // ============================================================
-  // Component #4: Targets
+  // Component #4: Targets (Debug)
   // ============================================================
-  function renderTargets(component) {
-    const nextWeekTargets = component.next_week_targets || {};
-    const recommendedWarStacks = (component.recommended_war_stacks || []).slice(0, 3);
-    const focusAdjustments = (component.focus_adjustments || []).slice(0, 3);
-    const fireHitSuggestions = (component.fire_hit_suggestions || []).slice(0, 4);
+  function renderTargetsDebug(component) {
+    const focusTargets = component.focus_targets || {};
+    const fireTargets = component.fire_targets || {};
+    const warStacksNeeded = (component.war_stacks_needed || []).slice(0, 4);
 
-    if (Object.keys(nextWeekTargets).length === 0 &&
-        recommendedWarStacks.length === 0 &&
-        focusAdjustments.length === 0 &&
-        fireHitSuggestions.length === 0) {
-      document.getElementById('targetsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No targets generated yet</em>';
+    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
+    const hasFocusTargets = domains.some(d => focusTargets[d] && focusTargets[d].mission !== 'unknown');
+    const hasFireTargets = domains.some(d => (fireTargets[d] || []).length > 0);
+
+    if (!hasFocusTargets && !hasFireTargets && warStacksNeeded.length === 0) {
+      document.getElementById('debugTargetsContent').innerHTML = '<em style="color:rgba(234,220,245,0.5);font-size:12px;">No targets generated yet</em>';
       return;
     }
 
     let html = '';
 
-    // Next Week Targets by Domain
-    const domains = ['BODY', 'BEING', 'BALANCE', 'BUSINESS'];
-    const hasAnyTargets = domains.some(d => (nextWeekTargets[d] || []).length > 0);
-
-    if (hasAnyTargets) {
+    // War Stacks Needed (Highest Priority)
+    if (warStacksNeeded.length > 0) {
       html += '<div style="margin-bottom:14px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.9);margin-bottom:6px;">🎯 Next Week Focus</div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.9);margin-bottom:6px;">⚔️ War Stacks Needed</div>';
+      warStacksNeeded.forEach(ws => {
+        html += `<div style="margin-left:8px;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-left:3px solid rgba(255,92,138,0.9);border-radius:6px;font-size:12px;line-height:1.5;">`;
+        html += `<div style="color:rgba(215,180,106,0.95);font-weight:600;margin-bottom:3px;">${safeText(ws.domain)}: ${safeText(ws.title)}</div>`;
+        html += `<div style="color:rgba(234,220,245,0.7);margin-bottom:6px;font-style:italic;">${safeText(ws.why)}</div>`;
+        if (ws.suggested_hits && ws.suggested_hits.length > 0) {
+          html += `<div style="margin-top:6px;">`;
+          ws.suggested_hits.slice(0, 4).forEach(hit => {
+            html += `<div style="color:rgba(99,255,219,0.85);font-size:11px;margin-left:8px;">→ ${safeText(hit)}</div>`;
+          });
+          html += `</div>`;
+        }
+        html += `</div>`;
+      });
+      html += '</div>';
+    }
 
+    // Focus Targets (Monthly)
+    if (hasFocusTargets) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(189,147,249,0.8);margin-bottom:6px;">📍 Focus Targets (Monthly)</div>';
       domains.forEach(domain => {
-        const targets = (nextWeekTargets[domain] || []).slice(0, 2);
+        const focus = focusTargets[domain];
+        if (focus && focus.mission !== 'unknown') {
+          html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
+          html += `<div style="color:rgba(215,180,106,0.9);font-weight:600;margin-bottom:2px;">${domain} (${safeText(focus.quarter)})</div>`;
+          html += `<div style="color:rgba(234,220,245,0.85);">Mission: ${safeText(focus.mission)}</div>`;
+          html += `<div style="color:rgba(234,220,245,0.65);font-size:11px;">${safeText(focus.alignment)}</div>`;
+          html += `</div>`;
+        }
+      });
+      html += '</div>';
+    }
+
+    // Fire Targets (Weekly)
+    if (hasFireTargets) {
+      html += '<div>';
+      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.8);margin-bottom:6px;">🔥 Fire Targets (This Week)</div>';
+      domains.forEach(domain => {
+        const targets = (fireTargets[domain] || []).slice(0, 3);
         if (targets.length > 0) {
           html += `<div style="margin-left:8px;margin-bottom:8px;">`;
           html += `<div style="font-size:11px;font-weight:600;color:rgba(234,220,245,0.8);margin-bottom:4px;">${domain}</div>`;
           targets.forEach(target => {
-            html += `<div style="margin-left:8px;padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;font-size:11px;line-height:1.4;margin-bottom:4px;">`;
+            html += `<div style="margin-left:8px;padding:4px 8px;background:rgba(0,0,0,0.2);border-radius:4px;font-size:11px;line-height:1.4;margin-bottom:4px;">`;
             html += `<div style="color:rgba(234,220,245,0.9);">→ ${safeText(target)}</div>`;
             html += `</div>`;
           });
@@ -1481,44 +1519,7 @@
       html += '</div>';
     }
 
-    // Recommended War Stacks
-    if (recommendedWarStacks.length > 0) {
-      html += '<div style="margin-bottom:12px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,92,138,0.8);margin-bottom:6px;">⚔️ War Stack Recommendations</div>';
-      recommendedWarStacks.forEach(ws => {
-        html += `<div style="margin-left:8px;margin-bottom:6px;padding:8px 10px;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,92,138,0.4);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);font-weight:600;margin-bottom:3px;">${safeText(ws.title)}</div>`;
-        html += `<div style="color:rgba(234,220,245,0.7);font-size:11px;">${safeText(ws.reason)}</div>`;
-        html += `</div>`;
-      });
-      html += '</div>';
-    }
-
-    // Focus Adjustments
-    if (focusAdjustments.length > 0) {
-      html += '<div style="margin-bottom:12px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(255,209,102,0.8);margin-bottom:6px;">📍 Focus Adjustments</div>';
-      focusAdjustments.forEach(adj => {
-        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(adj)}</div>`;
-        html += `</div>`;
-      });
-      html += '</div>';
-    }
-
-    // Fire Hit Suggestions
-    if (fireHitSuggestions.length > 0) {
-      html += '<div>';
-      html += '<div style="font-size:12px;font-weight:600;color:rgba(99,255,219,0.8);margin-bottom:6px;">🔥 Fire Hits for Next Week</div>';
-      fireHitSuggestions.forEach(hit => {
-        html += `<div style="margin-left:8px;margin-bottom:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:12px;line-height:1.5;">`;
-        html += `<div style="color:rgba(234,220,245,0.95);">• ${safeText(hit)}</div>`;
-        html += `</div>`;
-      });
-      html += '</div>';
-    }
-
-    document.getElementById('targetsContent').innerHTML = html;
+    document.getElementById('debugTargetsContent').innerHTML = html;
   }
 
   function restoreLocal() {
