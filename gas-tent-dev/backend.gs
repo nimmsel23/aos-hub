@@ -22,6 +22,7 @@ const PROP = {
 
   // Integration
   BRIDGE_URL: 'BRIDGE_URL',
+  INDEX_NODE_URL: 'INDEX_NODE_URL',
   VAULT_PATH: 'VAULT_PATH',
 
   // Centre URLs (optional)
