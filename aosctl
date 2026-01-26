@@ -46,14 +46,15 @@ INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
 SYNCVAULTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
 AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
 ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
-CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/core4/core4ctl" || true)"
+CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/python-core4/core4ctl" || true)"
 ENVCTL="$(resolve_bin "envctl" || true)"
 FIREMAP_BIN="$(resolve_bin "$SCRIPT_DIR/firemap" || true)"
 FIREMAP_SETUP="$(resolve_bin "$SCRIPT_DIR/scripts/setup-fire-map.sh" || true)"
 FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
-FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap-bot/firemap_bot.py" || true)"
+FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap/firemap_bot.py" || true)"
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
+TENTCTL="$(resolve_bin "$SCRIPT_DIR/gas-tent-dev/tentctl" || true)"
 AOS_CENTRES="${AOS_CENTRES_CMD:-$HOME/αOS/bin/aos-centres}"
 RCLONE_RC_URL="${AOS_RCLONE_RC_URL:-http://127.0.0.1:5572/}"
 
@@ -81,6 +82,7 @@ COMPONENTS:
   fire        Fire Map scheduling + sync
   fruits      Fruits CLI (JSON store)
   creatorking CreatorKing CLI (JSON store)
+  tent        General's Tent Centre (GAS deployment manager)
   centre      Desktop centres (menu.yaml routing)
   env         Environment manager (envctl)
   alias       Alias manager (aos-aliasctl)
@@ -377,6 +379,10 @@ route_component() {
       [[ -n "$SYNCVAULTCTL" ]] || die "syncvaultctl not found"
       "$SYNCVAULTCTL" "$@"
       ;;
+    tent)
+      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/gas-tent-dev/tentctl"
+      "$TENTCTL" "$@"
+      ;;
     env)
       env_cmd "$@"
       ;;
@@ -386,7 +392,7 @@ route_component() {
     *)
       err "Unknown component: $component"
       msg ""
-      msg "Available components: hub, index, router, bridge, core4, vault, sync, fire, centre, env, alias"
+      msg "Available components: hub, index, router, bridge, core4, vault, sync, fire, tent, centre, env, alias"
       msg "Run 'aosctl help' for usage"
       exit 1
       ;;
@@ -394,7 +400,7 @@ route_component() {
 }
 
 core4_cmd() {
-  [[ -n "$CORE4CTL" ]] || die "core4ctl not found (expected at ~/aos-hub/core4/core4ctl)"
+  [[ -n "$CORE4CTL" ]] || die "core4ctl not found (expected at ~/aos-hub/python-core4/core4ctl)"
   local action="${1:-status}"
   shift || true
   case "$action" in
@@ -627,7 +633,7 @@ main() {
     version|-v|--version) show_version ;;
     doctor|doc) run_doctor ;;
     centre|centres|center|centers) centre_cmd "$@" ;;
-    hub|index|router|bridge|core4|vault|sync|env|alias) route_component "$cmd" "$@" ;;
+    hub|index|router|bridge|core4|vault|sync|tent|env|alias) route_component "$cmd" "$@" ;;
     fire) fire_cmd "$@" ;;
     fruits) fruits_cmd "$@" ;;
     creatorking) creatorking_cmd "$@" ;;

@@ -36,7 +36,7 @@ door_flow:
 
 firemap_commands:
   python_bin: python3
-  script: python-firemap-bot/firemap_bot.py
+  script: python-firemap/firemap_bot.py
   daily_mode: daily
   weekly_mode: weekly
 
@@ -60,3 +60,4 @@ core4_actions:
     pos: posterity
     dis: discover
     dec: declare
+
