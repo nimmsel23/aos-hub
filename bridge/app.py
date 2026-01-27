@@ -633,6 +633,177 @@ async def handle_health(_request: web.Request) -> web.Response:
     )
 
 
+async def handle_debug(request: web.Request) -> web.Response:
+    """
+    Debug endpoint - shows config, checks all integrations, tests RPC.
+
+    Returns comprehensive diagnostic info about Bridge state.
+    """
+    debug_info = {
+        "ok": True,
+        "service": "aos-bridge",
+        "time": _now().isoformat(),
+        "tz": DEFAULT_TZ,
+        "config": {},
+        "paths": {},
+        "checks": {},
+    }
+
+    # Config (safe - no tokens)
+    debug_info["config"] = {
+        "gas_webhook_url": "***" + GAS_WEBHOOK_URL[-20:] if GAS_WEBHOOK_URL else "not set",
+        "gas_tent_url": "***" + GAS_TENT_URL[-20:] if GAS_TENT_URL else "not set",
+        "gas_chat_id": GAS_CHAT_ID if GAS_CHAT_ID else "not set",
+        "gas_mode": GAS_MODE,
+        "fallback_tele": FALLBACK_TELE,
+        "tele_bin": TELE_BIN,
+        "bridge_token": "set" if BRIDGE_TOKEN else "not set",
+        "task_exec_enabled": TASK_EXEC_ENABLED,
+        "fire_daily_send": FIRE_DAILY_SEND,
+        "fire_daily_mode": FIRE_DAILY_MODE,
+    }
+
+    # Paths
+    debug_info["paths"] = {
+        "vault_dir": str(VAULT_DIR),
+        "vault_exists": VAULT_DIR.exists(),
+        "core4_local": str(CORE4_LOCAL_DIR),
+        "core4_local_exists": CORE4_LOCAL_DIR.exists(),
+        "core4_mount": str(CORE4_MOUNT_DIR),
+        "core4_mount_exists": CORE4_MOUNT_DIR.exists(),
+        "fruits_dir": str(FRUITS_DIR),
+        "fruits_exists": FRUITS_DIR.exists(),
+        "tent_dir": str(TENT_DIR),
+        "tent_exists": TENT_DIR.exists(),
+        "warstack_dir": str(WARSTACK_DIR),
+        "warstack_exists": WARSTACK_DIR.exists(),
+        "queue_dir": str(QUEUE_DIR),
+        "queue_exists": QUEUE_DIR.exists(),
+    }
+
+    # Binaries check
+    debug_info["checks"]["binaries"] = {}
+    for name, bin_path in [
+        ("task", TASK_BIN),
+        ("tele", TELE_BIN),
+        ("core4ctl", CORE4CTL_BIN),
+        ("firectl", FIRECTL_BIN),
+        ("firemap", FIREMAP_BIN),
+    ]:
+        try:
+            result = await asyncio.create_subprocess_exec(
+                bin_path, "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=2)
+            debug_info["checks"]["binaries"][name] = {
+                "path": bin_path,
+                "available": result.returncode == 0,
+                "version": stdout.decode().strip()[:100] if stdout else "unknown"
+            }
+        except (FileNotFoundError, asyncio.TimeoutError):
+            debug_info["checks"]["binaries"][name] = {
+                "path": bin_path,
+                "available": False,
+                "error": "not found or timeout"
+            }
+
+    # GAS Tent URL check
+    if GAS_TENT_URL:
+        try:
+            async with aiohttp.ClientSession() as session:
+                test_payload = {"action": "health"}
+                async with session.post(
+                    GAS_TENT_URL,
+                    json=test_payload,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    response_text = await resp.text()
+                    try:
+                        data = json.loads(response_text)
+                        debug_info["checks"]["gas_tent"] = {
+                            "ok": resp.status < 400,
+                            "status": resp.status,
+                            "response": data
+                        }
+                    except json.JSONDecodeError:
+                        debug_info["checks"]["gas_tent"] = {
+                            "ok": False,
+                            "status": resp.status,
+                            "error": "Invalid JSON response",
+                            "raw": response_text[:200]
+                        }
+        except asyncio.TimeoutError:
+            debug_info["checks"]["gas_tent"] = {
+                "ok": False,
+                "error": "Timeout (10s)"
+            }
+        except Exception as e:
+            debug_info["checks"]["gas_tent"] = {
+                "ok": False,
+                "error": str(e)
+            }
+    else:
+        debug_info["checks"]["gas_tent"] = {
+            "ok": False,
+            "error": "GAS_TENT_URL not configured"
+        }
+
+    # Task export check
+    task_export = _task_export_path()
+    debug_info["checks"]["task_export"] = {
+        "path": str(task_export),
+        "exists": task_export.exists(),
+        "size": task_export.stat().st_size if task_export.exists() else 0,
+        "modified": task_export.stat().st_mtime if task_export.exists() else None
+    }
+
+    # Queue check
+    if QUEUE_DIR.exists():
+        queue_files = list(QUEUE_DIR.glob("*.json"))
+        debug_info["checks"]["queue"] = {
+            "dir": str(QUEUE_DIR),
+            "files": len(queue_files),
+            "oldest": min((f.stat().st_mtime for f in queue_files), default=None)
+        }
+    else:
+        debug_info["checks"]["queue"] = {
+            "dir": str(QUEUE_DIR),
+            "error": "Queue dir does not exist"
+        }
+
+    # Core4 weeks check
+    if CORE4_LOCAL_DIR.exists():
+        week_files = list(CORE4_LOCAL_DIR.glob(f"{CORE4_PREFIX}*.json"))
+        debug_info["checks"]["core4_weeks"] = {
+            "dir": str(CORE4_LOCAL_DIR),
+            "weeks": len(week_files),
+            "latest": sorted([f.stem.replace(CORE4_PREFIX, "") for f in week_files])[-3:] if week_files else []
+        }
+    else:
+        debug_info["checks"]["core4_weeks"] = {
+            "dir": str(CORE4_LOCAL_DIR),
+            "error": "Core4 dir does not exist"
+        }
+
+    # Overall health
+    critical_checks = [
+        debug_info["paths"]["vault_exists"],
+        debug_info["checks"]["binaries"]["task"]["available"],
+    ]
+
+    if not all(critical_checks):
+        debug_info["ok"] = False
+        debug_info["warnings"] = []
+        if not debug_info["paths"]["vault_exists"]:
+            debug_info["warnings"].append(f"VAULT_DIR not found: {VAULT_DIR}")
+        if not debug_info["checks"]["binaries"]["task"]["available"]:
+            debug_info["warnings"].append(f"task binary not available: {TASK_BIN}")
+
+    return web.json_response(debug_info, status=200)
+
+
 def _task_export_path() -> Path:
     override = os.getenv("AOS_TASK_EXPORT_PATH", "").strip()
     if override:
@@ -1689,6 +1860,8 @@ def create_app() -> web.Application:
         [
             web.get("/health", handle_health),
             web.get("/bridge/health", handle_health),
+            web.get("/debug", handle_debug),
+            web.get("/bridge/debug", handle_debug),
             # RPC endpoint (forwards to GAS Tent Centre)
             web.post("/rpc", handle_rpc),
             web.post("/bridge/rpc", handle_rpc),

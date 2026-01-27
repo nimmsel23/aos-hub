@@ -50,7 +50,7 @@ Small HTTP bridge for HQ data flow. Runs on port `8080` and can be reached via T
 - `AOS_FIREMAP_TRIGGER_ARGS` (optional, default `sync`)
 - `AOS_FIRE_DAILY_SEND` (optional, `1` to auto-send via `AOS_TELE_BIN`)
 - `AOS_FIRE_DAILY_MODE` (optional, default `firectl`; `firectl` calls the local Fire bot/engine; legacy modes: `report`, `due_export`)
-- `AOS_FIRECTL_BIN` (optional, default `<repo>/scripts/firectl`) — wrapper around the local Fire bot (`python-firemap-bot/firemap_bot.py`)
+- `AOS_FIRECTL_BIN` (optional, default `<repo>/scripts/firectl`) — wrapper around the local Fire bot (`python-firemap/firemap_bot.py`)
 - `AOS_TASK_EXPORT_PATH` (optional, overrides `<vault>/.alphaos/task_export.json` for `/bridge/daily-review-data`)
 - `AOS_BRIDGE_TOKEN` (optional, require `X-Bridge-Token` header)
 - `AOS_BRIDGE_TOKEN_HEADER` (optional, default `X-Bridge-Token`)
@@ -165,7 +165,7 @@ curl -X POST http://127.0.0.1:8080/bridge/core4/log \
   -H 'Content-Type: application/json' \
   -d '{"domain":"body","task":"fitness","ts":"2025-01-01T10:00:00+01:00","source":"hq","user":{"id":"web"}}'
 ```
-This endpoint appends a Core4 *event* (one JSON per done) into `<vault>/Core4/.core4/events/YYYY-MM-DD/`, then rebuilds the derived `core4_day_YYYY-MM-DD.json` and `core4_week_YYYY-WWW.json`. Scoring is idempotent per `key=YYYY-MM-DD:domain:task` to avoid double-counting when multiple trackers report the same completion.
+This endpoint appends a Core4 *event* (one JSON per done) into `<vault>/Core4/.python-core4/events/YYYY-MM-DD/`, then rebuilds the derived `core4_day_YYYY-MM-DD.json` and `core4_week_YYYY-WWW.json`. Scoring is idempotent per `key=YYYY-MM-DD:domain:task` to avoid double-counting when multiple trackers report the same completion.
 
 Tent summary side-effect (optional):
 - `POST /bridge/tent/summary` can seal Core4 for that `week` into `<vault>/Core4/core4_scores.csv` when `AOS_CORE4_FINALIZE_ON_TENT=1` (default off).

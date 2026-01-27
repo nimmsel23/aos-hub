@@ -33,7 +33,39 @@ ui_title() {
   if has_gum; then
     gum style --bold --border normal --padding "1 2" "bridgectl"
   else
-    msg "bridgectl"
+    msg "=== bridgectl ==="
+  fi
+}
+
+ui_ok() {
+  if has_gum; then
+    gum style --foreground 10 "✔ $*"
+  else
+    msg "✔ $*"
+  fi
+}
+
+ui_err() {
+  if has_gum; then
+    gum style --foreground 9 "✘ $*"
+  else
+    warn "✘ $*"
+  fi
+}
+
+ui_warn() {
+  if has_gum; then
+    gum style --foreground 11 "⚠ $*"
+  else
+    warn "⚠ $*"
+  fi
+}
+
+ui_info() {
+  if has_gum; then
+    gum style --faint "$*"
+  else
+    msg "$*"
   fi
 }
 
@@ -96,6 +128,43 @@ with urllib.request.urlopen(req) as r:
 PY
 }
 
+curl_json_post_data() {
+  local url="$1"
+  local data="$2"
+  if has_cmd curl; then
+    if [[ -n "$BRIDGE_TOKEN" ]]; then
+      curl -fsS -X POST -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" -H "Content-Type: application/json" -d "$data" "$url"
+    else
+      curl -fsS -X POST -H "Content-Type: application/json" -d "$data" "$url"
+    fi
+    return
+  fi
+  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - "$url" "$data" <<'PY'
+import os
+import sys
+import urllib.request
+
+headers = {"Content-Type": "application/json"}
+token = os.environ.get("AOS_BRIDGE_TOKEN", "")
+header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
+if token:
+    headers[header] = token
+req = urllib.request.Request(sys.argv[1], data=sys.argv[2].encode(), headers=headers, method="POST")
+with urllib.request.urlopen(req) as r:
+    sys.stdout.write(r.read().decode("utf-8"))
+PY
+}
+
+format_json() {
+  if has_cmd jq; then
+    jq -C .
+  elif has_cmd python; then
+    python -m json.tool
+  else
+    cat
+  fi
+}
+
 install_deps() {
   if ! has_cmd pacman; then
     die "pacman not found. Install python-aiohttp manually."
@@ -139,20 +208,81 @@ PY
 }
 
 health() {
-  msg "Bridge health:"
-  curl_json "$BASE_URL/health" || warn "health check failed"
+  ui_info "Checking Bridge health..."
+  if response=$(curl_json "$BASE_URL/health" 2>&1); then
+    if echo "$response" | grep -q '"ok".*true'; then
+      ui_ok "Bridge is online"
+      echo "$response" | format_json
+    else
+      ui_warn "Bridge responded but reported not ok"
+      echo "$response" | format_json
+    fi
+  else
+    ui_err "Health check failed"
+    echo "$response"
+  fi
 }
 
 debug() {
-  health
+  ui_title
+  ui_info "Running comprehensive diagnostics..."
   msg ""
-  msg "Core4 today:"
-  curl_json "$BASE_URL/bridge/core4/today" || warn "core4/today failed"
+
+  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
+    ui_err "Debug endpoint failed (is Bridge running?)"
+    echo "$response"
+    msg ""
+    ui_info "Trying basic health check instead..."
+    health
+    return 1
+  fi
+
+  # Parse debug response
+  local ok service
+  ok=$(echo "$response" | grep -o '"ok"[[:space:]]*:[[:space:]]*[^,}]*' | cut -d: -f2 | tr -d ' "')
+  service=$(echo "$response" | grep -o '"service"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+
+  if [[ "$ok" == "true" ]]; then
+    ui_ok "Bridge Debug: $service"
+  else
+    ui_warn "Bridge reported warnings"
+  fi
+
+  msg ""
+  echo "$response" | format_json
+
+  msg ""
+  ui_info "Testing RPC endpoint..."
+  test_rpc
+}
+
+test_rpc() {
+  local payload='{"action":"health","args":{}}'
+
+  if ! response=$(curl_json_post_data "$BASE_URL/rpc" "$payload" 2>&1); then
+    ui_err "RPC endpoint test failed"
+    echo "$response"
+    return 1
+  fi
+
+  if echo "$response" | grep -q '"ok".*true'; then
+    ui_ok "RPC endpoint working"
+  else
+    ui_warn "RPC endpoint returned error"
+  fi
+
+  echo "$response" | format_json
 }
 
 flush_queue() {
-  msg "Bridge queue flush:"
-  curl_json_post "$BASE_URL/bridge/queue/flush" || warn "queue flush failed"
+  ui_info "Flushing Bridge queue..."
+  if response=$(curl_json_post "$BASE_URL/bridge/queue/flush" 2>&1); then
+    ui_ok "Queue flushed"
+    echo "$response" | format_json
+  else
+    ui_err "Queue flush failed"
+    echo "$response"
+  fi
 }
 
 sync_push() {
@@ -254,7 +384,7 @@ menu() {
   ui_title
   local action
   action="$(choose \
-    "status" "health" "debug" \
+    "status" "health" "debug" "test-rpc" \
     "flush" \
     "sync push" "sync pull" "sync push (dry-run)" "sync pull (dry-run)" \
     "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" "syncvaultctl advanced" \
@@ -267,6 +397,7 @@ menu() {
     status) status ;;
     health) health ;;
     debug) debug ;;
+    test-rpc) test_rpc ;;
     flush) flush_queue ;;
     "sync push") sync_push ;;
     "sync pull") sync_pull ;;
@@ -296,10 +427,11 @@ usage() {
 Usage: bridgectl <command>
 
 Commands:
-  menu           Interactive menu (gum)
+  menu           Interactive menu (gum/fzf)
   status         Show service + python/aiohttp status
   health         GET /health
-  debug          Health + core4/today
+  debug          GET /debug (comprehensive diagnostics + RPC test)
+  test-rpc       Test RPC endpoint (forwards to GAS)
   flush          Flush queued task operations
   sync-push      POST /bridge/sync/push [--dry-run]
   sync-pull      POST /bridge/sync/pull [--dry-run]
@@ -315,7 +447,15 @@ Commands:
   serve          tailscale serve --set-path /bridge -> 8080 (tailnet-only)
   funnel         tailscale funnel --set-path /bridge -> 8080 (public)
   tailscale      Show tailscale status + IPs
-  doctor         Run status + tailscale + health
+  doctor         Run status + tailscale + health + debug
+
+Environment:
+  AOS_BRIDGE_HOST           Host (default: 127.0.0.1)
+  AOS_BRIDGE_PORT           Port (default: 8080)
+  AOS_BRIDGE_TOKEN          Auth token (optional)
+  AOS_BRIDGE_TOKEN_HEADER   Token header (default: X-Bridge-Token)
+  AOS_BRIDGE_ENV_FILE       Env file path (default: ~/.env/bridge.env)
+  AOS_GAS_TENT_URL          GAS Tent Centre URL (for RPC)
 EOF
 }
 
@@ -325,6 +465,7 @@ case "$cmd" in
   status) status ;;
   health) health ;;
   debug) debug ;;
+  test-rpc) test_rpc ;;
   flush) flush_queue ;;
   sync-push) sync_push "${2:-}" ;;
   sync-pull) sync_pull "${2:-}" ;;
