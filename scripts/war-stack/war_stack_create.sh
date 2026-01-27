@@ -5,11 +5,14 @@
 set -euo pipefail
 
 # Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 VAULT_PATH="${VAULT_PATH:-$HOME/Dokumente/AlphaOs-Vault}"
 PLAN_DIR="$VAULT_PATH/Door/2-Plan"
 PRODUCTION_DIR="$VAULT_PATH/Door/3-Production"
 LOG_FILE="${LOG_FILE:-$HOME/.dotfiles/logs/door-automation.log}"
 TICKTICK_API="${TICKTICK_API:-$HOME/.dotfiles/scripts/utils/integrations/ticktick_api.sh}"
+DOOR_UUID_SYNC="${DOOR_UUID_SYNC:-$REPO_ROOT/python-ticktick/door_uuid_sync.py}"
 
 # Create log directory
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -368,8 +371,8 @@ main() {
         create_door_ticktick_mapping "$DOOR_UUID" "$TICKTICK_PROJECT_ID"
 
         # Push UUID to TickTick description
-        if command -v door_uuid_sync.py >/dev/null 2>&1; then
-            if door_uuid_sync.py --door-uuid "$DOOR_UUID" --ticktick-id "$TICKTICK_PROJECT_ID"; then
+        if [[ -x "$DOOR_UUID_SYNC" ]]; then
+            if "$DOOR_UUID_SYNC" --door-uuid "$DOOR_UUID" --ticktick-id "$TICKTICK_PROJECT_ID"; then
                 log "  ✅ UUID synced to TickTick"
             else
                 log "  ⚠️  UUID sync to TickTick failed (API error?)"

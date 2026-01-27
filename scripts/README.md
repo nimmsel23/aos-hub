@@ -75,7 +75,7 @@ nodectl open            # open best URL (tailscale preferred)
 
 ---
 
-### ticktick/ ✅
+### python-ticktick/ ✅
 
 **Purpose:** TickTick API integration for Core4 + Door UUID sync
 
@@ -89,15 +89,15 @@ nodectl open            # open best URL (tailscale preferred)
 - UUID mapping for bidirectional sync
 - Gemini AI duplicate detection
 
-**See:** [ticktick/README.md](ticktick/README.md)
+**See:** [python-ticktick/README.md](../python-ticktick/README.md)
 
 ---
 
 ### Fire tooling ✅
 
-**Engine:** `python-firemap-bot/firemap.py` (Taskwarrior → Markdown-formatted text messages)
+**Engine:** `python-firemap/firemap.py` (Taskwarrior → Markdown-formatted text messages)
 
-**Bot:** `python-firemap-bot/firemap_bot.py` (sends `/fire` style snapshots)
+**Bot:** `python-firemap/firemap_bot.py` (sends `/fire` style snapshots)
 
 **Wrappers:**
 - `scripts/firectl` — wrapper + installers: `doctor`, `fix`, `status/logs`, `setup-reports`, `setup-systemd`
@@ -145,7 +145,7 @@ nodectl open            # open best URL (tailscale preferred)
 
 ## Migration from .dotfiles/bin/
 
-These scripts were moved from `~/.dotfiles/bin/` to `aos-hub/scripts/` for:
+These scripts were moved from `~/.dotfiles/bin/` to `aos-hub/python-ticktick/` for:
 
 1. **Centralization** - All Door Centre scripts in one repo
 2. **Documentation** - Each script has README with context
@@ -153,14 +153,14 @@ These scripts were moved from `~/.dotfiles/bin/` to `aos-hub/scripts/` for:
 4. **Clarity** - Clear status (active/deprecated)
 
 **Original Location:** `~/.dotfiles/bin/`
-**New Location:** `aos-hub/scripts/`
+**New Location:** `aos-hub/python-ticktick/`
 
 **Symlinks (optional):**
 ```bash
 # If you want to keep scripts in PATH
 ln -s ~/aos-hub/scripts/war-stack/war_stack_create.sh ~/.local/bin/war_stack_create
-ln -s ~/aos-hub/scripts/ticktick/ticktick_sync.py ~/.local/bin/ticktick_sync
-ln -s ~/aos-hub/scripts/ticktick/door_uuid_sync.py ~/.local/bin/door_uuid_sync
+ln -s ~/aos-hub/python-ticktick/ticktick_sync.py ~/.local/bin/ticktick_sync
+ln -s ~/aos-hub/python-ticktick/door_uuid_sync.py ~/.local/bin/door_uuid_sync
 ```
 
 ---
@@ -175,13 +175,13 @@ cd ~/aos-hub/scripts/war-stack
 
 ### Sync Core4 to TickTick
 ```bash
-cd ~/aos-hub/scripts/ticktick
+cd ~/aos-hub/python-ticktick
 ./ticktick_sync.py --sync --tele --gemini
 ```
 
 ### Sync Door UUID to TickTick
 ```bash
-cd ~/aos-hub/scripts/ticktick
+cd ~/aos-hub/python-ticktick
 ./door_uuid_sync.py --door-uuid a1b2c3d4-... --ticktick-id 63f8e7c9
 ```
 
@@ -191,7 +191,7 @@ cd ~/aos-hub/scripts/ticktick
 
 - [DOOR_CENTRE.md](../DOOR_CENTRE.md) - Complete Door Centre architecture
 - [bridge/README.md](../bridge/README.md) - Bridge API documentation
-- [python-warstack-bot/README.md](../python-warstack-bot/README.md) - Telegram War Stack Bot
+- [python-warstack/README.md](../python-warstack/README.md) - Telegram War Stack Bot
 - [gas/README.md](../gas/README.md) - Google Apps Script centres
 
 ---

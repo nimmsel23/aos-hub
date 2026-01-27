@@ -146,6 +146,37 @@ need_cmd() {
   }
 }
 
+# Format JSON output (if available)
+format_json() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -C .
+  elif command -v python >/dev/null 2>&1; then
+    python -m json.tool
+  else
+    cat
+  fi
+}
+
+# HTTP helpers (optional - for services with REST APIs)
+curl_json() {
+  local url="$1"
+  command -v curl >/dev/null 2>&1 || { ui_err "curl not installed"; return 1; }
+  curl -fsS "$url" 2>&1 || return 1
+}
+
+curl_json_post() {
+  local url="$1"
+  command -v curl >/dev/null 2>&1 || { ui_err "curl not installed"; return 1; }
+  curl -fsS -X POST "$url" 2>&1 || return 1
+}
+
+curl_json_post_data() {
+  local url="$1"
+  local data="$2"
+  command -v curl >/dev/null 2>&1 || { ui_err "curl not installed"; return 1; }
+  curl -fsS -X POST -H "Content-Type: application/json" -d "$data" "$url" 2>&1 || return 1
+}
+
 # Error trap
 trap 'ui_err "Failed at line $LINENO"; exit 1' ERR
 
@@ -221,7 +252,7 @@ cmd_logs() {
 cmd_doctor() {
   ui_title "Component Health Check"
   ui_info "Running diagnostics..."
-  ui_info ""
+  echo ""
 
   # Check dependencies
   if command -v gum >/dev/null 2>&1; then
@@ -231,12 +262,38 @@ cmd_doctor() {
     ui_info "Install: yay -S gum"
   fi
 
+  if command -v jq >/dev/null 2>&1; then
+    ui_ok "jq installed (JSON formatting)"
+  else
+    ui_warn "jq not installed (optional)"
+    ui_info "Install: pacman -S jq"
+  fi
+
   # Check component files
   if [[ -d "$COMPONENT_DIR" ]]; then
     ui_ok "Component directory: $COMPONENT_DIR"
   else
     ui_err "Component directory not found"
   fi
+
+  # Example: Check HTTP endpoint (for services)
+  # if response=$(curl_json "http://127.0.0.1:8080/health" 2>&1); then
+  #   if echo "$response" | grep -q '"ok".*true'; then
+  #     ui_ok "Service is online"
+  #     echo "$response" | format_json
+  #   else
+  #     ui_warn "Service responded but reported not ok"
+  #   fi
+  # else
+  #   ui_err "Service unreachable"
+  # fi
+
+  # Example: Check systemd service
+  # if systemctl --user is-active --quiet "$SERVICE_NAME"; then
+  #   ui_ok "Service $SERVICE_NAME is running"
+  # else
+  #   ui_err "Service $SERVICE_NAME is not running"
+  # fi
 
   # Add more checks as needed
 }

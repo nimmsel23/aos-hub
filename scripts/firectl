@@ -5,8 +5,8 @@ set -euo pipefail
 # firectl — Fire tooling (installer + wrapper around local Fire bot)
 # ============================================================
 # Goal: keep Fire logic runnable locally (CLI) and callable by bots/services.
-# - Fire logic lives in `python-firemap-bot/firemap.py` (Taskwarrior → Markdown-formatted text messages).
-# - Fire bot (`python-firemap-bot/firemap_bot.py`) sends or prints those messages.
+# - Fire logic lives in `python-firemap/firemap.py` (Taskwarrior → Markdown-formatted text messages).
+# - Fire bot (`python-firemap/firemap_bot.py`) sends or prints those messages.
 # - firectl wraps the bot and installs optional taskrc/systemd helpers.
 #
 # This file is repo-local. You can symlink into PATH via: firectl install-cli
@@ -58,7 +58,7 @@ TASK_BIN="${AOS_TASK_BIN:-task}"
 PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
 VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
 FIRE_ROOT="${AOS_FIRE_DIR:-$VAULT_DIR/Game/Fire}"
-FIREBOT_SCRIPT="${AOS_FIREBOT_SCRIPT:-$ROOT_DIR/python-firemap-bot/firemap_bot.py}"
+FIREBOT_SCRIPT="${AOS_FIREBOT_SCRIPT:-$ROOT_DIR/python-firemap/firemap_bot.py}"
 SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 SERVICE_DAILY="alphaos-fire-daily.service"
 TIMER_DAILY="alphaos-fire-daily.timer"
@@ -467,7 +467,7 @@ Usage:
 Env:
   AOS_TASK_BIN=task
   AOS_PYTHON_BIN=python
-  AOS_FIREBOT_SCRIPT=<repo>/python-firemap-bot/firemap_bot.py
+  AOS_FIREBOT_SCRIPT=<repo>/python-firemap/firemap_bot.py
   AOS_VAULT_DIR=~/AlphaOS-Vault
   AOS_FIRE_DIR=<vault>/Game/Fire
   AOS_TASKRC=~/.taskrc

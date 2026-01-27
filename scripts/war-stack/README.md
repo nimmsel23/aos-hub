@@ -124,6 +124,6 @@ Elliott teaches: 'The map is not the territory. Execute your Hits!'
 
 **Related:**
 - `gas/door.gs` - GAS implementation (similar logic)
-- `python-warstack-bot/` - Telegram bot implementation
+- `python-warstack/` - Telegram bot implementation
 - `DOOR_CENTRE.md` - Door Centre architecture
-- `scripts/ticktick/` - TickTick integration tools
+- `python-ticktick/` - TickTick integration tools

@@ -55,6 +55,30 @@ ui_warn()    # Yellow warning (⚠)
 ui_confirm() # Yes/No prompt
 ui_input()   # Text input
 ui_choose()  # Menu selection (fzf > gum > select fallback)
+need_cmd()   # Check if command exists, exit if not
+```
+
+### Utility Functions (Optional)
+
+For services with HTTP APIs:
+
+```bash
+format_json()            # Format JSON (jq > python > cat)
+curl_json(url)           # GET request
+curl_json_post(url)      # POST request (empty body)
+curl_json_post_data(url, data)  # POST request with JSON data
+```
+
+**Example usage:**
+```bash
+cmd_debug() {
+  if response=$(curl_json "http://127.0.0.1:8080/health" 2>&1); then
+    ui_ok "Service is online"
+    echo "$response" | format_json
+  else
+    ui_err "Service unreachable"
+  fi
+}
 ```
 
 **See:** `scripts/ctl-template.sh` for complete implementation
@@ -118,12 +142,34 @@ routerctl menu
 routerctl heartbeat status
 ```
 
-### bridgectl
+### bridgectl (HTTP Service Example)
 
-- ✅ gum UI
-- ✅ Health checks
+- ✅ gum UI helpers (ui_ok, ui_err, ui_warn, ui_info)
+- ✅ HTTP endpoint checks (health, debug)
+- ✅ JSON formatting (format_json)
+- ✅ curl helpers (curl_json, curl_json_post_data)
+- ✅ Comprehensive diagnostics (test-rpc, debug)
 - ✅ Service control
-- ✅ Debug commands
+
+**Pattern:**
+```bash
+bridgectl debug      # Full diagnostics + RPC test
+bridgectl test-rpc   # Quick RPC check
+bridgectl health     # Basic health check
+```
+
+**Example HTTP check:**
+```bash
+cmd_debug() {
+  ui_info "Running diagnostics..."
+  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
+    ui_err "Debug endpoint failed"
+    return 1
+  fi
+  ui_ok "Service is healthy"
+  echo "$response" | format_json
+}
+```
 
 ### tentctl
 
@@ -206,6 +252,75 @@ cmd_version() {
   echo "componentctl version $COMPONENTCTL_VERSION"
   # Optional: show dependency versions
   gum --version 2>/dev/null || true
+  jq --version 2>/dev/null || true
+}
+```
+
+### 6. HTTP Service Best Practices
+
+For ctl scripts managing HTTP services:
+
+```bash
+# Base URL from env
+BASE_URL="${AOS_SERVICE_URL:-http://127.0.0.1:8080}"
+
+# Health check with formatted output
+cmd_health() {
+  ui_info "Checking service health..."
+  if response=$(curl_json "$BASE_URL/health" 2>&1); then
+    if echo "$response" | grep -q '"ok".*true'; then
+      ui_ok "Service is online"
+      echo "$response" | format_json
+    else
+      ui_warn "Service responded but reported not ok"
+      echo "$response" | format_json
+    fi
+  else
+    ui_err "Health check failed"
+    echo "$response"
+  fi
+}
+
+# Debug command with comprehensive checks
+cmd_debug() {
+  ui_title
+  ui_info "Running diagnostics..."
+  echo ""
+
+  # Try debug endpoint
+  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
+    ui_err "Debug endpoint failed (is service running?)"
+    echo "$response"
+    echo ""
+    ui_info "Trying basic health check instead..."
+    cmd_health
+    return 1
+  fi
+
+  # Parse and display
+  ui_ok "Service diagnostics retrieved"
+  echo ""
+  echo "$response" | format_json
+}
+
+# RPC test (if service has RPC endpoint)
+cmd_test_rpc() {
+  local payload='{"action":"health","args":{}}'
+  ui_info "Testing RPC endpoint..."
+
+  if ! response=$(curl_json_post_data "$BASE_URL/rpc" "$payload" 2>&1); then
+    ui_err "RPC endpoint test failed"
+    echo "$response"
+    return 1
+  fi
+
+  if echo "$response" | grep -q '"ok".*true'; then
+    ui_ok "RPC endpoint working"
+  else
+    ui_warn "RPC returned error"
+  fi
+
+  echo "$response" | format_json
 }
 ```
 
