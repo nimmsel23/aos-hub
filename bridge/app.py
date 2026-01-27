@@ -25,7 +25,7 @@ TZ = ZoneInfo(DEFAULT_TZ)
 
 VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "AlphaOS-Vault")).expanduser()
 # Core4 storage model:
-# - Append-only event ledger lives under `.core4/events/<YYYY-MM-DD>/...json`
+# - Append-only event ledger lives under `.python-core4/events/<YYYY-MM-DD>/...json`
 # - Derived artifacts live in the Core4 root (rclone push copies Core4 -> Alpha_Core4)
 CORE4_LOCAL_DIR = Path(os.getenv("AOS_CORE4_LOCAL_DIR", VAULT_DIR / "Core4")).expanduser()
 CORE4_MOUNT_DIR = Path(os.getenv("AOS_CORE4_MOUNT_DIR", VAULT_DIR / "Alpha_Core4")).expanduser()
@@ -38,11 +38,15 @@ WARSTACK_DIR = Path(
 CORE4_PREFIX = "core4_week_"
 
 GAS_WEBHOOK_URL = os.getenv("AOS_GAS_WEBHOOK_URL", "").strip()
+GAS_TENT_URL = os.getenv("AOS_GAS_TENT_URL", "").strip()
 GAS_CHAT_ID = os.getenv("AOS_GAS_CHAT_ID", "").strip()
 GAS_USER_ID = os.getenv("AOS_GAS_USER_ID", "").strip()
 GAS_MODE = os.getenv("AOS_GAS_MODE", "direct").strip().lower()
 FALLBACK_TELE = os.getenv("AOS_BRIDGE_FALLBACK_TELE", "0").strip() == "1"
 TELE_BIN = os.getenv("AOS_TELE_BIN", "tele").strip()
+CORE4CTL_BIN = os.getenv(
+    "AOS_CORE4CTL_BIN", str((Path(__file__).resolve().parents[1] / "python-core4" / "core4ctl"))
+).strip()
 BRIDGE_TOKEN = os.getenv("AOS_BRIDGE_TOKEN", "").strip()
 BRIDGE_TOKEN_HEADER = os.getenv("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token").strip()
 QUEUE_DIR = Path(
@@ -799,6 +803,15 @@ async def _run_firectl_print(scope: str, timeout_s: float = 15.0) -> dict[str, A
     return await _run_task_report(cmd, timeout_s=timeout_s)
 
 
+async def _run_core4ctl(args: list[str], timeout_s: float = 120.0) -> dict[str, Any]:
+    if not CORE4CTL_BIN:
+        return {"ok": False, "error": "AOS_CORE4CTL_BIN missing"}
+    if not shutil.which(CORE4CTL_BIN) and not Path(CORE4CTL_BIN).expanduser().exists():
+        return {"ok": False, "error": f"core4ctl not found: {CORE4CTL_BIN}"}
+    cmd = [CORE4CTL_BIN, *args]
+    return await _run_task_report(cmd, timeout_s=timeout_s)
+
+
 def _format_fire_daily_message(report: dict[str, Any]) -> str:
     now = _now()
     header = f"🔥 Daily Fire ({now.strftime('%Y-%m-%d')})"
@@ -973,6 +986,12 @@ async def handle_core4_today(request: web.Request) -> web.Response:
         data = _core4_build_week_for_date(now.date())
     total = _core4_total_for_date(data.get("entries") or [], date_key)
     return web.json_response({"ok": True, "week": week, "date": date_key, "total": total})
+
+
+async def handle_core4_pull(_request: web.Request) -> web.Response:
+    result = await _run_core4ctl(["pull-core4"], timeout_s=180.0)
+    status = 200 if result.get("ok") else 500
+    return web.json_response(result, status=status)
 
 
 def _fruits_store_path() -> Path:
@@ -1611,12 +1630,68 @@ async def handle_sync_pull(request: web.Request) -> web.Response:
     return web.json_response(result, status=status)
 
 
+async def handle_rpc(request: web.Request) -> web.Response:
+    """
+    Generic RPC handler that forwards actions to GAS Tent Centre.
+
+    Payload: { action: string, args: object }
+    Returns: JSON response from GAS
+
+    Example actions:
+    - ticktickWeeklyDigest
+    - ticktickTentScores
+    - mapLatest
+    """
+    payload = await _read_json(request)
+    action = payload.get("action")
+    args = payload.get("args", {})
+
+    if not action:
+        return web.json_response({"ok": False, "error": "action required"}, status=400)
+
+    if not GAS_TENT_URL:
+        return web.json_response({"ok": False, "error": "GAS_TENT_URL not configured"}, status=503)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                GAS_TENT_URL,
+                json={"action": action, "args": args},
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                response_text = await resp.text()
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError:
+                    return web.json_response(
+                        {"ok": False, "error": "invalid JSON from GAS", "raw": response_text[:500]},
+                        status=502
+                    )
+
+                if resp.status >= 400:
+                    return web.json_response(
+                        {"ok": False, "error": f"GAS returned {resp.status}", "data": data},
+                        status=resp.status
+                    )
+
+                return web.json_response(data, status=200)
+
+    except asyncio.TimeoutError:
+        return web.json_response({"ok": False, "error": "GAS timeout"}, status=504)
+    except Exception as e:
+        LOGGER.error(f"RPC forward error: {e}")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
 def create_app() -> web.Application:
     app = web.Application(middlewares=[auth_middleware])
     app.add_routes(
         [
             web.get("/health", handle_health),
             web.get("/bridge/health", handle_health),
+            # RPC endpoint (forwards to GAS Tent Centre)
+            web.post("/rpc", handle_rpc),
+            web.post("/bridge/rpc", handle_rpc),
             # Tailscale `serve/funnel --set-path /bridge` strips the `/bridge` prefix when proxying to :8080.
             # Provide root-path aliases so external calls to `/bridge/<route>` map cleanly to `/<route>` here.
             web.get("/daily-review-data", handle_bridge_daily_review_data),
@@ -1631,6 +1706,8 @@ def create_app() -> web.Application:
             web.get("/bridge/core4/week", handle_core4_week),
             web.get("/core4/today", handle_core4_today),
             web.get("/bridge/core4/today", handle_core4_today),
+            web.post("/core4/pull", handle_core4_pull),
+            web.post("/bridge/core4/pull", handle_core4_pull),
             web.post("/fruits/answer", handle_fruits_answer),
             web.post("/bridge/fruits/answer", handle_fruits_answer),
             web.post("/tent/summary", handle_tent_summary),
