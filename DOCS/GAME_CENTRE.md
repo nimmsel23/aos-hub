@@ -46,7 +46,7 @@ The Game Centre should primarily show what already exists before creating anythi
   `~/AlphaOS-Vault/Game/Fire`
 - **Node Fire API (Local):** `/api/fire/day` + `/api/fire/week` (aliases: `/fired`, `/firew`)
 - **Task System:**  
-  Fire tasks live in Taskwarrior (`+fire`) and are printed/sent via the Firemap engine (`python-firemap-bot/firemap.py`).
+  Fire tasks live in Taskwarrior (`+fire`) and are printed/sent via the Firemap engine (`python-firemap/firemap.py`).
   - Terminal: `firemap print daily|weekly` (or `firectl print daily|weekly`)
   - Telegram: `/fire` and `/fireweek` (local python bot; GAS fallback when offline)
 - **TickTick Push (Optional):**  

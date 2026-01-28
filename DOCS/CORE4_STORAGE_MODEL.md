@@ -8,8 +8,8 @@ For a full end-to-end explanation, see `aos-hub/DOCS/CORE4.md`.
 
 **Event ledger (source of truth, append-only)**
 
-- Local: `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
-- GDrive mount (written by GAS): `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
+- Local: `~/AlphaOS-Vault/Core4/.python-core4/events/YYYY-MM-DD/*.json`
+- GDrive mount (written by GAS): `~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/*.json`
 
 Each *done* creates one JSON event. Scoring dedupes by:
 
@@ -29,13 +29,13 @@ These are rebuilt from the event ledger and then pushed to Drive by rclone (`Cor
 
 ## Writers
 
-- **Local CLI:** `aos-hub/core4/tracker.py`
+- **Local CLI:** `aos-hub/python-core4/tracker.py`
   - Writes events into local ledger and rebuilds day/week JSON.
   - Can still create+complete a Taskwarrior task for TickTick integration.
 - **Bridge:** `POST /bridge/core4/log` in `aos-hub/bridge/app.py`
   - Writes events into local ledger and rebuilds day/week JSON.
 - **GAS:** `aos-hub/gas/core4.gs`
-  - Writes events into Drive `Alpha_Core4/.core4/events/` and rebuilds `Alpha_Core4/core4_week_*.json`.
+  - Writes events into Drive `Alpha_Core4/.python-core4/events/` and rebuilds `Alpha_Core4/core4_week_*.json`.
 - **Taskwarrior hook:** `~/.task/hooks/on-modify.99-alphaos.py`
   - On completion of a `+core4` task: calls Bridge; if Bridge is down, writes a local event.
 
@@ -52,7 +52,7 @@ These are rebuilt from the event ledger and then pushed to Drive by rclone (`Cor
 
 Templates live in `aos-hub/systemd/` and are intentionally not enabled automatically.
 
-- Install templates: `aos-hub/core4/core4ctl install-timers`
+- Install templates: `aos-hub/python-core4/core4ctl install-timers`
 - Enable:
   - `systemctl --user daemon-reload`
   - `systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer`

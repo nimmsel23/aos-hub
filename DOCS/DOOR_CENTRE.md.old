@@ -46,7 +46,7 @@ Door Centre functionality is distributed across:
 |-----------|------|----------|
 | **Index Node** | Primary HQ - Web UI + API server | `index-node/server.js` |
 | **Router Bot** | Telegram interface (`/door` commands) | `router/extensions/door_flow.py` |
-| **War Stack Bot** | Conversational War Stack creation | `python-warstack-bot/warstack_bot.py` |
+| **War Stack Bot** | Conversational War Stack creation | `python-warstack/warstack_bot.py` |
 | **GAS Web App** | Cloud fallback (offline mode) | `gas/Door_*.html` |
 | **Bridge** | Data flow + GAS webhook forwarding | `bridge/app.py` |
 
@@ -625,7 +625,7 @@ Profit reflection → Learning loop
 ### War Stack Bot (Conversational Flow)
 
 **Role:** Interactive War Stack creation via Telegram
-**File:** `python-warstack-bot/warstack_bot.py`
+**File:** `python-warstack/warstack_bot.py`
 
 **Flow:**
 1. User starts `/war` (via Router or direct)
@@ -640,7 +640,7 @@ Profit reflection → Learning loop
 - GAS webhook output (optional)
 - Telegram result push (optional)
 
-**See:** `python-warstack-bot/AGENTS.md` for detailed bot patterns
+**See:** `python-warstack/AGENTS.md` for detailed bot patterns
 
 ### GAS Web App (Cloud Fallback)
 

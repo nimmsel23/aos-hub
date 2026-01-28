@@ -70,8 +70,8 @@
 │  ├─ Loads extensions                               │
 │  ├─ Routes to appropriate handler                  │
 │  ├─ May spawn standalone bots:                     │
-│  │   ├─ python-warstack-bot                        │
-│  │   ├─ python-firemap-bot                         │
+│  │   ├─ python-warstack                        │
+│  │   ├─ python-firemap                         │
 │  │   └─ python-tent-bot                            │
 │  └─ Exits after processing                         │
 └─────────────────────────────────────────────────────┘

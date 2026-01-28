@@ -56,12 +56,22 @@ function fruits_debugInfo() {
 }
 
 function fruits_getQuestions_() {
-  const raw = HtmlService.createHtmlOutputFromFile(FRUITS_CONFIG.QUESTIONS_FILE).getContent().trim();
+  let raw = HtmlService.createHtmlOutputFromFile(FRUITS_CONFIG.QUESTIONS_FILE).getContent();
+  raw = String(raw || '').replace(/^\uFEFF/, '').trim();
 
   // Try raw JSON first.
   try {
     return JSON.parse(raw);
   } catch (_) {}
+
+  // Fallback: strip outer HTML and parse the first {...} block.
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+    } catch (_) {}
+  }
 
   // Fallback: extract from <script> const QUESTIONS = {...};
   const idx = raw.indexOf('const QUESTIONS');

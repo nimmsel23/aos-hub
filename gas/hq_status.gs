@@ -10,11 +10,15 @@ function getSystemStatus_(options) {
   const status = {};
   const opts = options || {};
   const doPing = opts.ping !== false;
+  const touchHeartbeat = opts.touchHeartbeat === true;
   const sessionId = String(opts.sessionId || '').trim() || Utilities.getUuid().slice(0, 8);
 
   // Bridge status via helper (health + heartbeat info only)
   const bridge = (typeof bridgeHealth_ === 'function') ? bridgeHealth_() : { ok: false, label: 'missing bridgeHealth_', url: '' };
   status.bridge = bridge;
+  if (touchHeartbeat && bridge && bridge.ok && typeof watchdog_touchHeartbeat_ === 'function') {
+    watchdog_touchHeartbeat_('hq-bridge-ok');
+  }
 
   // Router status (unused in UI)
   status.router = { ok: null, label: 'not used' };

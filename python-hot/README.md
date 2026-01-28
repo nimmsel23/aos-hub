@@ -48,7 +48,7 @@ hot open 123
 
 Works with:
 - GAS Hot List reader (`gas/hotlist.gs`)
-- TickTick sync (`ticktick_hotlist_sync.py`)
+- TickTick sync (`python-ticktick/ticktick_hotlist_sync.py`)
 - Router Bot Door Flow extension
 - Index Node Door Centre API
 

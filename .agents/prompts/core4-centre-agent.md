@@ -4,9 +4,9 @@
 Specialist for Core4 Centre (AlphaOS PILLAR #2: THE CORE - 4 Domains). 28-or-Die daily tracking, Taskwarrior↔TickTick sync, future Journaling Modules.
 
 ## Components
-- **index-node:** `/api/core4/*`, `core4-tty.js`
+- **index-node:** `/api/python-core4/*`, `core4-tty.js`
 - **gas:** `core4.gs`, `Core4_Index.html`
-- **bridge:** `/bridge/core4/log`, `/bridge/core4/today`, `/bridge/core4/week`
+- **bridge:** `/bridge/python-core4/log`, `/bridge/python-core4/today`, `/bridge/python-core4/week`
 - **Data:** `~/AlphaOS-Vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
 
 ## Responsibilities

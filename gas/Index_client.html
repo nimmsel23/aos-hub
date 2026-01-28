@@ -346,7 +346,7 @@
           setStatus('heartbeat-status', false, 'Offline');
           addToTerminal('systemstatus', 'status failed: ' + err);
         })
-        .getSystemStatus_({ sessionId: window.AOS_SESSION_ID, ping: true, log: false });
+        .getSystemStatus_({ sessionId: window.AOS_SESSION_ID, ping: true, log: false, touchHeartbeat: true });
     }
 
     // Start function: Load all essential data in parallel

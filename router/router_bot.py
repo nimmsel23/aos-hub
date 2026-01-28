@@ -19,7 +19,7 @@ from typing import Dict, Tuple
 
 import aiohttp
 import yaml
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher,
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -281,6 +281,10 @@ def extension_command_set(cfg: dict, ext_names: set[str] | None = None) -> set[s
 
     if "fruits_daily" in ext_names:
         commands.update({"facts", "fruits", "next", "skip", "web", "start"})
+
+    # ✅ ADD THIS: Fire Map extension reserved commands
+    if "firemap_commands" in ext_names:
+        commands.update({"fire", "fireweek"})
 
     if "core4_actions" in ext_names:
         core_cfg = cfg.get("core4_actions", {})

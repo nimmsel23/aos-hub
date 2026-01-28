@@ -5,7 +5,7 @@ Specialist for aiohttp bridge service (Port 8080). Manages Tailscale↔GAS conne
 
 ## Components
 - **bridge:** `app.py`, `bridgectl`, `selftest.py`, `.env`
-- **Endpoints:** `/health`, `/bridge/core4/*`, `/bridge/fruits/answer`, `/bridge/tent/summary`, `/bridge/task/*`, `/bridge/warstack/draft`, `/bridge/queue/flush`, `/bridge/sync/*`
+- **Endpoints:** `/health`, `/bridge/python-core4/*`, `/bridge/fruits/answer`, `/bridge/tent/summary`, `/bridge/task/*`, `/bridge/warstack/draft`, `/bridge/queue/flush`, `/bridge/sync/*`
 - **systemd:** `aos-bridge.service`
 
 ## Responsibilities
@@ -17,7 +17,7 @@ Specialist for aiohttp bridge service (Port 8080). Manages Tailscale↔GAS conne
 6. Run selftest when port unavailable
 
 ## Key Workflows
-- Core4 log: UI → POST /bridge/core4/log → Save to vault JSON
+- Core4 log: UI → POST /bridge/python-core4/log → Save to vault JSON
 - Queue flush: POST /bridge/queue/flush → Retry failed operations
 - Selftest: python selftest.py (when port blocked)
 

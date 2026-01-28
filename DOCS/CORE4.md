@@ -10,8 +10,8 @@ Wichtig: Core4 ist in AlphaOS so gebaut, dass **mehrere Quellen** (lokal CLI/Tas
 
 **Source of truth ist ein append‑only Event‑Ledger**: pro “done” entsteht genau **eine Event‑JSON**.
 
-- Lokal: `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
-- GDrive‑Mount (von GAS): `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
+- Lokal: `~/AlphaOS-Vault/Core4/.python-core4/events/YYYY-MM-DD/*.json`
+- GDrive‑Mount (von GAS): `~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/*.json`
 
 Jedes Event hat u.a.:
 - `date` (YYYY-MM-DD), `domain` (body/being/balance/business), `task` (habit)
@@ -40,7 +40,7 @@ Für Chronik/Analyse gibt’s CSVs:
 
 ### A) Lokal (CLI)
 - Command: `core4 <habit>` (z.B. `core4 fitness`, optional backfill: `core4 fitness -1d`)
-- Engine: `~/aos-hub/core4/tracker.py`
+- Engine: `~/aos-hub/python-core4/tracker.py`
 - Effekt:
   - schreibt (direkt oder via Bridge) Core4‑Events
   - rebuildet Day/Week JSON
@@ -55,7 +55,7 @@ Wenn ein Core4‑Task in Taskwarrior completed wird, schreibt der Hook ein Core4
 ### C) GAS WebApp / Core4 Centre (GDrive)
 GAS schreibt Events in Drive (Alpha_Core4) und erzeugt daraus die Wochen‑JSON für den Tent:
 - GAS Code: `aos-hub/gas/core4.gs`
-- Drive Folder: `Alpha_Core4/.core4/events/...`
+- Drive Folder: `Alpha_Core4/.python-core4/events/...`
 
 ### D) Bridge (aiohttp, localhost:8080)
 Bridge nimmt Logs an und schreibt Events + rebuilds:
@@ -95,7 +95,7 @@ Reports:
 
 ## 6) TickTick Integration (optional)
 
-TickTick-Sync läuft über `~/.dotfiles/bin/ticktick_sync.py`:
+TickTick-Sync läuft über `~/aos-hub/python-ticktick/ticktick_sync.py`:
 - `--stdin` (on-add/on-modify hook) erstellt TickTick Task und schreibt UUID↔TickTick-ID mapping
 - `--sync` kann TickTick→Taskwarrior done spiegeln (bei passenden TickTick tags)
 - `--push` spiegelt Taskwarrior→TickTick done
@@ -123,7 +123,7 @@ Ansatz:
 Units/Templates liegen in `aos-hub/systemd/` und werden nicht automatisch aktiviert.
 
 Installieren:
-- `aos-hub/core4/core4ctl install-timers`
+- `aos-hub/python-core4/core4ctl install-timers`
 
 Aktivieren (manuell):
 - `systemctl --user daemon-reload`
@@ -139,7 +139,7 @@ Timer:
 ## 9) Troubleshooting
 
 - **Score in CLI fehlt, obwohl GAS geloggt wurde**
-  - Prüfen ob Mount da ist: `ls ~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/`
+  - Prüfen ob Mount da ist: `ls ~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/`
   - Dann `core4 -d` / `core4 -w` (rebuild)
 
 - **Doppelte Taskwarrior Tasks**
@@ -153,8 +153,8 @@ Timer:
 ## Referenzen (Code / Doku)
 
 - Storage/Retention/Timer Details: `aos-hub/DOCS/CORE4_STORAGE_MODEL.md`
-- CLI: `aos-hub/core4/tracker.py`, `aos-hub/core4/README.md`
+- CLI: `aos-hub/python-core4/tracker.py`, `aos-hub/python-core4/README.md`
 - Bridge: `aos-hub/bridge/app.py`, `aos-hub/bridge/README.md`
 - GAS Centre: `aos-hub/gas/core4.gs`, `aos-hub/gas/README.md`
-- TickTick: `~/.dotfiles/bin/ticktick_sync.py`
+- TickTick: `~/aos-hub/python-ticktick/ticktick_sync.py`
 - Taskwarrior Hooks: `~/.task/hooks/on-add.core4`, `~/.task/hooks/on-modify.core4`, `~/.task/hooks/on-modify.99-alphaos.py`

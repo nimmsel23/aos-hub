@@ -7,7 +7,7 @@
   "created": "2026-01-15",
   "updated": "2026-01-15",
   "purpose": "Game Centre development + operations (Strategic Maps: Frame→IPW→Freedom→Focus→Fire)",
-  "description": "Complete specialist for Game Centre ecosystem. Manages strategic navigation through Map hierarchy (Frame→IPW→Freedom→Focus→Fire→Daily Game). Understands index-node, gas, python-firemap-bot, and Map cascade principles.",
+  "description": "Complete specialist for Game Centre ecosystem. Manages strategic navigation through Map hierarchy (Frame→IPW→Freedom→Focus→Fire→Daily Game). Understands index-node, gas, python-firemap, and Map cascade principles.",
   "components": {
     "index_node": [
       "/api/game/* (chapters, export)",
@@ -30,7 +30,7 @@
       "Game_Tent_*.html"
     ],
     "bots": [
-      "python-firemap-bot/firemap_bot.py (Fire Map snapshots from Taskwarrior)",
+      "python-firemap/firemap_bot.py (Fire Map snapshots from Taskwarrior)",
       "router/extensions/firemap_commands.py (Telegram trigger)"
     ],
     "data": [
@@ -58,7 +58,7 @@
     "Develop Game Centre web UI (index-node + gas)",
     "Build Map creation interfaces (Frame/Freedom/Focus/Fire)",
     "Implement Map cascade logic (Frame change → update downstream)",
-    "Debug python-firemap-bot (daily/weekly/listen modes)",
+    "Debug python-firemap (daily/weekly/listen modes)",
     "Create General's Tent weekly review tools",
     "Export Maps to vault markdown",
     "Integrate Fire Map with War Stacks (4 Hits)",
@@ -77,7 +77,7 @@
   "data_sources": [
     "/home/alpha/aos-hub/index-node/AGENTS.md",
     "/home/alpha/aos-hub/gas/AGENTS.md",
-    "/home/alpha/aos-hub/python-firemap-bot/AGENTS.md",
+    "/home/alpha/aos-hub/python-firemap/AGENTS.md",
     "/home/alpha/aos-hub/router/AGENTS.md",
     "/home/alpha/aos-hub/DOCS/gas/fire.md",
     "/home/alpha/aos-hub/DOCS/gas/frame.md",
@@ -88,7 +88,7 @@
   "references": [
     "index-node/AGENTS.md",
     "gas/AGENTS.md",
-    "python-firemap-bot/AGENTS.md"
+    "python-firemap/AGENTS.md"
   ],
   "dependencies": [
     "door-centre-agent (War Stacks → Fire Map integration)",
@@ -96,7 +96,7 @@
   ],
   "test_prompts": [
     "Show me the Map hierarchy and cascade principle (Frame determines downstream)",
-    "python-firemap-bot isn't sending snapshots - debug the daily/weekly modes",
+    "python-firemap isn't sending snapshots - debug the daily/weekly modes",
     "Frame Map changed - what downstream Maps need updating?",
     "Integrate War Stack Hits into Fire Map (4×4 weekly Hits)",
     "Build General's Tent weekly review interface"
@@ -105,7 +105,7 @@
     "Maps Hierarchy: Frame → IPW → Freedom (annual) → Focus (monthly) → Fire (weekly) → Daily Game",
     "Cascade Principle: Frame change affects all downstream Maps (must check and update)",
     "Fire Map = 4 War Stacks × 4 Hits each = 16 weekly Hits",
-    "python-firemap-bot has 3 modes: daily, weekly, listen",
+    "python-firemap has 3 modes: daily, weekly, listen",
     "General's Tent = weekly review (consolidates all domains)",
     "game_shared.gs contains shared utilities across Game Centre",
     "IPW = Ideal Parallel World (10-year vision per domain)"

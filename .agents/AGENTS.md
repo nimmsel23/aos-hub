@@ -44,12 +44,12 @@ Coordinator of all centres and services.
 **Purpose:** Door Centre development + operations (4P Flow: Potential→Plan→Production→Profit)
 
 **Description:**
-Complete specialist for Door Centre ecosystem. Understands index-node, gas, python-warstack-bot, and router extensions. Facilitates weekly tactical flow from idea capture (Hot List) to execution completion (Profit).
+Complete specialist for Door Centre ecosystem. Understands index-node, gas, python-warstack, and router extensions. Facilitates weekly tactical flow from idea capture (Hot List) to execution completion (Profit).
 
 **Components:**
 - **index-node:** `/api/door/*`, `public/door/`
 - **gas:** `door.gs`, `door_main.gs`, `door_profit.gs`, `door_warstack.gs`, `Door_*.html`
-- **Bots:** `python-warstack-bot/warstack_bot.py`, `router/extensions/door_flow.py`
+- **Bots:** `python-warstack/warstack_bot.py`, `router/extensions/door_flow.py`
 - **Data:** `~/AlphaOS-Vault/Door/` (1-Potential, 2-Plan, War-Stacks, 3-Production, 4-Profit)
 
 **Triggers:**
@@ -67,7 +67,7 @@ Complete specialist for Door Centre ecosystem. Understands index-node, gas, pyth
 - Build Hot List capture interfaces
 - Implement Door War selection logic
 - Develop Hit List execution tracking
-- Debug python-warstack-bot (idle timeout, /resume flow)
+- Debug python-warstack (idle timeout, /resume flow)
 - Export markdown to vault (all 4P phases)
 - Integrate Taskwarrior for Hit creation
 
@@ -76,7 +76,7 @@ Complete specialist for Door Centre ecosystem. Understands index-node, gas, pyth
 
 **Notes:**
 - War Stack has 3 independent interfaces (python bot, web UI, GAS)
-- python-warstack-bot: idle timeout 900s, /resume via bridge drafts
+- python-warstack: idle timeout 900s, /resume via bridge drafts
 - 4P Flow: Potential (capture) → Plan (select) → Production (execute) → Profit (reflect)
 
 ---
@@ -96,7 +96,7 @@ Complete specialist for Game Centre ecosystem. Manages strategic navigation thro
 **Components:**
 - **index-node:** `/api/game/*`, `public/game/fire.html`, `public/game/tent.html`
 - **gas:** `game_main.gs`, `game_fire.gs`, `game_focus.gs`, `game_frame.gs`, `game_freedom.gs`, `game_tent.gs`, `game_shared.gs`, `Game_*.html`
-- **Bots:** `python-firemap-bot/firemap_bot.py`, `router/extensions/firemap_commands.py`
+- **Bots:** `python-firemap/firemap_bot.py`, `router/extensions/firemap_commands.py`
 - **Data:** `~/AlphaOS-Vault/Game/` (Frame, IPW, Freedom, Focus, Fire), `~/AlphaOS-Vault/Alpha_Tent/`
 
 **Triggers:**
@@ -115,7 +115,7 @@ Complete specialist for Game Centre ecosystem. Manages strategic navigation thro
 - Develop Map interfaces (Frame/Freedom/Focus/Fire)
 - Implement cascade logic (Frame change → update downstream)
 - Fire Map integration (4 War Stacks × 4 Hits = 16 weekly Hits)
-- Debug python-firemap-bot (daily/weekly/listen modes)
+- Debug python-firemap (daily/weekly/listen modes)
 - Build General's Tent weekly review tools
 - Export Maps to vault markdown
 - Integrate Taskwarrior → Fire Map snapshot pipeline
@@ -127,7 +127,7 @@ Complete specialist for Game Centre ecosystem. Manages strategic navigation thro
 - Maps Hierarchy: Frame → IPW → Freedom → Focus → Fire → Daily Game
 - Cascade Principle: Frame determines all downstream Maps
 - Fire Map = 4 War Stacks × 4 Hits each = 16 weekly Hits
-- python-firemap-bot: 3 modes (daily, weekly, listen)
+- python-firemap: 3 modes (daily, weekly, listen)
 
 ---
 
@@ -180,9 +180,9 @@ Specialist for Voice Centre (AlphaOS PILLAR #3: THE VOICE - Mental Mastery). Dev
 Complete specialist for Core4 Centre (AlphaOS PILLAR #2: THE CORE). Manages 28-or-Die daily tracking, Taskwarrior↔TickTick sync, Core4 TTY utility, and future Journaling Modules per habit.
 
 **Components:**
-- **index-node:** `/api/core4/*`, `core4-tty.js`
+- **index-node:** `/api/python-core4/*`, `core4-tty.js`
 - **gas:** `core4.gs`, `Core4_Index.html`
-- **bridge:** `/bridge/core4/log`, `/bridge/core4/today`, `/bridge/core4/week`
+- **bridge:** `/bridge/python-core4/log`, `/bridge/python-core4/today`, `/bridge/python-core4/week`
 - **Bots:** `router/extensions/core4_actions.py` (disabled by default)
 - **Data:** `~/AlphaOS-Vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
 
@@ -392,7 +392,7 @@ Specialist for aiohttp bridge service. Manages Tailscale↔GAS connection, Core4
 
 **Components:**
 - **bridge:** `app.py`, `bridgectl`, `selftest.py`, `.env`
-- **Endpoints:** `/health`, `/bridge/core4/*`, `/bridge/fruits/answer`, `/bridge/tent/summary`, `/bridge/task/*`, `/bridge/warstack/draft`, `/bridge/queue/flush`, `/bridge/sync/*`
+- **Endpoints:** `/health`, `/bridge/python-core4/*`, `/bridge/fruits/answer`, `/bridge/tent/summary`, `/bridge/task/*`, `/bridge/warstack/draft`, `/bridge/queue/flush`, `/bridge/sync/*`
 - **systemd:** `aos-bridge.service`
 
 **Triggers:**

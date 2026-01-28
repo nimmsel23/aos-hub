@@ -33,7 +33,7 @@ const GEN_TENT = {
 
   get webUrl() {
     // Vorsicht: getUrl() liefert erst nach WebApp Deploy sinnvolle URL.
-    return sp_('GEN_TENT_PUBLIC_URL') || ScriptApp.getService().getUrl();
+    return tent_getWebUrl_();
   },
 
   telegram: {
@@ -56,11 +56,24 @@ const GEN_TENT = {
   }
 };
 
+// Standalone Tent Centre WebApp URL (fallback for Telegram bot links).
+const TENT_WEBAPP_URL_FALLBACK = "https://script.google.com/macros/s/AKfycbzRXpjBQPk77W4nnR0pI5l1-pkMk8jIcxA-iL1jzb-ZNQuU8nwTaUJ2O-xGiscVXudaZg/exec";
+
 function sp_(k) {
   return PropertiesService.getScriptProperties().getProperty(k);
 }
 function spSet_(k, v) {
   PropertiesService.getScriptProperties().setProperty(k, String(v));
+}
+
+function tent_getWebUrl_() {
+  const sp = PropertiesService.getScriptProperties();
+  return (
+    (sp.getProperty('TENT_WEBAPP_URL') || '').trim() ||
+    (sp.getProperty('GEN_TENT_PUBLIC_URL') || '').trim() ||
+    TENT_WEBAPP_URL_FALLBACK ||
+    ScriptApp.getService().getUrl()
+  );
 }
 
 // ================================
@@ -631,7 +644,7 @@ function tent_handleTelegramMessage_(message) {
   if (!text) return false;
 
   if (text === '/tent') {
-    const webUrl = PropertiesService.getScriptProperties().getProperty('TENT_WEBAPP_URL') || ScriptApp.getService().getUrl();
+    const webUrl = tent_getWebUrl_();
     tent_sendMessage_(chatId,
       '⛺ *GENERAL\'S TENT*\n\n' +
       'Weekly review - Where am I in the war?\n\n' +
@@ -642,7 +655,7 @@ function tent_handleTelegramMessage_(message) {
   }
 
   if (text === '/tentweb') {
-    const webUrl = PropertiesService.getScriptProperties().getProperty('TENT_WEBAPP_URL') || ScriptApp.getService().getUrl();
+    const webUrl = tent_getWebUrl_();
     tent_sendMessage_(chatId, `⛺ General's Tent: ${webUrl}?page=tent`);
     return true;
   }

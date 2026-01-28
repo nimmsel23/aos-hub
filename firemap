@@ -24,7 +24,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC_SCRIPT_DEFAULT="$SCRIPT_DIR/scripts/utils/fire-to-tasks.sh"
 SYNC_SCRIPT="${AOS_FIRE_TO_TASKS:-$SYNC_SCRIPT_DEFAULT}"
-FIREBOT_PY_DEFAULT="$SCRIPT_DIR/python-firemap-bot/firemap_bot.py"
+FIREBOT_PY_DEFAULT="$SCRIPT_DIR/python-firemap/firemap_bot.py"
 FIREBOT_PY="${AOS_FIREBOT_SCRIPT:-$FIREBOT_PY_DEFAULT}"
 PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
 
@@ -74,7 +74,7 @@ COMMANDS:
     list                List all Fire Maps
     status              Show current week Fire Map status
     print daily|weekly  Print Fire bot output (same grouping as Telegram)
-    send  daily|weekly  Send Fire bot output (sender configured in python-firemap-bot)
+    send  daily|weekly  Send Fire bot output (sender configured in python-firemap)
     test [text]         Send a test message via the Fire bot sender
     help                Show this help
 

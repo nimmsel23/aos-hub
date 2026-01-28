@@ -74,7 +74,7 @@ Proposed module ownership (updated per HQ + bot hub)
 Notes and dependencies
 - Bot roles and fallbacks (important for modularization)
   - Laptop bots (python) are primary for interactive flows; GAS bots can be offline fallbacks.
-  - `gas/fire_bot.gs` is a polling fallback when laptop is offline; `python-firemap-bot` is the primary interactive bot.
+  - `gas/fire_bot.gs` is a polling fallback when laptop is offline; `python-firemap` is the primary interactive bot.
   - Warstack has parallel paths: python bot (laptop) + GAS WebApp output; both should stay consistent.
   - `watchdog.gs` is system-level and needs its own token; do not route it through a generic token.
 - `doPost` depends on: `fruits_handleTelegramMessage_` (`gas/fruits.gs`),

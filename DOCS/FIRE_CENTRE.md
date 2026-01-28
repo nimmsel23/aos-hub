@@ -43,10 +43,10 @@ Offline (Local only):
 - **Fire Centre UI (Local):** `index-node/public/game/fire.html`  
   Local front-end entry point for Fire Maps.
 - **Node API (Local):** `/api/fire/day` and `/api/fire/week` (aliases: `/fired`, `/firew`)
-- **Firemap engine:** `python-firemap-bot/firemap.py`  
+- **Firemap engine:** `python-firemap/firemap.py`  
   Taskwarrior (+fire) → Markdown-formatted text messages (due/scheduled + waiting; overdue separate; grouped per project).
-- **Fire Bot (local, Telegram):** `python-firemap-bot/firemap_bot.py`  
-  Sends daily/weekly snapshots to Telegram (text, not files). Config in `python-firemap-bot/.env`.
+- **Fire Bot (local, Telegram):** `python-firemap/firemap_bot.py`  
+  Sends daily/weekly snapshots to Telegram (text, not files). Config in `python-firemap/.env`.
 - **Terminal wrapper:** `scripts/firectl`  
   Wrapper/installer for the bot; `firectl print` matches `/fire` output; `firectl build` writes the same output into the vault as markdown.
 - **Legacy markdown sync (optional):** `firemap sync` → `scripts/utils/fire-to-tasks.sh`  
@@ -55,7 +55,7 @@ Offline (Local only):
   Fire tasks are pushed when tagged `+fire +production +hit` (legacy + Fire Centre flow).
 - **Calendar (UI-only, optional):**  
   TickTick/GCal can be embedded in the Fire Centre UI, but `/fire` snapshots come from Taskwarrior via Drive `task_export.json`.
-- **Fire Bot (Telegram):** `python-firemap-bot/firemap_bot.py`  
+- **Fire Bot (Telegram):** `python-firemap/firemap_bot.py`  
   Sends daily/weekly snapshots from Taskwarrior to Telegram.
 - **Fire Bot (GAS, Telegram polling):** `gas/fire_bot.gs`  
   Always-on `/fire` + `/fireweek` from Drive `task_export.json` (no Bridge required). Requires `AOS_TASK_EXPORT_FILE_ID` (or the file is discoverable in `AlphaOS-Vault/.alphaos`).
@@ -86,9 +86,9 @@ Offline (Local only):
                                    v
 ┌────────────────────────────────────────────────────────────┐
 │ Python Fire Bot                                            │
-│ python-firemap-bot/firemap_bot.py                           │
+│ python-firemap/firemap_bot.py                           │
 │ - sender: API/tele/auto (AOS_FIREMAP_SENDER)                │
-│ - engine: python-firemap-bot/firemap.py                     │
+│ - engine: python-firemap/firemap.py                     │
 └───────────────────────────────┬────────────────────────────┘
                                 │
                                 v
@@ -106,7 +106,7 @@ Telegram /fire or /fireweek
 Router Bot (firemap_commands)
         │
         v
-python-firemap-bot (daily/weekly)
+python-firemap (daily/weekly)
         │
         v
 Telegram snapshot

@@ -165,8 +165,8 @@ See `extensions/base.py` for the Extension base class and `ARCHITECTURE.md` for 
   - `__init__.py` - Extension loader
 - `.env` - Environment variables (create from `.env.example`)
 - `requirements.txt` - Python dependencies
-- `python-warstack-bot/` - Separate War Stack bot repo (external, referenced by warstack_commands)
-- `python-firemap-bot/` - Separate Fire Map bot repo (external, referenced by firemap_commands)
+- `python-warstack/` - Separate War Stack bot repo (external, referenced by warstack_commands)
+- `python-firemap/` - Separate Fire Map bot repo (external, referenced by firemap_commands)
 
 ## Docs
 

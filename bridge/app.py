@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import asyncio
 import csv
@@ -9,6 +11,8 @@ import os
 import re
 import shutil
 import shlex
+import subprocess
+import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -19,13 +23,15 @@ from aiohttp import web
 import aiohttp
 
 LOGGER = logging.getLogger("aos-bridge")
+STARTED_AT = datetime.now(timezone.utc)
 
 DEFAULT_TZ = os.getenv("AOS_TZ", "Europe/Vienna")
 TZ = ZoneInfo(DEFAULT_TZ)
 
 VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "AlphaOS-Vault")).expanduser()
+
 # Core4 storage model:
-# - Append-only event ledger lives under `.python-core4/events/<YYYY-MM-DD>/...json`
+# - Append-only event ledger lives under `.core4/events/<YYYY-MM-DD>/...json`
 # - Derived artifacts live in the Core4 root (rclone push copies Core4 -> Alpha_Core4)
 CORE4_LOCAL_DIR = Path(os.getenv("AOS_CORE4_LOCAL_DIR", VAULT_DIR / "Core4")).expanduser()
 CORE4_MOUNT_DIR = Path(os.getenv("AOS_CORE4_MOUNT_DIR", VAULT_DIR / "Alpha_Core4")).expanduser()
@@ -49,9 +55,7 @@ CORE4CTL_BIN = os.getenv(
 ).strip()
 BRIDGE_TOKEN = os.getenv("AOS_BRIDGE_TOKEN", "").strip()
 BRIDGE_TOKEN_HEADER = os.getenv("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token").strip()
-QUEUE_DIR = Path(
-    os.getenv("AOS_BRIDGE_QUEUE_DIR", Path.home() / ".cache/alphaos/bridge-queue")
-).expanduser()
+QUEUE_DIR = Path(os.getenv("AOS_BRIDGE_QUEUE_DIR", Path.home() / ".cache/alphaos/bridge-queue")).expanduser()
 
 FIREMAP_BIN = os.getenv("AOS_FIREMAP_BIN", "firemap").strip()
 FIREMAP_TRIGGER_ARGS = os.getenv("AOS_FIREMAP_TRIGGER_ARGS", "sync").strip()
@@ -61,14 +65,24 @@ FIRE_WEEKLY_REPORT = os.getenv("AOS_FIRE_WEEKLY_REPORT", "firew").strip()
 FIRE_DAILY_FALLBACK_FILTER = os.getenv("AOS_FIRE_DAILY_FALLBACK_FILTER", "+fire status:pending").strip()
 FIRE_DAILY_SEND = os.getenv("AOS_FIRE_DAILY_SEND", "0").strip() == "1"
 FIRE_DAILY_MODE = os.getenv("AOS_FIRE_DAILY_MODE", "firectl").strip().lower()
-FIRECTL_BIN = os.getenv(
-    "AOS_FIRECTL_BIN", str((Path(__file__).resolve().parents[1] / "scripts" / "firectl"))
-).strip()
+FIRECTL_BIN = os.getenv("AOS_FIRECTL_BIN", str((Path(__file__).resolve().parents[1] / "scripts" / "firectl"))).strip()
 
 TASK_BIN = os.getenv("AOS_TASK_BIN", "task").strip()
 TASK_EXEC_ENABLED = os.getenv("AOS_TASK_EXECUTE", "0").strip() == "1"
 TASK_ID_RE = re.compile(r"created task (\d+)", re.IGNORECASE)
 TASK_UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def _git_rev_short() -> str:
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=Path(__file__).parent)
+        text = out.decode("utf-8", errors="ignore").strip()
+        return text[:16] or "unknown"
+    except Exception:
+        return "unknown"
+
+
+BRIDGE_VERSION = os.getenv("AOS_BRIDGE_VERSION", "") or _git_rev_short()
 
 core4_lock = asyncio.Lock()
 fruits_lock = asyncio.Lock()
@@ -88,11 +102,39 @@ async def auth_middleware(request: web.Request, handler):
         return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     return await handler(request)
 
+
+@web.middleware
+async def request_log_middleware(request: web.Request, handler):
+    """
+    Minimal request logging for troubleshooting:
+    method path status duration_ms remote ua
+    """
+    t0 = asyncio.get_event_loop().time()
+    try:
+        resp = await handler(request)
+        status = getattr(resp, "status", 200)
+        return resp
+    except web.HTTPException as exc:
+        status = getattr(exc, "status", 500)
+        raise
+    finally:
+        dt_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
+        try:
+            peer = request.transport.get_extra_info("peername") if request.transport else None
+            remote = peer[0] if isinstance(peer, (tuple, list)) and peer else "-"
+        except Exception:
+            remote = "-"
+        ua = request.headers.get("User-Agent", "-")
+        LOGGER.info("http %s %s %s %sms remote=%s ua=%s", request.method, request.path, status, dt_ms, remote, ua)
+
+
 async def _read_json(request: web.Request) -> Dict[str, Any]:
     try:
         payload = await request.json()
     except Exception:
-        raise web.HTTPBadRequest(text=json.dumps({"ok": False, "error": "invalid json"}), content_type="application/json")
+        raise web.HTTPBadRequest(
+            text=json.dumps({"ok": False, "error": "invalid json"}), content_type="application/json"
+        )
     if not isinstance(payload, dict):
         raise web.HTTPBadRequest(
             text=json.dumps({"ok": False, "error": "invalid payload"}), content_type="application/json"
@@ -333,12 +375,50 @@ def _core4_day_path(day_key: str) -> Path:
 
 
 def _core4_event_dir(base_dir: Path) -> Path:
+    # Canonical location for the event ledger
     return base_dir / ".core4" / "events"
 
 
 def _core4_safe_filename(text: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "_", str(text or "").strip())
     return cleaned or "x"
+
+
+def _core4_canon_task(task: str) -> str:
+    value = str(task or "").strip().lower()
+    mapping = {
+        "partner": "person1",
+        "person_1": "person1",
+        "person-1": "person1",
+        "posterity": "person2",
+        "person_2": "person2",
+        "person-2": "person2",
+        "learn": "discover",
+        "action": "declare",
+    }
+    return mapping.get(value, value)
+
+
+def _core4_infer_domain(domain: str, task: str) -> str:
+    value = str(domain or "").strip().lower()
+    if value:
+        return value
+    habit = _core4_canon_task(task)
+    mapping = {
+        "fitness": "body",
+        "fuel": "body",
+        "meditation": "being",
+        "memoirs": "being",
+        "person1": "balance",
+        "person2": "balance",
+        "discover": "business",
+        "declare": "business",
+    }
+    return mapping.get(habit, "")
+
+
+def _core4_entry_key(date_key: str, domain: str, task: str) -> str:
+    return f"{date_key}:{domain}:{task}"
 
 
 def _core4_write_event(event: Dict[str, Any]) -> None:
@@ -390,11 +470,114 @@ def _core4_events_for_day(day_key: str) -> list[Dict[str, Any]]:
     return out
 
 
+def _core4_normalize_entry_sources(entry: Dict[str, Any]) -> list[str]:
+    sources = entry.get("sources")
+    if isinstance(sources, list):
+        out = [str(s) for s in sources if s]
+    elif isinstance(sources, str) and sources:
+        out = [sources]
+    else:
+        src = str(entry.get("source") or "").strip()
+        out = [src] if src else []
+    seen = set()
+    normalized: list[str] = []
+    for src in out:
+        if src in seen:
+            continue
+        seen.add(src)
+        normalized.append(src)
+    return normalized
+
+
+def _core4_dedup_entries(entries: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    keep: dict[str, Dict[str, Any]] = {}
+    passthrough: list[Dict[str, Any]] = []
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        date_key = str(entry.get("date") or "").strip()
+        domain = str(entry.get("domain") or "").strip().lower()
+        task = _core4_canon_task(str(entry.get("task") or "").strip().lower())
+        key = str(entry.get("key") or "").strip()
+        if not key and date_key and domain and task:
+            key = _core4_entry_key(date_key, domain, task)
+            entry["key"] = key
+
+        if not key:
+            passthrough.append(entry)
+            continue
+
+        if key not in keep:
+            entry["domain"] = domain
+            entry["task"] = task
+            entry["sources"] = _core4_normalize_entry_sources(entry)
+            entry["done"] = bool(entry.get("done", True))
+            if "last_ts" not in entry and entry.get("ts"):
+                entry["last_ts"] = entry.get("ts")
+            keep[key] = entry
+            continue
+
+        existing = keep[key]
+        existing_sources = _core4_normalize_entry_sources(existing)
+        incoming_sources = _core4_normalize_entry_sources(entry)
+        merged_sources = existing_sources[:]
+        for src in incoming_sources:
+            if src not in merged_sources:
+                merged_sources.append(src)
+        existing["sources"] = merged_sources
+        existing["done"] = bool(existing.get("done", True) or entry.get("done", True))
+
+        existing_points = _safe_float(existing.get("points", 0), 0.0)
+        incoming_points = _safe_float(entry.get("points", 0), 0.0)
+        existing["points"] = max(existing_points, incoming_points)
+
+        existing_ts = _parse_ts(existing.get("last_ts") or existing.get("ts"))
+        incoming_ts = _parse_ts(entry.get("ts"))
+        if incoming_ts > existing_ts:
+            existing["last_ts"] = incoming_ts.isoformat()
+            existing["ts"] = incoming_ts.isoformat()
+            existing["source"] = str(entry.get("source") or existing.get("source") or "bridge")
+            existing["user"] = entry.get("user") or existing.get("user") or {}
+
+    return passthrough + list(keep.values())
+
+
+def _core4_compute_totals(entries: list[Dict[str, Any]]):
+    totals: dict[str, Any] = {"week_total": 0, "by_domain": {}, "by_day": {}, "by_habit": {}}
+    for entry in entries:
+        if entry.get("done") is False:
+            continue
+        points = _safe_float(entry.get("points", 0), 0.0)
+        totals["week_total"] += points
+        domain = entry.get("domain")
+        task = entry.get("task")
+        dt_key = entry.get("date")
+        if domain:
+            totals["by_domain"][domain] = totals["by_domain"].get(domain, 0) + points
+        if dt_key:
+            totals["by_day"][dt_key] = totals["by_day"].get(dt_key, 0) + points
+        if domain and task:
+            key = f"{domain}:{task}"
+            totals["by_habit"][key] = totals["by_habit"].get(key, 0) + points
+    return totals
+
+
+def _core4_total_for_date(entries: list[Dict[str, Any]], date_key: str) -> float:
+    total = 0.0
+    for entry in entries:
+        if entry.get("done") is False:
+            continue
+        if entry.get("date") == date_key:
+            total += _safe_float(entry.get("points", 0), 0.0)
+    return total
+
+
 def _core4_build_day(day_key: str) -> Dict[str, Any]:
     entries = _core4_events_for_day(day_key)
     entries = _core4_dedup_entries(entries)
     totals = _core4_compute_totals(entries)
-    data = {
+    data: Dict[str, Any] = {
         "date": day_key,
         "week": _week_key(datetime.fromisoformat(f"{day_key}T12:00:00+00:00").astimezone(TZ)),
         "updated_at": _now().isoformat(),
@@ -414,7 +597,7 @@ def _core4_build_week_for_date(day: date) -> Dict[str, Any]:
         events.extend(_core4_events_for_day(d.isoformat()))
     entries = _core4_dedup_entries(events)
     week = f"{day.isocalendar().year}-W{day.isocalendar().week:02d}"
-    data = {
+    data: Dict[str, Any] = {
         "week": week,
         "updated_at": _now().isoformat(),
         "entries": entries,
@@ -482,326 +665,93 @@ def _core4_finalize_week(week: str, *, force: bool = False) -> dict[str, Any]:
     return {"ok": True, "week": week, "sealed": True, "skipped": False, "csv": str(csv_path)}
 
 
-def _core4_canon_task(task: str) -> str:
-    value = str(task or "").strip().lower()
-    mapping = {
-        "partner": "person1",
-        "person_1": "person1",
-        "person-1": "person1",
-        "posterity": "person2",
-        "person_2": "person2",
-        "person-2": "person2",
-        "learn": "discover",
-        "action": "declare",
-    }
-    return mapping.get(value, value)
-
-
-def _core4_infer_domain(domain: str, task: str) -> str:
-    value = str(domain or "").strip().lower()
-    if value:
-        return value
-    habit = _core4_canon_task(task)
-    mapping = {
-        "fitness": "body",
-        "fuel": "body",
-        "meditation": "being",
-        "memoirs": "being",
-        "person1": "balance",
-        "person2": "balance",
-        "discover": "business",
-        "declare": "business",
-    }
-    return mapping.get(habit, "")
-
-
-def _core4_entry_key(date_key: str, domain: str, task: str) -> str:
-    return f"{date_key}:{domain}:{task}"
-
-
-def _core4_normalize_entry_sources(entry: Dict[str, Any]) -> list[str]:
-    sources = entry.get("sources")
-    if isinstance(sources, list):
-        out = [str(s) for s in sources if s]
-    elif isinstance(sources, str) and sources:
-        out = [sources]
-    else:
-        src = str(entry.get("source") or "").strip()
-        out = [src] if src else []
-    seen = set()
-    normalized = []
-    for src in out:
-        if src in seen:
-            continue
-        seen.add(src)
-        normalized.append(src)
-    return normalized
-
-
-def _core4_dedup_entries(entries: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
-    keep: dict[str, Dict[str, Any]] = {}
-    passthrough: list[Dict[str, Any]] = []
-
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        date_key = str(entry.get("date") or "").strip()
-        domain = str(entry.get("domain") or "").strip().lower()
-        task = _core4_canon_task(str(entry.get("task") or "").strip().lower())
-        key = str(entry.get("key") or "").strip()
-        if not key and date_key and domain and task:
-            key = _core4_entry_key(date_key, domain, task)
-            entry["key"] = key
-
-        if not key:
-            passthrough.append(entry)
-            continue
-
-        if key not in keep:
-            entry["domain"] = domain
-            entry["task"] = task
-            entry["sources"] = _core4_normalize_entry_sources(entry)
-            entry["done"] = bool(entry.get("done", True))
-            if "last_ts" not in entry and entry.get("ts"):
-                entry["last_ts"] = entry.get("ts")
-            keep[key] = entry
-            continue
-
-        existing = keep[key]
-        existing_sources = _core4_normalize_entry_sources(existing)
-        incoming_sources = _core4_normalize_entry_sources(entry)
-        merged_sources = existing_sources[:]
-        for src in incoming_sources:
-            if src not in merged_sources:
-                merged_sources.append(src)
-        existing["sources"] = merged_sources
-        existing["done"] = bool(existing.get("done", True) or entry.get("done", True))
-
-        existing_points = _safe_float(existing.get("points", 0), 0.0)
-        incoming_points = _safe_float(entry.get("points", 0), 0.0)
-        existing["points"] = max(existing_points, incoming_points)
-
-        existing_ts = _parse_ts(existing.get("last_ts") or existing.get("ts"))
-        incoming_ts = _parse_ts(entry.get("ts"))
-        if incoming_ts > existing_ts:
-            existing["last_ts"] = incoming_ts.isoformat()
-            existing["ts"] = incoming_ts.isoformat()
-            existing["source"] = str(entry.get("source") or existing.get("source") or "bridge")
-            existing["user"] = entry.get("user") or existing.get("user") or {}
-
-    return passthrough + list(keep.values())
-
-
-def _core4_compute_totals(entries):
-    totals = {"week_total": 0, "by_domain": {}, "by_day": {}, "by_habit": {}}
-    for entry in entries:
-        if entry.get("done") is False:
-            continue
-        points = _safe_float(entry.get("points", 0), 0.0)
-        totals["week_total"] += points
-        domain = entry.get("domain")
-        task = entry.get("task")
-        date = entry.get("date")
-        if domain:
-            totals["by_domain"][domain] = totals["by_domain"].get(domain, 0) + points
-        if date:
-            totals["by_day"][date] = totals["by_day"].get(date, 0) + points
-        if domain and task:
-            key = f"{domain}:{task}"
-            totals["by_habit"][key] = totals["by_habit"].get(key, 0) + points
-    return totals
-
-
-def _core4_total_for_date(entries, date_key):
-    total = 0
-    for entry in entries:
-        if entry.get("done") is False:
-            continue
-        if entry.get("date") == date_key:
-            total += _safe_float(entry.get("points", 0), 0.0)
-    return total
-
-
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response(
         {
             "ok": True,
             "service": "aos-bridge",
+            "version": BRIDGE_VERSION,
             "time": _now().isoformat(),
             "tz": DEFAULT_TZ,
         }
     )
 
 
-async def handle_debug(request: web.Request) -> web.Response:
-    """
-    Debug endpoint - shows config, checks all integrations, tests RPC.
+async def _run_cmd(cmd: list[str], timeout_s: float = 1.5) -> dict[str, Any]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+        return {
+            "ok": proc.returncode == 0,
+            "code": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="ignore").strip(),
+            "stderr": stderr.decode("utf-8", errors="ignore").strip(),
+            "cmd": " ".join(cmd),
+        }
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "timeout", "cmd": " ".join(cmd)}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "cmd": " ".join(cmd)}
 
-    Returns comprehensive diagnostic info about Bridge state.
+
+async def _git_info() -> dict[str, Any]:
     """
-    debug_info = {
+    Best-effort git metadata. Never raises.
+    """
+    if not shutil.which("git"):
+        return {"ok": False, "error": "git not found"}
+
+    # Use the repo root if possible; fallback to cwd.
+    repo_dir = Path(__file__).resolve().parents[1]
+    base = ["git", "-C", str(repo_dir)]
+
+    head = await _run_cmd([*base, "rev-parse", "--short", "HEAD"], timeout_s=1.5)
+    branch = await _run_cmd([*base, "rev-parse", "--abbrev-ref", "HEAD"], timeout_s=1.5)
+    dirty = await _run_cmd([*base, "status", "--porcelain"], timeout_s=1.5)
+
+    return {
         "ok": True,
-        "service": "aos-bridge",
-        "time": _now().isoformat(),
-        "tz": DEFAULT_TZ,
-        "config": {},
-        "paths": {},
-        "checks": {},
+        "repo_dir": str(repo_dir),
+        "head": head.get("stdout") if head.get("ok") else None,
+        "branch": branch.get("stdout") if branch.get("ok") else None,
+        "dirty": bool(dirty.get("stdout").strip()) if dirty.get("ok") else None,
+        "errors": {
+            "head": None if head.get("ok") else head,
+            "branch": None if branch.get("ok") else branch,
+            "dirty": None if dirty.get("ok") else dirty,
+        },
     }
 
-    # Config (safe - no tokens)
-    debug_info["config"] = {
-        "gas_webhook_url": "***" + GAS_WEBHOOK_URL[-20:] if GAS_WEBHOOK_URL else "not set",
-        "gas_tent_url": "***" + GAS_TENT_URL[-20:] if GAS_TENT_URL else "not set",
-        "gas_chat_id": GAS_CHAT_ID if GAS_CHAT_ID else "not set",
-        "gas_mode": GAS_MODE,
-        "fallback_tele": FALLBACK_TELE,
-        "tele_bin": TELE_BIN,
-        "bridge_token": "set" if BRIDGE_TOKEN else "not set",
-        "task_exec_enabled": TASK_EXEC_ENABLED,
-        "fire_daily_send": FIRE_DAILY_SEND,
-        "fire_daily_mode": FIRE_DAILY_MODE,
-    }
 
-    # Paths
-    debug_info["paths"] = {
-        "vault_dir": str(VAULT_DIR),
-        "vault_exists": VAULT_DIR.exists(),
-        "core4_local": str(CORE4_LOCAL_DIR),
-        "core4_local_exists": CORE4_LOCAL_DIR.exists(),
-        "core4_mount": str(CORE4_MOUNT_DIR),
-        "core4_mount_exists": CORE4_MOUNT_DIR.exists(),
-        "fruits_dir": str(FRUITS_DIR),
-        "fruits_exists": FRUITS_DIR.exists(),
-        "tent_dir": str(TENT_DIR),
-        "tent_exists": TENT_DIR.exists(),
-        "warstack_dir": str(WARSTACK_DIR),
-        "warstack_exists": WARSTACK_DIR.exists(),
-        "queue_dir": str(QUEUE_DIR),
-        "queue_exists": QUEUE_DIR.exists(),
-    }
+async def handle_version(_request: web.Request) -> web.Response:
+    """
+    Version endpoint used to verify what is deployed/running.
+    """
+    app_path = Path(__file__).resolve()
+    try:
+        st = app_path.stat()
+        mtime = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
+        size = st.st_size
+    except Exception:
+        mtime = None
+        size = None
 
-    # Binaries check
-    debug_info["checks"]["binaries"] = {}
-    for name, bin_path in [
-        ("task", TASK_BIN),
-        ("tele", TELE_BIN),
-        ("core4ctl", CORE4CTL_BIN),
-        ("firectl", FIRECTL_BIN),
-        ("firemap", FIREMAP_BIN),
-    ]:
-        try:
-            result = await asyncio.create_subprocess_exec(
-                bin_path, "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=2)
-            debug_info["checks"]["binaries"][name] = {
-                "path": bin_path,
-                "available": result.returncode == 0,
-                "version": stdout.decode().strip()[:100] if stdout else "unknown"
-            }
-        except (FileNotFoundError, asyncio.TimeoutError):
-            debug_info["checks"]["binaries"][name] = {
-                "path": bin_path,
-                "available": False,
-                "error": "not found or timeout"
-            }
-
-    # GAS Tent URL check
-    if GAS_TENT_URL:
-        try:
-            async with aiohttp.ClientSession() as session:
-                test_payload = {"action": "health"}
-                async with session.post(
-                    GAS_TENT_URL,
-                    json=test_payload,
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    response_text = await resp.text()
-                    try:
-                        data = json.loads(response_text)
-                        debug_info["checks"]["gas_tent"] = {
-                            "ok": resp.status < 400,
-                            "status": resp.status,
-                            "response": data
-                        }
-                    except json.JSONDecodeError:
-                        debug_info["checks"]["gas_tent"] = {
-                            "ok": False,
-                            "status": resp.status,
-                            "error": "Invalid JSON response",
-                            "raw": response_text[:200]
-                        }
-        except asyncio.TimeoutError:
-            debug_info["checks"]["gas_tent"] = {
-                "ok": False,
-                "error": "Timeout (10s)"
-            }
-        except Exception as e:
-            debug_info["checks"]["gas_tent"] = {
-                "ok": False,
-                "error": str(e)
-            }
-    else:
-        debug_info["checks"]["gas_tent"] = {
-            "ok": False,
-            "error": "GAS_TENT_URL not configured"
+    git = await _git_info()
+    return web.json_response(
+        {
+            "ok": True,
+            "service": "aos-bridge",
+            "started_at": STARTED_AT.isoformat(),
+            "now": _now().isoformat(),
+            "tz": DEFAULT_TZ,
+            "python": sys.version.split()[0],
+            "aiohttp": getattr(aiohttp, "__version__", "unknown"),
+            "app": {"path": str(app_path), "mtime_utc": mtime, "size": size},
+            "git": git,
         }
-
-    # Task export check
-    task_export = _task_export_path()
-    debug_info["checks"]["task_export"] = {
-        "path": str(task_export),
-        "exists": task_export.exists(),
-        "size": task_export.stat().st_size if task_export.exists() else 0,
-        "modified": task_export.stat().st_mtime if task_export.exists() else None
-    }
-
-    # Queue check
-    if QUEUE_DIR.exists():
-        queue_files = list(QUEUE_DIR.glob("*.json"))
-        debug_info["checks"]["queue"] = {
-            "dir": str(QUEUE_DIR),
-            "files": len(queue_files),
-            "oldest": min((f.stat().st_mtime for f in queue_files), default=None)
-        }
-    else:
-        debug_info["checks"]["queue"] = {
-            "dir": str(QUEUE_DIR),
-            "error": "Queue dir does not exist"
-        }
-
-    # Core4 weeks check
-    if CORE4_LOCAL_DIR.exists():
-        week_files = list(CORE4_LOCAL_DIR.glob(f"{CORE4_PREFIX}*.json"))
-        debug_info["checks"]["core4_weeks"] = {
-            "dir": str(CORE4_LOCAL_DIR),
-            "weeks": len(week_files),
-            "latest": sorted([f.stem.replace(CORE4_PREFIX, "") for f in week_files])[-3:] if week_files else []
-        }
-    else:
-        debug_info["checks"]["core4_weeks"] = {
-            "dir": str(CORE4_LOCAL_DIR),
-            "error": "Core4 dir does not exist"
-        }
-
-    # Overall health
-    critical_checks = [
-        debug_info["paths"]["vault_exists"],
-        debug_info["checks"]["binaries"]["task"]["available"],
-    ]
-
-    if not all(critical_checks):
-        debug_info["ok"] = False
-        debug_info["warnings"] = []
-        if not debug_info["paths"]["vault_exists"]:
-            debug_info["warnings"].append(f"VAULT_DIR not found: {VAULT_DIR}")
-        if not debug_info["checks"]["binaries"]["task"]["available"]:
-            debug_info["warnings"].append(f"task binary not available: {TASK_BIN}")
-
-    return web.json_response(debug_info, status=200)
+    )
 
 
 def _task_export_path() -> Path:
@@ -954,6 +904,7 @@ async def _run_task_report(cmd: list[str], timeout_s: float = 10.0) -> dict[str,
         }
     return {"ok": True, "code": 0, "stdout": out, "stderr": err, "cmd": " ".join(cmd)}
 
+
 def _split_blocks(text: str) -> list[str]:
     raw = str(text or "").strip()
     if not raw:
@@ -1040,9 +991,7 @@ async def handle_bridge_fire_daily(request: web.Request) -> web.Response:
             report_name = FIRE_DAILY_REPORT if days <= 1 else FIRE_WEEKLY_REPORT
             primary_cmd = [TASK_BIN, report_name] if (TASK_BIN and report_name) else []
             fallback_cmd = (
-                [TASK_BIN, *shlex.split(FIRE_DAILY_FALLBACK_FILTER)]
-                if (TASK_BIN and FIRE_DAILY_FALLBACK_FILTER)
-                else []
+                [TASK_BIN, *shlex.split(FIRE_DAILY_FALLBACK_FILTER)] if (TASK_BIN and FIRE_DAILY_FALLBACK_FILTER) else []
             )
             if primary_cmd:
                 report = await _run_task_report(primary_cmd)
@@ -1220,8 +1169,6 @@ async def handle_tent_summary(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "invalid name"}, status=400)
     path.write_text(markdown + "\n", encoding="utf-8")
 
-    # Optional: keep the legacy weekly sealing behavior behind a flag.
-    # Default is off because month-close sealing is preferred to avoid late-arrival issues.
     core4_finalized: dict[str, Any] | None = None
     try:
         if os.getenv("AOS_CORE4_FINALIZE_ON_TENT", "0").strip() == "1":
@@ -1237,18 +1184,12 @@ async def handle_tent_summary(request: web.Request) -> web.Response:
 
 
 async def handle_tent_sync(request: web.Request) -> web.Response:
-    """
-    POST /bridge/tent/sync
-    Fetch Tent data from Index Node and push to GAS
-    """
     week = str(request.query.get("week", "")).strip()
     if not week:
-        # Auto-detect current week
         now = _now()
         iso = now.isocalendar()
         week = f"{iso[0]}-W{iso[1]:02d}"
 
-    # Fetch from Index Node
     index_url = os.getenv("INDEX_NODE_URL", "http://127.0.0.1:8799")
     tent_url = f"{index_url}/api/tent/component/return-report?week={week}"
 
@@ -1256,77 +1197,42 @@ async def handle_tent_sync(request: web.Request) -> web.Response:
         async with aiohttp.ClientSession() as session:
             async with session.get(tent_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
-                    return web.json_response({
-                        "ok": False,
-                        "error": f"Index Node returned {resp.status}"
-                    }, status=502)
-
+                    return web.json_response({"ok": False, "error": f"Index Node returned {resp.status}"}, status=502)
                 tent_data = await resp.json()
-
     except asyncio.TimeoutError:
-        return web.json_response({
-            "ok": False,
-            "error": "Index Node timeout"
-        }, status=504)
+        return web.json_response({"ok": False, "error": "Index Node timeout"}, status=504)
     except Exception as e:
-        return web.json_response({
-            "ok": False,
-            "error": f"Failed to fetch from Index Node: {str(e)}"
-        }, status=502)
+        return web.json_response({"ok": False, "error": f"Failed to fetch from Index Node: {str(e)}"}, status=502)
 
-    # Push to GAS
     gas_webhook = os.getenv("AOS_GAS_TENT_WEBHOOK", GAS_WEBHOOK_URL).strip()
     if not gas_webhook:
-        return web.json_response({
-            "ok": False,
-            "error": "GAS webhook not configured (AOS_GAS_TENT_WEBHOOK or AOS_GAS_WEBHOOK_URL)"
-        }, status=500)
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "GAS webhook not configured (AOS_GAS_TENT_WEBHOOK or AOS_GAS_WEBHOOK_URL)",
+            },
+            status=500,
+        )
 
-    gas_payload = {
-        "type": "tent_sync",
-        "week": week,
-        "data": tent_data
-    }
+    gas_payload = {"type": "tent_sync", "week": week, "data": tent_data}
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                gas_webhook,
-                json=gas_payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
+            async with session.post(gas_webhook, json=gas_payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
                     gas_error = await resp.text()
-                    return web.json_response({
-                        "ok": False,
-                        "error": f"GAS returned {resp.status}: {gas_error}"
-                    }, status=502)
+                    return web.json_response({"ok": False, "error": f"GAS returned {resp.status}: {gas_error}"}, status=502)
 
                 gas_response = await resp.json()
-                return web.json_response({
-                    "ok": True,
-                    "week": week,
-                    "gas_response": gas_response
-                })
+                return web.json_response({"ok": True, "week": week, "gas_response": gas_response})
 
     except asyncio.TimeoutError:
-        return web.json_response({
-            "ok": False,
-            "error": "GAS webhook timeout"
-        }, status=504)
+        return web.json_response({"ok": False, "error": "GAS webhook timeout"}, status=504)
     except Exception as e:
-        return web.json_response({
-            "ok": False,
-            "error": f"Failed to push to GAS: {str(e)}"
-        }, status=502)
+        return web.json_response({"ok": False, "error": f"Failed to push to GAS: {str(e)}"}, status=502)
 
 
 async def handle_tent_fetch(request: web.Request) -> web.Response:
-    """
-    GET /bridge/tent/fetch?week=2026-W04
-    Proxy endpoint for GAS to fetch Tent data from Index Node
-    Needed because GAS can't reach localhost directly
-    """
     week = str(request.query.get("week", "")).strip()
     if not week:
         now = _now()
@@ -1340,24 +1246,15 @@ async def handle_tent_fetch(request: web.Request) -> web.Response:
         async with aiohttp.ClientSession() as session:
             async with session.get(tent_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
-                    return web.json_response({
-                        "ok": False,
-                        "error": f"Index Node returned {resp.status}"
-                    }, status=502)
+                    return web.json_response({"ok": False, "error": f"Index Node returned {resp.status}"}, status=502)
 
                 tent_data = await resp.json()
                 return web.json_response(tent_data)
 
     except asyncio.TimeoutError:
-        return web.json_response({
-            "ok": False,
-            "error": "Index Node timeout"
-        }, status=504)
+        return web.json_response({"ok": False, "error": "Index Node timeout"}, status=504)
     except Exception as e:
-        return web.json_response({
-            "ok": False,
-            "error": f"Failed to fetch from Index Node: {str(e)}"
-        }, status=502)
+        return web.json_response({"ok": False, "error": f"Failed to fetch from Index Node: {str(e)}"}, status=502)
 
 
 async def handle_task_operation(request: web.Request) -> web.Response:
@@ -1548,7 +1445,6 @@ async def _run_task_modify(uuid: str, updates: Dict[str, Any]) -> Dict[str, Any]
 
     args = [TASK_BIN, uuid, "modify"]
 
-    # Handle tags (add/remove)
     tags_add = updates.get("tags_add") or []
     for tag in tags_add:
         if tag:
@@ -1558,27 +1454,22 @@ async def _run_task_modify(uuid: str, updates: Dict[str, Any]) -> Dict[str, Any]
         if tag:
             args.append(f"-{tag}")
 
-    # Handle project
     project = updates.get("project")
     if project:
         args.append(f"project:{project}")
 
-    # Handle due
     due = updates.get("due")
     if due:
         args.append(f"due:{due}")
 
-    # Handle wait
     wait = updates.get("wait")
     if wait:
         args.append(f"wait:{wait}")
 
-    # Handle priority
     priority = updates.get("priority")
     if priority:
         args.append(f"priority:{priority}")
 
-    # Handle depends (set or append)
     depends = updates.get("depends")
     if depends:
         if isinstance(depends, str):
@@ -1588,7 +1479,6 @@ async def _run_task_modify(uuid: str, updates: Dict[str, Any]) -> Dict[str, Any]
             if deps:
                 args.append(f"depends:{deps}")
 
-    # Must have at least one modification
     if len(args) <= 3:
         return {"ok": False, "error": "no modifications specified"}
 
@@ -1655,7 +1545,7 @@ def _rclone_filters() -> list:
     subdirs = [s.strip().strip("/") for s in raw.split(",") if s.strip()]
     if not subdirs:
         return []
-    filters = []
+    filters: list[str] = []
     for sub in subdirs:
         filters.extend(["--include", f"{sub}/**"])
     filters.extend(["--exclude", "*"])
@@ -1667,6 +1557,7 @@ def _rclone_flags() -> list[str]:
     if raw:
         return shlex.split(raw)
     return ["--skip-links", "--create-empty-src-dirs", "--update"]
+
 
 def _rclone_join(base: str, subpath: str) -> str:
     base = (base or "").strip()
@@ -1802,17 +1693,6 @@ async def handle_sync_pull(request: web.Request) -> web.Response:
 
 
 async def handle_rpc(request: web.Request) -> web.Response:
-    """
-    Generic RPC handler that forwards actions to GAS Tent Centre.
-
-    Payload: { action: string, args: object }
-    Returns: JSON response from GAS
-
-    Example actions:
-    - ticktickWeeklyDigest
-    - ticktickTentScores
-    - mapLatest
-    """
     payload = await _read_json(request)
     action = payload.get("action")
     args = payload.get("args", {})
@@ -1828,7 +1708,7 @@ async def handle_rpc(request: web.Request) -> web.Response:
             async with session.post(
                 GAS_TENT_URL,
                 json={"action": action, "args": args},
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 response_text = await resp.text()
                 try:
@@ -1836,13 +1716,13 @@ async def handle_rpc(request: web.Request) -> web.Response:
                 except json.JSONDecodeError:
                     return web.json_response(
                         {"ok": False, "error": "invalid JSON from GAS", "raw": response_text[:500]},
-                        status=502
+                        status=502,
                     )
 
                 if resp.status >= 400:
                     return web.json_response(
                         {"ok": False, "error": f"GAS returned {resp.status}", "data": data},
-                        status=resp.status
+                        status=resp.status,
                     )
 
                 return web.json_response(data, status=200)
@@ -1850,23 +1730,174 @@ async def handle_rpc(request: web.Request) -> web.Response:
     except asyncio.TimeoutError:
         return web.json_response({"ok": False, "error": "GAS timeout"}, status=504)
     except Exception as e:
-        LOGGER.error(f"RPC forward error: {e}")
+        LOGGER.error("RPC forward error: %s", e)
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
+async def handle_debug(request: web.Request) -> web.Response:
+    debug_info: dict[str, Any] = {
+        "ok": True,
+        "service": "aos-bridge",
+        "version": BRIDGE_VERSION,
+        "time": _now().isoformat(),
+        "tz": DEFAULT_TZ,
+        "config": {},
+        "paths": {},
+        "checks": {},
+    }
+
+    debug_info["config"] = {
+        "gas_webhook_url": "***" + GAS_WEBHOOK_URL[-20:] if GAS_WEBHOOK_URL else "not set",
+        "gas_tent_url": "***" + GAS_TENT_URL[-20:] if GAS_TENT_URL else "not set",
+        "gas_chat_id": GAS_CHAT_ID if GAS_CHAT_ID else "not set",
+        "gas_mode": GAS_MODE,
+        "fallback_tele": FALLBACK_TELE,
+        "tele_bin": TELE_BIN,
+        "bridge_token": "set" if BRIDGE_TOKEN else "not set",
+        "task_exec_enabled": TASK_EXEC_ENABLED,
+        "fire_daily_send": FIRE_DAILY_SEND,
+        "fire_daily_mode": FIRE_DAILY_MODE,
+    }
+
+    debug_info["paths"] = {
+        "vault_dir": str(VAULT_DIR),
+        "vault_exists": VAULT_DIR.exists(),
+        "core4_local": str(CORE4_LOCAL_DIR),
+        "core4_local_exists": CORE4_LOCAL_DIR.exists(),
+        "core4_mount": str(CORE4_MOUNT_DIR),
+        "core4_mount_exists": CORE4_MOUNT_DIR.exists(),
+        "fruits_dir": str(FRUITS_DIR),
+        "fruits_exists": FRUITS_DIR.exists(),
+        "tent_dir": str(TENT_DIR),
+        "tent_exists": TENT_DIR.exists(),
+        "warstack_dir": str(WARSTACK_DIR),
+        "warstack_exists": WARSTACK_DIR.exists(),
+        "queue_dir": str(QUEUE_DIR),
+        "queue_exists": QUEUE_DIR.exists(),
+    }
+
+    debug_info["checks"]["binaries"] = {}
+    for name, bin_path in [
+        ("task", TASK_BIN),
+        ("tele", TELE_BIN),
+        ("core4ctl", CORE4CTL_BIN),
+        ("firectl", FIRECTL_BIN),
+        ("firemap", FIREMAP_BIN),
+    ]:
+        bp = str(bin_path or "").strip()
+        # availability should mean "executable exists", NOT "supports --version"
+        available = bool(bp) and (shutil.which(bp) is not None or Path(bp).expanduser().exists())
+        info: dict[str, Any] = {"path": bp, "available": available}
+        if available:
+            # best-effort version probe
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    bp,
+                    "--version",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=2)
+                text = (stdout or stderr).decode("utf-8", errors="ignore").strip()
+                info["version"] = text[:120] if text else "unknown"
+                info["version_probe_ok"] = proc.returncode == 0
+            except Exception as exc:
+                info["version"] = "unknown"
+                info["version_probe_ok"] = False
+                info["version_probe_error"] = str(exc)[:200]
+        debug_info["checks"]["binaries"][name] = info
+
+    # GAS Tent URL check
+    if GAS_TENT_URL:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    GAS_TENT_URL,
+                    json={"action": "health"},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    response_text = await resp.text()
+                    try:
+                        data = json.loads(response_text)
+                        debug_info["checks"]["gas_tent"] = {
+                            "ok": resp.status < 400,
+                            "status": resp.status,
+                            "response": data,
+                        }
+                    except json.JSONDecodeError:
+                        debug_info["checks"]["gas_tent"] = {
+                            "ok": False,
+                            "status": resp.status,
+                            "error": "Invalid JSON response",
+                            "raw": response_text[:200],
+                        }
+        except asyncio.TimeoutError:
+            debug_info["checks"]["gas_tent"] = {"ok": False, "error": "Timeout (10s)"}
+        except Exception as e:
+            debug_info["checks"]["gas_tent"] = {"ok": False, "error": str(e)}
+    else:
+        debug_info["checks"]["gas_tent"] = {"ok": False, "error": "GAS_TENT_URL not configured"}
+
+    # Task export check
+    task_export = _task_export_path()
+    debug_info["checks"]["task_export"] = {
+        "path": str(task_export),
+        "exists": task_export.exists(),
+        "size": task_export.stat().st_size if task_export.exists() else 0,
+        "modified": task_export.stat().st_mtime if task_export.exists() else None,
+    }
+
+    # Queue check
+    if QUEUE_DIR.exists():
+        queue_files = list(QUEUE_DIR.glob("*.json"))
+        debug_info["checks"]["queue"] = {
+            "dir": str(QUEUE_DIR),
+            "files": len(queue_files),
+            "oldest": min((f.stat().st_mtime for f in queue_files), default=None),
+        }
+    else:
+        debug_info["checks"]["queue"] = {"dir": str(QUEUE_DIR), "error": "Queue dir does not exist"}
+
+    # Core4 weeks check
+    if CORE4_LOCAL_DIR.exists():
+        week_files = list(CORE4_LOCAL_DIR.glob(f"{CORE4_PREFIX}*.json"))
+        debug_info["checks"]["core4_weeks"] = {
+            "dir": str(CORE4_LOCAL_DIR),
+            "weeks": len(week_files),
+            "latest": sorted([f.stem.replace(CORE4_PREFIX, "") for f in week_files])[-3:] if week_files else [],
+        }
+    else:
+        debug_info["checks"]["core4_weeks"] = {"dir": str(CORE4_LOCAL_DIR), "error": "Core4 dir does not exist"}
+
+    # Overall health: critical checks should verify existence, not --version
+    critical_checks = [
+        debug_info["paths"]["vault_exists"],
+        debug_info["checks"]["binaries"]["task"]["available"],
+    ]
+
+    if not all(critical_checks):
+        debug_info["ok"] = False
+        debug_info["warnings"] = []
+        if not debug_info["paths"]["vault_exists"]:
+            debug_info["warnings"].append(f"VAULT_DIR not found: {VAULT_DIR}")
+        if not debug_info["checks"]["binaries"]["task"]["available"]:
+            debug_info["warnings"].append(f"task binary not available: {TASK_BIN}")
+
+    return web.json_response(debug_info, status=200)
+
+
 def create_app() -> web.Application:
-    app = web.Application(middlewares=[auth_middleware])
+    app = web.Application(middlewares=[auth_middleware, request_log_middleware])
     app.add_routes(
         [
             web.get("/health", handle_health),
             web.get("/bridge/health", handle_health),
+            web.get("/version", handle_version),
+            web.get("/bridge/version", handle_version),
             web.get("/debug", handle_debug),
             web.get("/bridge/debug", handle_debug),
-            # RPC endpoint (forwards to GAS Tent Centre)
             web.post("/rpc", handle_rpc),
             web.post("/bridge/rpc", handle_rpc),
-            # Tailscale `serve/funnel --set-path /bridge` strips the `/bridge` prefix when proxying to :8080.
-            # Provide root-path aliases so external calls to `/bridge/<route>` map cleanly to `/<route>` here.
             web.get("/daily-review-data", handle_bridge_daily_review_data),
             web.get("/bridge/daily-review-data", handle_bridge_daily_review_data),
             web.post("/trigger/weekly-firemap", handle_bridge_trigger_weekly_firemap),
@@ -1927,6 +1958,7 @@ def main() -> None:
         FRUITS_DIR,
         TENT_DIR,
     )
+    LOGGER.info("Bridge version=%s", BRIDGE_VERSION)
     if BRIDGE_TOKEN:
         LOGGER.info("Bridge auth enabled (header=%s)", BRIDGE_TOKEN_HEADER)
     else:

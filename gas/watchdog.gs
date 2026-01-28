@@ -45,12 +45,16 @@ function watchdog_getSystemStatus_(options) {
   const status = {};
   const opts = options || {};
   const doPing = opts.ping !== false;
+  const touchHeartbeat = opts.touchHeartbeat === true;
   const sessionId = String(opts.sessionId || '').trim() || Utilities.getUuid().slice(0, 8);
 
   const bridge = (typeof bridgeHealth_ === 'function')
     ? bridgeHealth_()
     : { ok: false, label: 'missing bridgeHealth_', url: '' };
   status.bridge = bridge;
+  if (touchHeartbeat && bridge && bridge.ok) {
+    watchdog_touchHeartbeat_('hq-bridge-ok');
+  }
 
   // Router status (from ROUTER_STARTUP_TS)
   const sp = PropertiesService.getScriptProperties();
@@ -93,6 +97,14 @@ function watchdog_getSystemStatus_(options) {
   }
 
   return status;
+}
+
+function watchdog_touchHeartbeat_(source) {
+  const sp = PropertiesService.getScriptProperties();
+  sp.setProperty(WD_LAST_BEAT_TS, String(Date.now()));
+  if (source) {
+    sp.setProperty(WD_LAST_HOST, String(source));
+  }
 }
 
 function watchdogCheck() {

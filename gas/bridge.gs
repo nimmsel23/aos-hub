@@ -186,6 +186,39 @@ function bridge_syncPush(options) {
   }
 }
 
+// ------------------------------------------------
+// Core4 pull trigger (Bridge core4ctl pull-core4)
+// ------------------------------------------------
+function bridge_core4Pull(options) {
+  var base = (typeof getBridgeUrl_ === 'function' ? getBridgeUrl_() : '') || '';
+  if (!base) return { ok: false, error: 'bridge URL not set' };
+  base = String(base || '').replace(/\/$/, '');
+  var url = /\/bridge$/.test(base) ? (base + '/core4/pull') : (base + '/bridge/core4/pull');
+
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      headers: (typeof bridge_getAuthHeaders_ === 'function' ? bridge_getAuthHeaders_() : {}),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    var body = res.getContentText();
+    var json = null;
+    try {
+      json = JSON.parse(body || '{}');
+    } catch (_) {
+      json = { raw: body };
+    }
+    if (code < 200 || code >= 300) {
+      return { ok: false, error: 'HTTP ' + code, body: json };
+    }
+    if (json && typeof json.ok === 'boolean') return json;
+    return { ok: true, body: json };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 // ================================================================
 // BRIDGE CHECK (explicit /health on bridge root URL)
 // ================================================================

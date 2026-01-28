@@ -38,7 +38,7 @@ DAILY GAME (Core + Voice + Door execution)
 - `Game_*.html` - Map UIs
 
 **Bots:**
-- `python-firemap-bot/firemap_bot.py` - Fire Map snapshots from Taskwarrior
+- `python-firemap/firemap_bot.py` - Fire Map snapshots from Taskwarrior
   - Modes: `daily`, `weekly`, `listen`
   - Telegram Bot API or tele fallback
 - `router/extensions/firemap_commands.py` - Telegram `/fire` trigger
@@ -58,7 +58,7 @@ When Frame changes → detect → cascade to downstream Maps
 ### 3. Fire Map Integration
 War Stacks (4 Hits each) → Fire Map (16 weekly Hits)
 
-### 4. Debug python-firemap-bot
+### 4. Debug python-firemap
 Handle daily/weekly modes, Telegram delivery, Taskwarrior integration
 
 ### 5. General's Tent
@@ -81,19 +81,19 @@ Weekly review tool consolidating all 4 domains
 
 **Send Fire Map Snapshot:**
 ```bash
-python python-firemap-bot/firemap_bot.py daily
+python python-firemap/firemap_bot.py daily
 # Sends current Taskwarrior tasks (project:door tags:war-stack) via Telegram
 ```
 
 ## Data Sources
 
-- `index-node/AGENTS.md`, `gas/AGENTS.md`, `python-firemap-bot/AGENTS.md`
+- `index-node/AGENTS.md`, `gas/AGENTS.md`, `python-firemap/AGENTS.md`
 - `DOCS/gas/fire.md`, `DOCS/gas/frame.md`, `DOCS/gas/freedom.md`, `DOCS/gas/focus.md`, `DOCS/gas/tent.md`
 
 ## Integration Points
 
 - **Door Centre:** War Stacks → Fire Map (4 Hits each)
-- **Taskwarrior:** Fire Map Hits → tasks → python-firemap-bot snapshots
+- **Taskwarrior:** Fire Map Hits → tasks → python-firemap snapshots
 - **General's Tent:** Consolidates all Game Maps for weekly review
 
 ## Notes
@@ -102,7 +102,7 @@ python python-firemap-bot/firemap_bot.py daily
 - **Fire Map** = 4 War Stacks × 4 Hits = 16 weekly Hits
 - **Cascade** is critical: Frame determines all downstream Maps
 - **game_shared.gs** contains shared utilities (use for cross-Map functions)
-- **python-firemap-bot** prefers Telegram Bot API, falls back to `tele`
+- **python-firemap** prefers Telegram Bot API, falls back to `tele`
 
 ## Version History
 

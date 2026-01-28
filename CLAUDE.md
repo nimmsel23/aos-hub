@@ -155,7 +155,7 @@ All output same format:
 - Taskwarrior commands
 
 **Core4 Logging:**
-- UI → Bridge `/bridge/python-python-core4/log`
+- UI → Bridge `/bridge/core4/log`
 - Bridge writes JSON to `~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json`
 - Weekly summary exported to `~/AlphaOS-Vault/Alpha_Tent/`
 
@@ -288,7 +288,7 @@ systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 
 **Core4:**
 - `POST /api/core4` - Toggle subtask
-- `GET /api/python-python-core4/today` - Today's totals
+- `GET /api/core4/today` - Today's totals
 
 **Taskwarrior:**
 - `GET /api/taskwarrior/tasks?status=pending&tags=door` - Filtered tasks
@@ -301,9 +301,9 @@ systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 - `GET /health` - Bridge health
 
 **Core4:**
-- `POST /bridge/python-python-core4/log` - Log Core4 event
-- `GET /bridge/python-python-core4/today` - Today's totals
-- `GET /bridge/python-python-core4/week?week=YYYY-Wxx` - Weekly JSON
+- `POST /bridge/core4/log` - Log Core4 event
+- `GET /bridge/core4/today` - Today's totals
+- `GET /bridge/core4/week?week=YYYY-Wxx` - Weekly JSON
 
 **Fruits:**
 - `POST /bridge/fruits/answer` - Submit Fruits answer

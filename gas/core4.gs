@@ -67,7 +67,12 @@ function core4_log(domain, task, timestamp, source, user) {
   const weekData = core4_buildWeekForDate_(ts);
 
   core4_appendSheetRow_(entry);
-  return { ok: true, week: weekKey, total_today: core4_totalForDate_(weekData.entries, dateKey) };
+  const totalToday = core4_totalForDate_(weekData.entries, dateKey);
+  try {
+    if (typeof bridge_core4Pull === 'function') bridge_core4Pull();
+  } catch (e) {}
+  core4_sendSilentLog_(entry, totalToday);
+  return { ok: true, week: weekKey, total_today: totalToday };
 }
 
 function core4_getToday() {
@@ -637,6 +642,33 @@ function core4_sendMessage_(chatId, text, keyboard) {
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
+}
+
+function core4_sendSilentLog_(entry, totalToday) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const chatId = props.getProperty('CHAT_ID');
+    if (!chatId) return;
+    const token = props.getProperty('CORE4_BOT_TOKEN') || props.getProperty('BOT_TOKEN');
+    if (!token) return;
+
+    const label = core4_getHabitLabel_(entry.domain, entry.task);
+    const total = Number(totalToday || 0).toFixed(1);
+    const payload = {
+      chat_id: chatId,
+      text: `Core4: ${label} (+0.5) • Today: ${total}/4.0`,
+      disable_notification: true
+    };
+
+    UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    Logger.log('core4 silent log failed: ' + e.toString());
+  }
 }
 
 // =====================================================

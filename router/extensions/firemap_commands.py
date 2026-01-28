@@ -25,7 +25,7 @@ class FireMapCommandsExtension(Extension):
     def __init__(self, bot, dp, config: dict):
         super().__init__(bot, dp, config)
         self.python_bin = config.get("python_bin", "python3")
-        self.script = config.get("script", "python-firemap-bot/firemap_bot.py")
+        self.script = config.get("script", "python-firemap/firemap_bot.py")
         self.daily_mode = config.get("daily_mode", "daily")
         self.weekly_mode = config.get("weekly_mode", "weekly")
 

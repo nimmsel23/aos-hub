@@ -8,7 +8,7 @@
 
 ## AlphaOS Philosophy: What MUST Be
 
-> "From the beginning, humanity was given a divine gift—dominion. This wasn't just a command to control the world around us, but a deeper call to master ourselves." — Elliott Hulse (Chapter 13)
+> "From the beginning, humanity was given a divine gift—dominion. This wasn't just a command to control the world around us, but a deeper call to master ourselves." — AlphaOS (Chapter 13)
 
 ### Purpose
 

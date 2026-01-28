@@ -14,6 +14,8 @@ Design:
 from __future__ import annotations
 
 import argparse
+import termios
+import tty
 import csv
 import json
 import os
@@ -85,6 +87,31 @@ HABIT_PROMPTS = {
 DEFAULT_VAULT_DIR = Path.home() / "AlphaOS-Vault"
 BRIDGE_URL = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
 TZ = ZoneInfo(os.environ.get("AOS_TZ", "Europe/Vienna"))
+CORE4CTL = Path(os.environ.get("AOS_CORE4CTL", str(Path(__file__).resolve().parent / "core4ctl"))).expanduser()
+CORE4_JOURNAL_DIR = Path(
+    os.environ.get("CORE4_JOURNAL_DIR")
+    or os.environ.get("AOS_CORE4_JOURNAL_DIR")
+    or (DEFAULT_VAULT_DIR / "Alpha_Journal" / "Entries")
+).expanduser()
+
+
+def _color(text: str, code: str) -> str:
+    force = str(os.environ.get("CORE4_COLOR", "1")).strip() == "1"
+    if sys.stdout.isatty() or force:
+        return f"\033[{code}m{text}\033[0m"
+    return text
+
+
+def _green(text: str) -> str:
+    return _color(text, "32")
+
+
+def _yellow(text: str) -> str:
+    return _color(text, "33")
+
+
+def _cyan(text: str) -> str:
+    return _color(text, "36")
 
 
 def week_key(day: date) -> str:
@@ -229,7 +256,7 @@ def export_daily_csv(*, days: int = 56) -> Path:
 def prune_events(*, keep_weeks: int = 8) -> Dict[str, Any]:
     """
     Remove local event files older than `keep_weeks` to limit growth.
-    Only touches the *local* ledger under `~/AlphaOS-Vault/Core4/.core4/events`.
+    Only touches the *local* ledger under `~/AlphaOS-Vault/Core4/.python-core4/events`.
     """
     keep_weeks = max(1, min(int(keep_weeks), 52))
     cutoff = date.today() - timedelta(days=keep_weeks * 7)
@@ -1079,9 +1106,9 @@ def score_mode(argv: list[str]) -> int:
             has_any = bool(data.get("entries") or []) or expected > 0.0
         total = current
         if (not has_any) and total == 0.0 and expected == 0.0:
-            print(f"Core4 {wk}: 0.0/28 (no data)")
+            print(_yellow(f"Core4 {wk}: 0.0/28 (no data)"))
             return 0
-        print(f"Core4 {wk}: {total:.1f}/28")
+        print(_cyan(f"Core4 {wk}: {total:.1f}/28"))
         if not quiet:
             by_day = _week_done_by_day(data, wk)
             for date_key in sorted(by_day.keys()):
@@ -1104,14 +1131,14 @@ def score_mode(argv: list[str]) -> int:
         data = load_week(day)
         current = day_total_from_week(data, day)
     total = current
-    print(f"Core4 {day.isoformat()} ({wk}): {total:.1f}/4")
+    print(_cyan(f"Core4 {day.isoformat()} ({wk}): {total:.1f}/4"))
     if not quiet:
         done = _day_done_list(data, day)
         done_habits = [h for _, h in done]
         if done_habits:
-            print(f"Done: {', '.join(done_habits)}")
+            print(_green(f"Done: {', '.join(done_habits)}"))
         else:
-            print("Done: (none)")
+            print(_yellow("Done: (none)"))
     return 0
 
 
@@ -1198,7 +1225,7 @@ def task_done(uuid: str) -> None:
 
 
 def try_ticktick_push() -> None:
-    ticktick = "/home/alpha/.dotfiles/bin/ticktick_sync.py"
+    ticktick = "/home/alpha/aos-hub/python-ticktick/ticktick_sync.py"
     if not os.path.exists(ticktick):
         return
     token_available = bool(os.getenv("TICKTICK_TOKEN") or os.path.exists(os.path.expanduser("~/.ticktick_token")))
@@ -1207,7 +1234,370 @@ def try_ticktick_push() -> None:
     subprocess.run([ticktick, "--push"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def run_core4ctl(*args: str) -> bool:
+    if not CORE4CTL.exists():
+        print(f"core4: core4ctl not found: {CORE4CTL}", file=sys.stderr)
+        return False
+    res = subprocess.run([str(CORE4CTL), *args], check=False)
+    return res.returncode == 0
+
+
+def safe_slug(text: str) -> str:
+    slug = re.sub(r"^[\\/]+", "", str(text or "").strip().lower())
+    slug = slug.replace("'", "").replace('"', "")
+    slug = re.sub(r"\s+", "-", slug)
+    slug = re.sub(r"[^a-z0-9_-]", "", slug)
+    return slug
+
+
+def journal_entry_path(subtask: str) -> Path:
+    date_key = date.today().isoformat()
+    base = safe_slug(subtask or "journal") or "journal"
+    filename = f"{base}-{date_key}.md"
+    full = CORE4_JOURNAL_DIR / filename
+    if full.exists():
+        stamp = datetime.now().isoformat().replace(":", "-").replace(".", "-").replace("T", "_").replace("Z", "")
+        filename = f"{base}-{date_key}-{stamp}.md"
+        full = CORE4_JOURNAL_DIR / filename
+    return full
+
+
+def open_core4_journal(subtask: str, *, task_label: str, task_uuid: str = "") -> None:
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return
+    CORE4_JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+    path = journal_entry_path(subtask)
+    now = datetime.now(tz=TZ).isoformat()
+    tags = ["core4", subtask]
+    fm = [
+        "---",
+        "title: Core4 Journal",
+        f"created: {now}",
+    ]
+    if task_uuid:
+        fm.append(f"task_uuid: {task_uuid}")
+    fm.append(f"task: {task_label or subtask or 'core4'}")
+    fm.append("tags:")
+    fm.extend([f"  - {tag}" for tag in tags if tag])
+    fm.append("---")
+    fm.append("")
+    if not path.exists():
+        path.write_text("\n".join(fm), encoding="utf-8")
+    if task_uuid:
+        annotate_taskopen(task_uuid, path)
+    editor = os.environ.get("EDITOR") or "nano"
+    subprocess.run([editor, str(path)], check=False)
+
+
+def get_task_uuid(target: "Target") -> str:
+    try:
+        uuid = find_completed_uuid(target)
+        if uuid:
+            return uuid
+        uuid = find_pending_uuid(target)
+        if uuid:
+            return uuid
+    except Exception:
+        return ""
+    return ""
+
+
+def annotate_taskopen(task_uuid: str, path: Path) -> None:
+    try:
+        info = run_task([task_uuid, "info"], capture=True)
+    except Exception:
+        return
+    if info.returncode == 0 and f"file://{path}" in (info.stdout or ""):
+        return
+    try:
+        run_task([task_uuid, "annotate", f"file://{path}"], capture=True)
+    except Exception:
+        return
+
+
+def _latest_event_day(base_dir: Path) -> str:
+    ev_root = core4_event_dir(base_dir)
+    if not ev_root.exists():
+        return ""
+    days = sorted([p.name for p in ev_root.iterdir() if p.is_dir()])
+    return days[-1] if days else ""
+
+
+def _latest_week_file(base_dir: Path) -> str:
+    pattern = "core4_week_"
+    files = sorted([p.name for p in base_dir.glob(f"{pattern}*.json") if p.is_file()])
+    return files[-1] if files else ""
+
+
+def show_sources() -> int:
+    dirs = core4_dirs()
+    if not dirs:
+        print("core4 sources: none")
+        return 0
+    print("core4 sources:")
+    for base in dirs:
+        base = base.expanduser()
+        ev_root = core4_event_dir(base)
+        latest_day = _latest_event_day(base)
+        latest_week = _latest_week_file(base)
+        exists = base.exists()
+        events_ok = ev_root.exists()
+        print(f"- {base}")
+        print(f"  exists: {_green('yes') if exists else _yellow('no')}")
+        print(f"  events: {str(ev_root) if events_ok else _yellow('missing')}")
+        print(f"  latest_day: {_green(latest_day) if latest_day else _yellow('n/a')}")
+        print(f"  latest_week: {_green(latest_week) if latest_week else _yellow('n/a')}")
+    return 0
+
+
+def _have_cmd(name: str) -> bool:
+    return subprocess.call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+
+
+def prompt_habit_menu(options: list[str], done: set[str]) -> Optional[str]:
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+
+    labels = []
+    for idx, opt in enumerate(options, start=1):
+        mark = "[x]" if opt in done else "[ ]"
+        labels.append(f"{idx}.{mark}{opt}")
+
+    row1 = "  ".join(labels[:4])
+    row2 = "  ".join(labels[4:])
+    print(row1)
+    print(row2)
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        print("Select 1-8 (q to cancel): ", end="", flush=True)
+        while True:
+            ch = sys.stdin.read(1)
+            if not ch:
+                return None
+            if ch in ("q", "Q"):
+                print("")
+                return None
+            if ch.isdigit():
+                choice = int(ch)
+                if 1 <= choice <= len(options):
+                    opt = options[choice - 1]
+                    if opt in done:
+                        print("")
+                        return None
+                    print("")
+                    return opt
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def fzf_pick_habit(options: list[str], done: set[str]) -> Optional[tuple[str, str]]:
+    if not (_have_cmd("fzf") and sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+    labels = []
+    for opt in options:
+        mark = "✓" if opt in done else " "
+        labels.append(f"[{mark}] {opt}")
+    res = subprocess.run(
+        [
+            "fzf",
+            "--prompt",
+            "Core4 log> ",
+            "--height",
+            "40%",
+            "--border",
+            "--no-multi",
+            "--expect",
+            "enter,space",
+            "--bind",
+            "space:accept,q:abort,esc:abort",
+        ],
+        input="\n".join(labels),
+        check=False,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if res.returncode != 0:
+        return None
+    lines = (res.stdout or "").splitlines()
+    if not lines:
+        return None
+    key = lines[0] if lines[0] in ("enter", "space") else "enter"
+    selection = lines[1] if lines[0] in ("enter", "space") and len(lines) > 1 else lines[0]
+    opt = selection.replace("[✓]", "").replace("[ ]", "").strip()
+    if not opt or opt not in options or opt in done:
+        return None
+    action = "done" if key == "space" else "log"
+    return opt, action
+
+
+def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "habit",
+        help="fitness|fuel|meditation|memoirs|partner|posterity|person1|person2|discover|declare",
+    )
+    parser.add_argument("rest", nargs="*", help="Optional: done | -1d | YYYY-MM-DD")
+    parser.add_argument("--date", dest="date", default=None, help="YYYY-MM-DD")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-taskwarrior", action="store_true", help="Only check JSON, do not write")
+    args = parser.parse_args(argv)
+    mark_done = "done" in args.rest
+    wants_journal = (not mark_done) and (not skip_journal)
+
+    day_raw = args.date
+    for tok in args.rest:
+        if tok == "done":
+            continue
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", tok) or re.fullmatch(r"-\d+d", tok):
+            day_raw = tok
+
+    try:
+        target = resolve_target(args.habit, day_raw)
+    except Exception as exc:
+        print(f"core4: {exc}", file=sys.stderr)
+        return finish(2)
+
+    def maybe_open_journal() -> None:
+        if not wants_journal:
+            return
+        subtask = _display_habit(target.habit)
+        task_label = _display_habit(target.habit)
+        task_uuid = get_task_uuid(target)
+        open_core4_journal(subtask, task_label=task_label, task_uuid=task_uuid)
+
+    if args.dry_run:
+        print(
+            f"core4 target: habit={target.habit} domain={target.domain} date={target.date_key} week={week_key(target.day)} key={target.entry_key}"
+        )
+        return finish(0)
+
+    if is_already_logged(target):
+        print(_green(f"✓ core4 {target.habit} ({target.date_key}) already logged (json)"))
+        maybe_open_journal()
+        return finish(0)
+
+    if args.no_taskwarrior:
+        print(_yellow(f"! core4 {target.habit} ({target.date_key}) not in json (no write)"))
+        maybe_open_journal()
+        return finish(1)
+
+    # Fail-safe: if TW already contains the completion, just replay into JSON.
+    if tw_has_completed(target):
+        try:
+            bridge_core4_log(target, source="tracker_replay")
+            try_ticktick_push()
+            if is_already_logged(target):
+                print(_green(f"✓ core4 {target.habit} ({target.date_key}) already done (replayed json)"))
+            else:
+                print(_green(f"✓ core4 {target.habit} ({target.date_key}) already done (replay queued)"))
+            maybe_open_journal()
+            return finish(0)
+        except Exception as exc:
+            print(f"core4: failed to replay bridge log: {exc}", file=sys.stderr)
+            # Fall through to task-based approach.
+
+    try:
+        ensure_taskwarrior()
+        # Concurrency/idempotency: if a pending task already exists, just complete it.
+        pending_uuid = find_pending_uuid(target)
+        if pending_uuid:
+            task_done(pending_uuid)
+            try_ticktick_push()
+            if is_already_logged(target):
+                print(_green(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json ok)"))
+            else:
+                print(_green(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json pending)"))
+            maybe_open_journal()
+            return finish(0)
+
+        # Extra safety: if a completed task exists under the stable tag, replay JSON and exit.
+        completed_uuid = find_completed_uuid(target)
+        if completed_uuid:
+            bridge_core4_log(target, source="tracker_replay_uuid")
+            try_ticktick_push()
+            print(_green(f"✓ core4 {target.habit} ({target.date_key}) already done (uuid)"))
+            maybe_open_journal()
+            return finish(0)
+
+        # Create+complete via Taskwarrior so hooks handle Bridge+TickTick.
+        task_add(target)
+        pending_uuid = find_pending_uuid(target)
+        if pending_uuid:
+            task_done(pending_uuid)
+        try_ticktick_push()
+    except Exception as exc:
+        print(f"core4: {exc}", file=sys.stderr)
+        return finish(1)
+
+    # Best-effort verification: if hooks/bridge are fast, JSON should now contain it.
+    if is_already_logged(target):
+        print(_green(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json ok)"))
+        maybe_open_journal()
+        return finish(0)
+    print(_green(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json pending)"))
+    maybe_open_journal()
+    return finish(0)
+
+
+def prompt_action_menu() -> Optional[str]:
+    options = [
+        "Log habit",
+        "Score today",
+        "Score week",
+        "Sync (pull+push)",
+        "Pull (Core4 only)",
+        "Push (Core4 only)",
+        "Sources",
+        "Build day/week",
+        "Export daily CSV",
+        "Prune events",
+        "Finalize month",
+        "Exit",
+    ]
+    if _have_cmd("fzf") and sys.stdin.isatty() and sys.stdout.isatty():
+        res = subprocess.run(
+            ["fzf", "--prompt", "Core4 menu> ", "--height", "40%", "--border"],
+            input="\n".join(options),
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        choice = (res.stdout or "").strip()
+        return choice or None
+    if _have_cmd("gum") and sys.stdin.isatty() and sys.stdout.isatty():
+        res = subprocess.run(
+            ["gum", "choose", "--header", "Core4 menu", "--height", "12", *options],
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        choice = (res.stdout or "").strip()
+        return choice or None
+    return None
+
+
+
+
 def main(argv: list[str]) -> int:
+    argv = list(argv)
+    skip_journal = False
+    sync_pull = "--pull" in argv or "--sync" in argv
+    sync_push = "--push" in argv or "--sync" in argv
+    if sync_pull or sync_push:
+        argv = [tok for tok in argv if tok not in ("--pull", "--push", "--sync")]
+        if sync_pull:
+            if not run_core4ctl("pull-core4"):
+                return 1
+
+    def finish(code: int) -> int:
+        if sync_push:
+            if not run_core4ctl("sync-core4"):
+                return 1 if code == 0 else code
+        return code
+
     if argv and argv[0] in ("-h", "--help"):
         print(
             "Core4 (tracker)\n"
@@ -1216,6 +1606,10 @@ def main(argv: list[str]) -> int:
             "  core4 fitness\n"
             "  core4 fitness -1d\n"
             "  core4 fitness done -1d\n"
+            "  core4 fitness --sync\n"
+            "  core4             # opens menu (gum/fzf)\n"
+            "  core4 sources     # show local Core4 sources\n"
+            "  core4 menu        # full action menu (fzf/gum)\n"
             "\n"
             "Show score (JSON-backed, with TW replay if behind):\n"
             "  core4 -d            # today\n"
@@ -1223,7 +1617,105 @@ def main(argv: list[str]) -> int:
             "  core4 -w            # this week\n"
             "  core4 -w --date 2026-01-13\n"
             "  core4 -w --quiet    # score only\n"
+            "\n"
+            "Sync Core4 only (pull before push):\n"
+            "  core4 sync\n"
+            "  core4 --pull\n"
+            "  core4 --push\n"
+            "  core4 --sync\n"
         )
+        return finish(0)
+
+    if not argv:
+        options = [
+            "fitness",
+            "fuel",
+            "meditation",
+            "memoirs",
+            "partner",
+            "posterity",
+            "discover",
+            "declare",
+        ]
+        if _have_cmd("fzf"):
+            while True:
+                day = date.today()
+                data = load_week(day)
+                done = {habit for _, habit in _day_done_list(data, day)}
+                picked = fzf_pick_habit(options, done)
+                if not picked:
+                    return finish(0)
+                habit, action = picked
+                if action == "done":
+                    run_habit_flow([habit, "done"], finish, skip_journal=True)
+                else:
+                    run_habit_flow([habit], finish, skip_journal=False)
+        day = date.today()
+        data = load_week(day)
+        done = {habit for _, habit in _day_done_list(data, day)}
+        choice = prompt_habit_menu(options, done)
+        if not choice:
+            return finish(0)
+        skip_journal = True
+        argv = [choice]
+
+    if argv and argv[0] in ("sources", "source", "debug"):
+        return finish(show_sources())
+
+    if argv and argv[0] in ("menu", "actions"):
+        choice = prompt_action_menu()
+        if not choice or choice == "Exit":
+            return finish(0)
+        if choice == "Log habit":
+            options = [
+                "fitness",
+                "fuel",
+                "meditation",
+                "memoirs",
+                "partner",
+                "posterity",
+                "discover",
+                "declare",
+            ]
+            day = date.today()
+            data = load_week(day)
+            done = {habit for _, habit in _day_done_list(data, day)}
+            habit_choice = prompt_habit_menu(options, done)
+            if not habit_choice:
+                return finish(0)
+            argv = [habit_choice]
+            skip_journal = True
+        elif choice == "Score today":
+            return finish(score_mode(["-d"]))
+        elif choice == "Score week":
+            return finish(score_mode(["-w"]))
+        elif choice == "Sync (pull+push)":
+            if not run_core4ctl("pull-core4"):
+                return 1
+            if not run_core4ctl("sync-core4"):
+                return 1
+            return 0
+        elif choice == "Pull (Core4 only)":
+            return 0 if run_core4ctl("pull-core4") else 1
+        elif choice == "Push (Core4 only)":
+            return 0 if run_core4ctl("sync-core4") else 1
+        elif choice == "Sources":
+            return finish(show_sources())
+        elif choice == "Build day/week":
+            return 0 if run_core4ctl("build") else 1
+        elif choice == "Export daily CSV":
+            return 0 if run_core4ctl("export-daily", "--days=56") else 1
+        elif choice == "Prune events":
+            return 0 if run_core4ctl("prune", "--keep-weeks=8") else 1
+        elif choice == "Finalize month":
+            month = f"{date.today().year:04d}-{date.today().month:02d}"
+            return 0 if run_core4ctl("finalize-month", month) else 1
+
+    if argv and argv[0] in ("sync", "core4sync", "sync-core4"):
+        if not run_core4ctl("pull-core4"):
+            return 1
+        if not run_core4ctl("sync-core4"):
+            return 1
         return 0
 
     if argv and argv[0] in ("finalize-week", "finalize", "seal-week", "seal"):
@@ -1241,12 +1733,12 @@ def main(argv: list[str]) -> int:
             res = finalize_week(week, force=force)
         except Exception as exc:
             print(f"core4: finalize failed: {exc}", file=sys.stderr)
-            return 1
+            return finish(1)
         if res.get("skipped"):
             print(f"Core4 {week}: already sealed (csv unchanged)")
         else:
             print(f"Core4 {week}: sealed -> {res.get('csv')}")
-        return 0
+        return finish(0)
 
     if argv and argv[0] in ("finalize-month", "seal-month", "month-close"):
         month = None
@@ -1264,12 +1756,12 @@ def main(argv: list[str]) -> int:
             res = finalize_month(month, force=force)
         except Exception as exc:
             print(f"core4: finalize-month failed: {exc}", file=sys.stderr)
-            return 1
+            return finish(1)
         if res.get("skipped"):
             print(f"Core4 {month}: already sealed (csv unchanged)")
         else:
             print(f"Core4 {month}: sealed -> {res.get('csv')}")
-        return 0
+        return finish(0)
 
     if argv and argv[0] in ("export-daily", "daily-csv"):
         days = 56
@@ -1283,9 +1775,9 @@ def main(argv: list[str]) -> int:
             path = export_daily_csv(days=days)
         except Exception as exc:
             print(f"core4: export-daily failed: {exc}", file=sys.stderr)
-            return 1
+            return finish(1)
         print(str(path))
-        return 0
+        return finish(0)
 
     if argv and argv[0] in ("prune", "prune-events"):
         keep_weeks = 8
@@ -1297,106 +1789,17 @@ def main(argv: list[str]) -> int:
                     pass
         res = prune_events(keep_weeks=keep_weeks)
         print(json.dumps(res, ensure_ascii=False))
-        return 0
+        return finish(0)
 
     # Score shortcuts:
     # - `core4 -w` (week total)
     # - `core4 -d` (day total, default today)
     # - `core4 -1d` (day total yesterday)
     if not argv:
-        return score_mode(["-d"])
+        return finish(score_mode(["-d"]))
     if argv[0].startswith("-") and argv[0] not in ("--date", "--dry-run", "--no-taskwarrior"):
-        return score_mode(argv)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "habit",
-        help="fitness|fuel|meditation|memoirs|partner|posterity|person1|person2|discover|declare",
-    )
-    parser.add_argument("rest", nargs="*", help="Optional: done | -1d | YYYY-MM-DD")
-    parser.add_argument("--date", dest="date", default=None, help="YYYY-MM-DD")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--no-taskwarrior", action="store_true", help="Only check JSON, do not write")
-    args = parser.parse_args(argv)
-
-    day_raw = args.date
-    for tok in args.rest:
-        if tok == "done":
-            continue
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", tok) or re.fullmatch(r"-\d+d", tok):
-            day_raw = tok
-
-    try:
-        target = resolve_target(args.habit, day_raw)
-    except Exception as exc:
-        print(f"core4: {exc}", file=sys.stderr)
-        return 2
-
-    if args.dry_run:
-        print(
-            f"core4 target: habit={target.habit} domain={target.domain} date={target.date_key} week={week_key(target.day)} key={target.entry_key}"
-        )
-        return 0
-
-    if is_already_logged(target):
-        print(f"✓ core4 {target.habit} ({target.date_key}) already logged (json)")
-        return 0
-
-    if args.no_taskwarrior:
-        print(f"! core4 {target.habit} ({target.date_key}) not in json (no write)")
-        return 1
-
-    # Fail-safe: if TW already contains the completion, just replay into JSON.
-    if tw_has_completed(target):
-        try:
-            bridge_core4_log(target, source="tracker_replay")
-            try_ticktick_push()
-            if is_already_logged(target):
-                print(f"✓ core4 {target.habit} ({target.date_key}) already done (replayed json)")
-            else:
-                print(f"✓ core4 {target.habit} ({target.date_key}) already done (replay queued)")
-            return 0
-        except Exception as exc:
-            print(f"core4: failed to replay bridge log: {exc}", file=sys.stderr)
-            # Fall through to task-based approach.
-
-    try:
-        ensure_taskwarrior()
-        # Concurrency/idempotency: if a pending task already exists, just complete it.
-        pending_uuid = find_pending_uuid(target)
-        if pending_uuid:
-            task_done(pending_uuid)
-            try_ticktick_push()
-            if is_already_logged(target):
-                print(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json ok)")
-            else:
-                print(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json pending)")
-            return 0
-
-        # Extra safety: if a completed task exists under the stable tag, replay JSON and exit.
-        completed_uuid = find_completed_uuid(target)
-        if completed_uuid:
-            bridge_core4_log(target, source="tracker_replay_uuid")
-            try_ticktick_push()
-            print(f"✓ core4 {target.habit} ({target.date_key}) already done (uuid)")
-            return 0
-
-        # Create+complete via Taskwarrior so hooks handle Bridge+TickTick.
-        task_add(target)
-        pending_uuid = find_pending_uuid(target)
-        if pending_uuid:
-            task_done(pending_uuid)
-        try_ticktick_push()
-    except Exception as exc:
-        print(f"core4: {exc}", file=sys.stderr)
-        return 1
-
-    # Best-effort verification: if hooks/bridge are fast, JSON should now contain it.
-    if is_already_logged(target):
-        print(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json ok)")
-        return 0
-    print(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json pending)")
-    return 0
+        return finish(score_mode(argv))
+    return run_habit_flow(argv, finish, skip_journal=skip_journal)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@
     ],
     "endpoints": [
       "/health",
-      "/bridge/core4/* (log, today, week)",
+      "/bridge/python-core4/* (log, today, week)",
       "/bridge/fruits/answer",
       "/bridge/tent/summary",
       "/bridge/task/* (operation, execute)",
@@ -50,7 +50,7 @@
     "/home/alpha/aos-hub/bridge/README.md"
   ],
   "test_prompts": [
-    "Bridge /bridge/core4/log returning 400 - debug invalid payload",
+    "Bridge /bridge/python-core4/log returning 400 - debug invalid payload",
     "Queue not flushing - check bridgectl flush",
     "Tailscale connection to GAS failing - debug"
   ],

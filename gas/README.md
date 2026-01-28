@@ -14,7 +14,7 @@ centres (Door, Voice, Frame, Freedom, Focus, Fire, Tent, Fruits).
 - Hot List: Drive `Alpha_Door/1-Potential` + optional TickTick sync.
 - Door War / War Stack / Hit List: Drive `Alpha_Door/2-Plan`, `3-Production`.
 - War Stack push: Telegram when `WARSTACK_TELEGRAM=1`.
-- Core4: event ledger in Drive `Alpha_Core4/.core4/events/` + derived weekly JSON `Alpha_Core4/core4_week_YYYY-WWW.json`, sheet `Core4_Log`.
+- Core4: event ledger in Drive `Alpha_Core4/.python-core4/events/` + derived weekly JSON `Alpha_Core4/core4_week_YYYY-WWW.json`, sheet `Core4_Log`.
 - Fruits: Drive `Alpha_Game/Fruits`, sheet `FRUITS_SHEET_ID`.
 - Fire Map: Drive `Alpha_Game/Fire` + Taskwarrior snapshot (`task_export.json`).
 
@@ -182,6 +182,9 @@ All bots are registered in `entrypoints.gs` via webhook (single endpoint).
 **Special Bots:**
 - `WATCHDOG_BOT_TOKEN` - System monitoring (optional, uses BOT_TOKEN if not set)
 - `FIRE_BOT_TOKEN` - Fire Bot (polling mode, separate webhook)
+**Core4 Silent Log (always on):**
+- Uses `CORE4_BOT_TOKEN` (fallback: `BOT_TOKEN`) and `CHAT_ID` for silent debug proofs on every Core4 log.
+Note: For GAS logging flows, add Telegram debug proofs (silent where possible) so every log has an external trace.
 
 ### Bot Commands
 
@@ -214,7 +217,7 @@ All bots are registered in `entrypoints.gs` via webhook (single endpoint).
 
 **Local CLI (Fish) → Core4 Tracker → Taskwarrior → Bridge → Event Ledger → Derived JSON → TickTick:**
 - Backfill via Fish: `fitness -1d`, `fuel -1d`, `partner -1d`, `posterity -1d` (or `core4 <habit> -1d`)
-- Fish calls `aos-hub/core4/tracker.py` which appends a Core4 *event* and rebuilds derived `core4_day_*.json` / `core4_week_*.json`. If it needs to, it creates a Taskwarrior task (tags `+core4 +<habit> +<domain> +core4_YYYYMMDD`, `due:YYYY-MM-DD`) and completes it.
+- Fish calls `aos-hub/python-core4/tracker.py` which appends a Core4 *event* and rebuilds derived `core4_day_*.json` / `core4_week_*.json`. If it needs to, it creates a Taskwarrior task (tags `+core4 +<habit> +<domain> +core4_YYYYMMDD`, `due:YYYY-MM-DD`) and completes it.
 - Taskwarrior hooks then:
   - create the matching TickTick task on add (`~/.task/hooks/on-add.core4`)
   - mark TickTick done on completion (`~/.task/hooks/on-modify.core4`, runs `ticktick_sync.py --push`)
@@ -284,7 +287,7 @@ tent_testWeeklyReview()
 ```
 
 **Data Sources:**
-- `core4_getWeekSummary(weekKey)` - derived Core4 JSON from `Alpha_Core4/core4_week_YYYY-WWW.json` (built from `Alpha_Core4/.core4/events/`)
+- `core4_getWeekSummary(weekKey)` - derived Core4 JSON from `Alpha_Core4/core4_week_YYYY-WWW.json` (built from `Alpha_Core4/.python-core4/events/`)
 - WebApp helpers:
   - `core4_logForDate(domain, task, dateKey)` (backfill via `YYYY-MM-DD`)
   - `core4_getDayState(dateKey)` (day entries + total)
@@ -357,6 +360,8 @@ setupTaskExportSnapshotTrigger()
 - `WATCHDOG_CHAT_ID` (fallback to CHAT_ID)
 - `WARSTACK_TELEGRAM` (1 to enable)
 - `CORE4_SHEET_ID`
+- `CORE4_SILENT_LOG`
+- `CORE4_SILENT_CHAT_ID`
 - `FRUITS_SHEET_ID`
 - `FRUITS_DRIVE_FOLDER_ID`
 - GPT URLs: `BODY_GPT_URL`, `BEING_GPT_URL`, `BALANCE_GPT_URL`, `BUSINESS_GPT_URL`
@@ -374,6 +379,7 @@ setupTaskExportSnapshotTrigger()
 - On first HQ load, the frontend creates `AOS_SESSION_ID` and calls `getSystemStatus_({ sessionId })`.
 - `getSystemStatus_` delegates to `watchdog_getSystemStatus_` (in `watchdog.gs`) which sends a one-time Telegram status ping per session ID.
 - Ping requires `WATCHDOG_BOT_TOKEN` + `WATCHDOG_CHAT_ID` (fallback: `CHAT_ID`); pass `{ ping: false }` to suppress.
+- If `{ touchHeartbeat: true }` and Bridge `/health` is OK, the watchdog heartbeat timestamp is refreshed (manual heartbeat when systemd ping is disabled).
 - Heartbeat ages stay relevant if Bridge `/health` is unreachable.
 
 ## Debug helpers (GAS console)

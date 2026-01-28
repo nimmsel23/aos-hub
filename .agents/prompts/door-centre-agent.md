@@ -25,7 +25,7 @@ USER (Telegram/Browser)
 │    - Door_*.html panels                 │
 │                                          │
 │ 3. Bots                                 │
-│    - python-warstack-bot (Telegram)    │
+│    - python-warstack (Telegram)    │
 │    - router door_flow extension         │
 └─────────────────────────────────────────┘
     ↓
@@ -102,7 +102,7 @@ USER (Telegram/Browser)
   - `AOS_BRIDGE_URL` - Bridge API base
 
 **Bots:**
-- **python-warstack-bot/warstack_bot.py**
+- **python-warstack/warstack_bot.py**
   - On-demand Telegram-guided War Stack flow
   - Idle timeout: 900s default (`WARSTACK_IDLE_TIMEOUT`)
   - `/resume` continues from next missing step
@@ -120,7 +120,7 @@ USER (Telegram/Browser)
 **Bridge (Port 8080):**
 - Endpoints:
   - `POST /bridge/warstack/draft` - Save War Stack draft for /resume
-- Purpose: Bridge python-warstack-bot resume capability with GAS
+- Purpose: Bridge python-warstack resume capability with GAS
 
 **Data Layer:**
 - `~/AlphaOS-Vault/Door/1-Potential/` - Hot List markdown files
@@ -165,7 +165,7 @@ function addHotListItem(title, description, domain, priority) {
 Three independent War Stack interfaces must work correctly.
 
 **War Stack Interfaces:**
-1. **python-warstack-bot** - Telegram conversation
+1. **python-warstack** - Telegram conversation
 2. **index-node web UI** - Browser-based
 3. **GAS web app** - Cloud fallback
 
@@ -199,7 +199,7 @@ task add "[Hit 4]" project:door tags:war-stack due:...
 ```
 ```
 
-**python-warstack-bot debugging:**
+**python-warstack debugging:**
 - Check `WARSTACK_IDLE_TIMEOUT` if bot stops
 - Verify `/resume` loads draft from bridge `/bridge/warstack/draft`
 - Check environment vars for GAS webhook + Telegram push
@@ -275,7 +275,7 @@ Access these files for information:
    - `index-node/AGENTS.md` - Node.js coding style, build commands
    - `router/AGENTS.md` - Router extension patterns
    - `gas/AGENTS.md` - GAS scope isolation, redeploy checklist
-   - `python-warstack-bot/AGENTS.md` - Bot idle timeout, resume flow
+   - `python-warstack/AGENTS.md` - Bot idle timeout, resume flow
 
 2. **Documentation:**
    - `DOCS/gas/door-hotlist.md` - Hot List documentation
@@ -286,7 +286,7 @@ Access these files for information:
    - `index-node/server.js` - Door API routes
    - `public/door/` - Door UI
    - `gas/door*.gs` - GAS Door logic
-   - `python-warstack-bot/warstack_bot.py` - War Stack bot
+   - `python-warstack/warstack_bot.py` - War Stack bot
    - `router/extensions/door_flow.py` - Router extension
 
 4. **Config:**
@@ -323,7 +323,7 @@ Agent:
 **Trigger:** User selects a door from Door War and wants strategic breakdown
 
 **Three paths:**
-1. **Telegram (python-warstack-bot):**
+1. **Telegram (python-warstack):**
    - User sends `/war` or bot triggers conversation
    - Bot asks 4 questions (Fact, Obstacle, 4 Hits, Responsibility)
    - Idle timeout after 900s
@@ -424,7 +424,7 @@ You have access to:
 
 ## Edge Cases & Gotchas
 
-### Edge Case 1: python-warstack-bot Idle Timeout
+### Edge Case 1: python-warstack Idle Timeout
 
 **Problem:** Bot stops responding after 900s of inactivity
 **Solution:**
@@ -522,7 +522,7 @@ ls -lh ~/AlphaOS-Vault/Door/1-Potential/
 
 **Production-ready components:**
 - Hot List capture (index-node + gas)
-- python-warstack-bot (Telegram conversation)
+- python-warstack (Telegram conversation)
 - War Stack markdown export
 - Basic 4P Flow structure
 
@@ -553,7 +553,7 @@ When user requests work on in-development or planned features, acknowledge the s
 - Data flow: GAS UI → Drive → Vault (via rclone)
 
 ### With bots:
-- python-warstack-bot:
+- python-warstack:
   - Telegram conversation flow
   - Idle timeout + /resume
   - Draft persistence via bridge
@@ -577,7 +577,7 @@ When user requests work on in-development or planned features, acknowledge the s
 
 **User Request:**
 ```
-User sends to python-warstack-bot: "Create War Stack for Vitaltrainer Ausbildung"
+User sends to python-warstack: "Create War Stack for Vitaltrainer Ausbildung"
 ```
 
 **Bot Conversation:**
@@ -640,7 +640,7 @@ Bot likely hit idle timeout (900s default). Let's resume:
 3. If /resume doesn't work:
    - Check bot is running: ps aux | grep warstack_bot
    - Check WARSTACK_IDLE_TIMEOUT env var
-   - Restart bot if needed: python python-warstack-bot/warstack_bot.py
+   - Restart bot if needed: python python-warstack/warstack_bot.py
 
 4. Alternative: Complete War Stack via web UI at http://127.0.0.1:8799/door
 ```
@@ -690,7 +690,7 @@ Priority field implemented and working across all interfaces
 **Self-test checklist:**
 1. [ ] Can read all component AGENTS.md files
 2. [ ] Can trace War Stack flow across all 3 interfaces
-3. [ ] Can debug python-warstack-bot idle timeout
+3. [ ] Can debug python-warstack idle timeout
 4. [ ] Can implement new field across components
 5. [ ] Can export markdown to correct vault locations
 6. [ ] Understands 4P Flow phases
@@ -706,7 +706,7 @@ Priority field implemented and working across all interfaces
 ## Notes
 
 - **War Stack** has 3 independent interfaces but all output same format
-- **python-warstack-bot** idle timeout is a feature (not a bug) - prevents bot running forever
+- **python-warstack** idle timeout is a feature (not a bug) - prevents bot running forever
 - **4P Flow** is sequential: Potential → Plan → Production → Profit
 - **Domino Doors** are high-leverage - opening one door opens many others
 - **menu.yaml** is Single Source of Truth for routing (never hardcode /door URL)

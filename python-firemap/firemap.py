@@ -1,10 +1,14 @@
-"""Firemap engine shared by the local Fire bot and tooling.
+#!/usr/bin/env python3
+"""Firemap engine (Taskwarrior -> grouped messages).
 
-Goal:
-- derive a minimal, readable daily/weekly execution list from Taskwarrior
-- include due + scheduled + waiting
-- keep output grouped per project (one message per project)
-- keep overdue separate
+Design goals:
+- Derive minimal daily/weekly execution list from Taskwarrior
+- Include due + scheduled + wait
+- Keep output grouped per project (one message per project)
+- Keep overdue separate
+
+AlphaOS alignment:
+- Fire Map is tactical output (weekly war + daily execution)
 """
 
 from __future__ import annotations
@@ -13,7 +17,9 @@ import datetime as dt
 import json
 import os
 import subprocess
-from typing import Any, Dict, Iterable, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List
+from zoneinfo import ZoneInfo
 
 
 TASK_BIN = os.environ.get("AOS_TASK_BIN", "task")
@@ -27,6 +33,15 @@ INCLUDE_UNDATED_WEEKLY = os.environ.get("AOS_FIREMAP_INCLUDE_UNDATED_WEEKLY", "1
     "on",
 )
 MAX_UNDATED = int(os.environ.get("AOS_FIREMAP_MAX_UNDATED", "10") or "10")
+
+DEFAULT_TZ = os.environ.get("AOS_TZ", "Europe/Vienna")
+TZ = ZoneInfo(DEFAULT_TZ)
+
+
+@dataclass(frozen=True)
+class Window:
+    start: dt.date
+    end: dt.date  # inclusive end
 
 
 def _run_task_export(args: List[str]) -> List[Dict[str, Any]]:
@@ -65,6 +80,8 @@ def _dedup(tasks: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _task_line(task: Dict[str, Any]) -> str:
     desc = str(task.get("description") or "").strip()
     tid = str(task.get("id") or "").strip()
+    if not desc:
+        return ""
     if tid:
         return f"- {tid} {desc}"
     return f"- {desc}"
@@ -78,28 +95,23 @@ def _group_by_project(tasks: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[st
     return groups
 
 
-def _today_iso() -> str:
-    return dt.date.today().isoformat()
+def _today() -> dt.date:
+    return dt.datetime.now(TZ).date()
 
 
-def _filters_for_scope(scope: str) -> List[str]:
-    if scope == "weekly":
-        # Weekly view should not duplicate overdue; overdue is handled separately.
-        # Use "after:yesterday" to include today while excluding anything < today.
-        return [
-            "+fire",
-            "(status:pending or status:waiting)",
-            "((due.after:yesterday and due.before:eow+1day) or (scheduled.after:yesterday and scheduled.before:eow+1day) or (wait.after:yesterday and wait.before:eow+1day))",
-        ]
-    # Daily view: only today (overdue handled separately).
-    return [
-        "+fire",
-        "(status:pending or status:waiting)",
-        "((due.after:yesterday and due.before:tomorrow) or (scheduled.after:yesterday and scheduled.before:tomorrow) or (wait.after:yesterday and wait.before:tomorrow))",
-    ]
+def _iso(d: dt.date) -> str:
+    return d.isoformat()
 
 
-def _filters_overdue() -> List[str]:
+def _week_window(today: dt.date) -> Window:
+    # ISO week: Monday=1 ... Sunday=7
+    start = today - dt.timedelta(days=today.isoweekday() - 1)
+    end = start + dt.timedelta(days=6)
+    return Window(start=start, end=end)
+
+
+def _filters_overdue(today: dt.date) -> List[str]:
+    # Anything strictly before today counts as overdue.
     return [
         "+fire",
         "(status:pending or status:waiting)",
@@ -107,9 +119,27 @@ def _filters_overdue() -> List[str]:
     ]
 
 
+def _filters_daily(today: dt.date) -> List[str]:
+    # Window: today only (>= today AND < tomorrow)
+    return [
+        "+fire",
+        "(status:pending or status:waiting)",
+        "((due.after:yesterday and due.before:tomorrow) or (scheduled.after:yesterday and scheduled.before:tomorrow) or (wait.after:yesterday and wait.before:tomorrow))",
+    ]
+
+
+def _filters_weekly(window: Window) -> List[str]:
+    # Weekly view excludes overdue; shows tasks within [today..end_of_week]
+    # Taskwarrior doesn't natively accept explicit ISO date ranges without comparisons;
+    # we'll approximate with relative terms (today..eow).
+    return [
+        "+fire",
+        "(status:pending or status:waiting)",
+        "((due.after:yesterday and due.before:eow+1day) or (scheduled.after:yesterday and scheduled.before:eow+1day) or (wait.after:yesterday and wait.before:eow+1day))",
+    ]
+
+
 def _filters_undated() -> List[str]:
-    # Optional: include +fire tasks without due/scheduled/wait in weekly view,
-    # so Fire doesn't look empty if tasks aren't date-stamped yet.
     return [
         "+fire",
         "(status:pending or status:waiting)",
@@ -123,10 +153,12 @@ def debug_counts(scope: str) -> Dict[str, int]:
     if scope not in ("daily", "weekly"):
         scope = "daily"
 
+    today = _today()
     total = _run_task_export(["+fire", "(status:pending or status:waiting)"])
-    overdue = _run_task_export(_filters_overdue())
-    windowed = _run_task_export(_filters_for_scope(scope))
-    undated = _run_task_export(_filters_undated()) if INCLUDE_UNDATED_WEEKLY else []
+    overdue = _run_task_export(_filters_overdue(today))
+    windowed = _run_task_export(_filters_daily(today) if scope == "daily" else _filters_weekly(_week_window(today)))
+    undated = _run_task_export(_filters_undated()) if (scope == "weekly" and INCLUDE_UNDATED_WEEKLY) else []
+
     return {
         "total_fire": len(_dedup(total)),
         "overdue": len(_dedup(overdue)),
@@ -136,13 +168,21 @@ def debug_counts(scope: str) -> Dict[str, int]:
 
 
 def build_overdue_message() -> str:
-    tasks = _dedup(_run_task_export(_filters_overdue()))
-    lines = [_task_line(t) for t in tasks if _task_line(t)]
-    lines = [l for l in lines if l.strip()]
+    today = _today()
+    tasks = _dedup(_run_task_export(_filters_overdue(today)))
+
+    lines = []
+    for t in tasks:
+        line = _task_line(t)
+        if line:
+            lines.append(line)
+
     if not lines:
         return "✅ No overdue fire tasks."
+
     if len(lines) > MAX_OVERDUE_LINES:
         lines = lines[:MAX_OVERDUE_LINES] + ["- ... (truncated)"]
+
     body = "\n".join(lines)
     if OUTPUT_FORMAT == "plain":
         return "⛔ Overdue Fire\n" + body
@@ -154,29 +194,43 @@ def build_project_messages(scope: str) -> List[str]:
     if scope not in ("daily", "weekly"):
         return []
 
-    tasks = _dedup(_run_task_export(_filters_for_scope(scope)))
-    if scope == "weekly" and INCLUDE_UNDATED_WEEKLY:
-        undated = _dedup(_run_task_export(_filters_undated()))
-        if undated:
-            # Limit to avoid flooding weekly output.
-            tasks.extend(undated[:MAX_UNDATED])
+    today = _today()
+
+    if scope == "daily":
+        tasks = _dedup(_run_task_export(_filters_daily(today)))
+        label = f"today — {_iso(today)}"
+    else:
+        w = _week_window(today)
+        tasks = _dedup(_run_task_export(_filters_weekly(w)))
+        label = f"week — {_iso(w.start)}..{_iso(w.end)}"
+        if INCLUDE_UNDATED_WEEKLY:
+            undated = _dedup(_run_task_export(_filters_undated()))
+            if undated:
+                tasks.extend(undated[:MAX_UNDATED])
+
     groups = _group_by_project(tasks)
-    now = _today_iso()
     out: List[str] = []
+
     for project in sorted(groups.keys()):
         items = groups[project]
-        lines = [_task_line(t) for t in items if _task_line(t)]
-        lines = [l for l in lines if l.strip()]
+        lines = []
+        for t in items:
+            line = _task_line(t)
+            if line:
+                lines.append(line)
+
         if not lines:
             continue
         if len(lines) > MAX_PER_PROJECT:
             lines = lines[:MAX_PER_PROJECT] + ["- ... (truncated)"]
-        title = "🔥 Fire " + ("week" if scope == "weekly" else "today") + f" — {project} ({now})"
+
+        title = f"🔥 Fire {label} — {project}"
         body = "\n".join(lines)
         if OUTPUT_FORMAT == "plain":
             out.append(title + "\n" + body)
         else:
             out.append(f"*{title}*\n```markdown\n{body}\n```")
+
     return out
 
 

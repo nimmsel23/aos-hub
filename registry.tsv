@@ -8,7 +8,7 @@ hot	Hot Capture	hot	tool	manual	Create HOT file
 hotlist	Hot List	hotlist	tool	manual	List HOT files
 hotopen	Hot Open	hotopen	tool	manual	Open HOT file
 document_with_gemini	Gemini Docs	document-with-gemini.py	python	dotfiles_bin	AI documentation with Gemini API
-ticktick_sync	TickTick Sync	ticktick_sync.py	python	dotfiles_bin	Taskwarrior ↔ TickTick sync
+ticktick_sync	TickTick Sync	python-ticktick/ticktick_sync.py	python	aos-hub	Taskwarrior ↔ TickTick sync
 alphaos_launcher	Python Launcher	alphaos-launcher	python	dotfiles_bin	Extended features (YAML/plugins)
 router_bot	Router Bot	router_bot.py	python	dotfiles_bin	Telegram AlphaOS Router Bot
 obsidian_tw_sync	Obsidian-TW Sync	obsidian_tw_sync.sh	python	dotfiles_bin	Obsidian ↔ Taskwarrior sync
@@ -52,15 +52,15 @@ session_end_analyzer	session-end-analyzer	session-end-analyzer	script	dotfiles_b
 auto_doc_commit	auto-doc-commit	auto-doc-commit	script	dotfiles_bin	
 claude_session_end_pipeline	claude-session-end-pipeline	claude-session-end-pipeline	script	dotfiles_bin	
 document_with_gemini_py	document-with-gemini.py	document-with-gemini.py	python	dotfiles_bin	
-ticktick_sync_py	ticktick_sync.py	ticktick_sync.py	python	dotfiles_bin	
+ticktick_sync_py	ticktick_sync.py	python-ticktick/ticktick_sync.py	python	aos-hub	
 alpha_obsidian_module_py	alpha_obsidian_module.py	alpha_obsidian_module.py	python	dotfiles_bin	
 claudewarrior	claudewarrior	claudewarrior	script	dotfiles_bin	
 claude_prompt_telegram_hook	claude-prompt-telegram-hook	claude-prompt-telegram-hook	script	dotfiles_bin	
 with_env	with-env	with-env	script	dotfiles_bin	
 agent_registry_sync	agent-registry-sync	agent-registry-sync	script	dotfiles_bin	
-ticktick_tag_watcher_py	ticktick_tag_watcher.py	ticktick_tag_watcher.py	python	dotfiles_bin	
+ticktick_tag_watcher_py	ticktick_tag_watcher.py	python-ticktick/ticktick_tag_watcher.py	python	aos-hub	
 door_lifecycle_sh	door_lifecycle.sh	door_lifecycle.sh	script	dotfiles_bin	
-door_uuid_sync_py	door_uuid_sync.py	door_uuid_sync.py	python	dotfiles_bin	
+door_uuid_sync_py	door_uuid_sync.py	python-ticktick/door_uuid_sync.py	python	aos-hub	
 war_stack_create_sh	war_stack_create.sh	war_stack_create.sh	script	dotfiles_bin	
 git_sync_enforcer	git-sync-enforcer	git-sync-enforcer	script	dotfiles_bin	
 syncctl	syncctl	syncctl	script	dotfiles_bin	

@@ -1,6 +1,6 @@
 # Core4 CLI (local habit tracker)
 
-`core4` is a thin wrapper around `aos-hub/core4/tracker.py`. It logs one Core4 habit as done and persists it as an append-only event (`.json` per done).
+`core4` is a thin wrapper around `aos-hub/python-core4/tracker.py`. It logs one Core4 habit as done and persists it as an append-only event (`.json` per done).
 
 See `aos-hub/DOCS/CORE4.md` for the full “how it works”.
 
@@ -22,8 +22,8 @@ The stable identity is `YYYY-MM-DD:domain:habit` (the `key`). Multiple events ca
 ## Storage model (event ledger → day → week)
 
 - **Event ledger (append-only, never edited):**
-  - Local: `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
-  - Mount: `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
+  - Local: `~/AlphaOS-Vault/Core4/.python-core4/events/YYYY-MM-DD/*.json`
+  - Mount: `~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/*.json`
 - **Derived artifacts (rebuilt anytime):**
   - Day: `~/AlphaOS-Vault/Core4/core4_day_YYYY-MM-DD.json`
   - Week: `~/AlphaOS-Vault/Core4/core4_week_YYYY-WWW.json`
@@ -40,4 +40,4 @@ Override read roots with:
 ## Integration notes
 
 - Taskwarrior tasks are created+completed with `+core4` and `core4_YYYYMMDD` tags; the Taskwarrior hook logs to Bridge, and falls back to writing a local event if Bridge is down.
-- TickTick completion is best-effort via `~/.dotfiles/bin/ticktick_sync.py --push` (mapping stored in `~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json`).
+- TickTick completion is best-effort via `~/aos-hub/python-ticktick/ticktick_sync.py --push` (mapping stored in `~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json`).

@@ -525,7 +525,7 @@ ls ~/AlphaOS-Vault/Door/1-Potential/
 
 - [TESTING_TASKWARRIOR_UUID.md](TESTING_TASKWARRIOR_UUID.md) - Complete test suite
 - [bridge/README.md](../bridge/README.md) - Bridge API
-- [python-warstack-bot/README.md](../python-warstack-bot/README.md) - War Stack Bot
+- [python-warstack/README.md](../python-warstack/README.md) - War Stack Bot
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [index-node/README.md](../index-node/README.md) - Node.js server docs
 

@@ -49,16 +49,16 @@ Quick, human-readable map of what each subsystem does, what actually runs in pro
   - Config: `aos-hub/config/aos-centres.env`.
   - Source of truth: `DOCS/aos-centres.md`.
 
-- **War Stack Bot** (`python-warstack-bot/`)
+- **War Stack Bot** (`python-warstack/`)
   - On-demand Telegram bot for War Stack creation.
   - `/resume` uses JSON in `WARSTACK_DATA_DIR`.
-  - Source of truth: `python-warstack-bot/README.md`, `python-warstack-bot/AGENTS.md`.
+  - Source of truth: `python-warstack/README.md`, `python-warstack/AGENTS.md`.
 
-- **Fire Map Bot** (`python-firemap-bot/`)
+- **Fire Map Bot** (`python-firemap/`)
   - Standalone module inside `aos-hub` (own setup + docs).
   - On-demand Taskwarrior snapshot sender.
   - Triggered via router `/fire` or run directly.
-  - Source of truth: `python-firemap-bot/README.md`, `python-firemap-bot/AGENTS.md`.
+  - Source of truth: `python-firemap/README.md`, `python-firemap/AGENTS.md`.
 
 ## Data Flow (Current)
 
@@ -103,8 +103,8 @@ Details live in `DOCS/gas/door.md` and `DOCS/gas/door-hotlist.md`.
 - `DOCS/index-node_README.md` → `index-node/README.md`
 - `DOCS/aos-centres.md` → Desktop Centre integration
 - `DOCS/centres.md` → Centre index (URLs/storage/config)
-- `DOCS/python-warstack-bot.md` → War Stack bot overview
-- `DOCS/python-firemap-bot.md` → Fire Map bot overview
+- `DOCS/python-warstack.md` → War Stack bot overview
+- `DOCS/python-firemap.md` → Fire Map bot overview
 - `DOCS/node/taskwarrior.md` → Taskwarrior + bridge + node flow
 
 ## Centre Docs

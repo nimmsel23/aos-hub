@@ -5,8 +5,77 @@ CORE4_BIN="${CORE4_BIN:-$HOME/bin/core4}"
 HUB_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
 UNIT_SRC_DIR="${HUB_DIR}/systemd"
 UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+CORE4_LOCAL_DIR="${AOS_CORE4_LOCAL_DIR:-$HOME/AlphaOS-Vault/Core4}"
+CORE4_MOUNT_DIR="${AOS_CORE4_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_Core4}"
+CORE4_REMOTE="${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+vaultctl_cmd() {
+  local repo_vaultctl="${HUB_DIR}/scripts/sync-utils/vaultctl"
+  local repo_alt="${HUB_DIR}/scripts/utils/vaultctl"
+  if [[ -x "$repo_vaultctl" ]]; then
+    echo "$repo_vaultctl"
+    return 0
+  fi
+  if [[ -x "$repo_alt" ]]; then
+    echo "$repo_alt"
+    return 0
+  fi
+  if have vaultctl; then
+    echo "vaultctl"
+    return 0
+  fi
+  if [[ -x "$HOME/.dotfiles/bin/vaultctl" ]]; then
+    echo "$HOME/.dotfiles/bin/vaultctl"
+    return 0
+  fi
+  return 1
+}
+
+notify_tele() {
+  local msg="$1"
+  if command -v tele >/dev/null 2>&1; then
+    tele -s "$msg" &
+  fi
+}
+
+run_rclone_copy() {
+  local label="$1"
+  local src="$2"
+  local dst="$3"
+  local rclone_bin
+  rclone_bin="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
+  if [[ -z "${rclone_bin:-}" || ! -x "$rclone_bin" ]]; then
+    echo "core4ctl: rclone not found" >&2
+    return 1
+  fi
+  local output
+  local rc=0
+  output="$("$rclone_bin" copy "$src" "$dst" \
+    --stats=1s \
+    --stats-one-line \
+    --contimeout 5s \
+    --timeout 30s \
+    --retries 1 \
+    --low-level-retries 1 \
+    2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "$output" >&2
+    return "$rc"
+  fi
+  local last
+  last="$(printf "%s\n" "$output" | tail -n 1)"
+  local transferred
+  transferred="$(printf "%s\n" "$last" | sed -n 's/.*Transferred:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p')"
+  if [[ -z "${transferred:-}" ]]; then
+    return 0
+  fi
+  if [[ "$transferred" != "0" ]]; then
+    notify_tele "Core4 ${label}: transferred ${transferred}"
+  fi
+  return 0
+}
 
 usage() {
   cat <<'EOF'
@@ -18,6 +87,9 @@ Commands
   status                         Show quick Core4 status + scores
   menu                           Gum menu (if available)
   build                          Rebuild week/day artifacts (prints nothing on success)
+  sync                           Push Core4 vault to Drive (via vaultctl copy)
+  sync-core4                     Push Core4 only via rclone (copy from Core4)
+  pull-core4                     Pull Core4 only via rclone (copy to Alpha_Core4)
   export-daily [--days N]         Regenerate rolling `core4_daily.csv`
   prune [--keep-weeks N]          Prune local event files older than the window
   finalize-month [YYYY-MM]        Write `core4_YYYY-MM.csv` (month close; idempotent)
@@ -48,13 +120,36 @@ cmd_status() {
   "$CORE4_BIN" -d --quiet || true
   "$CORE4_BIN" -w --quiet || true
   echo ""
-  if [[ -d "$HOME/AlphaOS-Vault/Core4/.core4/events" ]]; then
+  if [[ -d "$HOME/AlphaOS-Vault/Core4/.python-core4/events" ]]; then
     echo "events (local):"
-    find "$HOME/AlphaOS-Vault/Core4/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
+    find "$HOME/AlphaOS-Vault/Core4/.python-core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
   fi
   if [[ -f "$HOME/AlphaOS-Vault/Core4/core4_daily.csv" ]]; then
     echo "daily csv: $HOME/AlphaOS-Vault/Core4/core4_daily.csv"
   fi
+}
+
+cmd_sync() {
+  local vaultctl
+  vaultctl="$(vaultctl_cmd || true)"
+  if [[ -z "${vaultctl:-}" ]]; then
+    echo "core4ctl: vaultctl not found" >&2
+    exit 1
+  fi
+  "$vaultctl" sync
+}
+
+cmd_sync_core4() {
+  if [[ ! -d "$CORE4_LOCAL_DIR" ]]; then
+    echo "core4ctl: missing local Core4 dir: $CORE4_LOCAL_DIR" >&2
+    exit 1
+  fi
+  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE"
+}
+
+cmd_pull_core4() {
+  mkdir -p "$CORE4_MOUNT_DIR"
+  run_rclone_copy "pull" "$CORE4_REMOTE" "$CORE4_MOUNT_DIR"
 }
 
 cmd_build() {
@@ -80,6 +175,9 @@ cmd_menu() {
       printf "%s\n" \
         "Status" \
         "Build (rebuild day/week)" \
+        "Sync Core4 (vaultctl copy)" \
+        "Sync Core4 only (rclone copy)" \
+        "Pull Core4 only (rclone copy)" \
         "Export daily CSV (56d)" \
         "Prune events (keep 8w)" \
         "Finalize month (YYYY-MM)" \
@@ -91,6 +189,9 @@ cmd_menu() {
     case "$choice" in
       "Status") cmd_status ;;
       "Build (rebuild day/week)") cmd_build ;;
+      "Sync Core4 (vaultctl copy)") cmd_sync ;;
+      "Sync Core4 only (rclone copy)") cmd_sync_core4 ;;
+      "Pull Core4 only (rclone copy)") cmd_pull_core4 ;;
       "Export daily CSV (56d)") "$CORE4_BIN" export-daily --days=56 >/dev/null && echo "ok" ;;
       "Prune events (keep 8w)") "$CORE4_BIN" prune-events --keep-weeks=8 ;;
       "Finalize month (YYYY-MM)")
@@ -128,6 +229,9 @@ case "${1:-}" in
   menu) cmd_menu ;;
   status) cmd_status ;;
   build) cmd_build ;;
+  sync) cmd_sync ;;
+  sync-core4) cmd_sync_core4 ;;
+  pull-core4) cmd_pull_core4 ;;
   export-daily)
     need_core4
     exec "$CORE4_BIN" export-daily "${@:2}"

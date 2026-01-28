@@ -319,10 +319,10 @@ GET /api/generals/latest?type=frame|freedom|focus|fire|voice  # Get latest Map
 
 #### Fire Map Bot (Telegram)
 
-**Location:** `python-firemap-bot/firemap_bot.py`
+**Location:** `python-firemap/firemap_bot.py`
 **Commands:** `/fire` (daily), `/fireweek` (weekly)
 **Data Source:** Taskwarrior (`+fire` tasks)
-**Engine:** `python-firemap-bot/firemap.py` (prints Markdown-formatted text; overdue separate; grouped per project)
+**Engine:** `python-firemap/firemap.py` (prints Markdown-formatted text; overdue separate; grouped per project)
 
 #### Fire Map Sync (CLI)
 

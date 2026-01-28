@@ -133,13 +133,23 @@ function fruits_debugInfo() {
 }
 
 function fruits_getQuestions_() {
-  // questions live in a HTML file so the same data can be used in UI + bot.
-  const raw = HtmlService.createHtmlOutputFromFile(FRUITS_CONFIG.QUESTIONS_FILE).getContent().trim();
+  // Questions live in a HTML file so the same data can be used in UI + bot.
+  let raw = HtmlService.createHtmlOutputFromFile(FRUITS_CONFIG.QUESTIONS_FILE).getContent();
+  raw = String(raw || '').replace(/^\uFEFF/, '').trim();
 
   // Try raw JSON first (pure JSON file).
   try {
     return JSON.parse(raw);
   } catch (_) {}
+
+  // Fallback: strip outer HTML and parse the first {...} block.
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+    } catch (_) {}
+  }
 
   // Fallback: extract from <script> const QUESTIONS = {...};
   const idx = raw.indexOf('const QUESTIONS');

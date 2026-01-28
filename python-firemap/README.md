@@ -10,7 +10,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-No extra deps required (uses stdlib). Firemap logic lives in `python-firemap-bot/firemap.py`.
+No extra deps required (uses stdlib). Firemap logic lives in `python-firemap/firemap.py`.
 
 ## Environment
 

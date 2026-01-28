@@ -1083,9 +1083,9 @@ door_ingestWarStack_({markdown: "...", sessionId: "test"})
 
 - [TESTING_TASKWARRIOR_UUID.md](TESTING_TASKWARRIOR_UUID.md) - Complete test suite
 - [bridge/README.md](../bridge/README.md) - Bridge API documentation
-- [python-warstack-bot/README.md](../python-warstack-bot/README.md) - Telegram War Stack Bot
+- [python-warstack/README.md](../python-warstack/README.md) - Telegram War Stack Bot
 - [scripts/war-stack/README.md](../scripts/war-stack/README.md) - CLI automation
-- [scripts/ticktick/README.md](../scripts/ticktick/README.md) - TickTick integration
+- [python-ticktick/README.md](../python-ticktick/README.md) - TickTick integration
 - [gas/README.md](../gas/README.md) - GAS HQ documentation
 
 ---
