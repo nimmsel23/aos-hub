@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Daily "AlphaOS blueprints" chapter sender (Telegram via `tele`).
+# - Keeps a cursor so you get the next chapter each run.
+# - Default: sends as document (Markdown file) with a short caption.
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+
+AOS_VAULT_DIR_DEFAULT="/home/alpha/AlphaOS-Vault"
+VAULT_DIR="${AOS_VAULT_DIR:-$AOS_VAULT_DIR_DEFAULT}"
+BLUEPRINT_DIR="${AOS_BLUEPRINT_DIR:-$VAULT_DIR/AlphaOS-blueprints}"
+
+STATE_FILE_DEFAULT="${HOME}/.local/state/alphaos/blueprintctl.json"
+STATE_FILE="${AOS_BLUEPRINT_STATE_FILE:-$STATE_FILE_DEFAULT}"
+
+TELE_BIN="${AOS_TELE_BIN:-tele}"
+SILENT_DEFAULT="${AOS_BLUEPRINT_SILENT:-1}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  blueprintctl <command> [options]
+
+Commands:
+  list                 List chapters in scope
+  status               Show cursor + next chapter
+  next                 Print next chapter path
+  send                 Send next chapter to Telegram (and advance cursor)
+  reset                Reset cursor to start of scope (pos=0)
+
+Options:
+  --scope <name>       all|foundation|voice|door|game (default: all)
+  --silent             Send silently (default)
+  --loud               Send with notification
+  --force              Send even if already sent today
+  --text               Send as message text (splits into chunks), not as document
+  --env <file>         Source env file before running (KEY=VALUE shell format)
+  --state <file>       Override state file
+
+Env:
+  AOS_ENV_FILE (default: <repo>/.env/aos.env)
+  AOS_VAULT_DIR, AOS_BLUEPRINT_DIR
+  AOS_BLUEPRINT_STATE_FILE
+  AOS_BLUEPRINT_SILENT=1
+  AOS_TELE_BIN=tele
+EOF
+}
+
+die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
+warn() { printf "WARN: %s\n" "$*" >&2; }
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+source_env() {
+  local f="$1"
+  if ! aos_env_load "$f" "$ROOT_DIR"; then
+    die "${AOS_ENV_LOAD_ERROR:-failed to load env}"
+  fi
+}
+
+today_ymd() { date +%F; }
+
+scope_to_range() {
+  # Prints: "min max"
+  case "${1:-all}" in
+    all) echo "1 999" ;;
+    foundation) echo "1 17" ;;
+    voice) echo "18 24" ;;
+    door) echo "25 31" ;;
+    game) echo "32 42" ;;
+    *) die "unknown scope: $1 (use all|foundation|voice|door|game)" ;;
+  esac
+}
+
+chapters_json() {
+  local scope="$1"
+  local min max
+  read -r min max < <(scope_to_range "$scope")
+
+  [[ -d "$BLUEPRINT_DIR" ]] || die "missing blueprint dir: $BLUEPRINT_DIR"
+
+  python3 - "$BLUEPRINT_DIR" "$min" "$max" <<'PY'
+import json, os, re, sys
+
+root = sys.argv[1]
+min_n = int(sys.argv[2])
+max_n = int(sys.argv[3])
+
+rx = re.compile(r"^\s*(\d+)\s*-\s*(.+?)\s*\.md\s*$", re.IGNORECASE)
+
+out = []
+try:
+  names = os.listdir(root)
+except FileNotFoundError:
+  print("[]")
+  sys.exit(0)
+
+for name in names:
+  if not name.lower().endswith(".md"):
+    continue
+  m = rx.match(name)
+  if not m:
+    continue
+  n = int(m.group(1))
+  if n < min_n or n > max_n:
+    continue
+  title = m.group(2)
+  out.append({"n": n, "title": title, "path": os.path.join(root, name)})
+
+out.sort(key=lambda x: x["n"])
+print(json.dumps(out))
+PY
+}
+
+load_state() {
+  local f="$1"
+  python3 - "$f" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+if not os.path.exists(path):
+  print(json.dumps({"scope":"all","pos":0,"last_sent":""}))
+  sys.exit(0)
+try:
+  with open(path, "r", encoding="utf-8") as fh:
+    data = json.load(fh) or {}
+except Exception:
+  data = {}
+print(json.dumps({
+  "scope": str(data.get("scope") or "all"),
+  "pos": int(data.get("pos") or 0),
+  "last_sent": str(data.get("last_sent") or ""),
+  "last_path": str(data.get("last_path") or "")
+}))
+PY
+}
+
+write_state() {
+  local f="$1"
+  local scope="$2"
+  local pos="$3"
+  local last_sent="$4"
+  local last_path="$5"
+  mkdir -p "$(dirname "$f")"
+  python3 - "$f" "$scope" "$pos" "$last_sent" "$last_path" <<'PY'
+import json, os, sys
+path, scope, pos, last_sent, last_path = sys.argv[1:]
+data = {
+  "scope": scope,
+  "pos": int(pos),
+  "last_sent": last_sent,
+  "last_path": last_path,
+}
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+  json.dump(data, fh, indent=2)
+os.replace(tmp, path)
+PY
+}
+
+pick_next() {
+  local scope="$1"
+  local pos="$2"
+  local chapters
+  chapters="$(chapters_json "$scope")"
+  python3 - "$chapters" "$pos" <<'PY'
+import json, sys
+chapters = json.loads(sys.argv[1] or "[]")
+pos = int(sys.argv[2])
+if not chapters:
+  print("")
+  sys.exit(0)
+pos = pos % len(chapters)
+ch = chapters[pos]
+print(json.dumps({"idx": pos, "len": len(chapters), "n": ch["n"], "title": ch["title"], "path": ch["path"]}))
+PY
+}
+
+send_doc() {
+  local path="$1"
+  local caption="$2"
+  local silent="$3"
+  local args=()
+  if [[ "$silent" == "1" ]]; then
+    args+=(-s)
+  fi
+  "$TELE_BIN" "${args[@]}" --document "$path" --caption "$caption"
+}
+
+send_text() {
+  local text="$1"
+  local silent="$2"
+  local args=()
+  if [[ "$silent" == "1" ]]; then
+    args+=(-s)
+  fi
+  "$TELE_BIN" "${args[@]}" "$text"
+}
+
+split_and_send_text() {
+  local header="$1"
+  local body_path="$2"
+  local silent="$3"
+  # Telegram message limit is ~4096 chars; stay safely below.
+  python3 - "$header" "$body_path" "$silent" "$TELE_BIN" <<'PY'
+import subprocess, sys
+
+header = sys.argv[1]
+path = sys.argv[2]
+silent = sys.argv[3] == "1"
+tele = sys.argv[4]
+
+max_len = 3500
+with open(path, "r", encoding="utf-8") as fh:
+  body = fh.read().strip()
+
+chunks = []
+cur = header.rstrip() + "\n\n"
+for line in body.splitlines(True):
+  if len(cur) + len(line) > max_len and cur.strip():
+    chunks.append(cur.rstrip())
+    cur = ""
+  cur += line
+if cur.strip():
+  chunks.append(cur.rstrip())
+
+for i, msg in enumerate(chunks, 1):
+  args = [tele]
+  if silent:
+    args.append("-s")
+  args.append(msg)
+  subprocess.run(args, check=False)
+PY
+}
+
+cmd="${1:-help}"
+shift || true
+
+scope=""
+silent="$SILENT_DEFAULT"
+force=0
+as_text=0
+env_file=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --scope) scope="${2:-}"; shift 2 ;;
+    --silent) silent=1; shift ;;
+    --loud) silent=0; shift ;;
+    --force) force=1; shift ;;
+    --text) as_text=1; shift ;;
+    --env) env_file="${2:-}"; shift 2 ;;
+    --state) STATE_FILE="${2:-}"; shift 2 ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) die "unknown arg: $1" ;;
+  esac
+done
+
+source_env "$env_file"
+
+# Recompute paths after sourcing env.
+VAULT_DIR="${AOS_VAULT_DIR:-$AOS_VAULT_DIR_DEFAULT}"
+BLUEPRINT_DIR="${AOS_BLUEPRINT_DIR:-$VAULT_DIR/AlphaOS-blueprints}"
+TELE_BIN="${AOS_TELE_BIN:-tele}"
+
+state="$(load_state "$STATE_FILE")"
+scope_state="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("scope","all"))' <<<"$state")"
+pos_state="$(python3 -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("pos",0)))' <<<"$state")"
+last_sent_state="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("last_sent",""))' <<<"$state")"
+last_path_state="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("last_path",""))' <<<"$state")"
+
+if [[ -z "$scope" ]]; then
+  scope="$scope_state"
+fi
+
+  case "$cmd" in
+  list)
+    chapters="$(chapters_json "$scope")"
+    python3 - "$scope" "$chapters" <<'PY'
+import json, sys, os
+scope = sys.argv[1]
+chapters = json.loads(sys.argv[2] or "[]")
+print(f"scope: {scope} ({len(chapters)} chapters)")
+for ch in chapters:
+  base = os.path.basename(ch["path"])
+  print(f'{ch["n"]:>2}  {ch["title"]}  ({base})')
+PY
+    ;;
+  next)
+    next="$(pick_next "$scope" "$pos_state")"
+    path="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("path",""))' <<<"$next")"
+    [[ -n "$path" ]] || die "no chapters found for scope=$scope in $BLUEPRINT_DIR"
+    printf "%s\n" "$path"
+    ;;
+  status)
+    next="$(pick_next "$scope" "$pos_state")"
+    python3 - "$STATE_FILE" "$scope" "$pos_state" "$last_sent_state" "$last_path_state" "$next" <<'PY'
+import json, sys
+state_file, scope, pos, last_sent, last_path, next_json = sys.argv[1:]
+next_obj = json.loads(next_json or "{}")
+print(f"state: {state_file}")
+print(f"scope: {scope}")
+print(f"pos: {pos}")
+if last_sent:
+  print(f"last_sent: {last_sent}")
+if last_path:
+  print(f"last_path: {last_path}")
+if next_obj.get("path"):
+  print("")
+  print(f'next: {next_obj.get("n")} - {next_obj.get("title")}')
+  print(f'path: {next_obj.get("path")}')
+PY
+    ;;
+  reset)
+    write_state "$STATE_FILE" "$scope" "0" "" ""
+    printf "OK: reset scope=%s pos=0\n" "$scope"
+    ;;
+  send)
+    [[ -d "$BLUEPRINT_DIR" ]] || die "missing blueprint dir: $BLUEPRINT_DIR"
+    if [[ "$force" != "1" && "$(today_ymd)" == "$last_sent_state" && "$scope" == "$scope_state" ]]; then
+      printf "SKIP: already sent today (%s)\n" "$last_sent_state"
+      exit 0
+    fi
+    need_cmd "$TELE_BIN" || die "tele not found: $TELE_BIN"
+
+    next="$(pick_next "$scope" "$pos_state")"
+    path="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("path",""))' <<<"$next")"
+    n="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("n",""))' <<<"$next")"
+    title="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("title",""))' <<<"$next")"
+    idx="$(python3 -c 'import json,sys; print(int(json.loads(sys.stdin.read() or "{}").get("idx",0)))' <<<"$next")"
+    total="$(python3 -c 'import json,sys; print(int(json.loads(sys.stdin.read() or "{}").get("len",0)))' <<<"$next")"
+    [[ -n "$path" ]] || die "no chapters found for scope=$scope in $BLUEPRINT_DIR"
+    [[ -f "$path" ]] || die "chapter missing: $path"
+
+    caption="AlphaOS Blueprints — ${n} - ${title} ($((idx+1))/${total})"
+    if (( as_text )); then
+      split_and_send_text "$caption" "$path" "$silent"
+    else
+      send_doc "$path" "$caption" "$silent"
+    fi
+
+    next_pos="$((pos_state + 1))"
+    write_state "$STATE_FILE" "$scope" "$next_pos" "$(today_ymd)" "$path"
+    printf "OK: sent %s (scope=%s pos=%s)\n" "$n" "$scope" "$next_pos"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
