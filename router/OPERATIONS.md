@@ -63,6 +63,8 @@ cd ~/aos-hub/router
 python router_bot.py
 ```
 
+Note: `router_bot.py` is the entrypoint; most logic lives in `router_app/`.
+
 ### Background (tmux)
 ```bash
 tmux new -s router-bot

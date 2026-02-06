@@ -1,497 +1,74 @@
 #!/usr/bin/env python3
-"""AlphaOS Router Bot - Dumb URL router for AlphaOS centres.
+"""AlphaOS Router Bot (entrypoint).
 
-This bot fetches centre URLs from the local AlphaOS Index Node
-and routes Telegram commands to the appropriate centre URLs.
-
-Extensions can be loaded to add additional functionality without
-modifying the core routing logic.
+Kept intentionally small: wiring + startup only.
+Implementation lives in `router_app/`.
 """
 
 import asyncio
 import logging
-import os
-import socket
-import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Tuple
-
-import aiohttp
-import yaml
-from aiogram import Bot, Dispatcher,
-from aiogram.filters import Command
-from aiogram.types import Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram import Bot, Dispatcher
 
 from extensions import ExtensionLoader
 
-# Configure logging
+from router_app.index_cache import IndexCache
+from router_app.settings import load_config, read_settings
+from router_app.startup_ping import send_startup_ping
+from router_app.state import AppState
+from router_app.handlers.core import build_core_router
+from router_app.handlers.dynamic import build_dynamic_router
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# Environment configuration
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-ALLOWED_USER_ID = os.getenv("ALLOWED_USER_ID", "").strip()
-CONFIG_PATH = Path(os.getenv("ROUTER_CONFIG", "./config.yaml")).expanduser()
-GAS_WEBHOOK_URL = os.getenv("AOS_GAS_WEBHOOK_URL", "").strip()
-
-
-def require_token():
-    """Ensure BOT_TOKEN is set."""
-    if not BOT_TOKEN:
+async def main():
+    settings = read_settings()
+    if not settings.bot_token:
         raise SystemExit("Missing TELEGRAM_BOT_TOKEN environment variable")
 
+    config = load_config(settings.config_path)
+    index_config = config.get("index_api", {}) if isinstance(config, dict) else {}
+    health_config = config.get("healthcheck", {}) if isinstance(config, dict) else {}
 
-def allowed(uid: int) -> bool:
-    """Check if user is allowed to use the bot."""
-    return (not ALLOWED_USER_ID) or (str(uid) == str(ALLOWED_USER_ID))
-
-
-def load_config() -> dict:
-    """Load configuration from config.yaml."""
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        logger.warning(f"Config file not found: {CONFIG_PATH}, using defaults")
-        return {}
-    except Exception as exc:
-        logger.error(f"Error loading config: {exc}")
-        return {}
-
-
-@dataclass(frozen=True)
-class Centre:
-    """Represents an AlphaOS centre."""
-    cmd: str
-    label: str
-    url: str
-
-
-class IndexCache:
-    """Caches centre data from the Index API."""
-
-    def __init__(self, api_base: str, api_path: str, cache_ttl: int):
-        """Initialize cache.
-
-        Args:
-            api_base: Index API base URL (e.g., http://100.76.197.55:8799)
-            api_path: Index API path (e.g., /api/centres)
-            cache_ttl: Cache TTL in seconds
-        """
-        self._lock = asyncio.Lock()
-        self._centres: Dict[str, Centre] = {}
-        self._updated_at: str = ""
-        self._ts: float = 0.0
-        self.api_base = api_base.rstrip("/")
-        self.api_path = api_path
-        self.cache_ttl = cache_ttl
-
-    def fresh(self) -> bool:
-        """Check if cache is still fresh."""
-        return self._centres and (time.time() - self._ts) < self.cache_ttl
-
-    async def fetch(self, force: bool = False) -> Tuple[Dict[str, Centre], str]:
-        """Fetch centres from Index API.
-
-        Args:
-            force: Force refresh even if cache is fresh
-
-        Returns:
-            Tuple of (centres dict, updated_at timestamp)
-        """
-        async with self._lock:
-            if self.fresh() and not force:
-                return self._centres, self._updated_at
-
-            url = self.api_base + self.api_path
-            try:
-                timeout = aiohttp.ClientTimeout(total=3)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(url) as response:
-                        if response.status != 200:
-                            raise RuntimeError(f"HTTP {response.status}")
-                        payload = await response.json(content_type=None)
-
-                centres: Dict[str, Centre] = {}
-                for item in payload.get("centres", []):
-                    cmd = str(item.get("cmd", "")).strip().lstrip("/").lower()
-                    label = str(item.get("label", "")).strip()
-                    link = str(item.get("url", "")).strip()
-                    if link.startswith("/"):
-                        link = f"{self.api_base}{link}"
-                    if cmd and label and link:
-                        centres[cmd] = Centre(cmd, label, link)
-
-                self._centres = centres
-                self._updated_at = str(payload.get("updated_at", ""))
-                self._ts = time.time()
-                logger.info(f"Fetched {len(centres)} centres from Index API")
-            except Exception as exc:
-                logger.warning(f"Failed to fetch from Index API: {exc}")
-                # Fail-soft: keep last cache (if any)
-
-            return self._centres, self._updated_at
-
-
-# Global state
-config = load_config()
-index_config = config.get("index_api", {})
-health_config = config.get("healthcheck", {})
-CACHE = IndexCache(
-    api_base=index_config.get("base", "http://100.76.197.55:8799"),
-    api_path=index_config.get("path", "/api/centres"),
-    cache_ttl=int(index_config.get("cache_ttl", 60))
-)
-HEALTH_URL = os.getenv("BRIDGE_HEALTH_URL", str(health_config.get("url", "http://100.76.197.55:8080/health"))).strip()
-HEALTH_TIMEOUT = float(os.getenv("BRIDGE_HEALTH_TIMEOUT", health_config.get("timeout", 3)))
-dp = Dispatcher()
-extension_loader = None  # Will be initialized in main()
-
-
-def menu_kb(centres: Dict[str, Centre], cols: int = 2):
-    """Build inline keyboard for centre menu."""
-    kb = InlineKeyboardBuilder()
-    for cmd in sorted(centres.keys()):
-        c = centres[cmd]
-        kb.button(text=c.label, url=c.url)
-    kb.adjust(cols)
-    return kb.as_markup()
-
-
-@dp.message(Command("start"))
-async def start_command(m: Message):
-    """Handle /start command."""
-    if not allowed(m.from_user.id):
-        return
-
-    logger.info(f"/start from user {m.from_user.id}")
-    centres, updated = await CACHE.fetch(force=True)
-
-    if not centres:
-        await m.answer(
-            f"⚠️ Index API unreachable.\n\n"
-            f"Check: {CACHE.api_base}{CACHE.api_path}"
-        )
-        return
-
-    await m.answer(
-        "αOS Router\n\n"
-        "Commands:\n"
-        "/menu or /commands — show all centres\n"
-        "/reload — refresh centre list\n"
-        "/help — show help\n\n"
-        "Or type /voice /door /fire etc. (routes to centres)",
-        reply_markup=menu_kb(centres),
-        disable_web_page_preview=True,
+    cache = IndexCache(
+        api_base=str(index_config.get("base", "http://100.76.197.55:8799")),
+        api_path=str(index_config.get("path", "/api/centres")),
+        cache_ttl=int(index_config.get("cache_ttl", 60)),
     )
 
+    health_url = settings.health_url or str(health_config.get("url", "http://100.76.197.55:8080/health"))
+    health_timeout = settings.health_timeout
+    if health_timeout is None:
+        try:
+            health_timeout = float(health_config.get("timeout", 3))
+        except Exception:
+            health_timeout = 3.0
 
-def list_extension_commands() -> str:
-    """List commands exposed by loaded extensions/config."""
-    lines: list[str] = []
-
-    # War Stack extension
-    if "warstack_commands" in config.get("extensions", []):
-        lines.append("/war — launch War Stack bot")
-        lines.append("/warstack — alias for /war")
-
-    # Door Flow extension
-    if "door_flow" in config.get("extensions", []):
-        lines.append("/war — start War Stack flow")
-        lines.append("/warstack — alias for /war")
-        lines.append("/door — open Door Centre link")
-
-    # Fruits Daily extension
-    if "fruits_daily" in config.get("extensions", []):
-        lines.append("/facts — Fruits Centre info")
-        lines.append("/fruits — alias for /facts")
-        lines.append("/next — send the next Fruits question")
-        lines.append("/skip — skip current Fruits question")
-        lines.append("/web — open Fruits Centre")
-
-    # Fire Map extension
-    if "firemap_commands" in config.get("extensions", []):
-        lines.append("/fire — run Fire Map (daily)")
-        lines.append("/fireweek — run Fire Map (weekly)")
-
-    # Core4 Actions extension
-    core_cfg = config.get("core4_actions", {})
-    tags = core_cfg.get("tags", {}) if isinstance(core_cfg, dict) else {}
-    for cmd, tag in tags.items():
-        lines.append(f"/{cmd} — Core4 done (+{tag})")
-
-    return "\n".join(lines)
-
-
-def configured_extension_names(cfg: dict) -> set[str]:
-    """Collect extension module names from config."""
-    ext_list = cfg.get("extensions", [])
-    if not isinstance(ext_list, list):
-        return set()
-    return {str(name).strip() for name in ext_list if str(name).strip()}
-
-
-def loaded_extension_names() -> set[str]:
-    """Collect extension module names that actually loaded."""
-    if not extension_loader:
-        return set()
-    names: set[str] = set()
-    for ext in extension_loader.extensions:
-        module = ext.__class__.__module__
-        if module.startswith("extensions."):
-            names.add(module.split(".")[-1])
-    return names
-
-
-def warstack_help_note(cfg: dict, ext_names: set[str] | None = None) -> str:
-    """Describe which War Stack mode is active, if any."""
-    if ext_names is None:
-        ext_names = configured_extension_names(cfg)
-
-    if "door_flow" in ext_names and "warstack_commands" in ext_names:
-        return (
-            "War Stack mode: door_flow + warstack_commands both enabled "
-            "(choose one to avoid confusion)"
-        )
-    if "door_flow" in ext_names:
-        return "War Stack mode: door_flow (local Index Node Door API)"
-    if "warstack_commands" in ext_names:
-        return "War Stack mode: warstack_commands (external bot link)"
-    return ""
-
-
-def extension_command_set(cfg: dict, ext_names: set[str] | None = None) -> set[str]:
-    """Collect commands reserved by enabled extensions."""
-    commands: set[str] = set()
-    if ext_names is None:
-        ext_names = configured_extension_names(cfg)
-    else:
-        ext_names = {str(name).strip() for name in ext_names if str(name).strip()}
-
-    if "warstack_commands" in ext_names:
-        commands.update({"war", "warstack"})
-
-    if "door_flow" in ext_names:
-        commands.update({"war", "warstack", "door"})
-
-    if "fruits_daily" in ext_names:
-        commands.update({"facts", "fruits", "next", "skip", "web", "start"})
-
-    # ✅ ADD THIS: Fire Map extension reserved commands
-    if "firemap_commands" in ext_names:
-        commands.update({"fire", "fireweek"})
-
-    if "core4_actions" in ext_names:
-        core_cfg = cfg.get("core4_actions", {})
-        tags = core_cfg.get("tags", {}) if isinstance(core_cfg, dict) else {}
-        if isinstance(tags, dict):
-            for cmd in tags.keys():
-                cmd_name = str(cmd).strip().lstrip("/")
-                if cmd_name:
-                    commands.add(cmd_name)
-
-    return commands
-
-
-@dp.message(Command("menu"))
-async def menu_command(m: Message):
-    """Handle /menu command (centre links from Index)."""
-    if not allowed(m.from_user.id):
-        return
-
-    logger.info(f"/menu from user {m.from_user.id}")
-    centres, updated = await CACHE.fetch()
-
-    if not centres:
-        await m.answer(
-            f"⚠️ No centres cached.\n\n"
-            f"Check Index API: {CACHE.api_base}{CACHE.api_path}"
-        )
-        return
-
-    timestamp = updated or "unknown"
-    await m.answer(
-        f"AlphaOS Centres\n(Index: {timestamp})",
-        reply_markup=menu_kb(centres)
+    state = AppState(
+        config=config if isinstance(config, dict) else {},
+        cache=cache,
+        allowed_user_id=settings.allowed_user_id,
+        health_url=str(health_url).strip(),
+        health_timeout=float(health_timeout),
+        gas_webhook_url=settings.gas_webhook_url,
     )
 
+    dp = Dispatcher()
+    dp.include_router(build_core_router(state))
+    dp.include_router(build_dynamic_router(state))
 
-@dp.message(Command("commands"))
-async def commands_command(m: Message):
-    """Handle /commands command (bot/extension commands)."""
-    if not allowed(m.from_user.id):
-        return
+    bot = Bot(settings.bot_token)
 
-    ext_cmds = list_extension_commands()
-    msg = "Bot/Extension Commands:\n"
-    if ext_cmds:
-        msg += ext_cmds
-    else:
-        msg += "No extension commands configured."
+    extension_loader = ExtensionLoader(bot, dp, state.config)
+    state.extension_loader = extension_loader
 
-    await m.answer(msg)
-
-
-@dp.message(Command("help"))
-async def help_command(m: Message):
-    """Handle /help command."""
-    if not allowed(m.from_user.id):
-        return
-
-    logger.info(f"/help from user {m.from_user.id}")
-
-    # Get loaded extension names
-    ext_names = [ext.get_name() for ext in extension_loader.extensions] if extension_loader else []
-    ext_info = f"\n\nLoaded extensions: {', '.join(ext_names)}" if ext_names else ""
-    ext_cmds = list_extension_commands()
-    ext_cmds_block = f"\n\nExtension commands:\n{ext_cmds}" if ext_cmds else ""
-    loaded_names = loaded_extension_names()
-    warstack_note = warstack_help_note(config, loaded_names or None)
-    warstack_note_block = f"\n\n{warstack_note}" if warstack_note else ""
-
-    await m.answer(
-        "αOS Router Help\n\n"
-        "/menu or /commands — show all centres from the Index\n"
-        "/reload — refresh centre list\n"
-        "/health — check bridge/laptop health\n"
-        "/help — this help message\n\n"
-        "Dynamic commands (from Index API):\n"
-        "Type /voice /door /fire /frame etc. to get centre URLs.\n"
-        "Available commands are whatever the Index menu currently serves."
-        f"{ext_cmds_block}"
-        f"{warstack_note_block}"
-        f"{ext_info}"
-    )
-
-
-@dp.message(Command("reload"))
-async def reload_command(m: Message):
-    """Handle /reload command."""
-    if not allowed(m.from_user.id):
-        return
-
-    logger.info(f"/reload from user {m.from_user.id}")
-    centres, updated = await CACHE.fetch(force=True)
-
-    if not centres:
-        await m.answer("⚠️ Reload failed (Index API unreachable).")
-        return
-
-    timestamp = updated or "unknown"
-    await m.answer(
-        f"✅ Reloaded {len(centres)} centres.\n(Index: {timestamp})",
-        reply_markup=menu_kb(centres)
-    )
-
-
-@dp.message(Command("health"))
-async def health_command(m: Message):
-    """Handle /health command."""
-    if not allowed(m.from_user.id):
-        return
-
-    if not HEALTH_URL:
-        await m.answer("⚠️ Health URL not configured.")
-        return
-
-    logger.info(f"/health from user {m.from_user.id}")
-    timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
-    try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            started = time.monotonic()
-            async with session.get(HEALTH_URL) as response:
-                elapsed_ms = int((time.monotonic() - started) * 1000)
-                status = response.status
-                text = await response.text()
-                msg = f"🟢 Bridge health OK\nHTTP {status} • {elapsed_ms}ms"
-                if text:
-                    msg += f"\n\n{text[:800]}"
-                await m.answer(msg)
-    except Exception as exc:
-        await m.answer(f"🔴 Bridge health failed\n{HEALTH_URL}\n{exc}")
-
-
-@dp.message(F.text.regexp(r"^/(.+)$"))
-async def route_command(m: Message):
-    """Handle dynamic routing for centre commands."""
-    if not allowed(m.from_user.id):
-        return
-
-    # Extract command
-    cmd = m.text.strip().lstrip("/").split()[0].lower()
-
-    # Skip known commands (handled by other handlers)
-    if cmd in ("start", "menu", "reload", "help", "health", "commands"):
-        return
-    if cmd in extension_command_set(config, loaded_extension_names()):
-        return
-
-    logger.info(f"Routing /{cmd} from user {m.from_user.id}")
-
-    # Fetch centres
-    centres, _ = await CACHE.fetch()
-    centre = centres.get(cmd)
-
-    if not centre:
-        await m.answer(
-            f"❌ Unknown command: /{cmd}\n\n"
-            "Use /menu to see available centres."
-        )
-        return
-
-    # Build response
-    kb = InlineKeyboardBuilder()
-    kb.button(text=f"Open: {centre.label}", url=centre.url)
-
-    await m.answer(
-        f"{centre.label}\n{centre.url}",
-        reply_markup=kb.as_markup(),
-        disable_web_page_preview=True
-    )
-
-
-async def send_startup_ping():
-    """Send one-time startup ping to GAS (triggers Bridge check + Telegram notification)."""
-    if not GAS_WEBHOOK_URL:
-        logger.info("Startup ping skipped: AOS_GAS_WEBHOOK_URL not configured")
-        return
-
-    try:
-        # Send ping to GAS webhook (GAS orchestrates the rest)
-        hostname = socket.gethostname()
-        timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            payload = {
-                "kind": "router_startup",
-                "status": "online",
-                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                "host": hostname
-            }
-            async with session.post(GAS_WEBHOOK_URL, json=payload) as response:
-                if response.status == 200:
-                    logger.info(f"Startup ping sent to GAS: {GAS_WEBHOOK_URL}")
-                else:
-                    logger.warning(f"GAS ping failed: HTTP {response.status}")
-    except Exception as exc:
-        logger.warning(f"Startup ping failed: {exc}")
-
-
-async def main():
-    """Main bot entry point."""
-    require_token()
-
-    # Initialize bot
-    bot = Bot(BOT_TOKEN)
-
-    # Load extensions
-    global extension_loader
-    extension_loader = ExtensionLoader(bot, dp, config)
-    extension_names = config.get("extensions", [])
+    extension_names = state.config.get("extensions", [])
+    if not isinstance(extension_names, list):
+        extension_names = []
 
     if extension_names:
         logger.info(f"Loading extensions: {extension_names}")
@@ -499,8 +76,7 @@ async def main():
     else:
         logger.info("No extensions configured (dumb router mode)")
 
-    # Send startup ping to GAS
-    await send_startup_ping()
+    await send_startup_ping(state.gas_webhook_url)
 
     # Start polling
     try:

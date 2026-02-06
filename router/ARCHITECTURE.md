@@ -203,7 +203,7 @@ Option 3: Web UI (GAS - Remote fallback)
 
 ## Components
 
-### Core Router (`router_bot.py`)
+### Core Router (`router_bot.py` + `router_app/`)
 
 **Responsibilities:**
 - Fetch centre list from Index API
@@ -327,13 +327,13 @@ warstack_commands:
 
 **Three types of commands in Router Bot:**
 
-### Type 1: Core Commands (Hardcoded in router_bot.py)
+### Type 1: Core Commands (Core handlers in router code)
 - `/start` - Initialize bot
 - `/menu` - Show all centres
 - `/reload` - Refresh centre list
 - `/help` - Show help
 
-**Source:** `router_bot.py` code
+**Source:** `router_app/handlers/core.py` (wired by `router_bot.py`)
 **Purpose:** Bot management
 
 ### Type 2: Dynamic Commands (From Index API)

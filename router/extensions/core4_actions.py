@@ -124,7 +124,7 @@ class Core4ActionsExtension(Extension):
     async def _mark_task_done_by_tag(self, tag: str) -> str:
         """Mark a Taskwarrior task as done by tag.
 
-        Finds the first pending task with +core4 +{tag} due:today
+        Finds the first pending task with +{tag} (optionally +core4) due:today
         and marks it as done.
 
         Args:
@@ -133,19 +133,16 @@ class Core4ActionsExtension(Extension):
         Returns:
             Status message (success or error)
         """
-        # Export pending tasks with the tag
-        export_cmd = [
-            "task",
-            "rc.verbose=0",
-            "rc.confirmation=no",
-            "+core4",
-            f"+{tag}",
-            "due:today",
-            "status:pending",
-            "export",
-        ]
-
         try:
+            export_cmd = [
+                "task",
+                "rc.verbose=0",
+                "rc.confirmation=no",
+                f"+{tag}",
+                "due:today",
+                "status:pending",
+                "export",
+            ]
             proc = await asyncio.create_subprocess_exec(
                 *export_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -153,12 +150,7 @@ class Core4ActionsExtension(Extension):
             )
             out, _ = await proc.communicate()
             text = (out or b"").decode("utf-8", errors="ignore").strip()
-
-            if not text:
-                return f"❌ No pending +{tag} task due today"
-
-            # Parse JSON
-            tasks = json.loads(text)
+            tasks = json.loads(text) if text else []
             if not tasks:
                 return f"❌ No pending +{tag} task due today"
 

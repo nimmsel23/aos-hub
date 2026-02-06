@@ -158,7 +158,8 @@ See `extensions/base.py` for the Extension base class and `ARCHITECTURE.md` for 
 
 ## Files
 
-- `router_bot.py` - Dumb core router
+- `router_bot.py` - Bot entrypoint (wiring + startup)
+- `router_app/` - Core implementation (settings/cache/handlers)
 - `config.yaml` - Configuration file
 - `extensions/` - Extension modules
   - `base.py` - Extension base class
