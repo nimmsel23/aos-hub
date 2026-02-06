@@ -1,5 +1,9 @@
 # GAS HQ Changelog
 
+## 2026-02-04
+- Consolidated `bridge.gs` + `router.gs` into `watchdog.gs` to keep all watchdog/bridge/router logic in one place.
+- Added `nietzsche_quotes.gs` (local quote pool for status messages).
+
 ## 2026-01-03
 - Bridge health fallback: added Telegram ping per HQ load (session id + bridge/router/heartbeat labels), bridge errors now include exception text.
 - Bridge task executor: supports `depends` and `wait`; War Stack tasks now create Hits (wait/due offsets), Door task (depends on hits), Profit task (depends on door, wait:+5d); Taskwarrior UUIDs written to frontmatter + section.
@@ -11,8 +15,8 @@
 - Status UI now ignores router/heartbeat; only Bridge /health (from `getBridgeRootUrl_()`) is used. Telegram status ping trimmed to bridge only. Terminal command `bridgecheck` remains for explicit health debug.
 - Frontend boot is now guarded: `loadSystemStatus()` runs first, setup errors are caught/logged, and bridge badge shows “Error” on failures.
 - Status: heartbeat is info-only; no time triggers. System status calls Bridge /health; heartbeat age is only appended to the label. Telegram ping happens once per status call (HQ load/manual).
-- Bridge helpers split: new `bridge.gs` houses `bridgeHealth_()` (health + heartbeat info, with auth header); `alphaos_single_project.gs` now calls that helper.
-- New `bridgeHeartbeatHook(e)` (in `bridge.gs`): accepts JSON heartbeat from bridge/router on start, stores `BRIDGE_HEARTBEAT_TS`, calls `bridgeHealth_()`, and sends one Telegram debug ping.
+- Bridge helpers split: new `bridge.gs` houses `bridgeHealth_()` (health + heartbeat info, with auth header); `alphaos_single_project.gs` now calls that helper. (Now consolidated into `watchdog.gs`.)
+- New `bridgeHeartbeatHook(e)` (in `bridge.gs`): accepts JSON heartbeat from bridge/router on start, stores `BRIDGE_HEARTBEAT_TS`, calls `bridgeHealth_()`, and sends one Telegram debug ping. (Now in `watchdog.gs`.)
 - Door split start: shared helpers consolidated into `door.gs` (props/Drive/Sheet/TickTick, WarStack draft + bridge sync, profit JSON, log); `door_warstack.gs` holds War Stack parsing/tasks/queue. Hotlist/Potential moved into `hotlist.gs`.
 - Hotlist: adds `hotlist_index.json` in `Alpha_Door/1-Potential`, and creates Taskwarrior tasks via Bridge (`project:HotList priority:L +potential`) with offline queue fallback.
 - Hotlist: dedupe by idea text (case-insensitive) using `hotlist_index.json`.

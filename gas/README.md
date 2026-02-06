@@ -373,6 +373,8 @@ setupTaskExportSnapshotTrigger()
 - Hot List UUIDs sync via `task_export.json` (read-only from GAS, no Bridge required for UUID updates)
 - Taskwarrior `on-exit.alphaos.py` hook exports task_export.json INSTANTLY after every task command
 - GAS reads from `AlphaOS-Vault/.alphaos/task_export.json` (synced via rclone or mounted GDrive)
+- Bridge + router helpers are consolidated in `watchdog.gs` (merged from the older `bridge.gs` / `router.gs` split).
+- Status messages can append a Nietzsche quote if `nietzsche_quotes.gs` is present.
 
 ## HQ status + session ping
 

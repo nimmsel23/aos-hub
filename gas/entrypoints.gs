@@ -156,6 +156,19 @@ function doPost(e) {
 // ================================================================
 
 function doGet(e) {
+  const kind = String((e && e.parameter && e.parameter.kind) || '').trim().toLowerCase();
+  if (kind === 'heartbeat') {
+    const host = String((e && e.parameter && e.parameter.host) || 'unknown');
+    if (typeof watchdog_handleHeartbeat_ === 'function') {
+      watchdog_handleHeartbeat_({ host: host });
+    } else {
+      const p = PropertiesService.getScriptProperties();
+      p.setProperty('WATCHDOG_LAST_BEAT_TS', String(Date.now()));
+      p.setProperty('WATCHDOG_LAST_HOST', host);
+    }
+    return ContentService.createTextOutput('OK');
+  }
+
   const page = String((e && e.parameter && e.parameter.page) || '').trim().toLowerCase();
 
   switch (page) {

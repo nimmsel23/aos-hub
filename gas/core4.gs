@@ -119,20 +119,105 @@ function core4_buildWeeklyReportText(weekKey) {
     domainLines.push(`${label}: ${points}/7`);
   });
 
-  let message = `⚡ *Core4 Weekly Summary – ${summary.week}*\\n\\n`;
-  message += `Total: ${weekTotal}/${target} (${pct}%)\\n\\n`;
-  message += `*By Domain:*\\n${domainLines.map(l => `• ${l}`).join('\\n')}\\n\\n`;
-  message += `*Daily Totals:*\\n`;
+  let message = `⚡ *Core4 Weekly Summary – ${summary.week}*\n\n`;
+  message += `Total: ${weekTotal}/${target} (${pct}%)\n\n`;
+  message += `*By Domain:*\n${domainLines.map(l => `• ${l}`).join('\n')}\n\n`;
+  message += `*Daily Totals:*\n`;
   const dayKeys = Object.keys(totals.by_day || {}).sort();
   if (!dayKeys.length) {
-    message += '• No entries yet\\n';
+    message += '• No entries yet\n';
   } else {
     dayKeys.forEach(day => {
-      message += `• ${day}: ${totals.by_day[day]}\\n`;
+      message += `• ${day}: ${totals.by_day[day]}\n`;
     });
   }
-  message += '\\n28 or Die.';
+  message += '\n28 or Die.';
   return message;
+}
+
+function core4_buildDailyReportText(dateKey) {
+  const day = dateKey || core4_formatDate_(new Date());
+  const dt = new Date(`${day}T12:00:00`);
+  if (String(dt) === 'Invalid Date') return { ok: false, error: 'invalid date' };
+
+  const weekKey = core4_getWeekKey_(dt);
+  const data = core4_loadWeek_(weekKey);
+  const entries = (data.entries || []).filter(e => e && e.date === day);
+  const total = core4_totalForDate_(data.entries || [], day) || 0;
+  const target = 4;
+  const pct = Math.round((total / target) * 100);
+
+  const byDomain = {};
+  entries.forEach(entry => {
+    if (!entry || !entry.domain) return;
+    byDomain[entry.domain] = (byDomain[entry.domain] || 0) + (entry.points || 0);
+  });
+
+  const domainLines = [];
+  Object.keys(CORE4_HABITS).forEach(domain => {
+    const label = core4_capitalize_(domain);
+    const points = byDomain[domain] || 0;
+    domainLines.push(`${label}: ${Number(points).toFixed(1)}/1.0`);
+  });
+
+  let message = `*Core4 Daily Summary – ${day}*\n\n`;
+  message += `Total: ${Number(total).toFixed(1)}/${target} (${pct}%)\n\n`;
+  message += `*By Domain:*\n${domainLines.map(l => `• ${l}`).join('\n')}\n\n`;
+  message += '*Entries:*\n';
+  if (!entries.length) {
+    message += '• No entries yet\n';
+  } else {
+    entries.sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
+    entries.forEach(entry => {
+      const label = core4_getHabitLabel_(entry.domain, entry.task);
+      message += `• ${core4_capitalize_(entry.domain)}: ${label} (+${Number(entry.points || 0).toFixed(1)})\n`;
+    });
+  }
+  return { ok: true, message: message };
+}
+
+function core4_sendDailySummary(chatId, dateKey) {
+  const props = PropertiesService.getScriptProperties();
+  const target = chatId || props.getProperty('CHAT_ID');
+  if (!target) return { ok: false, error: 'CHAT_ID not set' };
+  const res = core4_buildDailyReportText(dateKey);
+  if (!res || !res.ok) return res;
+  core4_sendMessage_(target, res.message);
+  return { ok: true };
+}
+
+function core4_dailySummaryGuard_() {
+  const props = PropertiesService.getScriptProperties();
+  const today = core4_formatDate_(new Date());
+  const last = props.getProperty('CORE4_DAILY_SUMMARY_LAST');
+  if (last === today) return true;
+  props.setProperty('CORE4_DAILY_SUMMARY_LAST', today);
+  return false;
+}
+
+function core4_dailySummaryTrigger() {
+  if (core4_dailySummaryGuard_()) return { ok: true, skipped: true };
+  return core4_sendDailySummary();
+}
+
+function core4_setupDailySummaryTrigger(hour, minute) {
+  const h = typeof hour === 'number' ? hour : 20;
+  const m = typeof minute === 'number' ? minute : 0;
+  const handler = 'core4_dailySummaryTrigger';
+  const triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach(t => {
+    if (t.getHandlerFunction && t.getHandlerFunction() === handler) {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  let builder = ScriptApp.newTrigger(handler).timeBased().everyDays(1).atHour(h);
+  if ([0, 15, 30, 45].indexOf(m) >= 0) {
+    builder = builder.nearMinute(m);
+  }
+  builder.create();
+  return { ok: true, trigger: handler, hour: h, minute: m };
 }
 
 function core4_exportWeekSummaryToDrive(weekKey) {
@@ -143,32 +228,32 @@ function core4_exportWeekSummaryToDrive(weekKey) {
   const weekTotal = totals.week_total || 0;
   const pct = Math.round((weekTotal / target) * 100);
 
-  let md = `# Core4 Weekly Summary – ${week}\\n\\n`;
-  md += `Total: ${weekTotal}/${target} (${pct}%)\\n\\n`;
-  md += '## By Domain\\n';
+  let md = `# Core4 Weekly Summary – ${week}\n\n`;
+  md += `Total: ${weekTotal}/${target} (${pct}%)\n\n`;
+  md += '## By Domain\n';
   Object.keys(CORE4_HABITS).forEach(domain => {
     const points = totals.by_domain[domain] || 0;
-    md += `- ${core4_capitalize_(domain)}: ${points}/7\\n`;
+    md += `- ${core4_capitalize_(domain)}: ${points}/7\n`;
   });
-  md += '\\n## Daily Totals\\n';
+  md += '\n## Daily Totals\n';
   const dayKeys = Object.keys(totals.by_day || {}).sort();
   if (!dayKeys.length) {
-    md += '- No entries yet\\n';
+    md += '- No entries yet\n';
   } else {
     dayKeys.forEach(day => {
-      md += `- ${day}: ${totals.by_day[day]}\\n`;
+      md += `- ${day}: ${totals.by_day[day]}\n`;
     });
   }
-  md += '\\n## Entries\\n';
+  md += '\n## Entries\n';
   summary.entries.forEach(entry => {
     const habitLabel = core4_getHabitLabel_(entry.domain, entry.task);
-    md += `- ${entry.date} • ${core4_capitalize_(entry.domain)} • ${habitLabel} • +${entry.points}\\n`;
+    md += `- ${entry.date} • ${core4_capitalize_(entry.domain)} • ${habitLabel} • +${entry.points}\n`;
   });
 
   const folder = core4_getSummaryFolder_();
   const name = CORE4_CONFIG.SUMMARY_PREFIX + week + '.md';
   const files = folder.getFilesByName(name);
-  const content = md.trim() + '\\n';
+  const content = md.trim() + '\n';
   let file;
   if (files.hasNext()) {
     file = files.next();
