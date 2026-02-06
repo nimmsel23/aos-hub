@@ -36,6 +36,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Fire runtime files
+fire/fire.env
+python-firemap/.offset
+
 # IDE
 .vscode/
 .idea/

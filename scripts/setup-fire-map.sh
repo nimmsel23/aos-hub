@@ -2,9 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FIREMAP_BIN="${AOS_FIREMAP_BIN:-$ROOT_DIR/firemap}"
 TASKRC="${AOS_TASKRC:-$HOME/.taskrc}"
-SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
 msg() { printf "%s\n" "$*"; }
 warn() { printf "WARN: %s\n" "$*" >&2; }
@@ -59,42 +57,41 @@ EOF
   msg "✅ Added Fire Map block to $TASKRC"
 }
 
-write_unit() {
-  mkdir -p "$SYSTEMD_DIR"
-  cat >"$SYSTEMD_DIR/alphaos-firemap-weekly.service" <<EOF
-[Unit]
-Description=AlphaOS Fire Map Weekly Sync
+ensure_fire_report_v2() {
+  if [[ ! -f "$TASKRC" ]]; then
+    return
+  fi
+  if rg -q "Alpha OS Fire Report v2" "$TASKRC"; then
+    msg "✅ Taskwarrior Fire report v2 already present."
+    return
+  fi
 
-[Service]
-Type=oneshot
-ExecStart=${FIREMAP_BIN} sync
+  cat >>"$TASKRC" <<'EOF'
+
+# Alpha OS Fire Report v2 (daily execution + undated production/hits)
+# - Shows tasks due/scheduled/wait today
+# - Also includes undated tasks if tagged +production/+hit/+fire
+report.fire.description=Daily Fire (Execution)
+report.fire.columns=id,urgency,project,tags,scheduled.relative,due.relative,description
+report.fire.filter=(status:pending or status:waiting) and ((due.before:tomorrow) or (scheduled.before:tomorrow) or (wait.before:tomorrow) or ((due.none and scheduled.none and wait.none) and (+production or +hit or +fire)))
+report.fire.labels=ID,Urg,Project,Tags,Sched,Due,Description
+report.fire.sort=urgency-,due+,scheduled+
 EOF
 
-  cat >"$SYSTEMD_DIR/alphaos-firemap-weekly.timer" <<'EOF'
-[Unit]
-Description=AlphaOS Fire Map Weekly Sync (Sun 19:00)
-
-[Timer]
-OnCalendar=Sun *-*-* 19:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  systemctl --user daemon-reload
-  msg "✅ Wrote weekly firemap systemd units."
+  msg "✅ Added/updated report: task fire"
 }
 
 usage() {
   cat <<EOF
-setup-fire-map.sh - Taskwarrior Fire Map config + weekly sync timer
+setup-fire-map.sh - Taskwarrior Fire config (reports + urgency)
 
 Usage:
   scripts/setup-fire-map.sh
 
+Options:
+  --systemd   write+enable user timers via scripts/firectl (recommended)
+
 Env overrides:
-  AOS_FIREMAP_BIN=$ROOT_DIR/firemap
   AOS_TASKRC=$HOME/.taskrc
 EOF
 }
@@ -104,15 +101,20 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-need_cmd task || die "taskwarrior not found"
-if [[ ! -x "$FIREMAP_BIN" ]]; then
-  warn "firemap not found at: $FIREMAP_BIN"
-  warn "Set AOS_FIREMAP_BIN or run from within the repo root (so ./firemap exists)"
+if [[ "${1:-}" == "--systemd" ]]; then
+  if [[ -x "$ROOT_DIR/scripts/firectl" ]]; then
+    exec "$ROOT_DIR/scripts/firectl" setup-systemd
+  fi
+  die "missing: $ROOT_DIR/scripts/firectl"
 fi
 
+need_cmd task || die "taskwarrior not found"
+need_cmd rg || die "rg (ripgrep) not found"
+
 ensure_taskrc_block
-write_unit
+ensure_fire_report_v2
 
 msg ""
 msg "Next:"
-msg "  systemctl --user enable --now alphaos-firemap-weekly.timer"
+msg "  task fire"
+msg "  scripts/firectl setup-systemd   # optional timers"

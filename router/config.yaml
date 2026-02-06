@@ -35,6 +35,12 @@ door_flow:
 #   info_message: "Custom message for /war command"
 
 firemap_commands:
+  # Prefer triggering existing user units (recommended; consistent env/logs):
+  # prefer_systemd: true
+  # daily_unit: alphaos-fire-daily.service
+  # weekly_unit: alphaos-fire-weekly.service
+  #
+  # Fallback subprocess mode (if systemd units are missing/unavailable):
   python_bin: python3
   script: python-firemap/firemap_bot.py
   daily_mode: daily
@@ -60,4 +66,11 @@ core4_actions:
     pos: posterity
     dis: discover
     dec: declare
-
+    fitness: fitness
+    fuel: fuel
+    meditation: meditation
+    memoirs: memoirs
+    partner: partner
+    posterity: posterity
+    discover: discover
+    declare: declare

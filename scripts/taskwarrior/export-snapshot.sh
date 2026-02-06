@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
 msg() { printf "%s\n" "$*"; }
 warn() { printf "WARN: %s\n" "$*" >&2; }
 die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
@@ -9,7 +17,7 @@ need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 TASK_BIN="${AOS_TASK_BIN:-${TASK_BIN:-task}}"
 TASKRC_PATH="${AOS_TASKRC:-${TASKRC:-}}"
-EXPORT_FILTER="${AOS_TASK_EXPORT_FILTER:-${TASK_EXPORT_FILTER:-status:pending}}"
+EXPORT_FILTER="${AOS_TASK_EXPORT_FILTER:-${TASK_EXPORT_FILTER:-(status:pending or status:waiting)}}"
 OUT_PATH="${AOS_TASK_EXPORT_PATH:-${TASK_EXPORT:-$HOME/.local/share/alphaos/task_export.json}}"
 VAULT_PATH="${AOS_TASK_EXPORT_VAULT_PATH:-$HOME/AlphaOS-Vault/.alphaos/task_export.json}"
 COPY_TO_VAULT="${AOS_TASK_EXPORT_COPY_TO_VAULT:-1}"

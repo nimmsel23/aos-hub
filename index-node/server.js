@@ -87,13 +87,19 @@ const DOOR_HITS_TAGS = String(
   .map((tag) => tag.trim())
   .filter(Boolean);
 const FIRE_GCAL_EMBED_URL = process.env.FIRE_GCAL_EMBED_URL || "";
-const FIRE_TASK_TAGS_ALL = String(
-  process.env.FIRE_TASK_TAGS_ALL || process.env.FIRE_TASK_TAGS || "fire,production,hit"
+const FIRE_INCLUDE_UNDATED = String(process.env.FIRE_INCLUDE_UNDATED || "1").trim() !== "0";
+const FIRE_TASK_TAGS_MODE = String(
+  process.env.FIRE_TASK_TAGS_MODE || (process.env.FIRE_TASK_TAGS_ALL ? "all" : "any")
+)
+  .trim()
+  .toLowerCase();
+const FIRE_TASK_TAGS = String(
+  process.env.FIRE_TASK_TAGS || process.env.FIRE_TASK_TAGS_ALL || "production,hit,fire"
 )
   .split(",")
   .map((tag) => tag.trim().toLowerCase())
   .filter(Boolean);
-const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "scheduled,due")
+const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "scheduled,due,wait")
   .split(",")
   .map((field) => field.trim())
   .filter(Boolean);
@@ -486,6 +492,18 @@ function fireTaskHasAllTags(taskTags, required) {
   if (!required.length) return true;
   const tags = (taskTags || []).map((t) => String(t || "").toLowerCase());
   return required.every((tag) => tags.includes(tag));
+}
+
+function fireTaskHasAnyTag(taskTags, required) {
+  if (!required.length) return true;
+  const tags = (taskTags || []).map((t) => String(t || "").toLowerCase());
+  return required.some((tag) => tags.includes(tag));
+}
+
+function fireTaskMatchesTags(taskTags, required) {
+  if (!required.length) return true;
+  if (FIRE_TASK_TAGS_MODE === "all") return fireTaskHasAllTags(taskTags, required);
+  return fireTaskHasAnyTag(taskTags, required);
 }
 
 function fireTaskDateCandidates(task) {
@@ -2144,14 +2162,17 @@ function pickLatestTask(list) {
 
 async function taskwarriorCreateCore4Task(meta, tags) {
   const cleanedTags = tags.map(normalizeTaskTag).filter(Boolean);
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const dateTag = `core4_${today.getFullYear()}${mm}${dd}`;
   const args = [
     "add",
     meta.title,
     "project:core4",
     "due:today",
-    "rec:daily",
-    "wait:+1d",
     "+core4",
+    `+${dateTag}`,
     ...cleanedTags.map((tag) => `+${tag}`),
   ];
   try {
@@ -3722,8 +3743,16 @@ app.get("/api/fire/week", async (req, res) => {
       if (!ok) throw new Error(taskError || "task-export-failed");
 
       const filtered = twTasks
-        .filter((task) => String(task.status || "").toLowerCase() === "pending")
-        .filter((task) => fireTaskInRange(task, start, end, true))
+        .filter((task) => {
+          const st = String(task.status || "").toLowerCase();
+          return st === "pending" || st === "waiting";
+        })
+        .filter((task) => {
+          if (fireTaskInRange(task, start, end, true)) return true;
+          if (!FIRE_INCLUDE_UNDATED) return false;
+          if (fireTaskPrimaryDate(task)) return false;
+          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+        })
         .map((task) => normalizeFireTask(task, start));
 
       tasks = filtered.sort((a, b) => {
@@ -3788,8 +3817,16 @@ app.get("/api/fire/day", async (req, res) => {
       if (!ok) throw new Error(taskError || "task-export-failed");
 
       const filtered = twTasks
-        .filter((task) => String(task.status || "").toLowerCase() === "pending")
-        .filter((task) => fireTaskInRange(task, start, end, true))
+        .filter((task) => {
+          const st = String(task.status || "").toLowerCase();
+          return st === "pending" || st === "waiting";
+        })
+        .filter((task) => {
+          if (fireTaskInRange(task, start, end, true)) return true;
+          if (!FIRE_INCLUDE_UNDATED) return false;
+          if (fireTaskPrimaryDate(task)) return false;
+          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+        })
         .map((task) => normalizeFireTask(task, start));
 
       tasks = filtered.sort((a, b) => {

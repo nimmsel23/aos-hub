@@ -11,6 +11,11 @@ has_cmd() { command -v "$1" >/dev/null 2>&1; }
 has_gum() { command -v gum >/dev/null 2>&1; }
 has_fzf() { command -v fzf >/dev/null 2>&1; }
 
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
 ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "firectl" || echo "firectl"; }
 ui_info() { has_gum && gum style --faint "$*" || echo "$*"; }
 ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || echo "✔ $*"; }
@@ -49,6 +54,17 @@ run() {
   # shellcheck disable=SC2068
   "$@"
 }
+
+load_fire_env() {
+  local f="${AOS_FIRE_ENV_FILE:-}"
+  [[ -z "$f" ]] && return 0
+  [[ -f "$f" ]] || return 0
+  # shellcheck disable=SC1090
+  set -a; source "$f"; set +a
+}
+
+# Optional override (default config should live in `aos.env`).
+load_fire_env || true
 
 TASK_BIN="${AOS_TASK_BIN:-task}"
 PYTHON_BIN="${AOS_PYTHON_BIN:-python}"

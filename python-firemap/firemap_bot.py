@@ -22,9 +22,6 @@ from pathlib import Path
 from typing import List
 from urllib import parse, request
 
-from firemap import build_all_messages, debug_counts
-
-
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 OFFSET_PATH = BASE_DIR / ".offset"
@@ -53,7 +50,31 @@ def load_dotenv(path: Path) -> None:
         return
 
 
-load_dotenv(ENV_PATH)
+def load_default_env() -> None:
+    env_files: list[Path] = []
+
+    override = os.environ.get("AOS_FIRE_ENV_FILE", "").strip()
+    if override:
+        env_files.append(Path(override).expanduser())
+
+    # Repo-local shared env (untracked).
+    repo_root = BASE_DIR.parent
+    env_files.append(repo_root / "fire" / "fire.env")
+
+    # Conventional shared location (host user).
+    env_files.append(Path.home() / ".env" / "fire.env")
+    # Legacy names (keep working).
+    env_files.append(Path.home() / ".env" / "firemap.env")
+    # Repo-local fallback.
+    env_files.append(ENV_PATH)
+
+    for p in env_files:
+        load_dotenv(p)
+
+
+load_default_env()
+
+from firemap import build_all_messages, debug_counts  # noqa: E402
 
 TASK_BIN = os.environ.get("AOS_TASK_BIN", "task")
 TELE_BIN = os.environ.get("AOS_TELE_BIN", "tele")
@@ -249,7 +270,10 @@ def listen_for_done() -> None:
                         "<code>/fire</code> — today (due/scheduled/wait)\n"
                         "<code>/fireweek</code> — this week (Mon–Sun)\n\n"
                         "<b>Notes</b>\n"
-                        "- only <code>+fire</code> tasks (<code>pending</code>/<code>waiting</code>)\n"
+                        "- due/scheduled/wait tasks are included regardless of tags\n"
+                        "- undated tasks are included by tags via <code>AOS_FIREMAP_TAGS</code> (default: <code>production,hit,fire</code>)\n"
+                        "- undated mode via <code>AOS_FIREMAP_TAGS_MODE</code> (<code>any</code>/<code>all</code>)\n"
+                        "- include undated in daily via <code>AOS_FIREMAP_INCLUDE_UNDATED_DAILY</code>\n"
                         "- overdue is sent separately\n\n"
                         "<b>Debug (terminal)</b>\n"
                         "<code>firectl doctor</code>\n"
