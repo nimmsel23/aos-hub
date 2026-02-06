@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="heartbeat"
+HB_VERSION="0.1.0"
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+msg() { printf "[%s] %s\n" "$APP" "$*"; }
+warn() { printf "[%s] WARN: %s\n" "$APP" "$*" >&2; }
+die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+need_cmd() {
+  has_cmd "$1" || die "Missing: $1"
+}
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+if ! aos_env_load "" "$ROOT_DIR"; then
+  die "${AOS_ENV_LOAD_ERROR:-failed to load env}"
+fi
+
+HB_NAME="${HB_NAME:-alphaos-heartbeat}"
+HB_URL="${HB_URL:-${AOS_GAS_WEBHOOK_URL:-}}"
+HB_HOST="${HB_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
+HB_BOOT_DELAY="${HB_BOOT_DELAY:-30s}"
+HB_INTERVAL="${HB_INTERVAL:-2min}"
+HB_SYSTEMD_DIR="${HB_SYSTEMD_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user}"
+HB_SERVICE_FILE="${HB_SYSTEMD_DIR}/${HB_NAME}.service"
+HB_TIMER_FILE="${HB_SYSTEMD_DIR}/${HB_NAME}.timer"
+
+write_units() {
+  mkdir -p "$HB_SYSTEMD_DIR"
+  local curl_bin
+  curl_bin="$(command -v curl 2>/dev/null || true)"
+  [[ -n "$curl_bin" ]] || die "Missing: curl"
+  cat >"$HB_SERVICE_FILE" <<EOF
+[Unit]
+Description=AlphaOS Heartbeat -> Index GAS
+
+[Service]
+Type=oneshot
+TimeoutStartSec=15
+SuccessExitStatus=28
+ExecStart=${curl_bin} -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \\
+  --connect-timeout 5 --max-time 10 -o /dev/null -X POST \\
+  -H 'Content-Type: application/json' \\
+  -d '{"kind":"heartbeat","host":"%H"}' \\
+  "${HB_URL}"
+EOF
+
+  cat >"$HB_TIMER_FILE" <<EOF
+[Unit]
+Description=AlphaOS Heartbeat Timer
+
+[Timer]
+OnBootSec=${HB_BOOT_DELAY}
+OnUnitActiveSec=${HB_INTERVAL}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload
+  msg "Wrote units:"
+  msg "  $HB_SERVICE_FILE"
+  msg "  $HB_TIMER_FILE"
+}
+
+install_units() {
+  need_cmd systemctl
+  write_units
+  systemctl --user enable --now "${HB_NAME}.timer"
+  msg "Heartbeat installed & running."
+}
+
+uninstall_units() {
+  need_cmd systemctl
+  systemctl --user disable --now "${HB_NAME}.timer" >/dev/null 2>&1 || true
+  rm -f "$HB_SERVICE_FILE" "$HB_TIMER_FILE"
+  systemctl --user daemon-reload
+  msg "Heartbeat removed."
+}
+
+start_timer() { systemctl --user start "${HB_NAME}.timer"; msg "Heartbeat timer started."; }
+stop_timer() { systemctl --user stop "${HB_NAME}.timer"; msg "Heartbeat timer stopped."; }
+status_timer() {
+  systemctl --user status "${HB_NAME}.timer" --no-pager || true
+  systemctl --user status "${HB_NAME}.service" --no-pager || true
+}
+logs_timer() { journalctl --user -u "${HB_NAME}.service" -n 200 -f; }
+
+ping_once() {
+  [[ -n "$HB_URL" ]] || die "Missing heartbeat URL (set HB_URL or AOS_GAS_WEBHOOK_URL)"
+  if has_cmd gasctl; then
+    msg "Pinging GAS (via gasctl)..."
+    HB_URL="$HB_URL" HB_HOST="$HB_HOST" gasctl ping
+    msg "Ping OK."
+    return 0
+  fi
+
+  need_cmd curl
+  msg "Pinging heartbeat endpoint..."
+  curl -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
+    --connect-timeout 5 --max-time 10 -o /dev/null -X POST \
+    -H 'Content-Type: application/json' \
+    -d "{\"kind\":\"heartbeat\",\"host\":\"${HB_HOST}\",\"manual\":true}" \
+    "${HB_URL}"
+  msg "Ping OK."
+}
+
+show_help() {
+  cat <<EOF
+${APP} — standalone heartbeat manager (v${HB_VERSION})
+
+Usage:
+  ${APP} install|uninstall
+  ${APP} start|stop|status|logs
+  ${APP} ping
+  ${APP} help
+
+Env overrides:
+  HB_NAME=alphaos-heartbeat
+  HB_URL=https://.../exec   (or set AOS_GAS_WEBHOOK_URL)
+  HB_HOST=\$(hostname -s)
+  HB_BOOT_DELAY=30s
+  HB_INTERVAL=2min
+  HB_SYSTEMD_DIR=~/.config/systemd/user
+EOF
+}
+
+case "${1:-}" in
+  install) install_units ;;
+  uninstall) uninstall_units ;;
+  start) start_timer ;;
+  stop) stop_timer ;;
+  status) status_timer ;;
+  logs) logs_timer ;;
+  ping) ping_once ;;
+  help|-h|--help|"") show_help ;;
+  *)
+    warn "Unknown command: $1"
+    show_help
+    exit 1
+    ;;
+esac
