@@ -1,307 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# bridgectl — thin dispatcher
+# Keep this file small; real logic lives in:
+#   - bridge-servicectl (systemd/env)
+#   - bridge-apictl     (HTTP endpoints)
+#   - bridge-tsctl      (tailscale serve/funnel/status)
+
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
-SERVICE_NAME="aos-bridge.service"
-SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
-SERVICE_PATH_SYSTEM="$ROOT_DIR/systemd/$SERVICE_NAME"
-if [[ -f "$SERVICE_PATH_USER" ]]; then
-  SERVICE_PATH="$SERVICE_PATH_USER"
-else
-  SERVICE_PATH="$SERVICE_PATH_SYSTEM"
-fi
-USER_SERVICE_DIR="$HOME/.config/systemd/user"
-HOST="${AOS_BRIDGE_HOST:-127.0.0.1}"
-PORT="${AOS_BRIDGE_PORT:-8080}"
-BASE_URL="http://${HOST}:${PORT}"
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
-TS_PATH="${AOS_BRIDGE_TAILSCALE_PATH:-/bridge}"
-TS_TARGET="${AOS_BRIDGE_TAILSCALE_TARGET:-http://127.0.0.1:${PORT}}"
-BRIDGE_TOKEN="${AOS_BRIDGE_TOKEN:-}"
-BRIDGE_TOKEN_HEADER="${AOS_BRIDGE_TOKEN_HEADER:-X-Bridge-Token}"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/bridge-lib.sh"
+
 SYNCVAULTCTL_BIN="${SYNCVAULTCTL_BIN:-$ROOT_DIR/scripts/syncvaultctl}"
+HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
+ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
+ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
 
-msg() { printf "%s\n" "$*"; }
-warn() { printf "WARN: %s\n" "$*" >&2; }
-die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
-
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
-has_gum() { command -v gum >/dev/null 2>&1; }
-
-ui_title() {
-  if has_gum; then
-    gum style --bold --border normal --padding "1 2" "bridgectl"
-  else
-    msg "=== bridgectl ==="
-  fi
-}
-
-ui_ok() {
-  if has_gum; then
-    gum style --foreground 10 "✔ $*"
-  else
-    msg "✔ $*"
-  fi
-}
-
-ui_err() {
-  if has_gum; then
-    gum style --foreground 9 "✘ $*"
-  else
-    warn "✘ $*"
-  fi
-}
-
-ui_warn() {
-  if has_gum; then
-    gum style --foreground 11 "⚠ $*"
-  else
-    warn "⚠ $*"
-  fi
-}
-
-ui_info() {
-  if has_gum; then
-    gum style --faint "$*"
-  else
-    msg "$*"
-  fi
-}
-
-choose() {
-  if has_gum; then
-    gum choose "$@"
-  else
-    msg "Choose one:"
-    select opt in "$@"; do echo "$opt"; break; done
-  fi
-}
-
-curl_json() {
-  if has_cmd curl; then
-    if [[ -n "$BRIDGE_TOKEN" ]]; then
-      curl -fsS -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" "$1"
-    else
-      curl -fsS "$1"
-    fi
-    return
-  fi
-  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - <<'PY'
-import os
-import sys
-import urllib.request
-
-headers = {}
-token = os.environ.get("AOS_BRIDGE_TOKEN", "")
-header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
-if token:
-    headers[header] = token
-req = urllib.request.Request(sys.argv[1], headers=headers)
-with urllib.request.urlopen(req) as r:
-    sys.stdout.write(r.read().decode("utf-8"))
-PY
-}
-
-curl_json_post() {
-  if has_cmd curl; then
-    if [[ -n "$BRIDGE_TOKEN" ]]; then
-      curl -fsS -X POST -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" "$1"
-    else
-      curl -fsS -X POST "$1"
-    fi
-    return
-  fi
-  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - "$1" <<'PY'
-import os
-import sys
-import urllib.request
-
-headers = {"Content-Type": "application/json"}
-token = os.environ.get("AOS_BRIDGE_TOKEN", "")
-header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
-if token:
-    headers[header] = token
-req = urllib.request.Request(sys.argv[1], data=b"{}", headers=headers, method="POST")
-with urllib.request.urlopen(req) as r:
-    sys.stdout.write(r.read().decode("utf-8"))
-PY
-}
-
-curl_json_post_data() {
-  local url="$1"
-  local data="$2"
-  if has_cmd curl; then
-    if [[ -n "$BRIDGE_TOKEN" ]]; then
-      curl -fsS -X POST -H "$BRIDGE_TOKEN_HEADER: $BRIDGE_TOKEN" -H "Content-Type: application/json" -d "$data" "$url"
-    else
-      curl -fsS -X POST -H "Content-Type: application/json" -d "$data" "$url"
-    fi
-    return
-  fi
-  AOS_BRIDGE_TOKEN="$BRIDGE_TOKEN" AOS_BRIDGE_TOKEN_HEADER="$BRIDGE_TOKEN_HEADER" python - "$url" "$data" <<'PY'
-import os
-import sys
-import urllib.request
-
-headers = {"Content-Type": "application/json"}
-token = os.environ.get("AOS_BRIDGE_TOKEN", "")
-header = os.environ.get("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token")
-if token:
-    headers[header] = token
-req = urllib.request.Request(sys.argv[1], data=sys.argv[2].encode(), headers=headers, method="POST")
-with urllib.request.urlopen(req) as r:
-    sys.stdout.write(r.read().decode("utf-8"))
-PY
-}
-
-format_json() {
-  if has_cmd jq; then
-    jq -C .
-  elif has_cmd python; then
-    python -m json.tool
-  else
-    cat
-  fi
-}
-
-install_deps() {
-  if ! has_cmd pacman; then
-    die "pacman not found. Install python-aiohttp manually."
-  fi
-  msg "Installing python-aiohttp (Arch)..."
-  sudo pacman -S python-aiohttp
-}
-
-link_service() {
-  mkdir -p "$USER_SERVICE_DIR"
-  if [[ -e "$USER_SERVICE_DIR/$SERVICE_NAME" ]]; then
-    msg "Service already linked: $USER_SERVICE_DIR/$SERVICE_NAME"
-    return
-  fi
-  ln -s "$SERVICE_PATH" "$USER_SERVICE_DIR/$SERVICE_NAME"
-  msg "Linked service: $USER_SERVICE_DIR/$SERVICE_NAME"
-}
-
-systemctl_user() {
-  systemctl --user "$@"
-}
-
-status() {
-  msg "Bridge status:"
-  if has_cmd python; then
-    python - <<'PY' || true
-import importlib.util
-print("python:", "ok")
-spec = importlib.util.find_spec("aiohttp")
-print("aiohttp:", "ok" if spec else "missing")
-PY
-  else
-    warn "python not found"
-  fi
-
-  if has_cmd systemctl; then
-    systemctl_user status "$SERVICE_NAME" --no-pager || true
-  else
-    warn "systemctl not found"
-  fi
-}
-
-health() {
-  ui_info "Checking Bridge health..."
-  if response=$(curl_json "$BASE_URL/health" 2>&1); then
-    if echo "$response" | grep -q '"ok".*true'; then
-      ui_ok "Bridge is online"
-      echo "$response" | format_json
-    else
-      ui_warn "Bridge responded but reported not ok"
-      echo "$response" | format_json
-    fi
-  else
-    ui_err "Health check failed"
-    echo "$response"
-  fi
-}
-
-debug() {
-  ui_title
-  ui_info "Running comprehensive diagnostics..."
-  msg ""
-
-  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
-    ui_err "Debug endpoint failed (is Bridge running?)"
-    echo "$response"
-    msg ""
-    ui_info "Trying basic health check instead..."
-    health
-    return 1
-  fi
-
-  # Parse debug response
-  local ok service
-  ok=$(echo "$response" | grep -o '"ok"[[:space:]]*:[[:space:]]*[^,}]*' | cut -d: -f2 | tr -d ' "')
-  service=$(echo "$response" | grep -o '"service"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
-
-  if [[ "$ok" == "true" ]]; then
-    ui_ok "Bridge Debug: $service"
-  else
-    ui_warn "Bridge reported warnings"
-  fi
-
-  msg ""
-  echo "$response" | format_json
-
-  msg ""
-  ui_info "Testing RPC endpoint..."
-  test_rpc
-}
-
-test_rpc() {
-  local payload='{"action":"health","args":{}}'
-
-  if ! response=$(curl_json_post_data "$BASE_URL/rpc" "$payload" 2>&1); then
-    ui_err "RPC endpoint test failed"
-    echo "$response"
-    return 1
-  fi
-
-  if echo "$response" | grep -q '"ok".*true'; then
-    ui_ok "RPC endpoint working"
-  else
-    ui_warn "RPC endpoint returned error"
-  fi
-
-  echo "$response" | format_json
-}
-
-flush_queue() {
-  ui_info "Flushing Bridge queue..."
-  if response=$(curl_json_post "$BASE_URL/bridge/queue/flush" 2>&1); then
-    ui_ok "Queue flushed"
-    echo "$response" | format_json
-  else
-    ui_err "Queue flush failed"
-    echo "$response"
-  fi
-}
-
-sync_push() {
-  msg "Bridge sync push:"
-  local suffix=""
-  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
-    suffix="?dry_run=1"
-  fi
-  curl_json_post "$BASE_URL/bridge/sync/push${suffix}" || warn "sync push failed"
-}
-
-sync_pull() {
-  msg "Bridge sync pull:"
-  local suffix=""
-  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
-    suffix="?dry_run=1"
-  fi
-  curl_json_post "$BASE_URL/bridge/sync/pull${suffix}" || warn "sync pull failed"
-}
+servicectl() { exec "$APP_DIR/bridge-servicectl" "$@"; }
+apictl() { exec "$APP_DIR/bridge-apictl" "$@"; }
+tsctl() { exec "$APP_DIR/bridge-tsctl" "$@"; }
 
 syncvaultctl_cmd() {
   if [[ -x "$SYNCVAULTCTL_BIN" ]]; then
@@ -317,106 +36,102 @@ syncvaultctl_cmd() {
 
 run_syncvaultctl() {
   local cmd
-  if ! cmd="$(syncvaultctl_cmd)"; then
-    warn "syncvaultctl not found"
-    return 1
-  fi
-  "$cmd" "$@"
+  cmd="$(syncvaultctl_cmd)" || die "syncvaultctl not found"
+  exec "$cmd" "$@"
 }
 
-tailscale_status() {
-  if ! has_cmd tailscale; then
-    warn "tailscale not installed"
-    return
+routerctl_cmd() {
+  if [[ -x "$ROUTERCTL_BIN" ]]; then
+    echo "$ROUTERCTL_BIN"
+    return 0
   fi
-  msg "Tailscale status:"
-  tailscale status || true
-  msg ""
-  msg "Tailscale IPs:"
-  tailscale ip -4 || true
-  tailscale ip -6 || true
-  msg ""
-  msg "Tailscale serve status:"
-  tailscale serve status || true
-  msg ""
-  msg "Tailscale funnel status:"
-  tailscale funnel status || true
-  if has_cmd systemctl; then
-    systemctl status tailscaled --no-pager || true
+  if has_cmd routerctl; then
+    command -v routerctl
+    return 0
   fi
+  return 1
 }
 
-tailscale_serve_bridge() {
-  if ! has_cmd tailscale; then
-    warn "tailscale not installed"
-    return
+heartbeat_cmd() {
+  if [[ -x "$HEARTBEAT_BIN" ]]; then
+    echo "$HEARTBEAT_BIN"
+    return 0
   fi
-  msg "Tailscale serve (tailnet-only):"
-  msg "  path:   $TS_PATH"
-  msg "  target: $TS_TARGET"
-  tailscale serve --bg --set-path "$TS_PATH" "$TS_TARGET"
-  msg ""
-  tailscale serve status || true
+  if has_cmd heartbeat; then
+    command -v heartbeat
+    return 0
+  fi
+  local bin
+  bin="$(routerctl_cmd)" || return 1
+  echo "$bin"
+  return 0
 }
 
-tailscale_funnel_bridge() {
-  if ! has_cmd tailscale; then
-    warn "tailscale not installed"
-    return
+run_heartbeat() {
+  local sub="${1:-status}"; shift || true
+  local bin
+  bin="$(heartbeat_cmd)" || die "heartbeat not available"
+  if [[ "$bin" == *routerctl ]]; then
+    exec "$bin" heartbeat "$sub" "$@"
   fi
-  msg "Tailscale funnel (public):"
-  msg "  path:   $TS_PATH"
-  msg "  target: $TS_TARGET"
-  tailscale funnel --bg --set-path "$TS_PATH" "$TS_TARGET"
-  msg ""
-  tailscale funnel status || true
+  exec "$bin" "$sub" "$@"
 }
 
 doctor() {
-  status
+  ui_title "bridgectl doctor"
+  "$APP_DIR/bridge-servicectl" status || true
   msg ""
-  tailscale_status
+  "$APP_DIR/bridge-tsctl" status || true
   msg ""
-  health
+  "$APP_DIR/bridge-apictl" health || true
+  msg ""
+  "$APP_DIR/bridge-apictl" debug || true
 }
 
 menu() {
-  ui_title
+  ui_title "bridgectl"
   local action
   action="$(choose \
-    "status" "health" "debug" "test-rpc" \
-    "flush" \
-    "sync push" "sync pull" "sync push (dry-run)" "sync pull (dry-run)" \
-    "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" "syncvaultctl advanced" \
-    "env" \
-    "start" "stop" "restart" "logs" "enable" \
-    "serve" "funnel" "tailscale" \
+    "service status" "service logs" "service restart" "service enable" "service env" \
+    "api health" "api debug" "api doctor" "api test-rpc" "api flush" \
+    "api sync-status" "api sync-pull" "api sync-push" "api sync-pull (dry-run)" "api sync-push (dry-run)" "api sync-abort" \
+    "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" \
+    "heartbeat status" "heartbeat ping" "heartbeat logs" \
+    "tailscale status" "tailscale serve" "tailscale funnel" \
     "doctor" "quit")"
 
   case "$action" in
-    status) status ;;
-    health) health ;;
-    debug) debug ;;
-    test-rpc) test_rpc ;;
-    flush) flush_queue ;;
-    "sync push") sync_push ;;
-    "sync pull") sync_pull ;;
-    "sync push (dry-run)") sync_push --dry-run ;;
-    "sync pull (dry-run)") sync_pull --dry-run ;;
+    "service status") servicectl status ;;
+    "service logs") servicectl logs ;;
+    "service restart") servicectl restart ;;
+    "service enable") servicectl enable ;;
+    "service env") servicectl env ;;
+
+    "api health") apictl health ;;
+    "api debug") apictl debug ;;
+    "api doctor") apictl doctor ;;
+    "api test-rpc") apictl test-rpc ;;
+    "api flush") apictl flush ;;
+    "api sync-status") apictl sync-status ;;
+    "api sync-pull") apictl sync-pull ;;
+    "api sync-push") apictl sync-push ;;
+    "api sync-pull (dry-run)") apictl sync-pull --dry-run ;;
+    "api sync-push (dry-run)") apictl sync-push --dry-run ;;
+    "api sync-abort") apictl sync-abort ;;
+
     "syncvaultctl menu") run_syncvaultctl menu ;;
     "syncvaultctl status") run_syncvaultctl status ;;
     "syncvaultctl sync") run_syncvaultctl sync ;;
     "syncvaultctl pull") run_syncvaultctl pull ;;
-    "syncvaultctl advanced") run_syncvaultctl advanced ;;
-    env) "${EDITOR:-nano}" "$ENV_FILE" ;;
-    start) systemctl_user start "$SERVICE_NAME" ;;
-    stop) systemctl_user stop "$SERVICE_NAME" ;;
-    restart) systemctl_user restart "$SERVICE_NAME" ;;
-    logs) journalctl --user -u "$SERVICE_NAME" -f ;;
-    enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
-    serve) tailscale_serve_bridge ;;
-    funnel) tailscale_funnel_bridge ;;
-    tailscale) tailscale_status ;;
+
+    "heartbeat status") run_heartbeat status ;;
+    "heartbeat ping") run_heartbeat ping ;;
+    "heartbeat logs") run_heartbeat logs ;;
+
+    "tailscale status") tsctl status ;;
+    "tailscale serve") tsctl serve ;;
+    "tailscale funnel") tsctl funnel ;;
+
     doctor) doctor ;;
     quit) exit 0 ;;
   esac
@@ -426,62 +141,56 @@ usage() {
   cat <<EOF
 Usage: bridgectl <command>
 
-Commands:
-  menu           Interactive menu (gum/fzf)
-  status         Show service + python/aiohttp status
-  health         GET /health
-  debug          GET /debug (comprehensive diagnostics + RPC test)
-  test-rpc       Test RPC endpoint (forwards to GAS)
-  flush          Flush queued task operations
-  sync-push      POST /bridge/sync/push [--dry-run]
-  sync-pull      POST /bridge/sync/pull [--dry-run]
-  syncvaultctl   Run syncvaultctl (repo or PATH)
-  env            Edit bridge env file
-  install-deps   Install python-aiohttp (Arch)
-  link-service   Link systemd user service
-  enable         Enable + start service
-  start          Start service
-  stop           Stop service
-  restart        Restart service
-  logs           Follow service logs
-  serve          tailscale serve --set-path /bridge -> 8080 (tailnet-only)
-  funnel         tailscale funnel --set-path /bridge -> 8080 (public)
-  tailscale      Show tailscale status + IPs
-  doctor         Run status + tailscale + health + debug
+Core:
+  bridgectl menu
+  bridgectl doctor
 
-Environment:
-  AOS_BRIDGE_HOST           Host (default: 127.0.0.1)
-  AOS_BRIDGE_PORT           Port (default: 8080)
-  AOS_BRIDGE_TOKEN          Auth token (optional)
-  AOS_BRIDGE_TOKEN_HEADER   Token header (default: X-Bridge-Token)
-  AOS_BRIDGE_ENV_FILE       Env file path (default: ~/.env/bridge.env)
-  AOS_GAS_TENT_URL          GAS Tent Centre URL (for RPC)
+Service:
+  bridgectl status|enable|start|stop|restart|logs|env
+
+API:
+  bridgectl health|debug|doctor|test-rpc|flush
+  bridgectl sync-status|sync-pull|sync-push|sync-abort
+
+Tailscale:
+  bridgectl tailscale|serve|funnel
+
+Other:
+  bridgectl syncvaultctl <args...>
+  bridgectl heartbeat <cmd>
+
+Env:
+  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
 EOF
 }
 
 cmd="${1:-menu}"
+shift || true
+
 case "$cmd" in
-  menu) menu ;;
-  status) status ;;
-  health) health ;;
-  debug) debug ;;
-  test-rpc) test_rpc ;;
-  flush) flush_queue ;;
-  sync-push) sync_push "${2:-}" ;;
-  sync-pull) sync_pull "${2:-}" ;;
-  syncvaultctl) shift; run_syncvaultctl "$@" ;;
-  env) "${EDITOR:-nano}" "$ENV_FILE" ;;
-  install-deps) install_deps ;;
-  link-service) link_service ;;
-  enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
-  start) systemctl_user start "$SERVICE_NAME" ;;
-  stop) systemctl_user stop "$SERVICE_NAME" ;;
-  restart) systemctl_user restart "$SERVICE_NAME" ;;
-  logs) journalctl --user -u "$SERVICE_NAME" -f ;;
-  serve) tailscale_serve_bridge ;;
-  funnel) tailscale_funnel_bridge ;;
-  tailscale) tailscale_status ;;
-  doctor) doctor ;;
   -h|--help|help) usage ;;
-  *) usage; exit 1 ;;
+  menu) menu ;;
+  doctor) doctor ;;
+
+  status|enable|start|stop|restart|logs|env|install-deps|link-service)
+    servicectl "$cmd" "$@"
+    ;;
+
+  health|debug|test-rpc|flush|sync-status|sync-pull|sync-push|sync-abort)
+    apictl "$cmd" "$@"
+    ;;
+  doctor-api|api-doctor) apictl doctor ;;
+
+  tailscale) tsctl status ;;
+  serve) tsctl serve ;;
+  funnel) tsctl funnel ;;
+
+  syncvaultctl) run_syncvaultctl "$@" ;;
+  heartbeat) run_heartbeat "${1:-status}" "${@:2}" ;;
+
+  *)
+    usage
+    exit 1
+    ;;
 esac
+

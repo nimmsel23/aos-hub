@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/bridge-lib.sh"
+
+ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+load_env_file_if_present "$ENV_FILE"
+bridge_recompute_config
+
+health() {
+  ui_info "Checking Bridge health..."
+  local response=""
+  if response="$(bridge_curl_get "${BRIDGE_BASE_URL%/}/health" 2>&1)"; then
+    if echo "$response" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+      ui_ok "Bridge is online"
+    else
+      ui_warn "Bridge responded but reported not ok"
+    fi
+    echo "$response" | format_json
+  else
+    ui_err "Health check failed"
+    echo "$response"
+    return 1
+  fi
+}
+
+debug() {
+  ui_title "bridgectl debug"
+  ui_info "Running diagnostics..."
+  local response=""
+  if ! response="$(bridge_curl_get "${BRIDGE_BASE_URL%/}/debug" 2>&1)"; then
+    ui_err "Debug endpoint failed (is Bridge running?)"
+    echo "$response"
+    msg ""
+    ui_info "Trying basic health check instead..."
+    health
+    return 1
+  fi
+  echo "$response" | format_json
+  msg ""
+  ui_info "Testing RPC endpoint..."
+  test_rpc
+}
+
+doctor() {
+  ui_title "bridgectl doctor"
+  ui_info "Calling /bridge/doctor (active probes)..."
+  bridge_curl_get "${BRIDGE_BASE_URL%/}/bridge/doctor" | format_json
+}
+
+test_rpc() {
+  local payload='{"action":"health","args":{}}'
+  local response=""
+  if ! response="$(bridge_curl_post_json "${BRIDGE_BASE_URL%/}/rpc" "$payload" 2>&1)"; then
+    ui_err "RPC endpoint test failed"
+    echo "$response"
+    return 1
+  fi
+  if echo "$response" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+    ui_ok "RPC endpoint working"
+  else
+    ui_warn "RPC endpoint returned error"
+  fi
+  echo "$response" | format_json
+}
+
+flush_queue() {
+  ui_info "Flushing Bridge queue..."
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/queue/flush" | format_json
+}
+
+sync_push() {
+  local suffix=""
+  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
+    suffix="?dry_run=1"
+  fi
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/sync/push${suffix}" | format_json
+}
+
+sync_pull() {
+  local suffix=""
+  if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
+    suffix="?dry_run=1"
+  fi
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/sync/pull${suffix}" | format_json
+}
+
+sync_status() {
+  bridge_curl_get "${BRIDGE_BASE_URL%/}/bridge/sync/status" | format_json
+}
+
+sync_abort() {
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/sync/abort" | format_json
+}
+
+usage() {
+  cat <<EOF
+bridge-apictl
+
+Usage: bridge-apictl <command>
+
+Commands:
+  health
+  debug
+  doctor
+  test-rpc
+  flush
+  sync-push [--dry-run]
+  sync-pull [--dry-run]
+  sync-status
+  sync-abort
+
+Env:
+  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
+  AOS_BRIDGE_URL (optional override)
+  AOS_BRIDGE_TOKEN / AOS_BRIDGE_TOKEN_HEADER (optional auth)
+EOF
+}
+
+cmd="${1:-health}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  health) health ;;
+  debug) debug ;;
+  doctor) doctor ;;
+  test-rpc) test_rpc ;;
+  flush) flush_queue ;;
+  sync-push) sync_push "${1:-}" ;;
+  sync-pull) sync_pull "${1:-}" ;;
+  sync-status) sync_status ;;
+  sync-abort) sync_abort ;;
+  *) usage; exit 1 ;;
+esac
+

@@ -11,8 +11,10 @@ import os
 import re
 import shutil
 import shlex
+import signal
 import subprocess
 import sys
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -50,6 +52,11 @@ GAS_USER_ID = os.getenv("AOS_GAS_USER_ID", "").strip()
 GAS_MODE = os.getenv("AOS_GAS_MODE", "direct").strip().lower()
 FALLBACK_TELE = os.getenv("AOS_BRIDGE_FALLBACK_TELE", "0").strip() == "1"
 TELE_BIN = os.getenv("AOS_TELE_BIN", "tele").strip()
+CORE4_NOTIFY = os.getenv("AOS_CORE4_NOTIFY", "0").strip() == "1"
+CORE4_NOTIFY_SILENT = os.getenv("AOS_CORE4_NOTIFY_SILENT", "0").strip() == "1"
+CORE4_NOTIFY_MODE = os.getenv("AOS_CORE4_NOTIFY_MODE", "tele").strip().lower()
+CORE4_AUTO_PUSH = os.getenv("AOS_CORE4_AUTO_PUSH", "0").strip() == "1"
+CORE4_AUTO_PUSH_MIN_INTERVAL = int(os.getenv("AOS_CORE4_AUTO_PUSH_MIN_INTERVAL", "60") or "60")
 CORE4CTL_BIN = os.getenv(
     "AOS_CORE4CTL_BIN", str((Path(__file__).resolve().parents[1] / "python-core4" / "core4ctl"))
 ).strip()
@@ -85,10 +92,18 @@ def _git_rev_short() -> str:
 BRIDGE_VERSION = os.getenv("AOS_BRIDGE_VERSION", "") or _git_rev_short()
 
 core4_lock = asyncio.Lock()
+core4_push_lock = asyncio.Lock()
+core4_last_push_mono = 0.0
 fruits_lock = asyncio.Lock()
 queue_lock = asyncio.Lock()
 firemap_lock = asyncio.Lock()
 fire_daily_lock = asyncio.Lock()
+sync_status_lock = asyncio.Lock()
+
+SYNC_STATUS: dict[str, dict[str, Any]] = {
+    "pull": {"direction": "pull", "running": False, "pids": []},
+    "push": {"direction": "push", "running": False, "pids": []},
+}
 
 
 @web.middleware
@@ -250,7 +265,7 @@ async def _send_tele(payload: Dict[str, Any]) -> None:
         return
 
 
-async def _send_tele_text(text: str) -> None:
+async def _send_tele_text(text: str, *, silent: bool = False) -> None:
     if not TELE_BIN:
         return
     if not shutil.which(TELE_BIN):
@@ -259,15 +274,87 @@ async def _send_tele_text(text: str) -> None:
     if not msg:
         return
     try:
+        args = [TELE_BIN]
+        if silent:
+            args.append("-s")
+        args.append(msg)
         proc = await asyncio.create_subprocess_exec(
-            TELE_BIN,
-            msg,
+            *args,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
         await asyncio.wait_for(proc.wait(), timeout=10)
     except Exception:
         return
+
+
+def _format_core4_notify(
+    domain: str, task: str, points: float, total_today: float, source: str, ts: datetime
+) -> str:
+    time_str = ts.astimezone(TZ).strftime("%H:%M")
+    return (
+        f"CORE4 +{points:.1f} {domain}/{task} | today {total_today:.1f} | {time_str} | src:{source}"
+    )
+
+
+def _core4_chat_user() -> tuple[Optional[int], Optional[int]]:
+    chat_id = str(GAS_CHAT_ID or GAS_USER_ID or "").strip()
+    user_id = str(GAS_USER_ID or GAS_CHAT_ID or "").strip()
+    if not chat_id:
+        return None, None
+    if not user_id:
+        user_id = chat_id
+    try:
+        return int(chat_id), int(user_id)
+    except ValueError:
+        return None, None
+
+
+async def _send_core4_notify(text: str) -> None:
+    mode = CORE4_NOTIFY_MODE
+    if mode == "gas":
+        chat_id, user_id = _core4_chat_user()
+        if not chat_id or not user_id:
+            LOGGER.warning("core4 notify: missing chat_id/user_id for GAS mode")
+            return
+        ok, err = await _post_telegram_update(GAS_WEBHOOK_URL, text, chat_id, user_id)
+        if not ok:
+            LOGGER.warning("core4 notify (gas) failed: %s", err)
+        return
+    if mode == "both":
+        chat_id, user_id = _core4_chat_user()
+        if chat_id and user_id:
+            ok, err = await _post_telegram_update(GAS_WEBHOOK_URL, text, chat_id, user_id)
+            if not ok:
+                LOGGER.warning("core4 notify (gas) failed: %s", err)
+        else:
+            LOGGER.warning("core4 notify: missing chat_id/user_id for GAS mode")
+        await _send_tele_text(text, silent=CORE4_NOTIFY_SILENT)
+        return
+    # default: tele
+    await _send_tele_text(text, silent=CORE4_NOTIFY_SILENT)
+
+
+async def _core4_auto_push() -> None:
+    global core4_last_push_mono
+    if not CORE4_AUTO_PUSH:
+        return
+    now_mono = time.monotonic()
+    if now_mono - core4_last_push_mono < CORE4_AUTO_PUSH_MIN_INTERVAL:
+        return
+    if core4_push_lock.locked():
+        return
+    async with core4_push_lock:
+        now_mono = time.monotonic()
+        if now_mono - core4_last_push_mono < CORE4_AUTO_PUSH_MIN_INTERVAL:
+            return
+        core4_last_push_mono = now_mono
+        result = await _run_core4ctl(["sync-core4"], timeout_s=180.0)
+        if result.get("ok"):
+            LOGGER.info("core4 auto-push ok")
+            return
+        err = result.get("error") or result.get("stderr") or result.get("stdout") or "unknown error"
+        LOGGER.warning("core4 auto-push failed: %s", str(err)[:800])
 
 
 async def _post_to_gas(payload: Dict[str, Any], chat_id: int, user_id: int) -> tuple[bool, str]:
@@ -397,6 +484,10 @@ def _core4_canon_task(task: str) -> str:
         "action": "declare",
     }
     return mapping.get(value, value)
+
+
+# Canonical → TW tag / display name  (reverse of _core4_canon_task)
+_CORE4_TW_TAG = {"person1": "partner", "person2": "posterity"}
 
 
 def _core4_infer_domain(domain: str, task: str) -> str:
@@ -798,6 +889,25 @@ def _count_pending_with_tag(tasks: list[Dict[str, Any]], tag: str) -> int:
     return count
 
 
+async def _find_pending_core4_uuid(habit_tag: str, date_key: str) -> Optional[str]:
+    """Live TW query: first pending task with +{habit_tag} due:{date_key}."""
+    if not _task_bin_available():
+        return None
+    proc = await asyncio.create_subprocess_exec(
+        TASK_BIN, f"+{habit_tag}", f"due:{date_key}", "status:pending", "uuids",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    if proc.returncode != 0:
+        return None
+    for line in stdout.decode("utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if TASK_UUID_RE.fullmatch(line):
+            return line
+    return None
+
+
 async def handle_bridge_daily_review_data(_request: web.Request) -> web.Response:
     path = _task_export_path()
     exists = path.exists()
@@ -903,6 +1013,160 @@ async def _run_task_report(cmd: list[str], timeout_s: float = 10.0) -> dict[str,
             "cmd": " ".join(cmd),
         }
     return {"ok": True, "code": 0, "stdout": out, "stderr": err, "cmd": " ".join(cmd)}
+
+
+def _resolve_bin(bin_path: str) -> dict[str, Any]:
+    """
+    Resolve a binary path in a systemd environment where PATH may be minimal.
+    Returns {configured, resolved, exists}.
+    """
+    configured = str(bin_path or "").strip()
+    if not configured:
+        return {"configured": "", "resolved": "", "exists": False}
+
+    # absolute path?
+    p = Path(configured).expanduser()
+    if p.is_absolute():
+        return {"configured": configured, "resolved": str(p), "exists": p.exists()}
+
+    # PATH lookup
+    found = shutil.which(configured)
+    if found:
+        return {"configured": configured, "resolved": found, "exists": True}
+
+    # not found
+    return {"configured": configured, "resolved": "", "exists": False}
+
+
+async def _sync_status_update(direction: str, updates: dict[str, Any]) -> dict[str, Any]:
+    async with sync_status_lock:
+        state = SYNC_STATUS.setdefault(direction, {"direction": direction, "running": False})
+        state.update(updates)
+        state["direction"] = direction
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return dict(state)
+
+
+async def _sync_status_snapshot() -> dict[str, Any]:
+    async with sync_status_lock:
+        return {k: dict(v) for k, v in SYNC_STATUS.items()}
+
+
+async def _sync_try_start(direction: str, *, dry_run: bool, async_mode: bool) -> dict[str, Any]:
+    started_at = datetime.now(timezone.utc)
+    started_mono = time.monotonic()
+    async with sync_status_lock:
+        state = SYNC_STATUS.setdefault(direction, {"direction": direction, "running": False, "pids": []})
+        if state.get("running"):
+            return {"ok": False, "state": dict(state)}
+        state.update(
+            {
+                "direction": direction,
+                "running": True,
+                "last_start": started_at.isoformat(),
+                "last_end": None,
+                "duration_ms": None,
+                "dry_run": bool(dry_run),
+                "async": bool(async_mode),
+                "last_result": None,
+                "last_error": None,
+                "updated_at": started_at.isoformat(),
+                "pids": [],
+            }
+        )
+        return {"ok": True, "state": dict(state), "started_mono": started_mono}
+
+
+async def _sync_add_pid(direction: str, pid: int) -> None:
+    if not pid:
+        return
+    async with sync_status_lock:
+        state = SYNC_STATUS.setdefault(direction, {"direction": direction, "running": False, "pids": []})
+        pids = list(state.get("pids") or [])
+        if pid not in pids:
+            pids.append(pid)
+        state["pids"] = pids
+        state["last_pid"] = pid
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _sync_result_summary(result: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {"ok": bool(result.get("ok"))}
+    for key in ("error", "code", "mode", "cmd"):
+        if key in result:
+            summary[key] = result.get(key)
+    if result.get("stdout"):
+        summary["stdout_head"] = str(result.get("stdout") or "")[:300]
+    if result.get("stderr"):
+        summary["stderr_head"] = str(result.get("stderr") or "")[:300]
+    if isinstance(result.get("results"), list):
+        items = result.get("results") or []
+        ok_count = sum(1 for item in items if isinstance(item, dict) and item.get("ok"))
+        summary["results"] = {"total": len(items), "ok": ok_count}
+    return summary
+
+
+async def _probe_bin(
+    name: str,
+    bin_path: str,
+    args: list[str],
+    *,
+    timeout_s: float = 2.0,
+) -> dict[str, Any]:
+    """
+    Execute a small probe command for a binary. This is ONLY for /doctor.
+    """
+    info = _resolve_bin(bin_path)
+    resolved = info.get("resolved") or info.get("configured") or ""
+    if not info.get("exists"):
+        return {
+            "name": name,
+            "ok": False,
+            "error": "not found",
+            "configured": info.get("configured"),
+            "resolved": resolved,
+            "args": args,
+        }
+
+    cmd = [resolved, *args] if resolved else [bin_path, *args]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+        out = stdout.decode("utf-8", errors="ignore").strip()
+        err = stderr.decode("utf-8", errors="ignore").strip()
+
+        return {
+            "name": name,
+            "ok": proc.returncode == 0,
+            "code": proc.returncode,
+            "configured": info.get("configured"),
+            "resolved": resolved,
+            "cmd": " ".join(cmd),
+            "stdout_head": out[:300],
+            "stderr_head": err[:300],
+        }
+    except asyncio.TimeoutError:
+        return {
+            "name": name,
+            "ok": False,
+            "error": "timeout",
+            "configured": info.get("configured"),
+            "resolved": resolved,
+            "cmd": " ".join(cmd),
+        }
+    except Exception as exc:
+        return {
+            "name": name,
+            "ok": False,
+            "error": str(exc),
+            "configured": info.get("configured"),
+            "resolved": resolved,
+            "cmd": " ".join(cmd),
+        }
 
 
 def _split_blocks(text: str) -> list[str]:
@@ -1087,6 +1351,14 @@ async def handle_core4_log(request: web.Request) -> web.Response:
         data = _core4_build_week_for_date(ts.date())
 
     total_today = _core4_total_for_date(data.get("entries") or [], date_key)
+    if CORE4_NOTIFY:
+        message = _format_core4_notify(domain, task, points, total_today, source, ts)
+        await _send_core4_notify(message)
+    if CORE4_AUTO_PUSH:
+        asyncio.create_task(_core4_auto_push())
+    # Complete matching TW task → on-modify hook fires (tele + TickTick)
+    if done and TASK_EXEC_ENABLED:
+        asyncio.create_task(_complete_core4_tw_task(_CORE4_TW_TAG.get(task, task), date_key))
     return web.json_response({"ok": True, "week": data.get("week") or week, "total_today": total_today})
 
 
@@ -1104,8 +1376,10 @@ async def handle_core4_today(request: web.Request) -> web.Response:
     date_key = _date_key(now)
     async with core4_lock:
         data = _core4_build_week_for_date(now.date())
-    total = _core4_total_for_date(data.get("entries") or [], date_key)
-    return web.json_response({"ok": True, "week": week, "date": date_key, "total": total})
+    entries = data.get("entries") or []
+    total = _core4_total_for_date(entries, date_key)
+    habits = {_CORE4_TW_TAG.get(e["task"], e["task"]): True for e in entries if e.get("date") == date_key and e.get("done")}
+    return web.json_response({"ok": True, "week": week, "date": date_key, "total": total, "habits": habits})
 
 
 async def handle_core4_pull(_request: web.Request) -> web.Response:
@@ -1408,6 +1682,31 @@ async def _get_task_uuid(task_id: str) -> Optional[str]:
     return None
 
 
+async def _run_task_done(uuid: str) -> Dict[str, Any]:
+    """Mark a TW task as done by UUID. Fire-and-forget safe."""
+    if not TASK_EXEC_ENABLED:
+        return {"ok": False, "error": "task execution disabled"}
+    if not _task_bin_available():
+        return {"ok": False, "error": "task binary not found"}
+    proc = await asyncio.create_subprocess_exec(
+        TASK_BIN, uuid, "done",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    await proc.communicate()
+    return {"ok": proc.returncode == 0, "uuid": uuid}
+
+
+async def _complete_core4_tw_task(habit_tag: str, date_key: str) -> None:
+    """Find + complete a pending Core4 TW task.  Fire-and-forget safe."""
+    try:
+        uuid = await _find_pending_core4_uuid(habit_tag, date_key)
+        if uuid:
+            await _run_task_done(uuid)
+    except Exception:
+        pass  # never block the event loop
+
+
 async def handle_task_execute(request: web.Request) -> web.Response:
     payload = await _read_json(request)
     single = payload.get("task")
@@ -1555,8 +1854,22 @@ def _rclone_filters() -> list:
 def _rclone_flags() -> list[str]:
     raw = os.getenv("AOS_RCLONE_FLAGS", "").strip()
     if raw:
-        return shlex.split(raw)
-    return ["--skip-links", "--create-empty-src-dirs", "--update"]
+        flags = shlex.split(raw)
+    else:
+        flags = ["--skip-links", "--create-empty-src-dirs", "--update"]
+
+    stats = os.getenv("AOS_RCLONE_STATS", "").strip()
+    if stats.lower() in ("0", "false", "off", "no"):
+        return flags
+
+    if not stats:
+        stats = "30s"
+
+    if not any(f.startswith("--stats") for f in flags):
+        flags.append(f"--stats={stats}")
+    if "--stats-one-line" not in flags:
+        flags.append("--stats-one-line")
+    return flags
 
 
 def _rclone_join(base: str, subpath: str) -> str:
@@ -1609,6 +1922,21 @@ def _truthy(value: Optional[str]) -> bool:
     return text in ("1", "true", "yes", "y", "on")
 
 
+async def _stream_reader(stream: Optional[asyncio.StreamReader], label: str) -> str:
+    if stream is None:
+        return ""
+    buf = ""
+    while True:
+        line = await stream.readline()
+        if not line:
+            break
+        text = line.decode("utf-8", errors="ignore").rstrip()
+        if text:
+            LOGGER.info("%s %s", label, text)
+            buf = (buf + text + "\n")[-4000:]
+    return buf.strip()
+
+
 async def _run_rclone(direction: str, *, dry_run: bool = False) -> Dict[str, Any]:
     remote = os.getenv("AOS_RCLONE_REMOTE", "").strip()
     local = os.getenv("AOS_RCLONE_LOCAL", str(VAULT_DIR)).strip()
@@ -1634,12 +1962,17 @@ async def _run_rclone(direction: str, *, dry_run: bool = False) -> Dict[str, Any
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await proc.communicate()
+        await _sync_add_pid(direction, proc.pid)
+        stdout_task = asyncio.create_task(_stream_reader(proc.stdout, f"rclone {direction}"))
+        stderr_task = asyncio.create_task(_stream_reader(proc.stderr, f"rclone {direction}"))
+        await proc.wait()
+        stdout = await stdout_task
+        stderr = await stderr_task
         return {
             "ok": proc.returncode == 0,
             "code": proc.returncode,
-            "stdout": stdout.decode("utf-8", errors="ignore"),
-            "stderr": stderr.decode("utf-8", errors="ignore"),
+            "stdout": stdout,
+            "stderr": stderr,
             "cmd": " ".join(cmd),
         }
 
@@ -1660,13 +1993,19 @@ async def _run_rclone(direction: str, *, dry_run: bool = False) -> Dict[str, Any
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await proc.communicate()
+        await _sync_add_pid(direction, proc.pid)
+        label = f"rclone {direction} {local_key}->{remote_key}"
+        stdout_task = asyncio.create_task(_stream_reader(proc.stdout, label))
+        stderr_task = asyncio.create_task(_stream_reader(proc.stderr, label))
+        await proc.wait()
+        stdout = await stdout_task
+        stderr = await stderr_task
         results.append(
             {
                 "ok": proc.returncode == 0,
                 "code": proc.returncode,
-                "stdout": stdout.decode("utf-8", errors="ignore"),
-                "stderr": stderr.decode("utf-8", errors="ignore"),
+                "stdout": stdout,
+                "stderr": stderr,
                 "cmd": " ".join(cmd),
                 "map": {"local": local_key, "remote": remote_key, "direction": direction},
             }
@@ -1678,18 +2017,240 @@ async def _run_rclone(direction: str, *, dry_run: bool = False) -> Dict[str, Any
     return {"ok": ok, "mode": "mapped", "results": results}
 
 
+async def _run_rclone_with_status(
+    direction: str,
+    *,
+    dry_run: bool = False,
+    async_mode: bool = False,
+    started_mono: Optional[float] = None,
+    pre_started: bool = False,
+) -> dict[str, Any]:
+    if started_mono is None:
+        started_mono = time.monotonic()
+    if not pre_started:
+        started_at = datetime.now(timezone.utc)
+        await _sync_status_update(
+            direction,
+            {
+                "running": True,
+                "last_start": started_at.isoformat(),
+                "last_end": None,
+                "duration_ms": None,
+                "dry_run": bool(dry_run),
+                "async": bool(async_mode),
+                "last_result": None,
+                "last_error": None,
+                "pids": [],
+            },
+        )
+    try:
+        result = await _run_rclone(direction, dry_run=dry_run)
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - started_mono) * 1000)
+        await _sync_status_update(
+            direction,
+            {
+                "running": False,
+                "last_end": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": duration_ms,
+                "last_error": str(exc),
+                "last_result": {"ok": False, "error": str(exc)},
+                "pids": [],
+            },
+        )
+        raise
+
+    duration_ms = int((time.monotonic() - started_mono) * 1000)
+    summary = _sync_result_summary(result)
+    await _sync_status_update(
+        direction,
+        {
+            "running": False,
+            "last_end": datetime.now(timezone.utc).isoformat(),
+            "duration_ms": duration_ms,
+            "last_error": summary.get("error") if not summary.get("ok") else None,
+            "last_result": summary,
+            "pids": [],
+        },
+    )
+    return result
+
+
+async def _run_rclone_and_log(
+    direction: str, *, dry_run: bool = False, started_mono: Optional[float] = None
+) -> None:
+    try:
+        result = await _run_rclone_with_status(
+            direction,
+            dry_run=dry_run,
+            async_mode=True,
+            started_mono=started_mono,
+            pre_started=True,
+        )
+    except Exception as exc:
+        LOGGER.warning("rclone %s failed: %s", direction, str(exc)[:800])
+        return
+    ok = result.get("ok")
+    if ok:
+        LOGGER.info("rclone %s finished ok", direction)
+        return
+    err = result.get("error") or result.get("stderr") or result.get("stdout") or "unknown error"
+    LOGGER.warning("rclone %s failed: %s", direction, str(err)[:800])
+
+
 async def handle_sync_push(request: web.Request) -> web.Response:
     dry_run = _truthy(request.query.get("dry_run")) or _truthy(os.getenv("AOS_RCLONE_DRY_RUN"))
-    result = await _run_rclone("push", dry_run=dry_run)
+    async_mode = _truthy(request.query.get("async"))
+    start = await _sync_try_start("push", dry_run=dry_run, async_mode=async_mode)
+    if not start.get("ok"):
+        return web.json_response(
+            {"ok": False, "error": "sync already running", "direction": "push", "state": start.get("state")},
+            status=409,
+        )
+    if async_mode:
+        remote = os.getenv("AOS_RCLONE_REMOTE", "").strip()
+        if not remote:
+            await _sync_status_update(
+                "push",
+                {
+                    "running": False,
+                    "last_end": datetime.now(timezone.utc).isoformat(),
+                    "last_error": "AOS_RCLONE_REMOTE not set",
+                    "last_result": {"ok": False, "error": "AOS_RCLONE_REMOTE not set"},
+                    "pids": [],
+                },
+            )
+            return web.json_response({"ok": False, "error": "AOS_RCLONE_REMOTE not set"}, status=500)
+        if not shutil.which("rclone"):
+            await _sync_status_update(
+                "push",
+                {
+                    "running": False,
+                    "last_end": datetime.now(timezone.utc).isoformat(),
+                    "last_error": "rclone not found",
+                    "last_result": {"ok": False, "error": "rclone not found"},
+                    "pids": [],
+                },
+            )
+            return web.json_response({"ok": False, "error": "rclone not found"}, status=500)
+        asyncio.create_task(_run_rclone_and_log("push", dry_run=dry_run, started_mono=start.get("started_mono")))
+        return web.json_response({"ok": True, "status": "started", "async": True, "dry_run": dry_run}, status=202)
+    result = await _run_rclone_with_status(
+        "push", dry_run=dry_run, async_mode=False, started_mono=start.get("started_mono"), pre_started=True
+    )
     status = 200 if result.get("ok") else 500
     return web.json_response(result, status=status)
 
 
 async def handle_sync_pull(request: web.Request) -> web.Response:
     dry_run = _truthy(request.query.get("dry_run")) or _truthy(os.getenv("AOS_RCLONE_DRY_RUN"))
-    result = await _run_rclone("pull", dry_run=dry_run)
+    async_mode = _truthy(request.query.get("async"))
+    start = await _sync_try_start("pull", dry_run=dry_run, async_mode=async_mode)
+    if not start.get("ok"):
+        return web.json_response(
+            {"ok": False, "error": "sync already running", "direction": "pull", "state": start.get("state")},
+            status=409,
+        )
+    if async_mode:
+        remote = os.getenv("AOS_RCLONE_REMOTE", "").strip()
+        if not remote:
+            await _sync_status_update(
+                "pull",
+                {
+                    "running": False,
+                    "last_end": datetime.now(timezone.utc).isoformat(),
+                    "last_error": "AOS_RCLONE_REMOTE not set",
+                    "last_result": {"ok": False, "error": "AOS_RCLONE_REMOTE not set"},
+                    "pids": [],
+                },
+            )
+            return web.json_response({"ok": False, "error": "AOS_RCLONE_REMOTE not set"}, status=500)
+        if not shutil.which("rclone"):
+            await _sync_status_update(
+                "pull",
+                {
+                    "running": False,
+                    "last_end": datetime.now(timezone.utc).isoformat(),
+                    "last_error": "rclone not found",
+                    "last_result": {"ok": False, "error": "rclone not found"},
+                    "pids": [],
+                },
+            )
+            return web.json_response({"ok": False, "error": "rclone not found"}, status=500)
+        asyncio.create_task(_run_rclone_and_log("pull", dry_run=dry_run, started_mono=start.get("started_mono")))
+        return web.json_response({"ok": True, "status": "started", "async": True, "dry_run": dry_run}, status=202)
+    result = await _run_rclone_with_status(
+        "pull", dry_run=dry_run, async_mode=False, started_mono=start.get("started_mono"), pre_started=True
+    )
     status = 200 if result.get("ok") else 500
     return web.json_response(result, status=status)
+
+
+async def handle_sync_status(_request: web.Request) -> web.Response:
+    snapshot = await _sync_status_snapshot()
+    return web.json_response(
+        {
+            "ok": True,
+            "service": "aos-bridge",
+            "time": _now().isoformat(),
+            "tz": DEFAULT_TZ,
+            "sync": snapshot,
+        }
+    )
+
+
+async def handle_sync_abort(request: web.Request) -> web.Response:
+    direction = str(request.query.get("direction") or "").strip().lower()
+    snapshot = await _sync_status_snapshot()
+    if direction in ("pull", "push"):
+        targets = [direction]
+    else:
+        targets = [name for name, state in snapshot.items() if state.get("running")]
+
+    if not targets:
+        return web.json_response({"ok": False, "error": "no running sync", "sync": snapshot}, status=404)
+
+    now = datetime.now(timezone.utc).isoformat()
+    results: dict[str, Any] = {}
+    for name in targets:
+        state = snapshot.get(name, {})
+        pids: list[int] = []
+        raw_pids = state.get("pids") if isinstance(state.get("pids"), list) else []
+        for pid in raw_pids:
+            try:
+                pids.append(int(pid))
+            except Exception:
+                continue
+        last_pid = state.get("last_pid")
+        if last_pid:
+            try:
+                last_pid_int = int(last_pid)
+                if last_pid_int not in pids:
+                    pids.append(last_pid_int)
+            except Exception:
+                pass
+
+        killed: list[int] = []
+        errors: list[str] = []
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed.append(pid)
+            except Exception as exc:
+                errors.append(f"{pid}: {exc}")
+
+        await _sync_status_update(
+            name,
+            {
+                "abort_requested_at": now,
+                "abort_signal": "SIGTERM",
+                "abort_pids": pids,
+                "abort_errors": errors if errors else None,
+            },
+        )
+        results[name] = {"pids": pids, "killed": killed, "errors": errors}
+
+    return web.json_response({"ok": True, "results": results, "sync": await _sync_status_snapshot()})
 
 
 async def handle_rpc(request: web.Request) -> web.Response:
@@ -1757,6 +2318,11 @@ async def handle_debug(request: web.Request) -> web.Response:
         "task_exec_enabled": TASK_EXEC_ENABLED,
         "fire_daily_send": FIRE_DAILY_SEND,
         "fire_daily_mode": FIRE_DAILY_MODE,
+        "core4_notify": CORE4_NOTIFY,
+        "core4_notify_silent": CORE4_NOTIFY_SILENT,
+        "core4_notify_mode": CORE4_NOTIFY_MODE,
+        "core4_auto_push": CORE4_AUTO_PUSH,
+        "core4_auto_push_min_interval": CORE4_AUTO_PUSH_MIN_INTERVAL,
     }
 
     debug_info["paths"] = {
@@ -1776,36 +2342,36 @@ async def handle_debug(request: web.Request) -> web.Response:
         "queue_exists": QUEUE_DIR.exists(),
     }
 
-    debug_info["checks"]["binaries"] = {}
-    for name, bin_path in [
-        ("task", TASK_BIN),
-        ("tele", TELE_BIN),
-        ("core4ctl", CORE4CTL_BIN),
-        ("firectl", FIRECTL_BIN),
-        ("firemap", FIREMAP_BIN),
-    ]:
-        bp = str(bin_path or "").strip()
-        # availability should mean "executable exists", NOT "supports --version"
-        available = bool(bp) and (shutil.which(bp) is not None or Path(bp).expanduser().exists())
-        info: dict[str, Any] = {"path": bp, "available": available}
-        if available:
-            # best-effort version probe
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    bp,
-                    "--version",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=2)
-                text = (stdout or stderr).decode("utf-8", errors="ignore").strip()
-                info["version"] = text[:120] if text else "unknown"
-                info["version_probe_ok"] = proc.returncode == 0
-            except Exception as exc:
-                info["version"] = "unknown"
-                info["version_probe_ok"] = False
-                info["version_probe_error"] = str(exc)[:200]
-        debug_info["checks"]["binaries"][name] = info
+    # Binaries check (config-only)
+    # Reason: debug must not depend on PATH quirks or on tools supporting `--version`.
+    debug_info["checks"]["binaries"] = {
+        "task": {
+            "path": TASK_BIN,
+            "probed": False,
+            "note": "config-only; no execution in /debug",
+        },
+        "tele": {
+            "path": TELE_BIN,
+            "fallback_enabled": bool(FALLBACK_TELE),
+            "probed": False,
+            "note": "config-only; tele is a human CLI shortcut",
+        },
+        "core4ctl": {
+            "path": CORE4CTL_BIN,
+            "probed": False,
+            "note": "config-only; no --version probe",
+        },
+        "firectl": {
+            "path": FIRECTL_BIN,
+            "probed": False,
+            "note": "config-only; no --version probe",
+        },
+        "firemap": {
+            "path": FIREMAP_BIN,
+            "probed": False,
+            "note": "config-only; no --version probe",
+        },
+    }
 
     # GAS Tent URL check
     if GAS_TENT_URL:
@@ -1869,10 +2435,10 @@ async def handle_debug(request: web.Request) -> web.Response:
     else:
         debug_info["checks"]["core4_weeks"] = {"dir": str(CORE4_LOCAL_DIR), "error": "Core4 dir does not exist"}
 
-    # Overall health: critical checks should verify existence, not --version
+    # Overall health: critical checks should be config-only (no PATH/probes)
     critical_checks = [
         debug_info["paths"]["vault_exists"],
-        debug_info["checks"]["binaries"]["task"]["available"],
+        bool(TASK_BIN),
     ]
 
     if not all(critical_checks):
@@ -1880,10 +2446,74 @@ async def handle_debug(request: web.Request) -> web.Response:
         debug_info["warnings"] = []
         if not debug_info["paths"]["vault_exists"]:
             debug_info["warnings"].append(f"VAULT_DIR not found: {VAULT_DIR}")
-        if not debug_info["checks"]["binaries"]["task"]["available"]:
-            debug_info["warnings"].append(f"task binary not available: {TASK_BIN}")
+        if not TASK_BIN:
+            debug_info["warnings"].append("task binary not configured (AOS_TASK_BIN empty)")
 
     return web.json_response(debug_info, status=200)
+
+
+async def handle_doctor(_request: web.Request) -> web.Response:
+    """
+    Doctor endpoint - performs active probes (executes binaries).
+    This is intentionally noisy/active. /debug must remain config-only.
+    """
+    started = _now().isoformat()
+
+    # What the service actually has as PATH (systemd often minimal)
+    env_path = os.getenv("PATH", "")
+
+    # Probes: choose commands that don't assume --version exists.
+    # tele is NOT probed (it's a human CLI shortcut), we only resolve it.
+    resolved_tele = _resolve_bin(TELE_BIN)
+
+    probes: list[dict[str, Any]] = []
+
+    # task usually supports --version
+    probes.append(await _probe_bin("task", TASK_BIN, ["--version"], timeout_s=2.0))
+
+    # core4ctl: prefer "status" (fast) over --version
+    probes.append(await _probe_bin("core4ctl", CORE4CTL_BIN, ["status"], timeout_s=4.0))
+
+    # firectl: "doctor" is meaningful if implemented; fallback to "status"
+    # We try doctor first; if it fails, we try status.
+    firectl_doctor = await _probe_bin("firectl", FIRECTL_BIN, ["doctor"], timeout_s=6.0)
+    if not firectl_doctor.get("ok"):
+        firectl_status = await _probe_bin("firectl", FIRECTL_BIN, ["status"], timeout_s=4.0)
+        probes.append({"primary": firectl_doctor, "fallback": firectl_status})
+    else:
+        probes.append(firectl_doctor)
+
+    # firemap: attempt "--help" (should exist); we don't care about output, just callable
+    probes.append(await _probe_bin("firemap", FIREMAP_BIN, ["--help"], timeout_s=3.0))
+
+    # Overall ok: everything except tele must be ok to be "green".
+    # tele is informational only.
+    ok_flags: list[bool] = []
+    for p in probes:
+        if isinstance(p, dict) and "primary" in p:
+            ok_flags.append(bool(p.get("fallback", {}).get("ok") or p.get("primary", {}).get("ok")))
+        else:
+            ok_flags.append(bool(p.get("ok")))
+
+    data = {
+        "ok": all(ok_flags) if ok_flags else True,
+        "service": "aos-bridge",
+        "time": started,
+        "tz": DEFAULT_TZ,
+        "env": {
+            "PATH": env_path,
+        },
+        "tele": {
+            "fallback_enabled": bool(FALLBACK_TELE),
+            "configured": resolved_tele.get("configured"),
+            "resolved": resolved_tele.get("resolved"),
+            "exists": resolved_tele.get("exists"),
+            "note": "tele is not executed by doctor; it is a human CLI shortcut",
+        },
+        "probes": probes,
+    }
+
+    return web.json_response(data, status=200 if data["ok"] else 500)
 
 
 def create_app() -> web.Application:
@@ -1896,6 +2526,8 @@ def create_app() -> web.Application:
             web.get("/bridge/version", handle_version),
             web.get("/debug", handle_debug),
             web.get("/bridge/debug", handle_debug),
+            web.get("/doctor", handle_doctor),
+            web.get("/bridge/doctor", handle_doctor),
             web.post("/rpc", handle_rpc),
             web.post("/bridge/rpc", handle_rpc),
             web.get("/daily-review-data", handle_bridge_daily_review_data),
@@ -1936,6 +2568,10 @@ def create_app() -> web.Application:
             web.post("/bridge/sync/push", handle_sync_push),
             web.post("/sync/pull", handle_sync_pull),
             web.post("/bridge/sync/pull", handle_sync_pull),
+            web.get("/sync/status", handle_sync_status),
+            web.get("/bridge/sync/status", handle_sync_status),
+            web.post("/sync/abort", handle_sync_abort),
+            web.post("/bridge/sync/abort", handle_sync_abort),
         ]
     )
     return app

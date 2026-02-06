@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/bridge-lib.sh"
+
+SERVICE_NAME="aos-bridge.service"
+SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
+SERVICE_PATH_SYSTEM="$ROOT_DIR/systemd/$SERVICE_NAME"
+if [[ -f "$SERVICE_PATH_USER" ]]; then
+  SERVICE_PATH="$SERVICE_PATH_USER"
+else
+  SERVICE_PATH="$SERVICE_PATH_SYSTEM"
+fi
+USER_SERVICE_DIR="$HOME/.config/systemd/user"
+
+ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+
+systemctl_user() { systemctl --user "$@"; }
+
+install_deps() {
+  if ! has_cmd pacman; then
+    die "pacman not found. Install python-aiohttp manually."
+  fi
+  msg "Installing python-aiohttp (Arch)..."
+  sudo pacman -S python-aiohttp
+}
+
+link_service() {
+  mkdir -p "$USER_SERVICE_DIR"
+  if [[ -e "$USER_SERVICE_DIR/$SERVICE_NAME" ]]; then
+    msg "Service already linked: $USER_SERVICE_DIR/$SERVICE_NAME"
+    return
+  fi
+  ln -s "$SERVICE_PATH" "$USER_SERVICE_DIR/$SERVICE_NAME"
+  msg "Linked service: $USER_SERVICE_DIR/$SERVICE_NAME"
+}
+
+status() {
+  msg "Bridge status:"
+  if has_cmd python; then
+    python - <<'PY' || true
+import importlib.util
+print("python:", "ok")
+spec = importlib.util.find_spec("aiohttp")
+print("aiohttp:", "ok" if spec else "missing")
+PY
+  else
+    warn "python not found"
+  fi
+
+  if has_cmd systemctl; then
+    systemctl_user status "$SERVICE_NAME" --no-pager || true
+  else
+    warn "systemctl not found"
+  fi
+}
+
+logs() { journalctl --user -u "$SERVICE_NAME" -n 200 -f; }
+
+env_edit() { "${EDITOR:-nano}" "$ENV_FILE"; }
+
+usage() {
+  cat <<EOF
+bridge-servicectl
+
+Usage: bridge-servicectl <command>
+
+Commands:
+  status
+  install-deps
+  link-service
+  enable
+  start|stop|restart
+  logs
+  env
+
+Env:
+  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
+EOF
+}
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  status) status ;;
+  install-deps) install_deps ;;
+  link-service) link_service ;;
+  enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
+  start) systemctl_user start "$SERVICE_NAME" ;;
+  stop) systemctl_user stop "$SERVICE_NAME" ;;
+  restart) systemctl_user restart "$SERVICE_NAME" ;;
+  logs) logs ;;
+  env) env_edit ;;
+  *) usage; exit 1 ;;
+esac
+

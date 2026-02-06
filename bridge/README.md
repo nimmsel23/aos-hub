@@ -80,6 +80,11 @@ sudo pacman -S python-aiohttp
 
 ## bridgectl (helper)
 
+`bridgectl` is a stable entrypoint; the implementation is split into smaller scripts:
+- `bridge-servicectl` (systemd/env)
+- `bridge-apictl` (HTTP endpoints)
+- `bridge-tsctl` (tailscale)
+
 ```bash
 ./bridgectl            # interactive menu (gum)
 ./bridgectl status

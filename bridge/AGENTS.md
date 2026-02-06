@@ -2,7 +2,10 @@
 
 ## Project Structure & Purpose
 - `app.py` is the aiohttp service on port `8080` (Core4/Fruits/Tent + task routing).
-- `bridgectl` is the CLI wrapper for status/health/queue/tailscale/systemd.
+- `bridgectl` is a thin CLI entrypoint (kept stable), dispatching into:
+  - `bridge-servicectl` (systemd/env)
+  - `bridge-apictl` (HTTP endpoints)
+  - `bridge-tsctl` (tailscale serve/funnel/status)
 - `selftest.py` runs in-process handler tests (no port bind).
 - `README.md` documents endpoints and env vars.
 
