@@ -19,6 +19,8 @@ from pathlib import Path
 
 
 ENV_PATH = Path(os.path.expanduser("~/.config/alpha-os/hooks.env"))
+GLOBAL_ENV_PATH = Path(os.environ.get("AOS_ENV_FILE") or os.path.expanduser("~/.env/aos.env"))
+PROTECTED_KEYS = set(os.environ.keys())
 
 
 def load_env(path: Path) -> None:
@@ -31,8 +33,9 @@ def load_env(path: Path) -> None:
                 continue
             key, value = line.split("=", 1)
             key = key.strip()
-            if key and key not in os.environ:
-                os.environ[key] = value.strip().strip('"').strip("'")
+            if not key or key in PROTECTED_KEYS:
+                continue
+            os.environ[key] = value.strip().strip('"').strip("'")
     except Exception:
         return
 
@@ -60,7 +63,9 @@ def _atomic_write_json(path: Path, data: object) -> bool:
 
 
 def main() -> int:
-    load_env(ENV_PATH)
+    load_env(GLOBAL_ENV_PATH)
+    hook_env_path = Path(os.environ.get("AOS_HOOK_ENV_FILE") or str(ENV_PATH)).expanduser()
+    load_env(hook_env_path)
 
     task_bin = os.environ.get("AOS_TASK_BIN") or os.environ.get("TASK_BIN") or "task"
     taskrc = os.environ.get("AOS_TASKRC") or os.environ.get("TASKRC") or ""
@@ -163,4 +168,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -6,6 +6,7 @@ Sends JSON payloads to Telegram via `tele` for GAS Task Bridge.
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -13,6 +14,8 @@ from pathlib import Path
 
 
 ENV_PATH = Path(os.path.expanduser("~/.config/alpha-os/hooks.env"))
+GLOBAL_ENV_PATH = Path(os.environ.get("AOS_ENV_FILE") or os.path.expanduser("~/.env/aos.env"))
+PROTECTED_KEYS = set(os.environ.keys())
 
 
 def load_env(path: Path) -> None:
@@ -25,10 +28,87 @@ def load_env(path: Path) -> None:
                 continue
             key, value = line.split("=", 1)
             key = key.strip()
-            if key and key not in os.environ:
-                os.environ[key] = value.strip().strip('"').strip("'")
+            if not key or key in PROTECTED_KEYS:
+                continue
+            os.environ[key] = value.strip().strip('"').strip("'")
     except Exception:
         return
+
+
+def _is_true(value: str | None) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _format_due(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    m = re.match(r"^(\d{4})(\d{2})(\d{2})", text)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})", text)
+    if m:
+        return m.group(1)
+    return text
+
+
+def _format_human_message(payload: dict) -> str:
+    data = payload.get("data") or {}
+    ptype = str(payload.get("type") or "").strip()
+    action = ptype
+    prefix = "Hook"
+    if ptype.startswith("core4_task_"):
+        action = ptype[len("core4_task_") :]
+        prefix = "Core4"
+    elif ptype.startswith("task_"):
+        action = ptype[len("task_") :]
+        if action.endswith("_sync"):
+            action = action[: -len("_sync")]
+        prefix = "TW"
+    action = action.replace("_", " ").strip() or ptype
+
+    desc = str(data.get("description") or "").strip()
+    domain = str(data.get("domain") or "").strip()
+    habit = str(data.get("task") or "").strip()
+    project = str(data.get("project") or "").strip()
+    tags = [str(t) for t in (data.get("tags") or []) if str(t).strip()]
+    priority = str(data.get("priority") or "").strip()
+    due = _format_due(data.get("due"))
+    status = str((data.get("changes") or {}).get("status", {}).get("new") or data.get("status") or "").strip()
+    door_name = str(data.get("door_name") or "").strip()
+
+    lines = []
+    if prefix == "Core4":
+        head = f"{prefix} {action}"
+        if domain or habit:
+            head = f"{head}: {domain}/{habit}".rstrip("/").replace(":/", ": ")
+        lines.append(head)
+        if desc and desc.lower() not in {habit.lower(), "core4"}:
+            lines.append(desc)
+    else:
+        head = f"{prefix} {action}"
+        if desc:
+            head = f"{head}: {desc}"
+        lines.append(head)
+
+    if project:
+        lines.append(f"project: {project}")
+    if tags:
+        lines.append(f"tags: {', '.join(tags)}")
+    if priority:
+        lines.append(f"priority: {priority}")
+    if due:
+        lines.append(f"due: {due}")
+    if status:
+        lines.append(f"status: {status}")
+    if door_name:
+        lines.append(f"door: {door_name}")
+    uuid = str(data.get("uuid") or "").strip()
+    if uuid and _is_true(os.environ.get("AOS_HOOK_TELE_INCLUDE_UUID", "1")):
+        lines.append(f"uuid: {uuid}")
+    return "\n".join(lines).strip()
 
 
 def now_iso() -> str:
@@ -79,8 +159,16 @@ def detect_alphatype(tags) -> str:
 
 def send_tele(payload: dict) -> None:
     tele_bin = os.environ.get("AOS_HOOK_TELE_BIN") or os.environ.get("TELE_BIN") or "tele"
-    message = json.dumps(payload, ensure_ascii=False)
-    subprocess.run([tele_bin, message], check=False)
+    tele_format = str(os.environ.get("AOS_HOOK_TELE_FORMAT", "") or "").strip().lower()
+    if tele_format in ("human", "text", "pretty"):
+        message = _format_human_message(payload)
+    else:
+        message = json.dumps(payload, ensure_ascii=False)
+    args = [tele_bin]
+    if _is_true(os.environ.get("AOS_HOOK_TELE_SILENT", "0")):
+        args.append("-s")
+    args.append(message)
+    subprocess.run(args, check=False)
 
 def send_bridge(payload: dict) -> None:
     bridge_url = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
@@ -98,7 +186,9 @@ def send_bridge(payload: dict) -> None:
 
 
 def main() -> int:
-    load_env(ENV_PATH)
+    load_env(GLOBAL_ENV_PATH)
+    hook_env_path = Path(os.environ.get("AOS_HOOK_ENV_FILE") or str(ENV_PATH)).expanduser()
+    load_env(hook_env_path)
     raw = sys.stdin.read()
     if not raw.strip():
         return 0
