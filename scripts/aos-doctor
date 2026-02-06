@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROUTERCTL="$ROOT_DIR/router/routerctl"
 BRIDGECTL="$ROOT_DIR/bridge/bridgectl"
 
+# Load shared env (optional). Makes AOS_* overrides consistent across scripts.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
 INDEX_URL="${AOS_INDEX_URL:-http://127.0.0.1:8799/api/centres}"
 BRIDGE_HEALTH_URL="${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
 
@@ -135,6 +140,7 @@ fi
 
 print_title "AlphaOS Doctor"
 print_kv "Root" "$ROOT_DIR"
+print_kv "Env" "${AOS_ENV_FILE_EFFECTIVE:-$ROOT_DIR/.env/aos.env (missing)}"
 print_kv "routerctl" "$ROUTERCTL"
 print_kv "bridgectl" "$BRIDGECTL"
 

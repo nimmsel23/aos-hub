@@ -8,8 +8,43 @@ set -euo pipefail
 # - enable/disable systemd timers per target (optional)
 # ============================================================
 
-DOTFILES_DIR="${AOS_DOTFILES:-$HOME/.dotfiles}"
-CONF_DIR="${DOTFILES_DIR}/config/aos/sync.d"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+has_env_files() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 1
+  ls -1 "$dir"/*.env >/dev/null 2>&1
+}
+
+detect_conf_dir() {
+  if [[ -n "${AOS_SYNC_CONF_DIR:-}" ]]; then
+    printf "%s\n" "$AOS_SYNC_CONF_DIR"
+    return 0
+  fi
+
+  local repo_dir="$ROOT_DIR/.env/sync.d"
+  local legacy_dir="${AOS_DOTFILES:-$HOME/.dotfiles}/config/aos/sync.d"
+
+  if has_env_files "$repo_dir"; then
+    printf "%s\n" "$repo_dir"
+    return 0
+  fi
+
+  if has_env_files "$legacy_dir"; then
+    printf "%s\n" "$legacy_dir"
+    return 0
+  fi
+
+  printf "%s\n" "$repo_dir"
+}
+
+CONF_DIR="$(detect_conf_dir)"
 SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 
 # Template unit names you likely already use; adjust if needed:
@@ -326,4 +361,3 @@ main_menu() {
 }
 
 main_menu
-

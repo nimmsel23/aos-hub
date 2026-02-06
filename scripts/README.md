@@ -10,13 +10,39 @@ Collection of utility scripts for AlphaOS Door Centre, Core4, and TickTick integ
 
 ```
 scripts/
+├── lib/               # Shared helpers (env loader, etc.)
 ├── hot-list/          # Hot List markdown creation (DEPRECATED)
+├── sync-utils/        # Sync internals (rclone copy helpers)
+├── utils/             # Legacy sync utils (fallback)
 ├── taskwarrior/       # Taskwarrior hooks + snapshots (ACTIVE)
 ├── war-stack/         # War Stack CLI automation (ACTIVE)
 ├── ticktick/          # TickTick API integration (ACTIVE)
 ├── automation/        # File watchers & lifecycle (DEPRECATED)
 └── README.md          # This file
 ```
+
+---
+
+## Global Env Convention
+
+Most `*ctl` scripts read configuration from environment variables (`AOS_*`).
+To avoid lots of per-script env files, use a single global file:
+
+- Preferred path: `aos-hub/.env/aos.env` (in this repo `.env` is a symlink to `~/.env`)
+- Fallback path: `~/.env/aos.env`
+- Override per command: `AOS_ENV_FILE=/path/to/aos.env` (and some scripts also support `--env FILE`)
+
+Starter template: `aos-hub/scripts/aos.env.example`
+
+Quick setup:
+- `cp aos-hub/scripts/aos.env.example aos-hub/.env/aos.env`
+
+Sync docs: `aos-hub/scripts/SYNC.md`
+
+Other env files (still used in some flows):
+- Sync targets: `aos-hub/.env/sync.d/<target>.env` (config for `aos-sync` / `aos-syncctl`)
+- Index service: `AOS_INDEX_ENV_FILE` (systemd `EnvironmentFile`, defaults to `~/.env/alphaos-index.env`)
+- Taskwarrior hooks: `AOS_HOOK_ENV_FILE` (defaults to `~/.config/alpha-os/hooks.env`, but hooks also read `~/.env/aos.env`)
 
 ---
 

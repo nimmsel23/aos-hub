@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+# Load global env (optional) so AOS_* defaults come from a single place.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+AOS_SYNC="${SCRIPT_DIR}/aos-sync"
+AOS_SYNCCTL="${SCRIPT_DIR}/aos-syncctl"
+VAULTCTL_PRIMARY="${SCRIPT_DIR}/sync-utils/vaultctl"
+VAULTCTL_FALLBACK="${SCRIPT_DIR}/utils/vaultctl"
+DOMAIN_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-domain-sync.sh"
+DOMAIN_FALLBACK="${SCRIPT_DIR}/utils/rclone-domain-sync.sh"
+VITAL_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-vitaltrainer-copy.sh"
+VITAL_FALLBACK="${SCRIPT_DIR}/utils/rclone-vitaltrainer-copy.sh"
+FADARO_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-fadaro-push.sh"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+have_tty() { [[ -t 0 && -t 1 ]]; }
+
+pause_screen() {
+  if have_tty; then
+    read -r -p "Press Enter to continue..." _ || true
+  fi
+}
+
+die() {
+  echo "syncctl: $*" >&2
+  exit 1
+}
+
+pick_bin() {
+  local primary="$1"
+  local fallback="$2"
+  local name="$3"
+  if [[ -n "$primary" && -x "$primary" ]]; then
+    echo "$primary"
+    return 0
+  fi
+  if [[ -n "$fallback" && -x "$fallback" ]]; then
+    echo "$fallback"
+    return 0
+  fi
+  if [[ -n "$name" ]] && have "$name"; then
+    command -v "$name"
+    return 0
+  fi
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+syncctl — rclone sync control
+
+Targets (aos-sync/aos-syncctl):
+  syncctl menu
+  syncctl list
+  syncctl run <target> [--dry] [--mode sync|bisync] [--resync]
+  syncctl enable <target> [--at HH:MM]
+  syncctl disable <target>
+  syncctl status <target>
+  syncctl logs <target> [--follow]
+  syncctl doctor <target>
+
+Vault copy (vaultctl):
+  syncctl vault <status|sync|pull|logs|timers|watch> [args...]
+
+Domain copy (rclone-domain-sync.sh):
+  syncctl domains <DOMAIN> <push|pull|push-sync|sync|status|log>
+  syncctl domains status-all
+
+Vitaltrainer copy:
+  syncctl vitaltrainer <push|pull|status>
+
+FADARO push:
+  syncctl fadaro [--dry-run]
+EOF
+}
+
+run_targets() {
+  local cmd="$1"; shift || true
+  local bin
+  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
+  if [[ "$cmd" == "status" && $# -eq 0 ]]; then
+    local targets
+    targets="$("$bin" list 2>/dev/null || true)"
+    if [[ -z "$targets" ]]; then
+      echo "syncctl: no targets found"
+      exit 0
+    fi
+    while read -r t; do
+      [[ -z "$t" ]] && continue
+      "$bin" status "$t" || true
+      echo ""
+    done <<<"$targets"
+    exit 0
+  fi
+  exec "$bin" "$cmd" "$@"
+}
+
+menu_vault() {
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Status" \
+      "Push now (copy)" \
+      "Push dry-run (copy)" \
+      "Pull now (copy)" \
+      "Pull dry-run (copy)" \
+      "Logs" \
+      "Timers" \
+      "Watch" \
+      "Back" \
+      | gum choose --header "Vault copy")"
+
+    case "$choice" in
+      "Status") (run_vault status) ;;
+      "Push now (copy)") (run_vault sync) ;;
+      "Push dry-run (copy)") (run_vault sync --dry-run) ;;
+      "Pull now (copy)") (run_vault pull) ;;
+      "Pull dry-run (copy)") (run_vault pull --dry-run) ;;
+      "Logs") (run_vault logs) ;;
+      "Timers") (run_vault timers) ;;
+      "Watch") (run_vault watch) ;;
+      "Back") return 0 ;;
+    esac
+    pause_screen
+  done
+}
+
+menu_domains() {
+  while true; do
+    local domain
+    domain="$(printf "%s\n" \
+      "BODY" \
+      "BEING" \
+      "BALANCE" \
+      "BUSINESS" \
+      "Status all" \
+      "Back" \
+      | gum choose --header "Domains")"
+
+    case "$domain" in
+      "Back") return 0 ;;
+      "Status all")
+        (run_domains status-all)
+        pause_screen
+        continue
+        ;;
+    esac
+
+    local action
+    action="$(printf "%s\n" \
+      "Status" \
+      "Push now (copy)" \
+      "Pull now (copy)" \
+      "Push-sync (delete remote)" \
+      "Log" \
+      "Back" \
+      | gum choose --header "Domain: $domain")"
+
+    case "$action" in
+      "Status") (run_domains "$domain" status) ;;
+      "Push now (copy)") (run_domains "$domain" push) ;;
+      "Pull now (copy)") (run_domains "$domain" pull) ;;
+      "Push-sync (delete remote)") (run_domains "$domain" push-sync) ;;
+      "Log") (run_domains "$domain" log) ;;
+      "Back") ;;
+    esac
+    pause_screen
+  done
+}
+
+menu_vitaltrainer() {
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Status" \
+      "Push now (copy)" \
+      "Pull now (copy)" \
+      "Back" \
+      | gum choose --header "Vitaltrainer copy")"
+
+    case "$choice" in
+      "Status") (run_vitaltrainer status) ;;
+      "Push now (copy)") (run_vitaltrainer push) ;;
+      "Pull now (copy)") (run_vitaltrainer pull) ;;
+      "Back") return 0 ;;
+    esac
+    pause_screen
+  done
+}
+
+menu_fadaro() {
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Push now" \
+      "Push dry-run" \
+      "Back" \
+      | gum choose --header "FADARO push")"
+
+    case "$choice" in
+      "Push now") (run_fadaro) ;;
+      "Push dry-run") (run_fadaro --dry-run) ;;
+      "Back") return 0 ;;
+    esac
+    pause_screen
+  done
+}
+
+run_menu() {
+  if ! have gum || ! have_tty; then
+    local bin
+    if bin="$(pick_bin "$AOS_SYNCCTL" "" "aos-syncctl")"; then
+      exec "$bin"
+    fi
+    run_targets menu
+  fi
+
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Targets (aos-syncctl)" \
+      "Vault copy" \
+      "Domains copy" \
+      "Vitaltrainer copy" \
+      "FADARO push" \
+      "Help" \
+      "Quit" \
+      | gum choose --header "syncctl")"
+
+    case "$choice" in
+      "Targets (aos-syncctl)")
+        local bin
+        if bin="$(pick_bin "$AOS_SYNCCTL" "" "aos-syncctl")"; then
+          "$bin"
+        else
+          (run_targets menu)
+        fi
+        ;;
+      "Vault copy") menu_vault ;;
+      "Domains copy") menu_domains ;;
+      "Vitaltrainer copy") menu_vitaltrainer ;;
+      "FADARO push") menu_fadaro ;;
+      "Help") usage; pause_screen ;;
+      "Quit") return 0 ;;
+    esac
+  done
+}
+
+run_vault() {
+  local bin
+  bin="$(pick_bin "$VAULTCTL_PRIMARY" "$VAULTCTL_FALLBACK" "vaultctl")" || die "vaultctl not found"
+  exec "$bin" "$@"
+}
+
+run_domains() {
+  local bin
+  bin="$(pick_bin "$DOMAIN_PRIMARY" "$DOMAIN_FALLBACK" "")" || die "rclone-domain-sync.sh not found"
+
+  local sub="${1:-}"
+  if [[ -z "$sub" || "$sub" == "status-all" ]]; then
+    for domain in BODY BEING BALANCE BUSINESS; do
+      "$bin" "$domain" status
+    done
+    exit 0
+  fi
+
+  local domain="$1"; shift || true
+  [[ -n "$domain" ]] || die "domains requires <DOMAIN>"
+  exec "$bin" "$domain" "$@"
+}
+
+run_vitaltrainer() {
+  local bin
+  bin="$(pick_bin "$VITAL_PRIMARY" "$VITAL_FALLBACK" "")" || die "rclone-vitaltrainer-copy.sh not found"
+  exec "$bin" "$@"
+}
+
+run_fadaro() {
+  local bin
+  bin="$(pick_bin "$FADARO_PRIMARY" "" "")" || die "rclone-fadaro-push.sh not found"
+  exec "$bin" "$@"
+}
+
+main() {
+  local cmd="${1:-}"
+  shift || true
+
+  case "$cmd" in
+    ""|-h|--help|help) usage ;;
+    menu|ui) run_menu ;;
+    list|run|enable|disable|status|logs|doctor) run_targets "$cmd" "$@" ;;
+    vault) run_vault "$@" ;;
+    domains|domain) run_domains "$@" ;;
+    vitaltrainer|vital) run_vitaltrainer "$@" ;;
+    fadaro) run_fadaro "$@" ;;
+    *)
+      usage
+      die "unknown command: $cmd"
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,12 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AOS_DOTFILES="${AOS_DOTFILES:-$HOME/.dotfiles}"
-CONF_DIR="$AOS_DOTFILES/config/aos/sync.d"
-LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/aos-sync-locks"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+has_env_files() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 1
+  ls -1 "$dir"/*.env >/dev/null 2>&1
+}
+
+detect_conf_dir() {
+  if [[ -n "${AOS_SYNC_CONF_DIR:-}" ]]; then
+    printf "%s\n" "$AOS_SYNC_CONF_DIR"
+    return 0
+  fi
+
+  local repo_dir="$ROOT_DIR/.env/sync.d"
+  local legacy_dir="${AOS_DOTFILES:-$HOME/.dotfiles}/config/aos/sync.d"
+
+  if has_env_files "$repo_dir"; then
+    printf "%s\n" "$repo_dir"
+    return 0
+  fi
+
+  if has_env_files "$legacy_dir"; then
+    printf "%s\n" "$legacy_dir"
+    return 0
+  fi
+
+  printf "%s\n" "$repo_dir"
+}
+
+CONF_DIR="$(detect_conf_dir)"
+LOCK_DIR="${AOS_SYNC_LOCK_DIR:-${XDG_RUNTIME_DIR:-/tmp}/aos-sync-locks}"
 
 usage() {
-  cat <<'USAGE'
+  cat <<USAGE
 Usage:
   aos-sync menu
   aos-sync list
@@ -18,7 +53,12 @@ Usage:
   aos-sync doctor <target>
 
 Targets live in:
-  ~/.dotfiles/config/aos/sync.d/<target>.env
+  ${CONF_DIR}/<target>.env
+
+Env:
+  AOS_ENV_FILE=$ROOT_DIR/.env/aos.env
+  AOS_SYNC_CONF_DIR=$ROOT_DIR/.env/sync.d
+  AOS_SYNC_LOCK_DIR=${XDG_RUNTIME_DIR:-/tmp}/aos-sync-locks
 USAGE
 }
 
