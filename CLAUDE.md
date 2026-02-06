@@ -30,11 +30,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Index Node (Node.js)
+
+**Running Locally (Development):**
 ```bash
 cd ~/aos-hub/index-node
-npm install
-node server.js                    # Start on http://127.0.0.1:8799
-npm run core4                     # Core4 TTY utility
+npm install                       # Install dependencies
+npm run dev                       # Start with nodemon (auto-reload) on http://127.0.0.1:8799
+# OR
+npm start                         # Start without auto-reload
+node server.js                    # Direct invocation
+```
+
+**Running as systemd Service:**
+```bash
+# User service (recommended):
+systemctl --user status alphaos-index.service
+systemctl --user start alphaos-index.service
+systemctl --user stop alphaos-index.service
+systemctl --user restart alphaos-index.service
+systemctl --user enable alphaos-index.service   # Auto-start on login
+journalctl --user -u alphaos-index -f           # Follow logs
+
+# OR using indexctl wrapper:
+./scripts/indexctl status
+./scripts/indexctl start
+./scripts/indexctl stop
+./scripts/indexctl restart
+./scripts/indexctl logs           # Follow logs
+./scripts/indexctl doctor         # Health check
+./scripts/indexctl env            # Edit env file (~/.env/alphaos-index.env)
+
+# System-wide service (if installed):
+sudo systemctl status aos-index.service
+./scripts/indexctl install        # Install system service
+```
+
+**Service Configuration:**
+- Service file: `~/.config/systemd/user/alphaos-index.service`
+- Env file: `~/.env/alphaos-index.env` (auto-created by indexctl)
+- Working dir: `~/aos-hub/index-node`
+- Command: `npm run dev` (nodemon with auto-reload)
+- Port: 8799 (configurable via `PORT` env var)
+- Health check: http://127.0.0.1:8799/health
+
+**Other Commands:**
+```bash
+npm run core4                     # Core4 TTY utility (terminal interface)
 ```
 
 ### Router Bot (Python/aiogram)

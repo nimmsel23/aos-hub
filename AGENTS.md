@@ -40,3 +40,4 @@
 - Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
 - Keep secrets out of git; document required vars in component READMEs or AGENTS.
 - To send messages/links/blocks to your phone, run `tele <text>` from the shell.
+- Use `scripts/aos-aliasctl` (or `aos-aliasctl` on PATH) to add/manage aliases.

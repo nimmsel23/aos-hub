@@ -10,7 +10,9 @@ Single control surface for AlphaOS services, scripts, and centres.
 - `indexctl` — Index Node systemd install/env/health
 - `routerctl` — Router bot control
 - `bridgectl` — Bridge service control
-- `syncvaultctl` — Vault + rclone sync control
+- `syncctl` — Rclone sync control (targets + vault copy)
+- `gitctl` — Git sync control (vault/vitaltrainer/fadaro)
+- `syncvaultctl` — Legacy wrapper to `syncctl`
 - `firectl` — Fire tooling wrapper (bot + installers)
 - `envctl` — Environment manager (`~/.env` service files)
 - `aos-aliasctl` — Alias manager (multi‑shell)
@@ -41,6 +43,7 @@ aosctl bridge status
 # Sync
 aosctl sync status
 syncctl status
+gitctl status
 
 # Env / Aliases
 aosctl env list
@@ -56,7 +59,8 @@ aosctl alias ui
 - **Index UI**: `nodectl` (or `aosctl index status`)
 - **Router Bot**: `routerctl`
 - **Bridge**: `bridgectl`
-- **Vault/Sync**: `syncvaultctl` or `syncctl`
+- **Sync (rclone)**: `syncctl` (legacy: `syncvaultctl`)
+- **Git Sync**: `gitctl`
 - **Env manager**: `envctl` or `aosctl env`
 - **Alias manager**: `aos-aliasctl` or `aosctl alias`
 
@@ -68,7 +72,8 @@ Defined in `~/.dotfiles/config/zsh/system-aliases.zsh`:
 alias aos='~/aos-hub/aos'
 alias aosctl='~/aos-hub/aosctl'
 alias hubctl='~/aos-hub/aosctl'
-alias syncctl='~/aos-hub/scripts/syncvaultctl'
+alias syncctl='~/aos-hub/scripts/syncctl'
+alias gitctl='~/aos-hub/scripts/gitctl'
 alias vaultctl='~/aos-hub/scripts/syncvaultctl'
 alias vaultct='~/aos-hub/scripts/syncvaultctl'
 alias indexctl='~/aos-hub/scripts/indexctl'

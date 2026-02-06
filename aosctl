@@ -18,11 +18,15 @@ if [[ "$SCRIPT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
   SCRIPT_DIR="$HOME/aos-hub"
 fi
 
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/scripts/ctl-lib.sh"
+: "${CTL_CHOOSE_PROMPT:=AlphaOS — aosctl}"
+: "${CTL_CHOOSE_PREFER:=gum}"
+: "${CTL_UI_OK_PREFIX:=✔}"
+: "${CTL_UI_ERR_PREFIX:=✘}"
+: "${CTL_UI_WARN_PREFIX:=⚠}"
+
 have() { command -v "$1" >/dev/null 2>&1; }
-msg() { printf "%s\n" "$*"; }
-warn() { printf "WARN: %s\n" "$*" >&2; }
-err() { printf "ERROR: %s\n" "$*" >&2; }
-die() { err "$*"; exit 1; }
 
 resolve_bin() {
   local primary="$1"; shift
@@ -44,6 +48,7 @@ ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" 
 BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
 INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
 SYNCVAULTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
+SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
 AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
 ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
 CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/python-core4/core4ctl" || true)"
@@ -55,6 +60,13 @@ FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap/firemap_bot.py" || tru
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
 TENTCTL="$(resolve_bin "$SCRIPT_DIR/gas-tent-dev/tentctl" || true)"
+BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
+MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
+HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
+DOORCTL="$(resolve_bin "$SCRIPT_DIR/scripts/doorctl" || true)"
+GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
+VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
+GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 AOS_CENTRES="${AOS_CENTRES_CMD:-$HOME/αOS/bin/aos-centres}"
 RCLONE_RC_URL="${AOS_RCLONE_RC_URL:-http://127.0.0.1:5572/}"
 
@@ -65,7 +77,7 @@ aosctl - AOS Unified Control Interface
 
 USAGE:
   aosctl <component> <action> [args...]
-  aosctl menu                # Gum menu (if available)
+  aosctl menu                # Interactive menu (gum/fzf if available)
   aosctl status              # Unified status (no logs) + heartbeat ping
   aosctl ping                # Heartbeat ping (routerctl)
   aosctl doctor              # Unified health check
@@ -77,9 +89,19 @@ COMPONENTS:
   router      Router Bot (Telegram aiogram bot)
   bridge      Bridge Service (aiohttp on :8080)
   core4       Core4 tooling (scores/exports/timers)
-  vault       Vault & Domain Sync (syncvaultctl - git + rclone)
-  sync        Alias for vault
+  vault       Vault & Domain Sync (syncvaultctl - rclone)
+  sync        Rclone sync control (syncctl)
+  git         Git sync control (gitctl)
   fire        Fire Map scheduling + sync
+  backup      Backup tooling (backupctl)
+  mount       Rclone mounts (mountctl)
+  hook        Taskwarrior hooks (hookctl)
+  door        Door / War Stack tooling (doorctl)
+  game        Game mount tooling (gamectl)
+  voice       Voice mount tooling (voicectl)
+  firectl     Fire bot wrapper (firectl)
+  tentctl     GAS Tent Centre Manager (tentctl)
+  core4ctl    Core4 tooling (core4ctl)
   fruits      Fruits CLI (JSON store)
   creatorking CreatorKing CLI (JSON store)
   tent        General's Tent Centre (GAS deployment manager)
@@ -105,6 +127,14 @@ EXAMPLES:
   aosctl bridge logs
   aosctl vault status
   aosctl fire status
+  aosctl sync status
+  aosctl git status
+  aosctl backup status
+  aosctl mount status
+  aosctl hook status
+  aosctl door status
+  aosctl game status
+  aosctl voice status
   aosctl centre list
   aosctl env list
   aosctl alias ui
@@ -121,32 +151,43 @@ __HELP__
 }
 
 show_menu() {
-  if ! have gum; then
-    show_help
-    return 0
-  fi
+  ui_title "AlphaOS — aosctl"
 
   local choices=()
   [[ -n "$INDEXCTL" ]] && choices+=("Index: status")
   [[ -n "$ROUTERCTL" ]] && choices+=("Router: status")
   [[ -n "$BRIDGECTL" ]] && choices+=("Bridge: status")
   [[ -n "$CORE4CTL" ]] && choices+=("Core4: status")
-  [[ -n "$SYNCVAULTCTL" ]] && choices+=("Vault: status")
+  [[ -n "$SYNCCTL" ]] && choices+=("Sync: status")
+  [[ -n "$GITCTL" ]] && choices+=("Git: status")
   [[ -n "$FIREMAP_BIN" ]] && choices+=("Fire: status")
+  [[ -n "$BACKUPCTL" ]] && choices+=("Backup: status")
+  [[ -n "$MOUNTCTL" ]] && choices+=("Mounts: status")
+  [[ -n "$HOOKCTL" ]] && choices+=("Hooks: status")
+  [[ -n "$DOORCTL" ]] && choices+=("Door: status")
+  [[ -n "$GAMECTL" ]] && choices+=("Game: status")
+  [[ -n "$VOICECTL" ]] && choices+=("Voice: status")
   [[ -n "$ENVCTL" ]] && choices+=("Env: list")
   [[ -n "$ALIASCTL" ]] && choices+=("Aliases: ui")
   choices+=("Status" "Ping" "Doctor" "Help" "Quit")
 
   local choice
-  choice="$(printf "%s\n" "${choices[@]}" | gum choose --header "AlphaOS — aosctl")" || return 0
+  choice="$(choose "${choices[@]}")" || return 0
 
   case "$choice" in
     "Index: status") "$INDEXCTL" status ;;
     "Router: status") "$ROUTERCTL" status ;;
     "Bridge: status") "$BRIDGECTL" status ;;
     "Core4: status") "$CORE4CTL" status ;;
-    "Vault: status") "$SYNCVAULTCTL" status ;;
+    "Sync: status") "$SYNCCTL" status ;;
+    "Git: status") "$GITCTL" status ;;
     "Fire: status") fire_cmd status ;;
+    "Backup: status") "$BACKUPCTL" status ;;
+    "Mounts: status") "$MOUNTCTL" status ;;
+    "Hooks: status") "$HOOKCTL" status ;;
+    "Door: status") "$DOORCTL" status ;;
+    "Game: status") "$GAMECTL" status ;;
+    "Voice: status") "$VOICECTL" status ;;
     "Env: list") env_cmd list ;;
     "Aliases: ui") alias_cmd ui ;;
     "Status") run_status ;;
@@ -181,10 +222,16 @@ show_version() {
     msg "  bridge: not installed"
   fi
 
-  if [[ -n "$SYNCVAULTCTL" ]]; then
-    msg "  sync:   $($SYNCVAULTCTL version 2>/dev/null || echo 'unknown')"
+  if [[ -n "$SYNCCTL" ]]; then
+    msg "  sync:   $($SYNCCTL version 2>/dev/null || echo 'unknown')"
   else
     msg "  sync:   not installed"
+  fi
+
+  if [[ -n "$GITCTL" ]]; then
+    msg "  git:    $($GITCTL version 2>/dev/null || echo 'unknown')"
+  else
+    msg "  git:    not installed"
   fi
 
   if [[ -n "$ENVCTL" ]]; then
@@ -236,12 +283,20 @@ run_status() {
     warn "bridgectl not found"
   fi
 
-  if [[ -n "$SYNCVAULTCTL" ]]; then
-    msg "=== syncvaultctl ==="
-    "$SYNCVAULTCTL" status || true
+  if [[ -n "$SYNCCTL" ]]; then
+    msg "=== syncctl ==="
+    "$SYNCCTL" status || true
     msg ""
   else
-    warn "syncvaultctl not found"
+    warn "syncctl not found"
+  fi
+
+  if [[ -n "$GITCTL" ]]; then
+    msg "=== gitctl ==="
+    "$GITCTL" status || true
+    msg ""
+  else
+    warn "gitctl not found"
   fi
 
   msg "=== rclone backend ==="
@@ -263,6 +318,54 @@ run_status() {
     msg ""
   else
     warn "firemap not found"
+  fi
+
+  if [[ -n "$BACKUPCTL" ]]; then
+    msg "=== backupctl ==="
+    "$BACKUPCTL" status || true
+    msg ""
+  else
+    warn "backupctl not found"
+  fi
+
+  if [[ -n "$MOUNTCTL" ]]; then
+    msg "=== mountctl ==="
+    "$MOUNTCTL" status || true
+    msg ""
+  else
+    warn "mountctl not found"
+  fi
+
+  if [[ -n "$HOOKCTL" ]]; then
+    msg "=== hookctl ==="
+    "$HOOKCTL" status || true
+    msg ""
+  else
+    warn "hookctl not found"
+  fi
+
+  if [[ -n "$DOORCTL" ]]; then
+    msg "=== doorctl ==="
+    "$DOORCTL" status || true
+    msg ""
+  else
+    warn "doorctl not found"
+  fi
+
+  if [[ -n "$GAMECTL" ]]; then
+    msg "=== gamectl ==="
+    "$GAMECTL" status || true
+    msg ""
+  else
+    warn "gamectl not found"
+  fi
+
+  if [[ -n "$VOICECTL" ]]; then
+    msg "=== voicectl ==="
+    "$VOICECTL" status || true
+    msg ""
+  else
+    warn "voicectl not found"
   fi
 
   if [[ -n "$ENVCTL" ]]; then
@@ -335,12 +438,20 @@ run_doctor() {
     warn "bridgectl not found"
   fi
 
-  if [[ -n "$SYNCVAULTCTL" ]]; then
-    msg "=== syncvaultctl ==="
-    "$SYNCVAULTCTL" status 2>&1 || msg "  ⚠️  Not running"
+  if [[ -n "$SYNCCTL" ]]; then
+    msg "=== syncctl ==="
+    "$SYNCCTL" status 2>&1 || msg "  ⚠️  Not running"
     msg ""
   else
-    warn "syncvaultctl not found"
+    warn "syncctl not found"
+  fi
+
+  if [[ -n "$GITCTL" ]]; then
+    msg "=== gitctl ==="
+    "$GITCTL" status 2>&1 || msg "  ⚠️  Not running"
+    msg ""
+  else
+    warn "gitctl not found"
   fi
 
   if [[ -n "$FIREMAP_BIN" ]]; then
@@ -364,7 +475,7 @@ route_component() {
       [[ -n "$INDEXCTL" ]] || die "indexctl not found"
       "$INDEXCTL" "$@"
       ;;
-    core4)
+    core4|core4ctl)
       core4_cmd "$@"
       ;;
     router)
@@ -375,11 +486,47 @@ route_component() {
       [[ -n "$BRIDGECTL" ]] || die "bridgectl not found"
       "$BRIDGECTL" "$@"
       ;;
-    vault|sync)
-      [[ -n "$SYNCVAULTCTL" ]] || die "syncvaultctl not found"
-      "$SYNCVAULTCTL" "$@"
+    vault)
+      [[ -n "$SYNCCTL" ]] || die "syncctl not found"
+      "$SYNCCTL" vault "$@"
       ;;
-    tent)
+    sync)
+      [[ -n "$SYNCCTL" ]] || die "syncctl not found"
+      "$SYNCCTL" "$@"
+      ;;
+    git)
+      [[ -n "$GITCTL" ]] || die "gitctl not found"
+      "$GITCTL" "$@"
+      ;;
+    backup)
+      [[ -n "$BACKUPCTL" ]] || die "backupctl not found"
+      "$BACKUPCTL" "$@"
+      ;;
+    mount)
+      [[ -n "$MOUNTCTL" ]] || die "mountctl not found"
+      "$MOUNTCTL" "$@"
+      ;;
+    hook|hooks)
+      [[ -n "$HOOKCTL" ]] || die "hookctl not found"
+      "$HOOKCTL" "$@"
+      ;;
+    door|doorctl)
+      [[ -n "$DOORCTL" ]] || die "doorctl not found"
+      "$DOORCTL" "$@"
+      ;;
+    game|gamectl)
+      [[ -n "$GAMECTL" ]] || die "gamectl not found"
+      "$GAMECTL" "$@"
+      ;;
+    voice|voicectl)
+      [[ -n "$VOICECTL" ]] || die "voicectl not found"
+      "$VOICECTL" "$@"
+      ;;
+    firectl)
+      [[ -n "$FIRECTL_BIN" ]] || die "firectl not found"
+      "$FIRECTL_BIN" "$@"
+      ;;
+    tent|tentctl)
       [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/gas-tent-dev/tentctl"
       "$TENTCTL" "$@"
       ;;
@@ -390,9 +537,9 @@ route_component() {
       alias_cmd "$@"
       ;;
     *)
-      err "Unknown component: $component"
+      ui_err "Unknown component: $component"
       msg ""
-      msg "Available components: hub, index, router, bridge, core4, vault, sync, fire, tent, centre, env, alias"
+      msg "Available components: hub, index, router, bridge, core4, vault, sync, git, fire, backup, mount, hook, door, game, voice, tent, centre, env, alias"
       msg "Run 'aosctl help' for usage"
       exit 1
       ;;
@@ -614,11 +761,7 @@ PY
 
 main() {
   if [[ $# -eq 0 ]]; then
-    if have gum; then
-      show_menu
-    else
-      show_help
-    fi
+    show_menu
     exit 0
   fi
 
@@ -633,13 +776,13 @@ main() {
     version|-v|--version) show_version ;;
     doctor|doc) run_doctor ;;
     centre|centres|center|centers) centre_cmd "$@" ;;
-    hub|index|router|bridge|core4|vault|sync|tent|env|alias) route_component "$cmd" "$@" ;;
+    hub|index|router|bridge|core4|core4ctl|vault|sync|git|backup|mount|hook|hooks|door|doorctl|game|gamectl|voice|voicectl|firectl|tent|tentctl|env|alias) route_component "$cmd" "$@" ;;
     fire) fire_cmd "$@" ;;
     fruits) fruits_cmd "$@" ;;
     creatorking) creatorking_cmd "$@" ;;
     bot) bot_cmd "$@" ;;
     *)
-      err "Unknown command: $cmd"
+      ui_err "Unknown command: $cmd"
       msg ""
       msg "Run 'aosctl help' for usage"
       exit 1

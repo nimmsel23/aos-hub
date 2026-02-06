@@ -2,9 +2,34 @@
 set -euo pipefail
 
 APP="aos"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# Normalize to repo checkout if available
+if [[ "$SCRIPT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  SCRIPT_DIR="$HOME/aos-hub"
+fi
 
 have() { command -v "$1" >/dev/null 2>&1; }
 die() { echo "[$APP] $*" >&2; exit 1; }
+
+resolve_bin() {
+  local primary="$1"; shift
+  if [[ -n "$primary" && -x "$primary" ]]; then
+    echo "$primary"; return 0
+  fi
+  for cand in "$@"; do
+    if [[ -n "$cand" && -x "$cand" ]]; then
+      echo "$cand"; return 0
+    fi
+  done
+  if have "$primary"; then
+    command -v "$primary"; return 0
+  fi
+  return 1
+}
+
+SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
+GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 
 usage() {
   cat <<EOF
@@ -12,25 +37,34 @@ $APP — AlphaOS frontdoor (stable bash overview)
 
 Usage:
   $APP menu                         # gum menu (if available)
-  $APP sync <subcommand> [...]      # sync stack (runner + ui)
+  $APP sync <subcommand> [...]      # rclone sync control (syncctl)
+  $APP git <subcommand> [...]       # git sync control (gitctl)
+  $APP vault <subcommand> [...]     # vault copy (syncctl vault)
   $APP router <subcommand> [...]    # router bot control (routerctl)
   $APP alias <subcommand> [...]     # multi-shell alias manager (aos-alias)
 
-Sync subcommands:
-  $APP sync menu                    # gum UI (aos-syncctl)
-  $APP sync list                    # list targets
-  $APP sync run <target> [...]      # run sync now (aos-sync)
+Sync subcommands (syncctl):
+  $APP sync menu
+  $APP sync list
+  $APP sync run <target> [...]
   $APP sync enable <target> --at HH:MM
   $APP sync disable <target>
   $APP sync status <target>
   $APP sync logs <target>
   $APP sync doctor <target>
 
+Git subcommands (gitctl):
+  $APP git status
+  $APP git sync
+  $APP git vault status
+
 Examples:
   $APP menu
   $APP sync menu
   $APP sync list
   $APP sync enable voice --at 03:30
+  $APP git status
+  $APP vault status
   $APP router status
   $APP alias ui
 EOF
@@ -45,8 +79,10 @@ menu() {
 
   local choice
   choice="$(printf "%s\n" \
-    "Sync: manage targets (aos-syncctl)" \
+    "Sync: menu (syncctl)" \
     "Sync: list targets" \
+    "Git: status" \
+    "Vault: status" \
     "Router: control bot (routerctl)" \
     "Aliases: manage (aos-alias)" \
     "Help" \
@@ -54,11 +90,29 @@ menu() {
     | gum choose --header "AlphaOS — aos")"
 
   case "$choice" in
-    "Sync: manage targets (aos-syncctl)")
-      exec aos-syncctl
+    "Sync: menu (syncctl)")
+      if [[ -n "$SYNCCTL" ]]; then
+        exec "$SYNCCTL" menu
+      fi
+      exec syncctl menu
       ;;
     "Sync: list targets")
-      exec aos-sync list
+      if [[ -n "$SYNCCTL" ]]; then
+        exec "$SYNCCTL" list
+      fi
+      exec syncctl list
+      ;;
+    "Git: status")
+      if [[ -n "$GITCTL" ]]; then
+        exec "$GITCTL" status
+      fi
+      exec gitctl status
+      ;;
+    "Vault: status")
+      if [[ -n "$SYNCCTL" ]]; then
+        exec "$SYNCCTL" vault status
+      fi
+      exec syncctl vault status
       ;;
     "Router: control bot (routerctl)")
       exec routerctl
@@ -74,31 +128,32 @@ menu() {
 
 # ---- sync wrapper ----
 sync_cmd() {
-  local sub="${1:-}"; shift || true
+  local sub="${1:-menu}"; shift || true
+  if [[ -n "$SYNCCTL" ]]; then
+    exec "$SYNCCTL" "$sub" "$@"
+  fi
+  have syncctl || die "syncctl not found in PATH"
+  exec syncctl "$sub" "$@"
+}
 
-  case "$sub" in
-    menu|ui)
-      have aos-syncctl || die "aos-syncctl not found in PATH"
-      exec aos-syncctl "$@"
-      ;;
-    list)
-      # list targets = list *.env files
-      local dir="${AOS_DOTFILES:-$HOME/.dotfiles}/config/aos/sync.d"
-      if [[ -d "$dir" ]]; then
-        (cd "$dir" && ls -1 *.env 2>/dev/null | sed 's/\.env$//' || true)
-      fi
-      ;;
-    run|enable|disable|status|logs|doctor)
-      have aos-sync || die "aos-sync not found in PATH"
-      exec aos-sync "$sub" "$@"
-      ;;
-    ""|-h|--help|help)
-      usage
-      ;;
-    *)
-      die "Unknown sync subcommand: $sub (try: aos sync help)"
-      ;;
-  esac
+# ---- git wrapper ----
+git_cmd() {
+  local sub="${1:-status}"; shift || true
+  if [[ -n "$GITCTL" ]]; then
+    exec "$GITCTL" "$sub" "$@"
+  fi
+  have gitctl || die "gitctl not found in PATH"
+  exec gitctl "$sub" "$@"
+}
+
+# ---- vault wrapper ----
+vault_cmd() {
+  local sub="${1:-status}"; shift || true
+  if [[ -n "$SYNCCTL" ]]; then
+    exec "$SYNCCTL" vault "$sub" "$@"
+  fi
+  have syncctl || die "syncctl not found in PATH"
+  exec syncctl vault "$sub" "$@"
 }
 
 router_cmd() {
@@ -114,6 +169,8 @@ alias_cmd() {
 case "$cmd" in
   menu) menu ;;
   sync) sync_cmd "$@" ;;
+  git) git_cmd "$@" ;;
+  vault) vault_cmd "$@" ;;
   router) router_cmd "$@" ;;
   alias) alias_cmd "$@" ;;
   help|-h|--help|"") usage ;;

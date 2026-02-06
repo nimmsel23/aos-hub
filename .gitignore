@@ -40,6 +40,18 @@ venv.bak/
 fire/fire.env
 python-firemap/.offset
 
+# Local env convenience files (untracked)
+python-firemap/firemap.env
+python-warstack/warstack.env
+router/router.env
+
+# Local scratch
+.tmpcfg/
+
+# Local convenience symlinks (avoid committing absolute links)
+tele
+aliasctl
+
 # IDE
 .vscode/
 .idea/
