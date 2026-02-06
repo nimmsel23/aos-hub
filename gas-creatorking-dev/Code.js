@@ -533,28 +533,36 @@ function geminiGenerateText_(prompt, opts) {
   return { ok:true, text: String(text || '').trim(), raw: json };
 }
 
-function generateGeminiInsight_(section, question, answer, allAnswers) {
-  const prompt = [
-    "You are 'Creator King Insight'.",
-    "Return a short, sharp insight in German.",
-    "Rules:",
-    "- Max 8 bullet points",
-    "- No fluff, no therapy talk",
-    "- Extract: (1) hidden theme, (2) message to declare, (3) one next strike",
-    "",
-    `SECTION: ${section}`,
-    `QUESTION: ${question}`,
-    `ANSWER:\n${answer}`,
-    "",
-    "Now produce:",
-    "1) THEME:",
-    "2) MESSAGE:",
-    "3) NEXT STRIKE:"
-  ].join("\n");
+function generateGeminiInsight_(jobs, answers) {
+  // Build Q&A block for ALL answered questions of the day
+  const qaLines = jobs.map(j => {
+    const a = (answers[j.question] || '').trim();
+    return `[${j.section}]\nFrage: ${j.question}\nAntwort: ${a}`;
+  }).join('\n\n');
 
-  const g = geminiGenerateText_(prompt, { model: 'gemini-2.5-flash', maxOutputTokens: 260, temperature: 0.5 });
-  if (!g.ok) return `Gemini error: ${g.error}`;
-  return g.text || '(No insight returned)';
+  const prompt = [
+    'Du bist "Creator King Insight" — ein brutaler, klarer Spiegel.',
+    'Analysiere die Eingaben des Tages als EINE zusammenhängende Reflexion.',
+    '',
+    'Regeln:',
+    '- Schreibe auf Deutsch, keine Therapie-Sprache, keine Floskeln.',
+    '- Finde den EINE roten Faden über alle Antworten hinweg.',
+    '- Gib genau diese 3 Blöcke aus, OHNE Markdown, OHNE Sternchen, OHNE Aufzählungszeichen:',
+    '',
+    'THEMA: (der verborgene rote Faden – ein Satz)',
+    'BOTSCHAFT: (was du dir jetzt erkläres – zwei bis drei Sätze)',
+    'NÄCHSTER STRIKE: (eine konkrete Aktion für morgen – ein Satz)',
+    '',
+    '--- EINGABEN DES TAGES ---',
+    qaLines,
+    '--- ENDE ---',
+    '',
+    'Jetzt:',
+  ].join('\n');
+
+  const g = geminiGenerateText_(prompt, { model: 'gemini-2.5-flash', maxOutputTokens: 700, temperature: 0.45 });
+  if (!g.ok) return null;
+  return g.text || null;
 }
 
 // =====================================================
@@ -609,50 +617,157 @@ function upsertAndAnalyze(section, question, answer) {
 // =====================================================
 // 20:00 DISPATCHER — generate insights + send Telegram
 // =====================================================
+// Strip stray markdown that Gemini sometimes emits despite instructions
+function stripMarkdown_(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold**
+    .replace(/\*([^*]+)\*/g, '$1')        // *italic*
+    .replace(/^[-•]\s+/gm, '')            // bullet lines
+    .replace(/`([^`]+)`/g, '$1');         // `code`
+}
+
+// Generic: split "LABEL: text" blocks from cleaned Gemini output
+function parseInsightBlocks_(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const blocks = [];
+  let current = null;
+  for (const line of lines) {
+    const match = line.match(/^([A-ZÄÖÜ\s]+):/);
+    if (match && match[1].trim().length >= 3) {
+      if (current) blocks.push(current);
+      const label = match[1].trim();
+      const rest = line.slice(match[0].length).trim();
+      current = { label, lines: rest ? [rest] : [] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+// Format parsed blocks as Telegram HTML
+function formatBlocksForTelegram_(blocks) {
+  return blocks.map(b =>
+    `<b>${escapeHtml_(b.label)}:</b> ${escapeHtml_(b.lines.join(' '))}`
+  ).join('\n');
+}
+
 function dispatchQueuedInsights() {
   const chatId = PropertiesService.getScriptProperties().getProperty(TG_DEFAULT_CHAT_ID_PROP);
   if (!chatId) return;
 
   const jobs = drainInsightQueue_();
-  if (!jobs.length) return; // silent
+  if (!jobs.length) return;
 
   const answers = loadAnswers_();
 
-  // Build message(s) — avoid Telegram length issues (~4096 chars)
+  // Single holistic call for the whole day
+  const raw = generateGeminiInsight_(jobs, answers);
+  if (!raw) {
+    Logger.log('dispatchQueuedInsights: Gemini returned nothing');
+    return;
+  }
+
+  const cleaned = stripMarkdown_(raw);
+  const blocks = parseInsightBlocks_(cleaned);
+
+  // Send via Telegram
   const header = `🌌 <b>Creator King — Abend-Insights</b>\n<i>${escapeHtml_(new Date().toLocaleDateString('de-DE'))}</i>\n\n`;
+  sendTelegramMessage(chatId, header + formatBlocksForTelegram_(blocks));
 
-  let chunk = header;
-  let sentAny = false;
+  // Persist to Drive — Delayed_Insights was created but never written to
+  saveEntry({
+    tool: 'CreatorKing_Daily_Insight',
+    markdown: `# Creator King — Abend-Insights\n**${new Date().toLocaleDateString('de-DE')}**\n\n${cleaned}\n`,
+    filename: `DailyInsight_${new Date().toISOString().slice(0,10)}.md`,
+    subfolder: 'Delayed_Insights'
+  });
 
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    const section = j.section;
-    const question = j.question;
-    const answer = (answers[question] || '').trim();
+  Logger.log(`Dispatched holistic insight for ${jobs.length} answer(s)`);
 
-    // Generate
-    const insight = generateGeminiInsight_(section, question, answer, answers);
+  // Check for newly completed sections → fire section analyses
+  checkAndDispatchSectionAnalyses_(chatId);
+}
 
-    const block =
-      `👑 <b>${i + 1})</b> ${escapeHtml_(question)}\n` +
-      `${escapeHtml_(String(insight).trim())}\n\n`;
+// =====================================================
+// SECTION COMPLETION — one-time Gemini analysis per section
+// =====================================================
+function generateSectionAnalysis_(section, sectionQA) {
+  const qaBlock = sectionQA.map(item =>
+    `Frage: ${item.question}\nAntwort: ${item.answer}`
+  ).join('\n\n');
 
-    // If exceeds safe size, send current chunk and start new
-    if ((chunk + block).length > 3500) {
-      sendTelegramMessage(chatId, chunk);
-      sentAny = true;
-      chunk = header + block;
-    } else {
-      chunk += block;
+  const prompt = [
+    'Du bist "Creator King Insight".',
+    `Analysiere die vollständigen Antworten der Section "${section}".`,
+    'Finde den roten Faden und das Kernmuster.',
+    '',
+    'Regeln:',
+    '- Auf Deutsch, keine Therapie-Sprache, keine Floskeln.',
+    '- Kein Markdown, keine Sternchen, keine Aufzählungszeichen.',
+    '- Gib genau diese 3 Blöcke aus:',
+    '',
+    'KERNMUSTER: (was sich über alle Antworten hinweg wiederholt – ein bis zwei Sätze)',
+    'PROFIL: (was diese Section über die Person aussagt – zwei bis drei Sätze)',
+    'STRIKE: (eine konkrete Nutzung dieses Erkenntnisses für das Business – ein Satz)',
+    '',
+    '--- ANTWORTEN ---',
+    qaBlock,
+    '--- ENDE ---',
+    '',
+    'Jetzt:'
+  ].join('\n');
+
+  return geminiGenerateText_(prompt, { model: 'gemini-2.5-flash', maxOutputTokens: 500, temperature: 0.45 });
+}
+
+function checkAndDispatchSectionAnalyses_(chatId) {
+  const store = loadStore_();
+  const answers = loadAnswers_();
+  const analyses = store.section_analyses || {};
+  let updated = false;
+
+  for (const section of Object.keys(QUESTIONS)) {
+    if (analyses[section]) continue; // already generated for this section
+
+    const questions = QUESTIONS[section];
+    const sectionQA = questions
+      .filter(q => String(answers[q] || '').trim())
+      .map(q => ({ question: q, answer: answers[q] }));
+
+    if (sectionQA.length !== questions.length) continue; // not fully answered yet
+
+    const g = generateSectionAnalysis_(section, sectionQA);
+    if (!g.ok) {
+      Logger.log(`Section analysis failed for "${section}": ${g.error}`);
+      continue;
     }
+
+    const cleaned = stripMarkdown_(g.text);
+    const blocks = parseInsightBlocks_(cleaned);
+
+    // Persist to Drive
+    const safeName = section.replace(/[^a-zA-Z0-9 ]/g, '').trim().substring(0, 60);
+    saveEntry({
+      tool: 'CreatorKing_Section_Analysis',
+      markdown: `# Section Analysis: ${section}\n\n${cleaned}\n\n*Generiert am: ${new Date().toLocaleDateString('de-DE')}*`,
+      filename: `SectionAnalysis_${safeName}_${new Date().toISOString().slice(0,10)}.md`,
+      subfolder: 'Delayed_Insights'
+    });
+
+    // Send via Telegram
+    const header = `👑 <b>Section Complete: ${escapeHtml_(section)}</b>\n\n`;
+    sendTelegramMessage(chatId, header + formatBlocksForTelegram_(blocks));
+
+    analyses[section] = { generated_at: new Date().toISOString() };
+    updated = true;
   }
 
-  if (chunk.trim() !== header.trim()) {
-    sendTelegramMessage(chatId, chunk);
-    sentAny = true;
+  if (updated) {
+    store.section_analyses = analyses;
+    saveStore_(store);
   }
-
-  if (sentAny) Logger.log(`Dispatched ${jobs.length} insight(s)`);
 }
 
 // =====================================================

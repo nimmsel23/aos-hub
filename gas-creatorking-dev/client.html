@@ -256,14 +256,36 @@ function render() {
   let activePlaced = false;
 
   const sections = data.sectionOrder || Object.keys(data.questions || {});
+
+  // Compute progress stats before rendering
+  let totalQ = 0, answeredQ = 0;
+  const sectionStats = {};
+  for (const section of sections) {
+    const qsArr = (data.questions || {})[section] || [];
+    const done = qsArr.filter(q => String(answers[q] || '').trim()).length;
+    sectionStats[section] = { total: qsArr.length, answered: done };
+    totalQ += qsArr.length;
+    answeredQ += done;
+  }
+
+  // Progress bar
+  const pct = totalQ ? Math.round(answeredQ / totalQ * 100) : 0;
+  const pw = document.createElement('div');
+  pw.className = 'progress-wrap';
+  pw.innerHTML =
+    `<div class="progress-label"><strong>${answeredQ}</strong> / ${totalQ} completed</div>` +
+    `<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+  container.appendChild(pw);
+
   for (const section of sections) {
     const qsArr = (data.questions || {})[section] || [];
     const sec = document.createElement('div');
     sec.className = 'section';
 
+    const st = sectionStats[section];
     const head = document.createElement('div');
     head.className = 'section-header';
-    head.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
+    head.innerHTML = `${randEmoji()} <strong>${section}</strong> <span class="section-count${st.answered === st.total ? ' done' : ''}">${st.answered}/${st.total}</span> ${randEmoji()}`;
     sec.appendChild(head);
 
     for (const q of qsArr) {
