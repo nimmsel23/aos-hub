@@ -19,7 +19,7 @@ Moved out of alphaos_single_project.gs (recent split)
 - HQ WebApp backend → `gas/hq_webapp.gs`
 - `setLaptopUrl()` → `gas/config.gs`
 - Reflection system → `gas/reflection.gs`
-- Router bot → `gas/router.gs`
+- Router bot → `gas/watchdog.gs` (merged)
 - Entry points (`doGet`, `doPost`) → `gas/entrypoints.gs`
 - HQ status + stats → `gas/hq_status.gs`
 - Inline map renderer → `gas/index_inline.gs`

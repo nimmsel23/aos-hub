@@ -109,7 +109,7 @@ These are only active if installed in the Apps Script project triggers list.
 - `fruits_pollTelegram_` (`gas/fruits.gs`) — Fruits Telegram polling (if enabled).
 - `fireBot_pollTelegram` (`gas/fire_bot.gs`) — Fire bot polling (if enabled).
 - `tent_weeklyReviewTrigger` (`gas/tent_weekly_review.gs`) — weekly Tent review trigger.
-- `bridge_syncPull` / `bridge_syncPush` (`gas/bridge.gs`) — Drive sync helpers (if enabled).
+- `bridge_syncPull` / `bridge_syncPush` (`gas/watchdog.gs`) — Drive sync helpers (if enabled).
 
 ## How to Detect Legacy
 
@@ -119,4 +119,3 @@ If a function is not referenced by:
 - a trigger handler string (time-based),
 
 …it’s a good candidate for “legacy”. Prefer marking it as legacy first (doc-only), before deleting or renaming.
-

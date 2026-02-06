@@ -46,7 +46,7 @@ Proposed module ownership (updated per HQ + bot hub)
     - `addToHotListWithDossier()`
     - `promoteToDoorWar()` (rename from `promoteTooorWar`; expected to surface Hot List entries into Door War panel)
     - `promoteToWarStack()` / `startExecution()` / `completeTask()`
-- `gas/router.gs` (new)
+- `gas/watchdog.gs` (merged router block)
   - GAS Telegram command router block:
     - `ROUTER_CONFIG`
     - `router_getBridgeUrl_()` + `router_getWebAppUrl_()` + `router_getTriggerUrl_()` + `ROUTER_REGISTRY`
@@ -79,8 +79,8 @@ Notes and dependencies
   - `watchdog.gs` is system-level and needs its own token; do not route it through a generic token.
 - `doPost` depends on: `fruits_handleTelegramMessage_` (`gas/fruits.gs`),
   `hotlist_handleTelegramMessage_` (`gas/hotlist.gs`),
-  `bridge_handleBotCommand()` / `bridge_handleTaskOperation()` (`gas/bridge.gs`),
-  `router_routeCommand_()` (`gas/router.gs`),
+  `bridge_handleBotCommand()` / `bridge_handleTaskOperation()` (`gas/watchdog.gs`),
+  `router_routeCommand_()` (`gas/watchdog.gs`),
   `webapp_handleWebAppData()` + `webapp_handleTelegramMessage()` (`gas/hq_webapp.gs`),
   watchdog functions (`gas/watchdog.gs`).
 - `getDashboardStats_()` calls:
@@ -112,7 +112,7 @@ Risks to watch
 - `promoteTooorWar()` typo can break calls once centralized; rename to `promoteToDoorWar()` and update any callers.
 
 Token intent clarification
-- `BOT_TOKEN` in `gas/bridge.gs` represents the generic GAS hub bot identity
+- `BOT_TOKEN` in `gas/watchdog.gs` represents the generic GAS hub bot identity
   used for outgoing Telegram messages (not the Bridge connection layer itself).
 - In practice `ALPHAOS_BOT_TOKEN`, `TELEGRAM_BOT_TOKEN`, and `BOT_TOKEN` are often the same,
   but they remain separate properties to preserve intent and legacy callers.

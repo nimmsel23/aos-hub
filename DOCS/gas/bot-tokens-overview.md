@@ -12,7 +12,7 @@ Bot Tokens (by module)
   - Used by: `gas/hq_webapp.gs` (HQ webapp backend).
   - Role: HQ v1 Telegram WebApp backend.
 - `BOT_TOKEN`
-  - Used by: `gas/bridge.gs` (GAS hub bot send helper), `gas/router.gs` router fallback.
+  - Used by: `gas/watchdog.gs` (GAS hub bot send helper + router fallback).
   - Role: generic "GAS hub bot" identity for outgoing messages (not the bridge connection layer).
 - `WARSTACK_BOT_TOKEN`
   - Used by: `gas/door_warstack.gs` (fallback chain includes TELEGRAM_BOT_TOKEN/BOT_TOKEN).
