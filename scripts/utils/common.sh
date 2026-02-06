@@ -3,6 +3,17 @@ set -o pipefail
 
 # Minimal common helpers for repo-local utils (ported from dotfiles).
 
+COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPTS_DIR="$(cd "$COMMON_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
+
+# Load global env (optional) so AOS_* defaults come from a single place.
+if [[ -f "$SCRIPTS_DIR/lib/aos-env.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPTS_DIR/lib/aos-env.sh"
+  aos_env_load "" "$ROOT_DIR" || true
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -28,4 +39,3 @@ script_header() {
     echo ""
   fi
 }
-

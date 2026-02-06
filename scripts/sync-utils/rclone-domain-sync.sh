@@ -12,6 +12,8 @@ source "${SCRIPT_DIR}/common.sh"
 RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 REMOTE_NAME="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
 
+COPY_LINKS_MODE="${AOS_DOMAIN_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
+
 DOMAIN="${1^^}"
 if [[ ! "$DOMAIN" =~ ^(BODY|BEING|BALANCE|BUSINESS)$ ]]; then
   echo "Error: Invalid domain. Must be one of: BODY, BEING, BALANCE, BUSINESS"
@@ -33,6 +35,7 @@ fi
 LOCK_FILE="${AOS_DOMAIN_LOCK_DIR:-/tmp}/rclone-${DOMAIN,,}-sync.lock"
 
 RCLONE_OPTIONS=(--verbose --checksum --create-empty-src-dirs \
+  --copy-links \
   --exclude '*.tmp' \
   --exclude '.DS_Store' \
   --exclude 'Thumbs.db' \
@@ -187,8 +190,14 @@ show_status() {
 
   if [ "${AOS_COMPACT:-0}" = "1" ]; then
     if [ -d "$LOCAL_PATH" ]; then
-      local_count=$(find "$LOCAL_PATH" -type f 2>/dev/null | wc -l)
-      local_size=$(du -sh "$LOCAL_PATH" 2>/dev/null | cut -f1)
+      find_opts=()
+      du_opts=()
+      if [ "${COPY_LINKS_MODE}" = "1" ]; then
+        find_opts=(-L)
+        du_opts=(-L)
+      fi
+      local_count=$(find "${find_opts[@]}" "$LOCAL_PATH" -type f 2>/dev/null | wc -l)
+      local_size=$(du -sh "${du_opts[@]}" "$LOCAL_PATH" 2>/dev/null | cut -f1)
       echo "Local: $local_count files, $local_size"
     else
       echo "Local: NOT FOUND"
@@ -218,8 +227,14 @@ show_status() {
   echo ""
 
   if [ -d "$LOCAL_PATH" ]; then
-    local_count=$(find "$LOCAL_PATH" -type f 2>/dev/null | wc -l)
-    local_size=$(du -sh "$LOCAL_PATH" 2>/dev/null | cut -f1)
+    find_opts=()
+    du_opts=()
+    if [ "${COPY_LINKS_MODE}" = "1" ]; then
+      find_opts=(-L)
+      du_opts=(-L)
+    fi
+    local_count=$(find "${find_opts[@]}" "$LOCAL_PATH" -type f 2>/dev/null | wc -l)
+    local_size=$(du -sh "${du_opts[@]}" "$LOCAL_PATH" 2>/dev/null | cut -f1)
     echo "Local files: $local_count"
     echo "Local size: $local_size"
   else

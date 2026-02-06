@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_ROOT="${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+VAULT_ROOT="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+if command -v realpath >/dev/null 2>&1; then
+  VAULT_ROOT="$(realpath -m -- "$VAULT_ROOT")"
+elif command -v readlink >/dev/null 2>&1; then
+  VAULT_ROOT="$(readlink -f -- "$VAULT_ROOT" 2>/dev/null || echo "$VAULT_ROOT")"
+fi
 LOG_DIR="${AOS_LOG_DIR:-$HOME/.local/share/alphaos/logs}"
 LOG_FILE="${AOS_VAULT_LOG_FILE:-}"
 if [ -z "${LOG_FILE}" ]; then
@@ -15,6 +28,15 @@ RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 RCLONE_BIN="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
 SYSTEMCTL_BIN="${AOS_SYSTEMCTL_BIN:-$(command -v systemctl || true)}"
 SLEEP_BETWEEN="${AOS_VAULT_SLEEP_BETWEEN:-30}"
+COPY_LINKS_MODE="${AOS_VAULT_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
+BACKUP_DIR_REMOTE="${AOS_VAULT_BACKUP_DIR_REMOTE:-${AOS_VAULT_BACKUP_DIR:-}}"
+BACKUP_DIR_LOCAL="${AOS_VAULT_BACKUP_DIR_LOCAL:-}"
+BACKUP_SUFFIX="${AOS_VAULT_BACKUP_SUFFIX:-}"
+
+RCLONE_COMMON_OPTS=(--create-empty-src-dirs)
+if [ "${COPY_LINKS_MODE}" = "1" ]; then
+  RCLONE_COMMON_OPTS+=(--copy-links)
+fi
 
 LOCAL_PATHS=(
   "$VAULT_ROOT/Game"
@@ -73,6 +95,19 @@ run_cmd() {
   fi
 }
 
+wait_between() {
+  if [ "${SLEEP_BETWEEN}" -le 0 ]; then
+    return 0
+  fi
+  if have_tty; then
+    info "waiting ${SLEEP_BETWEEN}s (press Enter to skip)"
+    read -r -t "$SLEEP_BETWEEN" _ || true
+  else
+    info "waiting ${SLEEP_BETWEEN}s"
+    sleep "$SLEEP_BETWEEN"
+  fi
+}
+
 status() {
   info "vaultctl status"
   echo ""
@@ -128,8 +163,27 @@ copy_direction() {
     label="${LABELS[$i]}"
     filter_from=()
     ignore_file="$local_path/.rcloneignore"
-    if [ -f "$ignore_file" ]; then
+    if [ "$label" = "Core4" ]; then
+      # Core4 derived JSON can be rebuilt from the append-only event ledger.
+      # Sync only `.core4/**` to avoid Google Drive duplicate-name issues.
+      filter_from=(--filter "+ .core4/**" --filter "- *")
+    elif [ -f "$ignore_file" ]; then
       filter_from=(--filter-from "$ignore_file")
+    fi
+    backup_dir=""
+    backup_opts=()
+    if [ "$direction" = "push" ]; then
+      backup_dir="$BACKUP_DIR_REMOTE"
+    else
+      backup_dir="$BACKUP_DIR_LOCAL"
+    fi
+    if [ -n "$backup_dir" ]; then
+      backup_opts+=(--backup-dir "$backup_dir")
+      if [ -n "$BACKUP_SUFFIX" ]; then
+        backup_opts+=(--suffix "$BACKUP_SUFFIX")
+      else
+        backup_opts+=(--suffix ".bak-$(date +%Y%m%d-%H%M%S)")
+      fi
     fi
 
     case "$direction" in
@@ -139,17 +193,17 @@ copy_direction() {
           continue
         fi
         if [ "$dry_run" = "true" ]; then
-          run_cmd "copy $label -> $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy --create-empty-src-dirs --dry-run "$local_path" "$remote_path"
+          run_cmd "copy $label -> $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run "$local_path" "$remote_path"
         else
-          run_cmd "copy $label -> $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy --create-empty-src-dirs "$local_path" "$remote_path"
+          run_cmd "copy $label -> $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "$local_path" "$remote_path"
         fi
         ;;
       pull)
         mkdir -p "$local_path"
         if [ "$dry_run" = "true" ]; then
-          run_cmd "copy $label <- $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy --create-empty-src-dirs --dry-run "$remote_path" "$local_path"
+          run_cmd "copy $label <- $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run "$remote_path" "$local_path"
         else
-          run_cmd "copy $label <- $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy --create-empty-src-dirs "$remote_path" "$local_path"
+          run_cmd "copy $label <- $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "$remote_path" "$local_path"
         fi
         ;;
       *)
@@ -159,8 +213,7 @@ copy_direction() {
     esac
 
     if [ "$i" -lt $(( ${#LOCAL_PATHS[@]} - 1 )) ]; then
-      info "waiting ${SLEEP_BETWEEN}s"
-      sleep "$SLEEP_BETWEEN"
+      wait_between
     fi
   done
 }
