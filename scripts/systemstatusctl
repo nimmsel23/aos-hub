@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Trigger GAS system status via the local Bridge service.
+# Mechanism: Bridge POSTs a synthetic Telegram update to the GAS webhook.
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load shared env (optional). This is where AOS_BRIDGE_* usually lives.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+
+ENV_FILE="${AOS_BRIDGE_ENV_FILE:-${AOS_ENV_FILE:-}}"
+
+usage() {
+  cat <<EOF
+Usage:
+  systemstatusctl [trigger|doctor|help] [--cmd /systemstatus] [--env FILE] [--json]
+
+Commands:
+  trigger   Trigger GAS system status via Bridge (default)
+  doctor    Call Bridge /bridge/doctor (active probes)
+  help      Show this help
+
+Options:
+  --cmd     Telegram command to inject (default: /systemstatus)
+  --env     Source env file before running (KEY=VALUE shell format)
+  --json    Print raw JSON response
+
+Env:
+  AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
+  AOS_BRIDGE_HOST, AOS_BRIDGE_PORT, AOS_BRIDGE_URL
+  AOS_BRIDGE_TOKEN, AOS_BRIDGE_TOKEN_HEADER
+  AOS_BRIDGE_ENV_FILE, AOS_ENV_FILE
+EOF
+}
+
+die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
+
+curl_post_json() {
+  local url="$1"
+  local json="$2"
+  local args=(-fsS -H "Content-Type: application/json")
+  if [[ -n "$TOKEN" ]]; then
+    args+=(-H "${TOKEN_HEADER}: ${TOKEN}")
+  fi
+  curl "${args[@]}" -d "$json" "$url"
+}
+
+curl_get() {
+  local url="$1"
+  local args=(-fsS)
+  if [[ -n "$TOKEN" ]]; then
+    args+=(-H "${TOKEN_HEADER}: ${TOKEN}")
+  fi
+  curl "${args[@]}" "$url"
+}
+
+json_get_field() {
+  local field="$1"
+  python - <<PY
+import json,sys
+try:
+  data=json.load(sys.stdin)
+  v=data.get("${field}")
+  print("" if v is None else str(v))
+except Exception:
+  print("")
+PY
+}
+
+cmd="${1:-trigger}"
+shift || true
+
+telegram_cmd="/systemstatus"
+print_json=0
+env_override=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cmd) telegram_cmd="${2:-}"; shift 2 ;;
+    --json) print_json=1; shift ;;
+    --env) env_override="${2:-}"; shift 2 ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) die "unknown arg: $1" ;;
+  esac
+done
+
+if [[ -n "$env_override" ]]; then
+  ENV_FILE="$env_override"
+fi
+
+if ! aos_env_load "$ENV_FILE" "$ROOT_DIR"; then
+  die "${AOS_ENV_LOAD_ERROR:-failed to load env}"
+fi
+
+TOKEN="${AOS_BRIDGE_TOKEN:-}"
+TOKEN_HEADER="${AOS_BRIDGE_TOKEN_HEADER:-X-Bridge-Token}"
+
+# Recompute after sourcing env file (it may override host/port/url).
+HOST="${AOS_BRIDGE_HOST:-127.0.0.1}"
+PORT="${AOS_BRIDGE_PORT:-8080}"
+BASE_URL="${AOS_BRIDGE_URL:-http://${HOST}:${PORT}}"
+
+case "$cmd" in
+  trigger|"")
+    [[ -n "${telegram_cmd:-}" ]] || die "--cmd is empty"
+    if [[ "${telegram_cmd:0:1}" != "/" ]]; then
+      telegram_cmd="/${telegram_cmd}"
+    fi
+    json="$(python -c 'import json,sys; print(json.dumps({"text": sys.argv[1]}))' "$telegram_cmd")"
+    res="$(curl_post_json "${BASE_URL%/}/bridge/telegram/send" "$json")"
+    if (( print_json )); then
+      printf "%s\n" "$res"
+      exit 0
+    fi
+    ok="$(printf "%s" "$res" | json_get_field ok)"
+    if [[ "$ok" == "True" || "$ok" == "true" ]]; then
+      printf "OK: triggered %s via bridge\n" "$telegram_cmd"
+      exit 0
+    fi
+    printf "%s\n" "$res"
+    exit 2
+    ;;
+  doctor)
+    res="$(curl_get "${BASE_URL%/}/bridge/doctor")"
+    if (( print_json )); then
+      printf "%s\n" "$res"
+      exit 0
+    fi
+    ok="$(printf "%s" "$res" | json_get_field ok)"
+    if [[ "$ok" == "True" || "$ok" == "true" ]]; then
+      printf "OK: bridge doctor green\n"
+      exit 0
+    fi
+    printf "%s\n" "$res"
+    exit 2
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    die "unknown command: $cmd"
+    ;;
+esac

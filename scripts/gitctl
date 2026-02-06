@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GITCTL_VERSION="0.1.0"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+LIB_DIR="${SCRIPT_DIR}/syncvaultctl.d"
+
+if [[ ! -d "$LIB_DIR" ]]; then
+  echo "gitctl: missing library dir: $LIB_DIR" >&2
+  exit 1
+fi
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+# shellcheck disable=SC1090
+source "${LIB_DIR}/common.sh"
+# shellcheck disable=SC1090
+source "${LIB_DIR}/paths.sh"
+# shellcheck disable=SC1090
+source "${LIB_DIR}/git.sh"
+
+usage() {
+  cat <<'EOF'
+gitctl — Git sync control for AlphaOS
+
+Usage:
+  gitctl status
+  gitctl sync
+  gitctl autosync
+  gitctl vault <sync|status|log|diff|remote|check|setup>
+  gitctl vault-sync
+  gitctl vitaltrainer-sync
+  gitctl fadaro-sync
+  gitctl menu
+  gitctl doctor
+  gitctl version
+
+Notes:
+  - Uses git-sync-enforcer if available (fallback to git-auto-sync.sh).
+EOF
+}
+
+cmd_status() {
+  show_git_status
+}
+
+cmd_sync() {
+  git_autosync_all
+}
+
+cmd_vault() {
+  vault_git_dispatch "$@"
+}
+
+cmd_doctor() {
+  print_header "GITCTL DOCTOR"
+
+  local gse=""
+  gse="$(git_sync_enforcer_cmd || true)"
+  local gas=""
+  gas="$(git_auto_sync_script || true)"
+  local vault=""
+  vault="$(vault_git_repo || true)"
+  local vital=""
+  vital="$(vitaltrainer_git_repo || true)"
+  local fadaro="$HOME/Dokumente/BUSINESS/FADARO"
+
+  echo ""
+  echo "git-sync-enforcer: ${gse:-<missing>}"
+  echo "git-auto-sync.sh:  ${gas:-<missing>}"
+  echo "vault repo:        ${vault:-<missing>}"
+  echo "vitaltrainer repo: ${vital:-<missing>}"
+  echo "fadaro repo:       ${fadaro}"
+}
+
+cmd_menu() {
+  if ! have_gum || ! have_tty; then
+    usage
+    return 0
+  fi
+
+  while true; do
+    local choice
+    choice="$(printf "%s\n" \
+      "Status (git-sync-enforcer)" \
+      "Autosync all" \
+      "Vault: sync" \
+      "Vault: status" \
+      "Vault: log" \
+      "Vault: diff" \
+      "Vault: remote" \
+      "Vault: check symlinks" \
+      "Vault: setup repo (gh)" \
+      "Vitaltrainer: sync" \
+      "FADARO: sync" \
+      "Doctor" \
+      "Back" \
+      | gum choose --header "gitctl")"
+
+    case "$choice" in
+      "Status (git-sync-enforcer)") run_allow_fail cmd_status ;;
+      "Autosync all") run_allow_fail cmd_sync ;;
+      "Vault: sync") run_allow_fail vault_git_sync ;;
+      "Vault: status") run_allow_fail vault_git_status ;;
+      "Vault: log") run_allow_fail vault_git_log ;;
+      "Vault: diff") run_allow_fail vault_git_diff ;;
+      "Vault: remote") run_allow_fail vault_git_remote ;;
+      "Vault: check symlinks") run_allow_fail vault_git_check_symlinks ;;
+      "Vault: setup repo (gh)") run_allow_fail vault_git_setup ;;
+      "Vitaltrainer: sync") run_allow_fail vitaltrainer_git_sync ;;
+      "FADARO: sync") run_allow_fail fadaro_git_sync ;;
+      "Doctor") run_allow_fail cmd_doctor ;;
+      "Back") break ;;
+    esac
+    pause_screen
+  done
+}
+
+cmd_version() {
+  echo "gitctl version ${GITCTL_VERSION}"
+}
+
+main() {
+  case "${1:-}" in
+    ""|-h|--help|help) usage ;;
+    status) cmd_status ;;
+    sync|autosync) cmd_sync ;;
+    vault-sync) vault_git_sync ;;
+    vitaltrainer-sync) vitaltrainer_git_sync ;;
+    fadaro-sync) fadaro_git_sync ;;
+    vault) shift; cmd_vault "$@" ;;
+    menu) cmd_menu ;;
+    doctor) cmd_doctor ;;
+    version|-v|--version) cmd_version ;;
+    *)
+      echo "gitctl: unknown command: $1" >&2
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

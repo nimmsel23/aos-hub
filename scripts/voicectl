@@ -14,15 +14,17 @@ JOURNALCTL_BIN="${JOURNALCTL_BIN:-journalctl}"
 SYSTEMCTL_USER=("$SYSTEMCTL_BIN" --user)
 JOURNALCTL_USER=("$JOURNALCTL_BIN" --user)
 
+SERVICE_VOICE="${AOS_VOICE_MOUNT_SERVICE:-rclone-alpha-voice.service}"
+
 UNITS=(
-  warstack-bot.service
+  "${SERVICE_VOICE}"
 )
 
 usage() {
   cat <<'EOF'
-doorctl
+voicectl
 
-Manage Door/Warstack-related systemd user units.
+Manage Voice-related systemd user units.
 
 Commands
   list                       List managed units
@@ -36,6 +38,7 @@ Commands
 
 Notes
   - Uses systemd user units (systemctl --user).
+  - Override unit via AOS_VOICE_MOUNT_SERVICE.
 EOF
 }
 
@@ -97,7 +100,7 @@ case "${1:-}" in
   disable) cmd_disable ;;
   logs) shift; cmd_logs "$@" ;;
   *)
-    echo "doorctl: unknown command: ${1}" >&2
+    echo "voicectl: unknown command: ${1}" >&2
     usage
     exit 2
     ;;

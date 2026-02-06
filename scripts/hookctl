@@ -1,0 +1,372 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOOKCTL_VERSION="0.1.0"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+HOOK_SRC_DIR="$ROOT_DIR/scripts/taskwarrior"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+HOOK_DIR="${AOS_HOOK_DIR:-$HOME/.task/hooks}"
+ENV_DIR="${AOS_HOOK_ENV_DIR:-$HOME/.config/alpha-os}"
+ENV_FILE="${AOS_HOOK_ENV_FILE:-$ENV_DIR/hooks.env}"
+
+has_gum() { command -v gum >/dev/null 2>&1; }
+has_fzf() { command -v fzf >/dev/null 2>&1; }
+
+ui_title() {
+  if has_gum; then
+    gum style --bold --border normal --padding "1 2" "${1:-hookctl}"
+  else
+    echo "=== ${1:-hookctl} ==="
+  fi
+}
+
+ui_info() {
+  if has_gum; then
+    gum style --faint "$*"
+  else
+    echo "$*"
+  fi
+}
+
+ui_ok() {
+  if has_gum; then
+    gum style --foreground 10 "OK  $*"
+  else
+    echo "OK  $*"
+  fi
+}
+
+ui_err() {
+  if has_gum; then
+    gum style --foreground 9 "ERR $*"
+  else
+    echo "ERR $*"
+  fi >&2
+}
+
+ui_warn() {
+  if has_gum; then
+    gum style --foreground 11 "WARN $*"
+  else
+    echo "WARN $*"
+  fi
+}
+
+ui_choose() {
+  local prompt="$1"
+  shift
+  local options=("$@")
+
+  if has_fzf; then
+    printf '%s\n' "${options[@]}" | fzf --prompt="$prompt > " --height=~50% --border
+  elif has_gum; then
+    gum choose --header="$prompt" "${options[@]}"
+  else
+    ui_info "$prompt"
+    select opt in "${options[@]}"; do
+      if [[ -n "$opt" ]]; then
+        echo "$opt"
+        return 0
+      fi
+    done
+  fi
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || { ui_err "Missing: $1"; exit 1; }
+}
+
+ensure_env_file() {
+  mkdir -p "$ENV_DIR"
+  if [[ -f "$ENV_FILE" ]]; then
+    return
+  fi
+  cat >"$ENV_FILE" <<'EOF'
+# AlphaOS Taskwarrior Hooks
+# Optional overrides (no secrets needed)
+# AOS_HOOK_TELE_BIN=tele
+# AOS_HOOK_TELE_SILENT=1
+# AOS_HOOK_TELE_FORMAT=human
+# AOS_HOOK_TELE_INCLUDE_UUID=1
+# AOS_HOOK_CORE4_TELE_DONE=1
+# AOS_HOOK_TARGET=tele
+# AOS_BRIDGE_URL=http://127.0.0.1:8080
+# AOS_CORE4_LOG=1
+# AOS_CORE4_POINTS=0.5
+#
+# Task export snapshot (on-exit)
+# AOS_TASK_EXPORT_FILTER=status:pending
+# AOS_TASK_EXPORT_PATH=$HOME/.local/share/alphaos/task_export.json
+# AOS_TASK_EXPORT_VAULT_PATH=$HOME/AlphaOS-Vault/.alphaos/task_export.json
+# AOS_TASK_EXPORT_COPY_TO_VAULT=1
+# AOS_TASK_EXPORT_MIN_INTERVAL_SEC=15
+EOF
+}
+
+read_env_value() {
+  local key="$1"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo ""
+    return
+  fi
+  grep -E "^${key}=" "$ENV_FILE" | head -n 1 | cut -d= -f2- || true
+}
+
+set_env_kv() {
+  local key="$1"
+  local value="$2"
+  ensure_env_file
+  if grep -qE "^${key}=" "$ENV_FILE"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+  else
+    echo "${key}=${value}" >>"$ENV_FILE"
+  fi
+}
+
+install_hook() {
+  local src="$1"
+  local dest="$2"
+  [[ -f "$src" ]] || { ui_err "Missing source: $src"; return 1; }
+  mkdir -p "$(dirname "$dest")"
+  install -m 755 "$src" "$dest"
+}
+
+cmd_install() {
+  ui_title "Install Hooks"
+  install_hook "$HOOK_SRC_DIR/on-add.alphaos.py" "$HOOK_DIR/on-add.99-alphaos.py"
+  install_hook "$HOOK_SRC_DIR/on-modify.alphaos.py" "$HOOK_DIR/on-modify.99-alphaos.py"
+  install_hook "$HOOK_SRC_DIR/on-exit.alphaos.py" "$HOOK_DIR/on-exit.99-alphaos.py"
+  ui_ok "Installed to $HOOK_DIR"
+}
+
+_status_one() {
+  local label="$1"
+  local src="$2"
+  local dest="$3"
+  if [[ -f "$dest" ]]; then
+    if [[ -f "$src" ]] && cmp -s "$src" "$dest"; then
+      ui_ok "$label installed (match)"
+    else
+      ui_warn "$label installed (diff)"
+    fi
+  else
+    ui_warn "$label missing"
+  fi
+}
+
+cmd_status() {
+  ui_title "Hook Status"
+  _status_one "on-add" "$HOOK_SRC_DIR/on-add.alphaos.py" "$HOOK_DIR/on-add.99-alphaos.py"
+  _status_one "on-modify" "$HOOK_SRC_DIR/on-modify.alphaos.py" "$HOOK_DIR/on-modify.99-alphaos.py"
+  _status_one "on-exit" "$HOOK_SRC_DIR/on-exit.alphaos.py" "$HOOK_DIR/on-exit.99-alphaos.py"
+
+  ensure_env_file
+  echo
+  ui_info "Env file: $ENV_FILE"
+  ui_info "AOS_HOOK_TARGET=$(read_env_value AOS_HOOK_TARGET)"
+  ui_info "AOS_HOOK_TELE_FORMAT=$(read_env_value AOS_HOOK_TELE_FORMAT)"
+  ui_info "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
+  ui_info "AOS_HOOK_TELE_INCLUDE_UUID=$(read_env_value AOS_HOOK_TELE_INCLUDE_UUID)"
+}
+
+cmd_env() {
+  ensure_env_file
+  "${EDITOR:-nano}" "$ENV_FILE"
+}
+
+cmd_set_target() {
+  local target="${1:-}"
+  if [[ -z "$target" ]]; then
+    target="$(ui_choose "Target" "tele" "bridge")"
+  fi
+  case "$target" in
+    tele|bridge) ;;
+    *) ui_err "Invalid target: $target (use tele|bridge)"; exit 1 ;;
+  esac
+  set_env_kv "AOS_HOOK_TARGET" "$target"
+  ui_ok "AOS_HOOK_TARGET=$target"
+}
+
+cmd_set_format() {
+  local fmt="${1:-}"
+  if [[ -z "$fmt" ]]; then
+    fmt="$(ui_choose "Format" "human" "json")"
+  fi
+  case "$fmt" in
+    human|json) ;;
+    *) ui_err "Invalid format: $fmt (use human|json)"; exit 1 ;;
+  esac
+  set_env_kv "AOS_HOOK_TELE_FORMAT" "$fmt"
+  ui_ok "AOS_HOOK_TELE_FORMAT=$fmt"
+}
+
+cmd_set_silent() {
+  local val="${1:-}"
+  if [[ -z "$val" ]]; then
+    val="$(ui_choose "Silent" "on" "off")"
+  fi
+  case "$val" in
+    on) set_env_kv "AOS_HOOK_TELE_SILENT" "1" ;;
+    off) set_env_kv "AOS_HOOK_TELE_SILENT" "0" ;;
+    *) ui_err "Invalid value: $val (use on|off)"; exit 1 ;;
+  esac
+  ui_ok "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
+}
+
+cmd_preview() {
+  local kind="${1:-modify}"
+  local hook_file="$HOOK_SRC_DIR/on-modify.alphaos.py"
+  local ptype="task_modify_sync"
+
+  case "$kind" in
+    add)
+      hook_file="$HOOK_SRC_DIR/on-add.alphaos.py"
+      ptype="task_add_sync"
+      ;;
+    modify)
+      hook_file="$HOOK_SRC_DIR/on-modify.alphaos.py"
+      ptype="task_modify_sync"
+      ;;
+    core4)
+      hook_file="$HOOK_SRC_DIR/on-modify.alphaos.py"
+      ptype="core4_task_modify"
+      ;;
+    *)
+      ui_err "Unknown preview type: $kind (use add|modify|core4)"
+      exit 1
+      ;;
+  esac
+
+  ensure_env_file
+  need_cmd python3
+
+  python3 - "$hook_file" "$ENV_FILE" "$ptype" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+
+hook_file = sys.argv[1]
+env_file = sys.argv[2]
+ptype = sys.argv[3]
+
+def load_env(path: str) -> None:
+    if not path or not os.path.exists(path):
+        return
+    try:
+        for line in open(path, "r", encoding="utf-8").read().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value.strip().strip('"').strip("'")
+    except Exception:
+        return
+
+load_env(env_file)
+
+payload = {
+    "type": ptype,
+    "timestamp": "2026-02-02T10:36:44Z",
+    "data": {
+        "uuid": "3aaa7f5d-7e3c-42ca-a473-d9dcf2da96a6",
+        "description": "Trainingsplanerstellung Gruppenstunde (8 Personen)",
+        "tags": ["pflicht", "core4"] if ptype.startswith("core4_") else ["pflicht"],
+        "project": "BUSINESS.Ausbildung.PersonalTrainer",
+        "priority": "H",
+        "due": "20260314T230000Z",
+        "end": None,
+        "door_name": "",
+        "alphatype": "",
+        "changes": {"status": {"new": "pending"}},
+        "domain": "body",
+        "task": "fuel",
+    },
+}
+
+spec = importlib.util.spec_from_file_location("hook_mod", hook_file)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)  # type: ignore
+
+if hasattr(mod, "_format_human_message"):
+    print(mod._format_human_message(payload))
+else:
+    print(json.dumps(payload, ensure_ascii=False))
+PY
+}
+
+show_help() {
+  cat <<'EOF'
+hookctl - Taskwarrior hook manager
+
+Usage:
+  hookctl <command> [args...]
+
+Commands:
+  install           Install hooks into ~/.task/hooks
+  status            Show hook status + env flags
+  env               Edit hooks.env
+  set-target [t]    Set AOS_HOOK_TARGET (tele|bridge)
+  set-format [f]    Set AOS_HOOK_TELE_FORMAT (human|json)
+  set-silent [v]    Set AOS_HOOK_TELE_SILENT (on|off)
+  preview [kind]    Show formatted message (add|modify|core4)
+  version           Show version
+  menu              Interactive menu
+  help              Show this help
+
+Examples:
+  hookctl install
+  hookctl set-format human
+  hookctl set-silent on
+  hookctl preview modify
+EOF
+}
+
+menu() {
+  ui_title "hookctl"
+  local action
+  action="$(ui_choose "Select" \
+    "install hooks" \
+    "status" \
+    "edit env" \
+    "set target" \
+    "set format" \
+    "set silent" \
+    "preview" \
+    "quit")"
+  case "$action" in
+    "install hooks") cmd_install ;;
+    "status") cmd_status ;;
+    "edit env") cmd_env ;;
+    "set target") cmd_set_target ;;
+    "set format") cmd_set_format ;;
+    "set silent") cmd_set_silent ;;
+    "preview") cmd_preview ;;
+    "quit") exit 0 ;;
+    *) exit 0 ;;
+  esac
+}
+
+cmd="${1:-menu}"
+case "$cmd" in
+  install) cmd_install ;;
+  status) cmd_status ;;
+  env) cmd_env ;;
+  set-target) cmd_set_target "${2:-}" ;;
+  set-format) cmd_set_format "${2:-}" ;;
+  set-silent) cmd_set_silent "${2:-}" ;;
+  preview) cmd_preview "${2:-modify}" ;;
+  version) echo "$HOOKCTL_VERSION" ;;
+  menu) menu ;;
+  -h|--help|help) show_help ;;
+  *) show_help; exit 1 ;;
+esac

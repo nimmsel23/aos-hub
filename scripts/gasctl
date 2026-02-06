@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# gasctl — minimal GAS interaction helper (local CLI)
+#
+# Intentionally tiny:
+# - ping: send a watchdog heartbeat payload to the GAS webhook/webapp URL.
+# - systemstatus: trigger a Telegram /systemstatus via Bridge (if available).
+
+APP="gasctl"
+
+msg() { printf "[%s] %s\n" "$APP" "$*"; }
+die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+HB_HOST_DEFAULT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load shared env (optional). This is where AOS_GAS_WEBHOOK_URL usually lives.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+
+usage() {
+  cat <<EOF
+$APP — GAS helper
+
+Usage:
+  $APP [--env FILE] ping
+  $APP [--env FILE] systemstatus
+
+Env:
+  AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
+  HB_URL / AOS_GAS_WEBHOOK_URL   GAS webhook /exec URL
+  HB_HOST                       Host label (default: $HB_HOST_DEFAULT)
+EOF
+}
+
+ping() {
+  has_cmd curl || die "curl not found"
+  [[ -n "${HB_URL:-}" ]] || die "Missing HB_URL (set HB_URL or AOS_GAS_WEBHOOK_URL)"
+  msg "ping -> GAS"
+  curl -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
+    --connect-timeout 5 --max-time 10 -o /dev/null -X POST \
+    -H 'Content-Type: application/json' \
+    -d "{\"kind\":\"heartbeat\",\"host\":\"${HB_HOST}\",\"manual\":true}" \
+    "${HB_URL}"
+  msg "OK"
+}
+
+systemstatus() {
+  if has_cmd systemstatusctl; then
+    exec systemstatusctl trigger --cmd /systemstatus
+  fi
+  die "systemstatusctl not found (expected in aos-hub/scripts/systemstatusctl)"
+}
+
+cmd="ping"
+env_override=""
+
+while [[ $# -gt 0 ]]; do
+  case "${1:-}" in
+    ping|"")
+      cmd="ping"
+      shift || true
+      ;;
+    systemstatus)
+      cmd="systemstatus"
+      shift || true
+      ;;
+    --env)
+      env_override="${2:-}"
+      [[ -n "$env_override" ]] || die "--env requires a file path"
+      shift 2
+      ;;
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "unknown arg: $1 (try: gasctl help)"
+      ;;
+  esac
+done
+
+if ! aos_env_load "$env_override" "$ROOT_DIR"; then
+  die "${AOS_ENV_LOAD_ERROR:-failed to load env}"
+fi
+
+HB_HOST="${HB_HOST:-$HB_HOST_DEFAULT}"
+HB_URL="${HB_URL:-${AOS_GAS_WEBHOOK_URL:-}}"
+
+case "$cmd" in
+  ping) ping ;;
+  systemstatus) systemstatus ;;
+  *) die "unknown command: $cmd (try: gasctl help)" ;;
+esac

@@ -24,9 +24,54 @@ vaultctl_cmd() {
     return 1
 }
 
+resolve_vault_root() {
+    local candidates=()
+    [ -n "${AOS_VAULT_ROOT:-}" ] && candidates+=("$AOS_VAULT_ROOT")
+    [ -n "${AOS_RCLONE_LOCAL:-}" ] && candidates+=("$AOS_RCLONE_LOCAL")
+    [ -n "${AOS_VAULT_DIR:-}" ] && candidates+=("$AOS_VAULT_DIR")
+    candidates+=("$HOME/Dokumente/AlphaOs-Vault" "$HOME/AlphaOS-Vault" "$HOME/AlphaOs-Vault")
+
+    local c
+    for c in "${candidates[@]}"; do
+        [ -n "$c" ] || continue
+        if [ -d "$c" ] || [ -L "$c" ]; then
+            if command -v realpath >/dev/null 2>&1; then
+                realpath -m -- "$c"
+                return 0
+            fi
+            if command -v readlink >/dev/null 2>&1; then
+                readlink -f -- "$c" 2>/dev/null || echo "$c"
+                return 0
+            fi
+            echo "$c"
+            return 0
+        fi
+    done
+    return 1
+}
+
+vaultctl_run() {
+    local vaultctl
+    vaultctl="$(vaultctl_cmd)" || return 1
+    local root
+    root="$(resolve_vault_root || true)"
+    if [ -n "$root" ]; then
+        AOS_VAULT_ROOT="$root" "$vaultctl" "$@"
+        return $?
+    fi
+    "$vaultctl" "$@"
+}
+
+
 aos_sync_cmd() {
     if command -v aos-sync >/dev/null 2>&1; then
         echo "aos-sync"
+        return 0
+    fi
+    local repo_root
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    if [ -x "$repo_root/scripts/aos-sync" ]; then
+        echo "$repo_root/scripts/aos-sync"
         return 0
     fi
     if [ -x "$HOME/.dotfiles/bin/utils/aos-sync" ]; then

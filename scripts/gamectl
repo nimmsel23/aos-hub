@@ -14,15 +14,17 @@ JOURNALCTL_BIN="${JOURNALCTL_BIN:-journalctl}"
 SYSTEMCTL_USER=("$SYSTEMCTL_BIN" --user)
 JOURNALCTL_USER=("$JOURNALCTL_BIN" --user)
 
+SERVICE_GAME="${AOS_GAME_MOUNT_SERVICE:-rclone-alpha-game.service}"
+
 UNITS=(
-  warstack-bot.service
+  "${SERVICE_GAME}"
 )
 
 usage() {
   cat <<'EOF'
-doorctl
+gamectl
 
-Manage Door/Warstack-related systemd user units.
+Manage Game-related systemd user units.
 
 Commands
   list                       List managed units
@@ -36,6 +38,7 @@ Commands
 
 Notes
   - Uses systemd user units (systemctl --user).
+  - Override unit via AOS_GAME_MOUNT_SERVICE.
 EOF
 }
 
@@ -97,7 +100,7 @@ case "${1:-}" in
   disable) cmd_disable ;;
   logs) shift; cmd_logs "$@" ;;
   *)
-    echo "doorctl: unknown command: ${1}" >&2
+    echo "gamectl: unknown command: ${1}" >&2
     usage
     exit 2
     ;;

@@ -3,7 +3,13 @@ set -euo pipefail
 
 APP="hubctl"
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load global env (optional) so subcommands inherit exported AOS_* vars.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
 
 have() { command -v "$1" >/dev/null 2>&1; }
 die() { echo "[$APP] $*" >&2; exit 1; }
@@ -46,11 +52,23 @@ usage() {
 $APP — unified CLI for aos-hub
 
 Usage:
+  $APP list
   $APP doctor
   $APP bridge <bridgectl-args...>
   $APP router <routerctl-args...>
+  $APP heartbeat <cmd>   (standalone heartbeat manager)
   $APP index  <indexctl-args...>
-  $APP sync   <syncvaultctl-args...>
+  $APP sync   <syncctl-args...>
+  $APP git    <gitctl-args...>
+  $APP backup <backupctl-args...>
+  $APP mount  <mountctl-args...>
+  $APP hook   <hookctl-args...>
+  $APP core4  <core4ctl-args...>
+  $APP tent   <tentctl-args...>
+  $APP firectl <firectl-args...>
+  $APP door   <doorctl-args...>
+  $APP game   <gamectl-args...>
+  $APP voice  <voicectl-args...>
   $APP fire   <command>
 
 Install into PATH (optional):
@@ -58,15 +76,52 @@ Install into PATH (optional):
   $APP uninstall-cli
 
 Examples:
+  $APP list
   $APP doctor
   $APP bridge health
   $APP router doctor
+  $APP heartbeat status
   $APP index doctor
   $APP sync status
+  $APP git status
+  $APP backup status
+  $APP mount status
+  $APP hook status
+  $APP core4 status
+  $APP tent status
+  $APP firectl status
+  $APP door status
+  $APP game status
+  $APP voice status
   $APP fire status
   $APP fire enable
   $APP fire run
+
+Env:
+  AOS_ENV_FILE=$ROOT_DIR/.env/aos.env
 EOF
+}
+
+list_scripts() {
+  echo "[$APP] Available scripts:"
+  local dir="$ROOT_DIR/scripts"
+  if [[ -d "$dir" ]]; then
+    while IFS= read -r -d '' p; do
+      local rel="${p#$ROOT_DIR/}"
+      [[ "$rel" == "scripts/hubctl" ]] && continue
+      echo "  - $rel"
+    done < <(find "$dir" -maxdepth 1 -type f -perm -u+x -print0 2>/dev/null | sort -z)
+  else
+    echo "  (missing: $dir)"
+  fi
+
+  echo ""
+  echo "[$APP] Other tools:"
+  for p in "$ROOT_DIR/router/routerctl" "$ROOT_DIR/bridge/bridgectl" "$ROOT_DIR/aosctl"; do
+    if [[ -x "$p" ]]; then
+      echo "  - ${p#$ROOT_DIR/}"
+    fi
+  done
 }
 
 cmd="${1:-}"
@@ -74,14 +129,26 @@ shift || true
 
 case "$cmd" in
   -h|--help|help|"") usage ;;
+  list) list_scripts ;;
   install-cli) install_cli ;;
   uninstall-cli) uninstall_cli ;;
 
   doctor) repo_exec "scripts/aos-doctor" "$@" ;;
   bridge) repo_exec "bridge/bridgectl" "$@" ;;
   router) repo_exec "router/routerctl" "$@" ;;
+  heartbeat) repo_exec "scripts/heartbeat" "${1:-status}" ;;
   index) repo_exec "scripts/indexctl" "$@" ;;
-  sync) repo_exec "scripts/syncvaultctl" "$@" ;;
+  sync) repo_exec "scripts/syncctl" "$@" ;;
+  git) repo_exec "scripts/gitctl" "$@" ;;
+  backup) repo_exec "scripts/backupctl" "$@" ;;
+  mount) repo_exec "scripts/mountctl" "$@" ;;
+  hook|hooks) repo_exec "scripts/hookctl" "$@" ;;
+  core4) repo_exec "python-core4/core4ctl" "$@" ;;
+  tent|tentctl) repo_exec "gas-tent-dev/tentctl" "$@" ;;
+  firectl) repo_exec "scripts/firectl" "$@" ;;
+  door|doorctl) repo_exec "scripts/doorctl" "$@" ;;
+  game|gamectl) repo_exec "scripts/gamectl" "$@" ;;
+  voice|voicectl) repo_exec "scripts/voicectl" "$@" ;;
   fire)
     sub="${1:-}"; shift || true
     case "$sub" in

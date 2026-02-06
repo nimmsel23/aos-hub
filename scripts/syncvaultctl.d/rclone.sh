@@ -21,14 +21,14 @@ menu_vaultctl() {
             | gum choose --header "Vault sync (vaultctl)")"
 
         case "$choice" in
-            "Status") run_allow_fail "$vaultctl" status ;;
-            "Push now (copy)") run_allow_fail "$vaultctl" sync ;;
-            "Push dry-run (copy)") run_allow_fail "$vaultctl" sync --dry-run ;;
-            "Pull now (copy)") run_allow_fail "$vaultctl" pull ;;
-            "Pull dry-run (copy)") run_allow_fail "$vaultctl" pull --dry-run ;;
-            "Timers") run_allow_fail "$vaultctl" timers ;;
-            "Logs") run_allow_fail "$vaultctl" logs ;;
-            "Watch") run_allow_fail "$vaultctl" watch ;;
+            "Status") run_allow_fail vaultctl_run status ;;
+            "Push now (copy)") run_allow_fail vaultctl_run sync ;;
+            "Push dry-run (copy)") run_allow_fail vaultctl_run sync --dry-run ;;
+            "Pull now (copy)") run_allow_fail vaultctl_run pull ;;
+            "Pull dry-run (copy)") run_allow_fail vaultctl_run pull --dry-run ;;
+            "Timers") run_allow_fail vaultctl_run timers ;;
+            "Logs") run_allow_fail vaultctl_run logs ;;
+            "Watch") run_allow_fail vaultctl_run watch ;;
             "Back") break ;;
         esac
         pause_screen
@@ -58,14 +58,12 @@ show_rclone_status() {
     fi
 
     # AlphaOS-Vault (push/pull via vaultctl)
-    if command -v vaultctl >/dev/null 2>&1 || [ -x "$HOME/.dotfiles/bin/vaultctl" ]; then
+    local vaultctl
+    vaultctl="$(vaultctl_cmd)" || true
+    if [ -n "${vaultctl:-}" ]; then
         echo ""
         print_msg "$BOLD$BLUE" "📚 AlphaOS-Vault (push/pull copy)"
-        local vaultctl
-        vaultctl="$(vaultctl_cmd)" || true
-        if [ -n "${vaultctl:-}" ]; then
-            run_allow_fail "$vaultctl" status
-        fi
+        run_allow_fail vaultctl_run status
     fi
 
     # Vitaltrainer (copy push/pull)

@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
 BASE_ROOT="${AOS_ROOT:-$HOME/aos-hub}"
 INDEX_ROOT="${AOS_INDEX_ROOT:-$BASE_ROOT/index-node}"
-SERVICE_NAME="${ALPHAOS_INDEX_SERVICE:-alphaos-index.service}"
-NODE_HOST="127.0.0.1"
-NODE_PORT="${ALPHAOS_INDEX_PORT:-8799}"
+SERVICE_NAME="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-alphaos-index.service}}"
+NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
+NODE_PORT="${AOS_INDEX_PORT:-${ALPHAOS_INDEX_PORT:-8799}}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$BASE_ROOT/routerctl}"
 BRIDGECTL_BIN="${BRIDGECTL_BIN:-$BASE_ROOT/bridgectl}"
 INDEXCTL_BIN="${INDEXCTL_BIN:-$BASE_ROOT/scripts/indexctl}"
