@@ -1224,14 +1224,75 @@ def task_done(uuid: str) -> None:
         raise RuntimeError(f"task done failed: {res.stderr.strip() or res.stdout.strip()}")
 
 
-def try_ticktick_push() -> None:
-    ticktick = "/home/alpha/aos-hub/python-ticktick/ticktick_sync.py"
-    if not os.path.exists(ticktick):
-        return
-    token_available = bool(os.getenv("TICKTICK_TOKEN") or os.path.exists(os.path.expanduser("~/.ticktick_token")))
-    if not token_available:
-        return
-    subprocess.run([ticktick, "--push"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _iso_week_days(day: date) -> list[date]:
+    """Mon–Sun for the ISO week that contains *day*."""
+    monday = day - timedelta(days=day.isoweekday() - 1)
+    return [monday + timedelta(days=i) for i in range(7)]
+
+
+def _habit_due_dates(habit: str, days: list[date]) -> set[str]:
+    """Return date-strings within *days* for which +{habit} already has a task (pending or completed)."""
+    target_sample = Target(habit=habit, domain=HABIT_TO_DOMAIN[habit], day=days[0])
+    habit_tag = target_sample.tw_habit_primary_tag
+    day_set = {d.isoformat() for d in days}
+    found: set[str] = set()
+    for status in ("pending", "completed"):
+        res = run_task([f"+{habit_tag}", f"status:{status}", "export"])
+        if res.returncode != 0:
+            continue
+        try:
+            tasks = json.loads((res.stdout or "").strip() or "[]")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for t in tasks:
+            due = _parse_due_to_date(t.get("due"))
+            if due and due.isoformat() in day_set:
+                found.add(due.isoformat())
+    return found
+
+
+def seed_week(day: date, *, dry_run: bool = False, force: bool = False) -> Dict[str, Any]:
+    """Seed pending Core4 TW tasks for every habit in the ISO week.
+
+    Idempotent: skips any habit+day that already has a pending or completed
+    task with the matching habit tag — regardless of description or other tags.
+    Pass *force* to skip the existence check entirely.
+    """
+    days = _iso_week_days(day)
+    wk = week_key(day)
+    created = 0
+    skipped = 0
+    errors: list[str] = []
+
+    if not dry_run:
+        try:
+            ensure_taskwarrior()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "week": wk}
+
+    # Pre-fetch: which habit+day combos already have a task?
+    existing: Dict[str, set[str]] = {}
+    if not dry_run and not force:
+        for habit in HABIT_ORDER:
+            existing[habit] = _habit_due_dates(habit, days)
+
+    for d in days:
+        for habit in HABIT_ORDER:
+            target = Target(habit=habit, domain=HABIT_TO_DOMAIN[habit], day=d)
+            if not dry_run and not force and d.isoformat() in existing.get(habit, set()):
+                skipped += 1
+                continue
+            if dry_run:
+                print(f"  {target.date_key}  {target.domain:8s}  {_display_habit(target.habit)}")
+                created += 1
+                continue
+            try:
+                task_add(target)
+                created += 1
+            except Exception as exc:
+                errors.append(f"{target.date_key}:{target.habit} {exc}")
+
+    return {"ok": True, "week": wk, "created": created, "skipped": skipped, "errors": errors}
 
 
 def run_core4ctl(*args: str) -> bool:
@@ -1488,7 +1549,6 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
     if tw_has_completed(target):
         try:
             bridge_core4_log(target, source="tracker_replay")
-            try_ticktick_push()
             if is_already_logged(target):
                 print(_green(f"✓ core4 {target.habit} ({target.date_key}) already done (replayed json)"))
             else:
@@ -1505,7 +1565,6 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
         pending_uuid = find_pending_uuid(target)
         if pending_uuid:
             task_done(pending_uuid)
-            try_ticktick_push()
             if is_already_logged(target):
                 print(_green(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json ok)"))
             else:
@@ -1517,7 +1576,6 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
         completed_uuid = find_completed_uuid(target)
         if completed_uuid:
             bridge_core4_log(target, source="tracker_replay_uuid")
-            try_ticktick_push()
             print(_green(f"✓ core4 {target.habit} ({target.date_key}) already done (uuid)"))
             maybe_open_journal()
             return finish(0)
@@ -1527,7 +1585,6 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
         pending_uuid = find_pending_uuid(target)
         if pending_uuid:
             task_done(pending_uuid)
-        try_ticktick_push()
     except Exception as exc:
         print(f"core4: {exc}", file=sys.stderr)
         return finish(1)
@@ -1623,6 +1680,11 @@ def main(argv: list[str]) -> int:
             "  core4 --pull\n"
             "  core4 --push\n"
             "  core4 --sync\n"
+            "\n"
+            "Seed pending tasks for the week:\n"
+            "  core4 seed-week            # 8 habits x 7 days (idempotent)\n"
+            "  core4 seed-week --dry-run  # preview what would be created\n"
+            "  core4 seed-week --date 2026-02-03\n"
         )
         return finish(0)
 
@@ -1717,6 +1779,26 @@ def main(argv: list[str]) -> int:
         if not run_core4ctl("sync-core4"):
             return 1
         return 0
+
+    if argv and argv[0] in ("seed-week", "seed_week", "seed"):
+        dry_run = "--dry-run" in argv
+        force = "--force" in argv or "-f" in argv
+        day = date.today()
+        for tok in argv[1:]:
+            if tok.startswith("--date="):
+                try:
+                    day = datetime.strptime(tok.split("=", 1)[1], "%Y-%m-%d").date()
+                except Exception:
+                    pass
+        result = seed_week(day, dry_run=dry_run, force=force)
+        if not result.get("ok"):
+            print(f"core4 seed-week failed: {result.get('error')}", file=sys.stderr)
+            return finish(1)
+        status = "dry-run" if dry_run else "done"
+        print(f"Core4 seed-week {result['week']} [{status}]: created={result['created']} skipped={result['skipped']}")
+        for err in result.get("errors", []):
+            print(f"  ! {err}", file=sys.stderr)
+        return finish(0)
 
     if argv and argv[0] in ("finalize-week", "finalize", "seal-week", "seal"):
         week = None
