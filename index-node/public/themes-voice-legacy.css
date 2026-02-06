@@ -1,0 +1,136 @@
+/* Voice Centre Legacy Themes - Mit farbigen Texten */
+
+body.theme-obsidian {
+  --bg: #07080c;
+  --card: #0e1020;
+  --border: rgba(139, 92, 246, 0.25);
+  --text: rgba(200, 180, 255, 0.92);
+  --muted: rgba(180, 160, 240, 0.70);
+  --accent: #8b5cf6;
+  --accent-2: #22d3ee;
+  --nav: rgba(0, 0, 0, 0.78);
+  --glow: rgba(139, 92, 246, 0.24);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-aurora {
+  --bg: #050b1a;
+  --card: #0b1533;
+  --border: rgba(45, 212, 191, 0.25);
+  --text: rgba(120, 240, 230, 0.92);
+  --muted: rgba(100, 220, 210, 0.70);
+  --accent: #2dd4bf;
+  --accent-2: #60a5fa;
+  --nav: rgba(2, 6, 23, 0.75);
+  --glow: rgba(45, 212, 191, 0.18);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-dawn {
+  --bg: #0b0a08;
+  --card: #14110d;
+  --border: rgba(245, 158, 11, 0.25);
+  --text: rgba(255, 200, 120, 0.92);
+  --muted: rgba(240, 180, 100, 0.70);
+  --accent: #f59e0b;
+  --accent-2: #fb7185;
+  --nav: rgba(0, 0, 0, 0.72);
+  --glow: rgba(245, 158, 11, 0.18);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-monk {
+  --bg: #f7f2e8;
+  --card: #fffaf1;
+  --border: rgba(20, 15, 10, 0.18);
+  --text: rgba(20, 15, 10, 0.92);
+  --muted: rgba(20, 15, 10, 0.62);
+  --accent: #0ea5e9;
+  --accent-2: #16a34a;
+  --nav: rgba(255, 250, 241, 0.85);
+  --glow: rgba(14, 165, 233, 0.18);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-copper {
+  --bg: #0a0c0f;
+  --card: #10151c;
+  --border: rgba(192, 132, 87, 0.25);
+  --text: rgba(220, 180, 140, 0.92);
+  --muted: rgba(200, 160, 120, 0.70);
+  --accent: #c08457;
+  --accent-2: #a3a3a3;
+  --nav: rgba(0, 0, 0, 0.75);
+  --glow: rgba(192, 132, 87, 0.16);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-forestnight {
+  --bg: #050d0a;
+  --card: #0a1612;
+  --border: rgba(52, 211, 153, 0.25);
+  --text: rgba(150, 255, 210, 0.92);
+  --muted: rgba(130, 240, 190, 0.70);
+  --accent: #34d399;
+  --accent-2: #93c5fd;
+  --nav: rgba(0, 0, 0, 0.75);
+  --glow: rgba(52, 211, 153, 0.16);
+  --accent-light: var(--accent-2);
+  --gold: var(--accent-2);
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-inkgold {
+  --bg: #07070a;
+  --card: #0f0f15;
+  --border: rgba(212, 175, 55, 0.25);
+  --text: rgba(240, 220, 140, 0.92);
+  --muted: rgba(220, 200, 120, 0.70);
+  --accent: #d4af37;
+  --accent-2: #a78bfa;
+  --nav: rgba(0, 0, 0, 0.78);
+  --glow: rgba(212, 175, 55, 0.16);
+  --accent-light: var(--accent-2);
+  --gold: #d4af37;
+  --phaseFocusGlow: var(--glow);
+}
+
+body.theme-bloodred {
+  --bg: #0a0a0a;
+  --card: #111111;
+  --border: #2a2a2a;
+  --text: rgba(255, 100, 120, 0.92);
+  --muted: rgba(240, 80, 100, 0.70);
+  --accent: #c41e3a;
+  --accent-2: #ff4444;
+  --accent-light: var(--accent-2);
+  --nav: #000;
+  --glow: rgba(196, 30, 58, 0.6);
+  --gold: #b8860b;
+  --grain: url('data:image/svg+xml,%3Csvg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="256" height="256" filter="url(%23noise)" opacity="0.03"/%3E%3C/svg%3E');
+  --phaseFocusGlow: rgba(196, 30, 58, 0.55);
+}
+
+body.theme-matrix {
+  --bg: #000;
+  --card: rgba(0, 0, 0, 0.7);
+  --border: #00ff00;
+  --text: #00ff00;
+  --muted: rgba(0, 255, 0, 0.6);
+  --accent: #00ff00;
+  --accent-2: #00ffcc;
+  --nav: #000;
+  --glow: rgba(0, 255, 0, 0.25);
+  --grain: none;
+  --phaseFocusGlow: rgba(0, 255, 0, 0.35);
+}

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="matrix">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fruit Fact Maps</title>
+  <link rel="stylesheet" href="/themes.css">
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
     :root {
@@ -482,6 +483,34 @@
       setTimeout(() => showOverlay(false), 1200);
       boot();
     });
+
+    // Theme Switcher
+    const themeToggle = document.createElement('div');
+    themeToggle.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000;';
+    themeToggle.innerHTML = `
+      <select id="theme-select" style="background: var(--surface); color: var(--text); border: 1px solid var(--surface-elevated); border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer;">
+        <option value="matrix">⚡ Matrix</option>
+        <option value="neutral">🌙 Neutral</option>
+        <option value="cyan">💎 Cyan</option>
+      </select>
+    `;
+    document.body.appendChild(themeToggle);
+
+    const themeSelect = document.getElementById('theme-select');
+
+    function applyTheme(themeKey = 'matrix') {
+      document.documentElement.setAttribute('data-theme', themeKey);
+      if (themeSelect) themeSelect.value = themeKey;
+      try { localStorage.setItem('facts_theme', themeKey); } catch (_) {}
+    }
+
+    (function initTheme() {
+      let stored = 'matrix';
+      try { stored = localStorage.getItem('facts_theme') || 'matrix'; } catch (_) {}
+      applyTheme(stored);
+    })();
+
+    themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
   </script>
 </body>
 </html>

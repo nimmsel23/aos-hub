@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="matrix">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>αOS Game Centre</title>
+  <link rel="stylesheet" href="/themes.css">
   <style>
-    :root {
+    /* Default fallback (only when no theme is set) */
+    html:not([data-theme]) body:not([class*="theme-"]) {
       --bg: #0d1117;
       --card: #161b22;
       --border: #30363d;
@@ -15,6 +17,7 @@
       --muted: #9ca3af;
     }
 
+    /* Legacy theme (if someone uses body.theme-matrix class) */
     body.theme-matrix {
       --bg: #000000;
       --card: rgba(0, 0, 0, 0.7);
@@ -357,7 +360,17 @@
 </main>
 
 <footer>
-  αOS • Game Centre • Built for Your Odyssey
+  <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+    <span>αOS • Game Centre • Built for Your Odyssey</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <label for="theme-select" style="font-size: 14px;">Style:</label>
+      <select id="theme-select" aria-label="Theme Auswahl" style="background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 14px;">
+        <option value="matrix">⚡ Matrix</option>
+        <option value="neutral">🌙 Neutral</option>
+        <option value="cyan">💎 Cyan</option>
+      </select>
+    </div>
+  </div>
 </footer>
 
 <div id="loading-overlay">
@@ -454,6 +467,32 @@ const CENTRES = {
   }
 
   loadGameChapters();
+
+  // Theme Switcher
+  const themeSelect = document.getElementById('theme-select');
+
+  function applyTheme(themeKey = 'matrix') {
+    const html = document.documentElement;
+    const unifiedThemes = ['matrix', 'neutral', 'cyan'];
+
+    if (unifiedThemes.includes(themeKey)) {
+      html.setAttribute('data-theme', themeKey);
+      document.body.className = ''; // Clear legacy classes
+    } else {
+      html.setAttribute('data-theme', 'matrix'); // Fallback
+    }
+
+    if (themeSelect) themeSelect.value = themeKey;
+    try { localStorage.setItem('game_theme', themeKey); } catch (_) {}
+  }
+
+  (function initTheme() {
+    let stored = 'matrix';
+    try { stored = localStorage.getItem('game_theme') || 'matrix'; } catch (_) {}
+    applyTheme(stored);
+  })();
+
+  themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
 </script>
 </body>
 </html>

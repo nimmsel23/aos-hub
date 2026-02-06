@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="matrix">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Door Centre</title>
+  <link rel="stylesheet" href="/themes.css">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #f0f6fc;
+      --muted: #9ca3af;
+      --accent: #58a6ff;
+      --accent-2: #a5a3ff;
+      --nav: #000000;
+    }
+
+    body.theme-ocean {
+      --bg: #0f172a;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22d3ee;
+      --accent-2: #a855f7;
+      --nav: #0b1222;
+    }
+
+    body.theme-blackred {
+      --bg: #0a0a0a;
+      --card: #111111;
+      --border: #222222;
+      --text: #f0f0f0;
+      --muted: #aaaaaa;
+      --accent: #ff4d4d;
+      --accent-2: #ff9999;
+      --nav: #000000;
+    }
+
+    body.theme-matrix {
+      --bg: #000000;
+      --card: rgba(0, 0, 0, 0.7);
+      --border: #00ff00;
+      --text: #00ff00;
+      --muted: rgba(0, 255, 0, 0.6);
+      --accent: #00ff00;
+      --accent-2: #00ffcc;
+      --nav: #000000;
+    }
+
+    body.theme-github {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #f0f6fc;
+      --muted: #9ca3af;
+      --accent: #58a6ff;
+      --accent-2: #a5a3ff;
+      --nav: #000000;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    #matrix-rain {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+      display: none;
+    }
+
+    body.theme-matrix #matrix-rain {
+      display: block;
+    }
+
+    header {
+      padding: 42px 20px 28px;
+      text-align: center;
+      border-bottom: 4px solid var(--accent);
+      background: linear-gradient(135deg, var(--nav), var(--bg));
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(34, 211, 238, 0.1);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 10px 0 6px;
+      font-size: 46px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: var(--accent);
+    }
+
+    .subtitle { color: var(--muted); font-size: 18px; margin: 0; }
+
+    nav.top-nav {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+      background: var(--nav);
+      padding: 8px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      grid-column: 1 / -1;
+    }
+
+    nav.top-nav a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+
+    nav.top-nav a.active, nav.top-nav a:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2);
+    }
+
+    .theme-switcher {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .theme-switcher select {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-weight: 600;
+    }
+
+
+    main {
+      max-width: 1200px;
+      margin: 30px auto 70px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 220px 1fr 220px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .side-column {
+      display: grid;
+      gap: 16px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .side-column.left { grid-column: 1; }
+    .side-column.right { grid-column: 3; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      transition: all 0.2s ease;
+    }
+
+    .card.card-link { cursor: pointer; }
+    .card.card-link:hover, .card.card-link:focus-visible { border-color: var(--accent); transform: translateY(-4px); outline: none; }
+    .card.card-link.active { border-color: var(--accent); box-shadow: 0 12px 40px rgba(34, 211, 238, 0.25); }
+
+    .card h2 { margin: 8px 0 6px; color: var(--accent); font-size: 22px; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.6; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      grid-column: 2;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 14px;
+      margin: 10px 0;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: #010409;
+      color: var(--text);
+      font-size: 16px;
+      transition: border 0.3s, box-shadow 0.3s;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.2);
+    }
+
+    button {
+      background: linear-gradient(135deg, #238636, #3fb950);
+      color: #fff;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      margin: 10px 0;
+      display: inline-block;
+      box-shadow: 0 8px 20px rgba(59, 149, 80, 0.4);
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(59, 149, 80, 0.6);
+    }
+
+    pre {
+      background: #000;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--accent);
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+
+    .panel {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+
+    .panel.active { display: block; }
+    .panel h3 { margin-top: 0; color: var(--accent); }
+    .panel p { color: var(--muted); }
+    .panel .helper-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--card) 85%, transparent);
+    }
+    .panel .helper-link:hover { border-color: var(--accent); }
+
+    .chapter-block {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .toc { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
+    .toc a { color: #cbd5e1; text-decoration: none; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); transition: all 0.2s ease; }
+    .toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+    footer { text-align: center; padding: 40px 20px; color: #6b7280; font-size: 14px; border-top: 1px solid var(--border); }
+
+    @media (max-width: 720px) {
+      h1 { font-size: 34px; }
+      nav.top-nav a { width: 100%; text-align: center; }
+      main { grid-template-columns: 1fr; }
+      .side-column { position: static; }
+    }
+  </style>
+</head>
+<body class="theme-github">
+  <canvas id="matrix-rain" aria-hidden="true"></canvas>
+
+<main>
+  <nav class="top-nav" aria-label="Hauptnavigation">
+    <a href="#" data-tab="home" class="active">Home</a>
+    <a href="#" data-tab="hotlist">Potential</a>
+    <a href="#" data-tab="doorwar">Plan</a>
+    <a href="#" data-tab="warstack">War Stack</a>
+    <a href="#" data-tab="hitlist">Production</a>
+    <a href="#" data-tab="profit">Profit</a>
+  </nav>
+
+  <aside class="side-column left">
+    <div class="card card-link active" data-tab="home" tabindex="0">
+      <div class="pill">Overview</div>
+      <h2>Home</h2>
+      <p>Bot, Web App und Drive arbeiten zusammen – starte hier.</p>
+    </div>
+    <div class="card card-link" data-tab="hotlist" tabindex="0">
+      <div class="pill">Potential</div>
+      <h2>Hot List</h2>
+      <p>Ideen sammeln und als Markdown in den Centre-Folder speichern.</p>
+    </div>
+    <div class="card card-link" data-tab="doorwar" tabindex="0">
+      <div class="pill">Plan</div>
+      <h2>Door War</h2>
+      <p>Quadrant-2 Entscheidung treffen und deine Domino Door wählen.</p>
+    </div>
+  </aside>
+
+  <section class="workspace">
+    <article class="panel active" id="tab-home">
+      <div class="pill">Overview</div>
+      <h3>Bot + Door Centre – Quickstart</h3>
+      <p>Lokaler Door Centre. War Stack erzeugen, dann in /Door/ exportieren.</p>
+      <ul>
+        <li><strong>Commands:</strong> /war, /status, /recent, /week, /help</li>
+        <li><strong>Storage:</strong> ~/AlphaOS-Vault/Door/1-4 + War-Stacks</li>
+        <li><strong>Exports:</strong> Buttons in jedem Panel</li>
+      </ul>
+      <h3>Chapters 25–31 – The Door</h3>
+      <div class="toc" id="doorTocHome"></div>
+      <article id="doorChaptersHome"></article>
+
+    </article>
+
+    <article class="panel" id="tab-hotlist">
+      <h3>Hot List</h3>
+      <p>Eine Idee pro Zeile erfassen. Beim Speichern landet Markdown in /Door/1-Potential.</p>
+      <label for="hotlistinput">Hot List Input</label>
+      <textarea id="hotlistinput" placeholder="Eine Idee pro Zeile…"></textarea>
+      <button type="button" onclick="saveHotList()">Hot List generieren</button>
+      <pre id="hotlistoutput"></pre>
+      <button type="button" onclick="exportDoorMarkdown('hotlist', 'Hot List', 'hotlistoutput', false)">Nach /Door/ speichern</button>
+      <button type="button" onclick="exportDoorMarkdown('hotlist', 'Hot List', 'hotlistoutput', true)">→ TickTick</button>
+      <div class="chapter-block">
+        <h3>Chapter 26 – Possibilities</h3>
+        <article id="chapterHotlist"></article>
+      </div>
+    </article>
+
+    <article class="panel" id="tab-doorwar">
+      <h3>Door War</h3>
+      <p>Quadrant-2 Entscheidung treffen und Domino Door wählen.</p>
+      <label for="doorwarinput">Door War Kandidaten</label>
+      <textarea id="doorwarinput" placeholder="Aus Hot List übernehmen oder manuell ergänzen…"></textarea>
+      <label for="doorwarchoice">Gewählte Domino Door</label>
+      <input id="doorwarchoice" placeholder="Welche Door wird es diese Woche?">
+      <button type="button" onclick="selectDoor()">Door War generieren</button>
+      <pre id="doorwaroutput"></pre>
+      <button type="button" onclick="exportDoorMarkdown('doorwar', 'Door War', 'doorwaroutput', false)">Nach /Door/ speichern</button>
+      <button type="button" onclick="exportDoorMarkdown('doorwar', 'Door War', 'doorwaroutput', true)">→ TickTick</button>
+      <div class="chapter-block">
+        <h3>Chapter 27 – Door War</h3>
+        <article id="chapterDoorWar"></article>
+      </div>
+    </article>
+
+    <article class="panel" id="tab-warstack">
+      <h3>War Stack</h3>
+      <a class="helper-link" href="https://t.me/lenovo_sync_bot" target="_blank" rel="noopener noreferrer">War Stack Bot</a>
+      <p>Definiere Kontext + 4 Hits. Fakt, Hindernis, Strike.</p>
+      <form id="warform">
+        <label for="wtitle">Title</label>
+        <input id="wtitle" placeholder="Titel des War Stack">
+
+        <label for="wdomain">Domain</label>
+        <select id="wdomain">
+          <option value="">Domain wählen</option>
+          <option>Body</option>
+          <option>Being</option>
+          <option>Balance</option>
+          <option>Business</option>
+        </select>
+
+        <label for="wdoor">Domino Door</label>
+        <textarea id="wdoor" placeholder="Welche eine Door wird alles ins Rollen bringen?"></textarea>
+
+        <label for="wtrigger">Trigger</label>
+        <textarea id="wtrigger" placeholder="Welche Person / welches Event hat diese Door ausgelöst?"></textarea>
+
+        <label for="wnarr">Narrative</label>
+        <textarea id="wnarr" placeholder="Welche Story erzählst du dir über diese Door?"></textarea>
+
+        <label for="wval">Validation</label>
+        <textarea id="wval" placeholder="Warum ist es notwendig, diese Door zu öffnen?"></textarea>
+
+        <label for="wimpact">Impact</label>
+        <textarea id="wimpact" placeholder="Wie verändert sich dein Leben, wenn die Door aufgeht?"></textarea>
+
+        <label for="wcons">Consequences</label>
+        <textarea id="wcons" placeholder="Was passiert, wenn die Door geschlossen bleibt?"></textarea>
+
+        <label for="wins">Insights</label>
+        <textarea id="wins" placeholder="Welche Erkenntnisse sind dir klar geworden?"></textarea>
+
+        <label for="wless">Lessons Learned</label>
+        <textarea id="wless" placeholder="Was ist die wichtigste Lesson?"></textarea>
+
+        <button type="submit">War Stack generieren</button>
+      </form>
+      <pre id="waroutput"></pre>
+      <button type="button" onclick="exportDoorMarkdown('warstack', document.getElementById('wtitle').value || 'War Stack', 'waroutput', false)">Nach /Door/ speichern</button>
+      <button type="button" onclick="exportDoorMarkdown('warstack', document.getElementById('wtitle').value || 'War Stack', 'waroutput', true)">→ TickTick</button>
+      <div class="chapter-block">
+        <h3>Chapter 28 – War Stack</h3>
+        <article id="chapterWarStack"></article>
+      </div>
+    </article>
+
+    <article class="panel" id="tab-hitlist">
+      <h3>Hit List</h3>
+      <p>Big Rocks aus War Stack, Little Rocks & Sand ergänzen.</p>
+      <label for="hitlistextras">Little Rocks &amp; Sand (LR:/S:)</label>
+      <textarea id="hitlistextras" placeholder="LR: Trainingsplan Feinschliff\nS: Random Pflichtkram"></textarea>
+      <button type="button" onclick="generateHitList()">Hit List generieren</button>
+      <pre id="hitlistoutput"></pre>
+      <button type="button" onclick="exportDoorMarkdown('hitlist', 'Hit List', 'hitlistoutput', false)">Nach /Door/ speichern</button>
+      <button type="button" onclick="exportDoorMarkdown('hitlist', 'Hit List', 'hitlistoutput', true)">→ TickTick</button>
+      <div class="chapter-block">
+        <h3>Chapter 29 – Production</h3>
+        <article id="chapterProduction"></article>
+      </div>
+    </article>
+
+    <article class="panel" id="tab-profit">
+      <h3>Profit</h3>
+      <p>Weekly Review sichern. Wins feiern, Rolls und Kills definieren.</p>
+      <label for="profitinput">Weekly Review</label>
+      <textarea id="profitinput" placeholder="Was hast du diese Woche erreicht?"></textarea>
+      <button type="button" onclick="generateProfit()">Profit Review generieren</button>
+      <pre id="profitoutput"></pre>
+      <button type="button" onclick="exportDoorMarkdown('profit', 'Profit Review', 'profitoutput', false)">Nach /Door/ speichern</button>
+      <button type="button" onclick="exportDoorMarkdown('profit', 'Profit Review', 'profitoutput', true)">→ TickTick</button>
+      <div class="chapter-block">
+        <h3>Chapter 30 – Profit</h3>
+        <article id="chapterProfit"></article>
+      </div>
+    </article>
+
+  </section>
+
+  <aside class="side-column right">
+    <div class="card card-link" data-tab="warstack" tabindex="0">
+      <div class="pill">Plan</div>
+      <h2>/war Stack</h2>
+      <p>War Stack mit 4 Hits erzeugen und exportieren.</p>
+    </div>
+    <div class="card card-link" data-tab="hitlist" tabindex="0">
+      <div class="pill">Production</div>
+      <h2>Hit List</h2>
+      <p>Big Rocks, Little Rocks und Sand definieren.</p>
+    </div>
+    <div class="card card-link" data-tab="profit" tabindex="0">
+      <div class="pill">Profit</div>
+      <h2>Achieved & Done</h2>
+      <p>Weekly Review mit Wins, Rolls und Celebrations sichern.</p>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <div class="theme-switcher">
+    <label for="theme-select">Style:</label>
+    <select id="theme-select" aria-label="Theme Auswahl">
+      <!-- New unified themes -->
+      <option value="matrix">⚡ Matrix</option>
+      <option value="neutral">🌙 Neutral</option>
+      <option value="cyan">💎 Cyan</option>
+      <option disabled>────────────</option>
+      <!-- Legacy themes -->
+      <option value="github">GitHub Blue</option>
+      <option value="ocean">Teal Pulse</option>
+      <option value="blackred">Black / Red</option>
+    </select>
+  </div>
+  <div class="pill">Door Centre Bot</div>
+</footer>
+
+<script src="/matrix.js"></script>
+<script src="/vendor/marked/marked.min.js"></script>
+<script>
+  const tabs = document.querySelectorAll('.panel');
+  const navLinks = document.querySelectorAll('nav.top-nav a');
+  const cards = document.querySelectorAll('.card.card-link');
+  const themeSelect = document.getElementById('theme-select');
+
+  function applyTheme(themeKey = 'matrix') {
+    const body = document.body;
+    const html = document.documentElement;
+
+    // New unified themes (data-theme attribute)
+    const unifiedThemes = ['matrix', 'neutral', 'cyan'];
+    // Legacy themes (CSS classes)
+    const legacyThemes = ['github', 'ocean', 'blackred'];
+    const legacyClasses = legacyThemes.map(t => `theme-${t}`);
+
+    if (unifiedThemes.includes(themeKey)) {
+      // Use new unified theme system
+      html.setAttribute('data-theme', themeKey);
+      legacyClasses.forEach(c => body.classList.remove(c));
+    } else if (legacyThemes.includes(themeKey)) {
+      // Use legacy theme system
+      html.removeAttribute('data-theme');
+      legacyClasses.forEach(c => body.classList.remove(c));
+      body.classList.add(`theme-${themeKey}`);
+    } else {
+      // Fallback to matrix
+      html.setAttribute('data-theme', 'matrix');
+      legacyClasses.forEach(c => body.classList.remove(c));
+    }
+
+    if (themeSelect) {
+      themeSelect.value = themeKey;
+    }
+
+    try { localStorage.setItem('door_theme', themeKey); } catch (_) {}
+  }
+
+  (function initTheme() {
+    let stored = 'matrix';
+    try {
+      stored = localStorage.getItem('door_theme') || 'matrix';
+    } catch (_) {}
+    applyTheme(stored);
+  })();
+
+  themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+
+  function openTab(tabId) {
+    tabs.forEach(p => p.classList.remove('active'));
+    navLinks.forEach(a => a.classList.toggle('active', a.dataset.tab === tabId));
+    cards.forEach(c => c.classList.toggle('active', c.dataset.tab === tabId));
+
+    const panel = document.getElementById(`tab-${tabId}`);
+    if (panel) panel.classList.add('active');
+
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tabId);
+    history.replaceState(null, '', url.toString());
+  }
+
+  navLinks.forEach(link => {
+    link.addEventListener('click', evt => {
+      evt.preventDefault();
+      openTab(link.dataset.tab);
+    });
+  });
+
+  cards.forEach(card => {
+    card.addEventListener('click', () => openTab(card.dataset.tab));
+    card.addEventListener('keydown', evt => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        openTab(card.dataset.tab);
+      }
+    });
+  });
+
+  (function initFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab) openTab(tab);
+  })();
+
+  function saveHotList() {
+    const input = document.getElementById('hotlistinput').value.trim();
+    const out = document.getElementById('hotlistoutput');
+
+    if (!input) {
+      out.textContent = 'Keine Einträge. Sammle zuerst deine Ideen.';
+      return;
+    }
+
+    const lines = input.split('\n').map(l => l.trim()).filter(Boolean);
+    const md = [
+      '# Hot List – Guardian of Ideas',
+      '',
+      ...lines.map((l, i) => `${i + 1}. ${l}`),
+      '',
+      '> Wähle aus dieser Liste deine Domino Door im Door War.'
+    ].join('\n');
+
+    out.textContent = md;
+    syncHotListFlow(lines);
+  }
+
+  function selectDoor() {
+    const input = document.getElementById('doorwarinput').value.trim();
+    const out = document.getElementById('doorwaroutput');
+    const choice = document.getElementById('doorwarchoice').value.trim();
+
+    if (!input) {
+      out.textContent = 'Bitte zuerst deine Hot List hier einfügen.';
+      return;
+    }
+
+    const ideas = input.split('\n').map(l => l.trim()).filter(Boolean);
+
+    const md = [
+      '# Door War – Quadrant-2 Entscheidung',
+      '',
+      '## Kandidaten (aus der Hot List)',
+      '',
+      ...ideas.map((l) => `- [ ] ${l}`),
+      '',
+      '---',
+      '',
+      '## Gewählte Domino Door',
+      '',
+      `**Door:** ${choice || '_hier deine Wahl eintragen_'}`,
+      '',
+      '**Grund:** _warum genau diese Door?_',
+      '',
+      '> Nächster Schritt: Erzeuge den War Stack zu dieser Door.'
+    ].join('\n');
+
+    out.textContent = md;
+    syncDoorWarFlow(ideas, choice);
+  }
+
+  document.getElementById('warform').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const title = document.getElementById('wtitle').value.trim() || 'Untitled';
+    const domain = document.getElementById('wdomain').value.trim() || '-';
+    const door = document.getElementById('wdoor').value.trim() || '-';
+    const trigger = document.getElementById('wtrigger').value.trim() || '-';
+    const narr = document.getElementById('wnarr').value.trim() || '-';
+    const val = document.getElementById('wval').value.trim() || '-';
+    const impact = document.getElementById('wimpact').value.trim() || '-';
+    const cons = document.getElementById('wcons').value.trim() || '-';
+    const ins = document.getElementById('wins').value.trim() || '-';
+    const less = document.getElementById('wless').value.trim() || '-';
+
+    const lines = [];
+    lines.push(`# War Stack – ${title}`);
+    lines.push('');
+    lines.push(`**Domain:** ${domain}`);
+    lines.push(`**Domino Door:** ${door}`);
+    lines.push(`**Trigger:** ${trigger}`);
+    lines.push('');
+    lines.push('**Narrative:**');
+    lines.push(narr);
+    lines.push('');
+    lines.push('**Validation:**');
+    lines.push(val);
+    lines.push('');
+    lines.push('**Impact:**');
+    lines.push(impact);
+    lines.push('');
+    lines.push('**Consequences:**');
+    lines.push(cons);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push('## Insights');
+    lines.push(ins);
+    lines.push('');
+    lines.push('## Lessons Learned');
+    lines.push(less);
+    lines.push('');
+
+    document.getElementById('waroutput').textContent = lines.join('\n');
+  });
+
+  function generateHitList() {
+    const out = document.getElementById('hitlistoutput');
+    const extra = document.getElementById('hitlistextras').value;
+
+    const lines = extra.split('\n').map(l => l.trim()).filter(Boolean);
+    const little = [];
+    const sand = [];
+
+    lines.forEach(line => {
+      if (/^s:/i.test(line)) {
+        sand.push(line.replace(/^s:/i, '').trim());
+      } else {
+        little.push(line.replace(/^lr:/i, '').trim());
+      }
+    });
+
+    const md = [
+      '# Weekly Jar – Hit List',
+      '',
+      '## Big Rocks',
+      '(aus War Stacks auswählen)',
+      '',
+      '## Little Rocks',
+      ...(little.length ? little.map((l, i) => `- [ ] LR${i + 1}: ${l}`) : ['(keine Little Rocks gesetzt)']),
+      '',
+      '## Sand',
+      ...(sand.length ? sand.map((s, i) => `- [ ] Sand ${i + 1}: ${s}`) : ['(kein Sand angegeben)']),
+      '',
+      '> Das Jar wird voll. Entscheide, womit.'
+    ].join('\n');
+
+    out.textContent = md;
+  }
+
+  function generateProfit() {
+    const input = document.getElementById('profitinput').value.trim();
+    const out = document.getElementById('profitoutput');
+
+    if (!input) {
+      out.textContent = 'Schreibe zuerst dein Weekly Review.';
+      return;
+    }
+
+    const stamp = new Date().toISOString().slice(0,10);
+    const md = [
+      `# Profit Review – Woche ${stamp}`,
+      '',
+      input,
+      '',
+      '---',
+      '',
+      '- Was wird gerollt in die nächste Woche?',
+      '- Was wird sofort gekillt?',
+      '- Was wird bewusst gefeiert?'
+    ].join('\n');
+
+    out.textContent = md;
+  }
+
+  async function exportDoorMarkdown(tool, title, outputId, ticktick) {
+    const out = document.getElementById(outputId);
+    const text = out ? out.textContent.trim() : '';
+    if (!text) {
+      alert('Kein Inhalt zum Speichern.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/door/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool, title, markdown: text, ticktick: !!ticktick })
+      });
+      const data = await res.json();
+      if (data && data.ok) {
+        alert('Gespeichert: ' + data.path);
+      } else {
+        alert('Speichern fehlgeschlagen.');
+      }
+    } catch (_) {
+      alert('Speichern fehlgeschlagen.');
+    }
+  }
+
+  async function syncHotListFlow(lines) {
+    try {
+      await fetch('/api/door/hotlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: lines, source: 'door-ui' })
+      });
+    } catch (_) {}
+  }
+
+  async function syncDoorWarFlow(ideas, choice) {
+    try {
+      await fetch('/api/door/doorwar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: ideas, choice, source: 'door-ui' })
+      });
+    } catch (_) {}
+  }
+
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function slugify(text) {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function renderChapters(markdown, container, toc) {
+    if (!container) return;
+    // Render as markdown for readability
+    try {
+      if (window.marked) {
+        container.innerHTML = marked.parse(markdown);
+      } else {
+        container.textContent = markdown;
+      }
+    } catch (_) {
+      container.textContent = markdown;
+    }
+
+    if (toc) {
+      toc.innerHTML = '';
+      const headings = container.querySelectorAll('h1, h2, h3');
+      headings.forEach((heading) => {
+        const text = heading.textContent.trim();
+        if (!text) return;
+        if (!heading.id) heading.id = slugify(text);
+        const link = document.createElement('a');
+        link.href = `#${heading.id}`;
+        link.textContent = text;
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
+        });
+        toc.appendChild(link);
+      });
+    }
+  }
+
+  function splitChapters(markdown) {
+    const parts = markdown.split(/^#\s+/m).filter(Boolean);
+    const result = {};
+    parts.forEach((chunk) => {
+      const headerLine = chunk.split('\n')[0] || '';
+      const match = headerLine.match(/(?:Chapter|Kapitel)\s+(\d+)/i);
+      if (!match) return;
+      const num = Number(match[1]);
+      result[num] = `# ${chunk}`.trim();
+    });
+    return result;
+  }
+
+  async function loadDoorChapters() {
+    const container = document.getElementById('doorChaptersHome');
+    const toc = document.getElementById('doorTocHome');
+    const hotlist = document.getElementById('chapterHotlist');
+    const doorwar = document.getElementById('chapterDoorWar');
+    const warstack = document.getElementById('chapterWarStack');
+    const production = document.getElementById('chapterProduction');
+    const profit = document.getElementById('chapterProfit');
+
+    try {
+      const res = await fetch('/api/door/chapters?source=blueprints', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data || !data.ok || !data.chapters) {
+        if (container) container.innerHTML = '<p>Kapitel nicht gefunden.</p>';
+        return;
+      }
+      const combined = data.chapters.map((ch) => ch.content || '').join('\n\n');
+      if (container) renderChapters(combined, container, toc);
+
+      const byChapter = splitChapters(combined);
+      if (hotlist && byChapter[26]) renderMarkdown(byChapter[26], hotlist);
+      if (doorwar && byChapter[27]) renderMarkdown(byChapter[27], doorwar);
+      if (warstack && byChapter[28]) renderMarkdown(byChapter[28], warstack);
+      if (production && byChapter[29]) renderMarkdown(byChapter[29], production);
+      if (profit && byChapter[30]) renderMarkdown(byChapter[30], profit);
+    } catch (_) {
+      if (container) container.innerHTML = '<p>Kapitel nicht verfügbar.</p>';
+    }
+  }
+
+  loadDoorChapters();
+
+  function renderMarkdown(markdown, container) {
+    if (window.marked) {
+      container.innerHTML = marked.parse(markdown);
+    } else {
+      container.textContent = markdown;
+    }
+  }
+
+</script>
+</body>
+</html>
