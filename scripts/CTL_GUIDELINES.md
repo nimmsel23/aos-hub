@@ -58,6 +58,17 @@ ui_choose()  # Menu selection (fzf > gum > select fallback)
 need_cmd()   # Check if command exists, exit if not
 ```
 
+### Shared Helper Library (preferred)
+
+To avoid duplication, use the shared helper library:
+
+```
+scripts/ctl-lib.sh
+```
+
+It provides the standard UI helpers plus env/curl utilities. When using it,
+keep component-specific logic in the component ctl script.
+
 ### Utility Functions (Optional)
 
 For services with HTTP APIs:

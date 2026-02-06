@@ -6,6 +6,8 @@ set -euo pipefail
 # ============================================================
 # Copy this template when creating new *ctl scripts
 #
+# Prefer sourcing scripts/ctl-lib.sh for shared helpers.
+#
 # Naming convention: <component>ctl (no dashes)
 # Examples: routerctl, bridgectl, tentctl, firectl
 #
@@ -14,6 +16,12 @@ set -euo pipefail
 
 COMPONENTCTL_VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Optional: load global env (AOS_* variables) from `$ROOT_DIR/.env/aos.env`.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
 
 # ============================================================
 # CONFIGURATION
