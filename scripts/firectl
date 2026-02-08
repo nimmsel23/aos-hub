@@ -2,7 +2,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-FIRECTL_VERSION="0.2.0"
+FIRECTL_VERSION="0.3.0"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
@@ -76,6 +76,7 @@ SERVICE_DAILY="alphaos-fire-daily.service"
 TIMER_DAILY="alphaos-fire-daily.timer"
 SERVICE_WEEKLY="alphaos-fire-weekly.service"
 TIMER_WEEKLY="alphaos-fire-weekly.timer"
+FIRE_GIT_DIR="${AOS_FIRE_GIT_DIR:-$FIRE_ROOT}"
 
 need_task() { has_cmd "$TASK_BIN" || die "missing: $TASK_BIN"; }
 need_firebot() { has_cmd "$PYTHON_BIN" || die "missing: $PYTHON_BIN"; [[ -f "$FIREBOT_SCRIPT" ]] || die "missing: $FIREBOT_SCRIPT"; }
@@ -242,6 +243,137 @@ doctor() {
   ui_info "fire bot .env: $(abs_path "$(dirname -- "$FIREBOT_SCRIPT")/.env")"
 }
 
+need_git() { has_cmd git || die "missing: git"; }
+
+fire_git_root() {
+  need_git
+  [[ -d "$FIRE_GIT_DIR" ]] || die "missing dir: $FIRE_GIT_DIR"
+  git -C "$FIRE_GIT_DIR" rev-parse --show-toplevel 2>/dev/null || return 1
+}
+
+fire_git_status() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  ui_title
+  ui_info "repo: $root"
+  git -C "$root" status -sb
+  echo ""
+  git -C "$root" remote -v || true
+}
+
+fire_git_log() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" log --oneline --graph --decorate -15
+}
+
+fire_git_diff() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" diff
+}
+
+fire_git_commit() {
+  local root msg="${1:-}"
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  [[ -n "$msg" ]] || msg="fire: update $(date +%F)"
+  git -C "$root" add -A
+  if git -C "$root" diff --cached --quiet; then
+    ui_ok "No changes to commit."
+    return 0
+  fi
+  git -C "$root" commit -m "$msg"
+}
+
+fire_git_pull() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" pull --rebase --autostash
+}
+
+fire_git_push() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" push
+}
+
+fire_git_sync() {
+  local msg="" do_commit=1 do_pull=1 do_push=1 dry_run=0
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+      -m|--message) msg="${2:-}"; shift 2 ;;
+      --no-commit) do_commit=0; shift ;;
+      --no-pull) do_pull=0; shift ;;
+      --no-push) do_push=0; shift ;;
+      -n|--dry-run|--print) dry_run=1; shift ;;
+      -h|--help)
+        cat <<EOF
+firectl git sync
+
+Usage:
+  firectl git sync [options]
+
+Options:
+  -m, --message MSG   Commit message (default: fire: update YYYY-MM-DD)
+  --no-commit         Skip git add/commit step
+  --no-pull           Skip pull --rebase
+  --no-push           Skip push
+  --dry-run           Print actions only
+
+Env:
+  AOS_FIRE_GIT_DIR    Directory inside the Fire git worktree (default: AOS_FIRE_DIR)
+EOF
+        return 0
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+  done
+
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  ui_info "repo: $root"
+
+  if [[ "$dry_run" == "1" ]]; then
+    ui_info "dry-run:"
+    [[ "$do_commit" == "1" ]] && ui_info "  git add -A && git commit -m <msg> (if changes)"
+    [[ "$do_pull" == "1" ]] && ui_info "  git pull --rebase --autostash"
+    [[ "$do_push" == "1" ]] && ui_info "  git push"
+    return 0
+  fi
+
+  if [[ "$do_commit" == "1" ]]; then
+    fire_git_commit "${msg:-}"
+  fi
+  if [[ "$do_pull" == "1" ]]; then
+    fire_git_pull
+  fi
+  if [[ "$do_push" == "1" ]]; then
+    fire_git_push
+  fi
+  ui_ok "Git sync done."
+}
+
+git_menu() {
+  ui_title
+  local action
+  action="$(choose \
+    "git status" \
+    "git sync" \
+    "git log" \
+    "git diff" \
+    "quit")"
+  case "$action" in
+    "git status") fire_git_status ;;
+    "git sync") fire_git_sync ;;
+    "git log") fire_git_log ;;
+    "git diff") fire_git_diff ;;
+    "quit") exit 0 ;;
+  esac
+}
+
 menu() {
   ui_title
   local action
@@ -250,6 +382,7 @@ menu() {
     "build daily md" "build weekly md" \
     "print daily" "print weekly" \
     "test --debug --scope daily" \
+    "git menu" \
     "status" "logs --follow" \
     "setup systemd timers" \
     "doctor" \
@@ -263,6 +396,7 @@ menu() {
     "print daily") print_message daily ;;
     "print weekly") print_message weekly ;;
     "test --debug --scope daily") test_message --debug --scope daily ;;
+    "git menu") git_menu ;;
     "status") status ;;
     "logs --follow") logs --follow ;;
     "setup systemd timers") setup_systemd ;;
@@ -285,6 +419,7 @@ Usage:
   firectl send  daily|weekly
   firectl test [--debug] [--scope daily|weekly] [--text "..."]
   firectl setup-systemd
+  firectl git <status|sync|log|diff|commit|pull|push|menu>
 
 Env:
   AOS_TASK_BIN=task
@@ -293,6 +428,7 @@ Env:
   AOS_VAULT_DIR=~/AlphaOS-Vault
   AOS_FIRE_DIR=<vault>/Game/Fire
   AOS_TASKRC=~/.taskrc
+  AOS_FIRE_GIT_DIR=<vault>/Game/Fire
 EOF
 }
 
@@ -310,5 +446,19 @@ case "$cmd" in
   send) send_message "${1:-}" ;;
   test) test_message "$@" ;;
   setup-systemd) setup_systemd ;;
+  git)
+    sub="${1:-menu}"; shift || true
+    case "$sub" in
+      menu) git_menu ;;
+      status) fire_git_status ;;
+      sync) fire_git_sync "$@" ;;
+      log) fire_git_log ;;
+      diff) fire_git_diff ;;
+      commit) fire_git_commit "${*:-}" ;;
+      pull) fire_git_pull ;;
+      push) fire_git_push ;;
+      *) die "unknown git subcommand: $sub" ;;
+    esac
+    ;;
   *) ui_err "unknown command: $cmd"; usage; exit 1 ;;
 esac

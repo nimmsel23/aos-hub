@@ -65,3 +65,12 @@ If the daily Telegram Firemap suddenly shows too few overdue tasks:
 - Check whether overdue tasks in Taskwarrior actually have `due|scheduled|wait` set.
 - Verify the Firemap engine isn’t accidentally tag-filtering dated tasks (it shouldn’t).
 - Use `firectl doctor` and `python python-firemap/firemap_bot.py test --debug --scope daily` for counts.
+
+## Fire Git (Vault)
+
+If your Fire vault folder is a git worktree, `firectl` can manage it:
+
+- `firectl git status`
+- `firectl git sync` (add/commit + pull --rebase + push)
+
+Set `AOS_FIRE_GIT_DIR` if your git repo root is above/below `AOS_FIRE_DIR`.
