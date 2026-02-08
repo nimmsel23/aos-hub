@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+need_systemctl() {
+  have systemctl || die "systemctl not found"
+}
+
+systemctl_user() { systemctl --user "$@"; }
+
+mount_status() { need_systemctl; systemctl_user status "$CORE4_MOUNT_SERVICE" --no-pager; }
+mount_enable() { need_systemctl; systemctl_user enable --now "$CORE4_MOUNT_SERVICE"; }
+mount_disable() { need_systemctl; systemctl_user disable --now "$CORE4_MOUNT_SERVICE"; }
+mount_restart() { need_systemctl; systemctl_user restart "$CORE4_MOUNT_SERVICE"; }
+mount_logs() { need_systemctl; journalctl --user -u "$CORE4_MOUNT_SERVICE" -n 200 --no-pager; }
+
+install_timers() {
+  mkdir -p "$UNIT_DST_DIR"
+  local units=(
+    core4-daily.service core4-daily.timer
+    core4-prune.service core4-prune.timer
+    core4-month-close.service core4-month-close.timer
+    core4-seed-week.service core4-seed-week.timer
+  )
+  local f
+  for f in "${units[@]}"; do
+    [[ -f "$UNIT_SRC_DIR/$f" ]] || die "missing unit template: $UNIT_SRC_DIR/$f"
+    cp -f "$UNIT_SRC_DIR/$f" "$UNIT_DST_DIR/$f"
+  done
+  msg "Installed units to $UNIT_DST_DIR"
+  msg "Next:"
+  msg "  systemctl --user daemon-reload"
+  msg "  systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer core4-seed-week.timer"
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-servicectl <command>
+
+Mount:
+  mount-status
+  mount-enable
+  mount-disable
+  mount-restart
+  mount-logs
+
+Systemd:
+  install-timers
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  mount-status) mount_status ;;
+  mount-enable) mount_enable ;;
+  mount-disable) mount_disable ;;
+  mount-restart) mount_restart ;;
+  mount-logs) mount_logs ;;
+  install-timers) install_timers ;;
+  *) usage; exit 1 ;;
+esac
+

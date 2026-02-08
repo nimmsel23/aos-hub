@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+sync_all() {
+  local vaultctl
+  vaultctl="$(vaultctl_cmd || true)"
+  [[ -n "${vaultctl:-}" ]] || die "vaultctl not found"
+  exec "$vaultctl" sync
+}
+
+push_core4() {
+  [[ -d "$CORE4_LOCAL_DIR" ]] || die "missing local Core4 dir: $CORE4_LOCAL_DIR"
+  # Only push the ledger; avoid Drive duplicates for derived JSON.
+  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" --filter "+ .core4/**" --filter "- *"
+}
+
+pull_core4() {
+  mkdir -p "$CORE4_MOUNT_DIR"
+  run_rclone_copy "pull" "$CORE4_REMOTE" "$CORE4_MOUNT_DIR" --filter "+ .core4/**" --filter "- *"
+  # Rebuild derived artifacts locally from all available sources.
+  "$APP_DIR/core4-trackctl" build >/dev/null 2>&1 || true
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-syncctl <command>
+
+Commands:
+  sync        Run vaultctl sync (Game/Door/Voice/Core4 copy)
+  sync-core4  Push Core4 ledger (.core4/**) to Drive
+  pull-core4  Pull Core4 ledger (.core4/**) from Drive + rebuild
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  sync) sync_all ;;
+  sync-core4|push-core4|push) push_core4 ;;
+  pull-core4|pull) pull_core4 ;;
+  *) usage; exit 1 ;;
+esac

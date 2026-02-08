@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+menu() {
+  ui_title "core4ctl"
+  local action
+  action="$(choose \
+    "log habit (core4)" \
+    "status" \
+    "sources" \
+    "build (rebuild day/week)" \
+    "pull (core4 only)" \
+    "push (core4 only)" \
+    "sync (vaultctl)" \
+    "install timers" \
+    "mount status" \
+    "mount restart" \
+    "doctor" \
+    "quit")"
+
+  case "$action" in
+    "log habit (core4)") exec "$CORE4_TRACKER" ;;
+    status) exec "$APP_DIR/core4-trackctl" status ;;
+    sources) exec "$APP_DIR/core4-trackctl" sources ;;
+    "build (rebuild day/week)") exec "$APP_DIR/core4-trackctl" build ;;
+    "pull (core4 only)") exec "$APP_DIR/core4-syncctl" pull-core4 ;;
+    "push (core4 only)") exec "$APP_DIR/core4-syncctl" sync-core4 ;;
+    "sync (vaultctl)") exec "$APP_DIR/core4-syncctl" sync ;;
+    "install timers") exec "$APP_DIR/core4-servicectl" install-timers ;;
+    "mount status") exec "$APP_DIR/core4-servicectl" mount-status ;;
+    "mount restart") exec "$APP_DIR/core4-servicectl" mount-restart ;;
+    doctor) exec "$APP_DIR/core4-clinctl" doctor ;;
+    quit) exit 0 ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-menuctl menu
+EOF
+}
+
+cmd="${1:-menu}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  menu) menu ;;
+  *) usage; exit 1 ;;
+esac
+

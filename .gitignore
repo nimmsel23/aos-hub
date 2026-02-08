@@ -62,10 +62,6 @@ index-node/docs
 # Local Codex skill scratch (do not commit)
 skills/
 
-# Local core4 helper scripts (experimental)
-python-core4/core4-lib.sh
-python-core4/core4-*ctl
-
 # Local imported blueprint chapters (do not commit)
 AlphaOS - THE *.md
 AlphaOS-THE-*.md

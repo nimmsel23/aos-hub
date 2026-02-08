@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+doctor() {
+  ui_title "core4ctl doctor"
+  msg ""
+  msg "- HUB_DIR: ${HUB_DIR:-}"
+  msg "- CORE4_TRACKER: ${CORE4_TRACKER:-}"
+  msg ""
+
+  if command -v core4 >/dev/null 2>&1; then
+    msg "core4 on PATH:"
+    type -a core4 || true
+    msg ""
+  else
+    msg "core4 on PATH: (not found)"
+    msg ""
+  fi
+
+  for p in "$HOME/bin/core4" "$HOME/.local/bin/core4"; do
+    if [[ -e "$p" ]]; then
+      msg "- $p -> $(readlink -f "$p" 2>/dev/null || echo "?")"
+    fi
+  done
+
+  msg ""
+  msg "Fix:"
+  msg "  core4ctl install-cli"
+}
+
+install_cli() {
+  local target="${1:-$HOME/.local/bin/core4}"
+  mkdir -p "$(dirname -- "$target")"
+  ln -sfn "$CORE4_TRACKER" "$target"
+  msg "Installed: $target -> $CORE4_TRACKER"
+  msg "Note: you may need: hash -r"
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-clinctl <command>
+
+Commands:
+  doctor
+  install-cli [TARGET]
+EOF
+}
+
+cmd="${1:-doctor}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  doctor) doctor ;;
+  install-cli) install_cli "${1:-}" ;;
+  *) usage; exit 1 ;;
+esac
+
