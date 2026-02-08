@@ -4,9 +4,13 @@
 Drive the 4P flow (Potential -> Plan -> Production -> Profit) and turn ideas into weekly execution.
 
 ## Entry
-- UI: `gas/Door_Index.html` (inline in HQ)
-- Client logic: `gas/Door_Client.html`
-- Backend: `gas/door.gs`
+- HQ UI (Door Centre): `gas/Door_Index.html` (inline map in HQ)
+- Standalone dev: `gas-door-dev/Door_Index.html` (separate GAS project)
+- Client logic: `gas/Door_Client.html` (and copied into `gas-door-dev/`)
+- Backend: `gas/door.gs` (and copied into `gas-door-dev/`)
+
+Note:
+- The **Door War Eisenhower Matrix block** was removed from the **HQ home**; Door War now lives inside the Door Centre (and `gas-door-dev/` for standalone deployments).
 
 ## Flow (short)
 - Hot List -> `Alpha_Door/1-Potential`

@@ -43,10 +43,7 @@ These functions are directly callable from the WebApp frontends and therefore pa
 - `hotlist_addWeb(idea, user)` (`gas/hotlist.gs`) — Hot List quick add.
 - `core4_log(domain, task, timestamp, source, user)` (`gas/core4.gs`) — add +0.5 points entry.
 - `core4_getToday()` (`gas/core4.gs`) — today’s points total.
-- Door War (inline in HQ):
-  - `getPotentialHotIdeas()` (`gas/hotlist.gs`) — list `.md` in `Alpha_Door/1-Potential` for backlog.
-  - `doorMovePotentialToPlan(fileIds)` (`gas/hotlist.gs`) — move selected IDs to `Alpha_Door/2-Plan`.
-  - `saveDoorEntry(payload)` (`gas/door.gs`) — save `DoorWar` markdown (and enqueue tasks if applicable).
+- Door War (HQ home): removed (now inside Door Centre / standalone).
 
 ### Door Centre (`gas/Door_Index.html` + `gas/Door_Client.html`)
 

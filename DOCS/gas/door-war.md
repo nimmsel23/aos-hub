@@ -7,7 +7,8 @@
 - Priority mapping: `q1=H`, `q2=M`, `q3=L`, `q4=none`.
 
 ## Entry Points (current)
-- Door Centre UI: lists Potential ideas (`getPotentialHotIdeas`) and can move them to Plan (`doorMovePotentialToPlan`).
+- Door Centre UI (HQ map): lists Potential ideas (`getPotentialHotIdeas`) and can move them to Plan (`doorMovePotentialToPlan`).
+- Door Centre UI (standalone dev): `gas-door-dev/` (copy of Door modules for a separate deployment).
 - Backend pieces still reside in `door_war` (to be hooked): scoring/selection not yet fully implemented in GAS (legacy logic lived in Node/Python).
 
 ## Storage / Move
