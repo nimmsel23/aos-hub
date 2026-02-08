@@ -1,5 +1,7 @@
 # Core4 — wie das System funktioniert
 
+Siehe auch: `aos-hub/DOCS/CORE4_SYSTEM.md` (end-to-end mental model, alle Komponenten, Datenfluss).
+
 Core4 ist ein Habit‑Tracker (8 Habits / 4 Domains) mit einem einfachen Ziel: **pro Tag 4 Punkte** (8×0.5) und daraus **28 pro Woche**.
 
 Wichtig: Core4 ist in AlphaOS so gebaut, dass **mehrere Quellen** (lokal CLI/Taskwarrior, Bridge, GAS/WebApp) schreiben können, ohne dass Einträge verloren gehen oder doppelt zählen.
@@ -10,8 +12,8 @@ Wichtig: Core4 ist in AlphaOS so gebaut, dass **mehrere Quellen** (lokal CLI/Tas
 
 **Source of truth ist ein append‑only Event‑Ledger**: pro “done” entsteht genau **eine Event‑JSON**.
 
-- Lokal: `~/AlphaOS-Vault/Core4/.python-core4/events/YYYY-MM-DD/*.json`
-- GDrive‑Mount (von GAS): `~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/*.json`
+- Lokal: `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
+- GDrive‑Mount (von GAS): `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
 
 Jedes Event hat u.a.:
 - `date` (YYYY-MM-DD), `domain` (body/being/balance/business), `task` (habit)
@@ -53,9 +55,9 @@ Wenn ein Core4‑Task in Taskwarrior completed wird, schreibt der Hook ein Core4
 - Fallback: wenn Bridge down ist, wird lokal ein Event geschrieben.
 
 ### C) GAS WebApp / Core4 Centre (GDrive)
-GAS schreibt Events in Drive (Alpha_Core4) und erzeugt daraus die Wochen‑JSON für den Tent:
+GAS schreibt Events in Drive (Alpha_Core4). Die Wochen/Tages‑Snapshots sind **derived** und werden lokal aus dem Ledger rebuildet:
 - GAS Code: `aos-hub/gas/core4.gs`
-- Drive Folder: `Alpha_Core4/.python-core4/events/...`
+- Drive Folder: `Alpha_Core4/.core4/events/...`
 
 ### D) Bridge (aiohttp, localhost:8080)
 Bridge nimmt Logs an und schreibt Events + rebuilds:
@@ -73,6 +75,10 @@ Bridge nimmt Logs an und schreibt Events + rebuilds:
 - `core4 -w` zeigt Wochen-Score plus pro Datum die erledigten Habits.
 
 Intern rebuildet `core4` aus den Events, deduped via `key`.
+Wichtig: Scoring ist **read-only** (schreibt keine Snapshot-Dateien).
+
+Wenn du Snapshot-Dateien explizit neu schreiben willst:
+- `core4 build` (schreibt `core4_day_*.json` + `core4_week_*.json` aus dem Ledger)
 
 ---
 
@@ -139,8 +145,8 @@ Timer:
 ## 9) Troubleshooting
 
 - **Score in CLI fehlt, obwohl GAS geloggt wurde**
-  - Prüfen ob Mount da ist: `ls ~/AlphaOS-Vault/Alpha_Core4/.python-core4/events/YYYY-MM-DD/`
-  - Dann `core4 -d` / `core4 -w` (rebuild)
+  - Prüfen ob Mount da ist: `ls ~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/`
+  - Dann `core4 -d` / `core4 -w` (recompute aus dem Ledger)
 
 - **Doppelte Taskwarrior Tasks**
   - Score zählt trotzdem nicht doppelt (dedupe via `key`), aber Tasks kannst du mit `task 28` finden und manuell löschen.

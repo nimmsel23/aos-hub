@@ -16,6 +16,7 @@ source "$APP_DIR/bridge-lib.sh"
 SYNCVAULTCTL_BIN="${SYNCVAULTCTL_BIN:-$ROOT_DIR/scripts/syncvaultctl}"
 HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
+SYSTEMSTATUSCTL_BIN="${SYSTEMSTATUSCTL_BIN:-$ROOT_DIR/scripts/systemstatusctl}"
 ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
 
 servicectl() { exec "$APP_DIR/bridge-servicectl" "$@"; }
@@ -77,6 +78,24 @@ run_heartbeat() {
   exec "$bin" "$sub" "$@"
 }
 
+systemstatusctl_cmd() {
+  if [[ -x "$SYSTEMSTATUSCTL_BIN" ]]; then
+    echo "$SYSTEMSTATUSCTL_BIN"
+    return 0
+  fi
+  if has_cmd systemstatusctl; then
+    command -v systemstatusctl
+    return 0
+  fi
+  return 1
+}
+
+run_systemstatus() {
+  local bin
+  bin="$(systemstatusctl_cmd)" || die "systemstatusctl not found"
+  exec "$bin" trigger "$@"
+}
+
 doctor() {
   ui_title "bridgectl doctor"
   "$APP_DIR/bridge-servicectl" status || true
@@ -96,6 +115,7 @@ menu() {
     "api health" "api debug" "api doctor" "api test-rpc" "api flush" \
     "api sync-status" "api sync-pull" "api sync-push" "api sync-pull (dry-run)" "api sync-push (dry-run)" "api sync-abort" \
     "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" \
+    "gas systemstatus" \
     "heartbeat status" "heartbeat ping" "heartbeat logs" \
     "tailscale status" "tailscale serve" "tailscale funnel" \
     "doctor" "quit")"
@@ -123,6 +143,8 @@ menu() {
     "syncvaultctl status") run_syncvaultctl status ;;
     "syncvaultctl sync") run_syncvaultctl sync ;;
     "syncvaultctl pull") run_syncvaultctl pull ;;
+
+    "gas systemstatus") run_systemstatus ;;
 
     "heartbeat status") run_heartbeat status ;;
     "heartbeat ping") run_heartbeat ping ;;
@@ -158,6 +180,7 @@ Tailscale:
 Other:
   bridgectl syncvaultctl <args...>
   bridgectl heartbeat <cmd>
+  bridgectl systemstatus
 
 Env:
   AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
@@ -187,10 +210,10 @@ case "$cmd" in
 
   syncvaultctl) run_syncvaultctl "$@" ;;
   heartbeat) run_heartbeat "${1:-status}" "${@:2}" ;;
+  systemstatus) run_systemstatus "$@" ;;
 
   *)
     usage
     exit 1
     ;;
 esac
-

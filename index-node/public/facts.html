@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fruit Fact Maps</title>
-  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/themes-all.css">
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
-    :root {
+
+    /* Default fallback (only when no theme is set) */
+    html:not([data-theme]) {
       --bg: #0b0f18;
       --surface: #141a28;
       --surface-elevated: #1e2536;
@@ -17,6 +19,9 @@
       --accent-dark: #e04a2b;
       --glow: rgba(255,94,58,0.3);
       --success: #2d8a3f;
+      --card: #141a28;
+      --border: #2d333b;
+      --muted: #9aa3c0;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -492,6 +497,19 @@
         <option value="matrix">⚡ Matrix</option>
         <option value="neutral">🌙 Neutral</option>
         <option value="cyan">💎 Cyan</option>
+        <option disabled>──────</option>
+        <option value="obsidian">🔮 Obsidian</option>
+        <option value="aurora">🌌 Aurora</option>
+        <option value="dawn">🌅 Dawn</option>
+        <option value="monk">📜 Monk</option>
+        <option value="copper">🪙 Copper</option>
+        <option value="forestnight">🌲 Forest</option>
+        <option value="inkgold">✨ Ink&Gold</option>
+        <option value="bloodred">🩸 Blood</option>
+        <option disabled>──────</option>
+        <option value="github">💻 GitHub</option>
+        <option value="ocean">🌊 Ocean</option>
+        <option value="blackred">⚫ Black/Red</option>
       </select>
     `;
     document.body.appendChild(themeToggle);
@@ -499,7 +517,14 @@
     const themeSelect = document.getElementById('theme-select');
 
     function applyTheme(themeKey = 'matrix') {
-      document.documentElement.setAttribute('data-theme', themeKey);
+      const allThemes = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
+
+      if (allThemes.includes(themeKey)) {
+        document.documentElement.setAttribute('data-theme', themeKey);
+      } else {
+        document.documentElement.setAttribute('data-theme', 'matrix');
+      }
+
       if (themeSelect) themeSelect.value = themeKey;
       try { localStorage.setItem('facts_theme', themeKey); } catch (_) {}
     }

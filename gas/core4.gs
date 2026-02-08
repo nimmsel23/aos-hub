@@ -66,6 +66,12 @@ function core4_log(domain, task, timestamp, source, user) {
   const dayData = core4_buildDay_(dateKey);
   const weekData = core4_buildWeekForDate_(ts);
 
+  // Convergence (cross-portal):
+  // - GAS writes to GDrive (Alpha_Core4/.core4/events/...)
+  // - Laptop portals (index-node/CLI) read from local ledger (Core4/.core4/events/...)
+  // So after each GAS log we:
+  //   1) ping Bridge to pull `.core4/**` (throttled; implemented in watchdog.gs)
+  //   2) emit a silent Telegram proof so each log has an external trace (debug evidence)
   core4_appendSheetRow_(entry);
   const totalToday = core4_totalForDate_(weekData.entries, dateKey);
   try {

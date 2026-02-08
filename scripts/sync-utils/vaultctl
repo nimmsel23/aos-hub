@@ -164,8 +164,9 @@ copy_direction() {
     filter_from=()
     ignore_file="$local_path/.rcloneignore"
     if [ "$label" = "Core4" ]; then
-      # Core4 derived JSON can be rebuilt from the append-only event ledger.
-      # Sync only `.core4/**` to avoid Google Drive duplicate-name issues.
+      # Core4: sync only the append-only ledger (`.core4/**`).
+      # Derived files like `core4_week_*.json` are rebuildable and should not be pushed to Drive,
+      # otherwise Google Drive can create duplicate-name copies.
       filter_from=(--filter "+ .core4/**" --filter "- *")
     elif [ -f "$ignore_file" ]; then
       filter_from=(--filter-from "$ignore_file")

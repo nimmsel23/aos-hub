@@ -296,6 +296,9 @@ def send_bridge(payload: dict) -> None:
 def send_core4_log(payload: dict) -> None:
     bridge_url = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
     url = f"{bridge_url}/bridge/core4/log"
+    # Hook-side Core4 logging is best-effort:
+    # - never block `task` commands on network/bridge issues
+    # - Bridge is idempotent (dedupe by `key = YYYY-MM-DD:domain:task`)
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     try:

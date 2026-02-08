@@ -1,0 +1,75 @@
+# Core4 Task Configuration
+# Defines the 8 habits and their TW task properties
+
+habits:
+  - id: fitness
+    domain: body
+    display: Fitness
+    tw_tag: fitness
+    tw_project: body          # project:{domain}
+    canonical: fitness
+
+  - id: fuel
+    domain: body
+    display: Fuel
+    tw_tag: fuel
+    tw_project: body
+    canonical: fuel
+
+  - id: meditation
+    domain: being
+    display: Meditation
+    tw_tag: meditation
+    tw_project: being
+    canonical: meditation
+
+  - id: memoirs
+    domain: being
+    display: Memoirs
+    tw_tag: memoirs
+    tw_project: being
+    canonical: memoirs
+
+  - id: partner
+    domain: balance
+    display: Partner
+    tw_tag: partner
+    tw_project: balance
+    canonical: person1        # Bridge canonical name
+
+  - id: posterity
+    domain: balance
+    display: Posterity
+    tw_tag: posterity
+    tw_project: balance
+    canonical: person2        # Bridge canonical name
+
+  - id: discover
+    domain: business
+    display: Discover
+    tw_tag: discover
+    tw_project: business
+    canonical: discover
+
+  - id: declare
+    domain: business
+    display: Declare
+    tw_tag: declare
+    tw_project: business
+    canonical: declare
+
+# Task creation defaults
+defaults:
+  points_per_habit: 0.5
+  task_title_template: "{display} — {date}"   # "Fitness — 2026-02-04"
+
+  # Task properties
+  priority: "H"               # High priority
+  core4_tag: true             # Add +core4 tag (for filtering)
+  week_tag: true              # Add +w{week} tag (e.g., +w06)
+
+# Seed-week behavior
+seed_week:
+  check_idempotent: true      # Skip if any +{habit} due:{date} task exists
+  create_future_weeks: false  # Only create current ISO week by default
+  default_time: "00:00:00"    # Due time (TW stores as midnight UTC)

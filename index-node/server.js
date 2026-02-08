@@ -62,6 +62,11 @@ const RCLONE_FLAGS = String(
 const RCLONE_BACKUP_TARGET =
   process.env.RCLONE_BACKUP_TARGET ||
   (RCLONE_TARGET ? `${RCLONE_TARGET}-backups` : "");
+// Bridge integration: Core4 "truth" lives in the Core4 event ledger. index-node uses Bridge as the
+// local API surface to fetch totals/state and to forward log requests.
+//
+// Important: `AOS_BRIDGE_URL` must be present in the *running service environment* (systemd),
+// otherwise `/api/core4/today` can't populate `bridge_total` and the UI will look "stuck at 0".
 const BRIDGE_URL = (process.env.AOS_BRIDGE_URL || process.env.BRIDGE_URL || "").replace(/\/$/, "");
 const BRIDGE_TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS || 2500);
 const FRUITS_MAP_TITLE = "Fruit Fact Maps";
@@ -1064,8 +1069,13 @@ function scanForWarStacks(doorDir, domain) {
  * @returns {object|null} Core4 metrics or null
  */
 function scanForCore4Metrics(domain, week) {
-  const core4Dir = path.join(getVaultDir(), "Alpha_Core4");
-  const weekFile = path.join(core4Dir, `core4_week_${week}.json`);
+  // Core4 week JSON is a derived artifact (rebuilt from `.core4/events`).
+  // Prefer the local write target (`Core4/`) and fall back to the GDrive mount (`Alpha_Core4/`).
+  const vaultDir = getVaultDir();
+  const weekName = `core4_week_${week}.json`;
+  const weekFileLocal = path.join(vaultDir, "Core4", weekName);
+  const weekFileMount = path.join(vaultDir, "Alpha_Core4", weekName);
+  const weekFile = fs.existsSync(weekFileLocal) ? weekFileLocal : weekFileMount;
 
   if (!fs.existsSync(weekFile)) {
     console.warn(`[scanForCore4Metrics] Week file not found: ${weekFile}`);
@@ -1077,7 +1087,12 @@ function scanForCore4Metrics(domain, week) {
     const data = JSON.parse(raw);
 
     const domainKey = domain.toLowerCase();
-    const weekTotal = data.totals && data.totals[domainKey] ? data.totals[domainKey] : 0;
+    // New format: totals.by_domain[domain] (points). Legacy format: totals[domain].
+    const totals = data.totals || {};
+    const byDomain = totals.by_domain || {};
+    const weekTotal =
+      (typeof byDomain[domainKey] === "number" ? byDomain[domainKey] : null) ??
+      (typeof totals[domainKey] === "number" ? totals[domainKey] : 0);
 
     return {
       week_total: weekTotal,
@@ -3997,30 +4012,50 @@ app.get("/api/game/focus/list", (req, res) => {
       return res.json({ ok: true, maps: [] });
     }
 
+    const monthKey = month.toLowerCase();
+    const phaseKeys = new Set(["current", "q1", "q2", "q3", "q4"]);
+
     const files = fs.readdirSync(focusDir)
       .filter(f => f.endsWith('.md'))
       .map(filename => {
         const filepath = path.join(focusDir, filename);
         const stat = fs.statSync(filepath);
 
-        // Extract domain and phase from filename
+        // Prefer YAML front matter (phase/month/domain); fall back to filename parsing.
         const parts = filename.replace('.md', '').split('_');
         const fileDomain = parts[0]?.toUpperCase() || '';
-        const filePhase = parts[2]?.toLowerCase() || '';
+
+        let yamlMeta = {};
+        try {
+          const content = fs.readFileSync(filepath, "utf8");
+          yamlMeta = extractYamlFrontMatter(content);
+        } catch (_) {}
+
+        const metaDomain = String(yamlMeta?.domain || fileDomain).trim().toUpperCase();
+        const metaPhase = String(yamlMeta?.phase || "").trim().toLowerCase();
+        const metaMonth = String(yamlMeta?.month || "").trim();
 
         return {
           filename,
           path: filepath,
-          domain: fileDomain,
-          phase: filePhase,
+          domain: metaDomain,
+          phase: metaPhase,
+          month: metaMonth,
           modified: stat.mtime
         };
       })
       .filter(map => {
         // Filter by domain if specified
         if (domain && map.domain !== domain) return false;
-        // Filter by month/phase if specified
-        if (month && !map.filename.toLowerCase().includes(month.toLowerCase())) return false;
+        // Filter by phase (current/q1/q2/q3/q4) if specified; otherwise try month label/filename match.
+        if (month) {
+          if (phaseKeys.has(monthKey)) {
+            if (String(map.phase || "").toLowerCase() !== monthKey) return false;
+          } else {
+            const hay = `${map.month || ""} ${map.filename}`.toLowerCase();
+            if (!hay.includes(monthKey)) return false;
+          }
+        }
         return true;
       })
       .sort((a, b) => b.modified - a.modified); // Most recent first

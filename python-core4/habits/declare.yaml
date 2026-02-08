@@ -1,0 +1,14 @@
+# Declare — Action & Execution
+
+default:
+  title: "Declare — {date}"
+  description: "Take decisive action on business/project goals"
+
+schedule:
+  monday:
+    title: "Weekly Strike — {date}"
+    description: "Set weekly intention, plan major moves"
+
+  friday:
+    title: "Weekly Review — {date}"
+    description: "Review progress, close loops, celebrate wins"

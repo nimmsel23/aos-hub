@@ -1,0 +1,35 @@
+# Fitness — Weekly Training Plan
+# Days without override use default
+
+default:
+  title: "Fitness — {date}"
+  description: ""
+
+schedule:
+  monday:
+    title: "Upper Body — {date}"
+    description: "Bench Press 3×8, Rows 3×10, Shoulders 3×12"
+
+  tuesday:
+    title: "Cardio — {date}"
+    description: "30min LISS or 15min HIIT"
+
+  wednesday:
+    title: "Lower Body — {date}"
+    description: "Squats 3×8, Deadlifts 3×6, Lunges 3×12"
+
+  thursday:
+    title: "Rest/Mobility — {date}"
+    description: "Stretching, foam rolling, light yoga"
+
+  friday:
+    title: "Full Body — {date}"
+    description: "Compound lifts, functional movements"
+
+  saturday:
+    title: "Active Recovery — {date}"
+    description: "Walk, swim, or light sport"
+
+  sunday:
+    title: "Rest — {date}"
+    description: "Recovery day"

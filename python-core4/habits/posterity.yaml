@@ -1,0 +1,10 @@
+# Posterity — Legacy Building
+
+default:
+  title: "Posterity — {date}"
+  description: "Content creation, knowledge sharing, or teaching"
+
+schedule:
+  saturday:
+    title: "Content Creation — {date}"
+    description: "Blog post, video, or educational content"

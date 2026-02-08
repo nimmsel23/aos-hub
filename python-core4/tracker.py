@@ -3,9 +3,9 @@
 Core4 tracker CLI (idempotent via weekly JSON).
 
 Design:
-- The *source of truth* for "already logged" is the weekly JSON written by Bridge:
-  `AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-WWW.json` (configurable via env).
-- If the entry is already present (done=true), we do nothing.
+- The *source of truth* for "already logged" is the append-only event ledger:
+  `AlphaOS-Vault/*Core4/.core4/events/YYYY-MM-DD/*.json`
+- If the stable entry key already exists (done=true), we do nothing.
 - Otherwise we create+complete a Taskwarrior task so existing hooks handle:
   - Bridge `/bridge/core4/log` (weekly JSON)
   - TickTick mapping + completion (`ticktick_sync.py`)
@@ -96,8 +96,15 @@ CORE4_JOURNAL_DIR = Path(
 
 
 def _color(text: str, code: str) -> str:
-    force = str(os.environ.get("CORE4_COLOR", "1")).strip() == "1"
-    if sys.stdout.isatty() or force:
+    if os.environ.get("NO_COLOR"):
+        return text
+    mode = str(os.environ.get("CORE4_COLOR", "auto")).strip().lower()
+    if mode in ("0", "off", "false", "no", "never"):
+        return text
+    if mode in ("1", "on", "true", "yes", "force", "always"):
+        return f"\033[{code}m{text}\033[0m"
+    # auto
+    if sys.stdout.isatty():
         return f"\033[{code}m{text}\033[0m"
     return text
 
@@ -150,12 +157,12 @@ def primary_core4_dir() -> Path:
 
 
 def core4_week_path(day: date) -> Path:
-    # Derived artifact written locally; pushed to GDrive via rclone (Core4 -> Alpha_Core4).
+    # Derived artifact written locally (rebuildable). We do NOT treat this as source-of-truth.
     return primary_core4_dir() / f"core4_week_{week_key(day)}.json"
 
 
 def core4_day_path(day: date) -> Path:
-    # Derived artifact written locally; pushed to GDrive via rclone.
+    # Derived artifact written locally (rebuildable).
     return primary_core4_dir() / f"core4_day_{day.isoformat()}.json"
 
 
@@ -256,7 +263,7 @@ def export_daily_csv(*, days: int = 56) -> Path:
 def prune_events(*, keep_weeks: int = 8) -> Dict[str, Any]:
     """
     Remove local event files older than `keep_weeks` to limit growth.
-    Only touches the *local* ledger under `~/AlphaOS-Vault/Core4/.python-core4/events`.
+    Only touches the *local* ledger under `~/AlphaOS-Vault/Core4/.core4/events`.
     """
     keep_weeks = max(1, min(int(keep_weeks), 52))
     cutoff = date.today() - timedelta(days=keep_weeks * 7)
@@ -431,8 +438,15 @@ def _merge_entry(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str
 
 
 def load_week(day: date) -> Dict[str, Any]:
-    # Weekly JSON is a derived artifact. Rebuild it from event ledger to avoid cross-writer conflicts.
-    return build_week(day, write=True)
+    """Return a computed week view from the event ledger (read-only)."""
+    # Week JSON is a derived artifact. We build it from events each time to avoid cross-writer conflicts.
+    # We keep reads as read-only by default; explicit commands (`core4 build`, pull-core4, logging) write.
+    return build_week(day, write=False)
+
+
+def load_day(day: date) -> Dict[str, Any]:
+    """Return a computed day view from the event ledger (read-only)."""
+    return build_day(day, write=False)
 
 
 def _event_key_from_entry(entry: Dict[str, Any]) -> str:
@@ -780,21 +794,13 @@ def resolve_target(habit_raw: str, day_raw: Optional[str]) -> Target:
 
 
 def is_already_logged(target: Target) -> bool:
-    data = load_week(target.day)
-    entries = data.get("entries") or []
-    for entry in entries:
-        if not isinstance(entry, dict):
+    # Cheap path: check day events only (truth = ledger).
+    for ev in list_events_for_day(target.day):
+        if not isinstance(ev, dict):
             continue
-        key = str(entry.get("key") or "").strip()
-        if not key:
-            date_key = str(entry.get("date") or "").strip()
-            domain = str(entry.get("domain") or "").strip().lower()
-            task = str(entry.get("task") or "").strip().lower()
-            if date_key and domain and task:
-                key = f"{date_key}:{domain}:{task}"
-        if key != target.entry_key:
+        if _event_key_from_entry(ev) != target.entry_key:
             continue
-        if bool(entry.get("done", True)) and float(entry.get("points") or 0.0) >= 0.5:
+        if bool(ev.get("done", True)) and float(ev.get("points") or 0.0) >= 0.5:
             return True
     return False
 
@@ -1116,12 +1122,6 @@ def score_mode(argv: list[str]) -> int:
                 if habits:
                     print(f"{date_key}: {', '.join(habits)}")
         return 0
-
-    # Ensure a day artifact exists for the requested date.
-    try:
-        build_day(day, write=True)
-    except Exception:
-        pass
 
     current = day_total_from_week(data, day)
     expected = _expected_points_from_tw(day, scope="day")
@@ -1457,10 +1457,23 @@ def prompt_habit_menu(options: list[str], done: set[str]) -> Optional[str]:
 def fzf_pick_habit(options: list[str], done: set[str]) -> Optional[tuple[str, str]]:
     if not (_have_cmd("fzf") and sys.stdin.isatty() and sys.stdout.isatty()):
         return None
-    labels = []
-    for opt in options:
-        mark = "✓" if opt in done else " "
-        labels.append(f"[{mark}] {opt}")
+    labels: list[str] = []
+    for idx, opt in enumerate(options, start=1):
+        if opt in done:
+            continue
+        # Keep the canonical 1-8 index visible so muscle memory works even if some are done.
+        labels.append(f"{idx}. {opt}")
+
+    done_line = " ".join([f"\u2713{_display_habit(h)}" for h in options if h in done]) or "none"
+    header = (
+        "Keys: 1-8=done  Enter=journal  Space=done  q/esc=exit\n"
+        f"Done today: {done_line}"
+    )
+
+    if not labels:
+        # Nothing left to log today.
+        print(_green("✓ core4: all habits done (today)"))
+        return ("", "noop")
     res = subprocess.run(
         [
             "fzf",
@@ -1470,10 +1483,12 @@ def fzf_pick_habit(options: list[str], done: set[str]) -> Optional[tuple[str, st
             "40%",
             "--border",
             "--no-multi",
+            "--header",
+            header,
             "--expect",
-            "enter,space",
+            "enter,space,1,2,3,4,5,6,7,8",
             "--bind",
-            "space:accept,q:abort,esc:abort",
+            "space:accept,enter:accept,q:abort,esc:abort",
         ],
         input="\n".join(labels),
         check=False,
@@ -1485,13 +1500,37 @@ def fzf_pick_habit(options: list[str], done: set[str]) -> Optional[tuple[str, st
     lines = (res.stdout or "").splitlines()
     if not lines:
         return None
-    key = lines[0] if lines[0] in ("enter", "space") else "enter"
-    selection = lines[1] if lines[0] in ("enter", "space") and len(lines) > 1 else lines[0]
-    opt = selection.replace("[✓]", "").replace("[ ]", "").strip()
-    if not opt or opt not in options or opt in done:
-        return None
+
+    key = ""
+    selection = ""
+    if lines[0] in ("enter", "space") or (len(lines[0]) == 1 and lines[0].isdigit()):
+        key = lines[0]
+        selection = lines[1] if len(lines) > 1 else ""
+    else:
+        key = "enter"
+        selection = lines[0]
+
+    # Fast path: digit hotkeys (always "done", no journal).
+    if len(key) == 1 and key.isdigit():
+        idx = int(key)
+        if not (1 <= idx <= len(options)):
+            return ("", "noop")
+        habit = options[idx - 1]
+        if habit in done:
+            return ("", "noop")
+        return habit, "done"
+
+    m = re.match(r"^\s*(\d+)\.\s+(\S+)\s*$", selection)
+    if not m:
+        return ("", "noop")
+    idx = int(m.group(1))
+    if not (1 <= idx <= len(options)):
+        return ("", "noop")
+    habit = options[idx - 1]
+    if not habit or habit not in options or habit in done:
+        return ("", "noop")
     action = "done" if key == "space" else "log"
-    return opt, action
+    return habit, action
 
 
 def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
@@ -1528,6 +1567,15 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
         task_label = _display_habit(target.habit)
         task_uuid = get_task_uuid(target)
         open_core4_journal(subtask, task_label=task_label, task_uuid=task_uuid)
+
+    def rebuild_derived_best_effort() -> None:
+        # Derived artifacts are rebuildable snapshots (NOT the truth). We keep them up to date on writes
+        # so other tools (e.g. index-node scanners) can read a single file, but we avoid writing on reads.
+        try:
+            build_week(target.day, write=True)
+            build_day(target.day, write=True)
+        except Exception:
+            pass
 
     if args.dry_run:
         print(
@@ -1569,6 +1617,7 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
                 print(_green(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json ok)"))
             else:
                 print(_green(f"✓ core4 {target.habit} ({target.date_key}) → done existing (json pending)"))
+            rebuild_derived_best_effort()
             maybe_open_journal()
             return finish(0)
 
@@ -1592,9 +1641,11 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
     # Best-effort verification: if hooks/bridge are fast, JSON should now contain it.
     if is_already_logged(target):
         print(_green(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json ok)"))
+        rebuild_derived_best_effort()
         maybe_open_journal()
         return finish(0)
     print(_green(f"✓ core4 {target.habit} ({target.date_key}) → created+done (json pending)"))
+    rebuild_derived_best_effort()
     maybe_open_journal()
     return finish(0)
 
@@ -1608,7 +1659,7 @@ def prompt_action_menu() -> Optional[str]:
         "Pull (Core4 only)",
         "Push (Core4 only)",
         "Sources",
-        "Build day/week",
+        "Build day/week (write)",
         "Export daily CSV",
         "Prune events",
         "Finalize month",
@@ -1667,6 +1718,7 @@ def main(argv: list[str]) -> int:
             "  core4             # opens menu (gum/fzf)\n"
             "  core4 sources     # show local Core4 sources\n"
             "  core4 menu        # full action menu (fzf/gum)\n"
+            "  core4 build       # write derived day+week snapshots (from ledger)\n"
             "\n"
             "Show score (JSON-backed, with TW replay if behind):\n"
             "  core4 -d            # today\n"
@@ -1708,6 +1760,8 @@ def main(argv: list[str]) -> int:
                 if not picked:
                     return finish(0)
                 habit, action = picked
+                if not habit or action == "noop":
+                    continue
                 if action == "done":
                     run_habit_flow([habit, "done"], finish, skip_journal=True)
                 else:
@@ -1723,6 +1777,22 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] in ("sources", "source", "debug"):
         return finish(show_sources())
+
+    if argv and argv[0] in ("build", "rebuild"):
+        # Explicit rebuild that writes derived artifacts (day/week) to the primary Core4 dir.
+        day_raw = argv[1] if len(argv) > 1 else None
+        try:
+            day = parse_day(day_raw)
+        except Exception as exc:
+            print(f"core4: {exc}", file=sys.stderr)
+            return finish(2)
+        try:
+            build_week(day, write=True)
+            build_day(day, write=True)
+        except Exception as exc:
+            print(f"core4: build failed: {exc}", file=sys.stderr)
+            return finish(1)
+        return finish(0)
 
     if argv and argv[0] in ("menu", "actions"):
         choice = prompt_action_menu()
@@ -1763,8 +1833,8 @@ def main(argv: list[str]) -> int:
             return 0 if run_core4ctl("sync-core4") else 1
         elif choice == "Sources":
             return finish(show_sources())
-        elif choice == "Build day/week":
-            return 0 if run_core4ctl("build") else 1
+        elif choice == "Build day/week (write)":
+            return finish(main(["build"]))
         elif choice == "Export daily CSV":
             return 0 if run_core4ctl("export-daily", "--days=56") else 1
         elif choice == "Prune events":

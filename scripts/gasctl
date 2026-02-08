@@ -1,27 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# gasctl — minimal GAS interaction helper (local CLI)
+# gasctl — GAS interaction helper (local CLI)
 #
-# Intentionally tiny:
+# Core:
 # - ping: send a watchdog heartbeat payload to the GAS webhook/webapp URL.
-# - systemstatus: trigger a Telegram /systemstatus via Bridge (if available).
+# - trigger/systemstatus: trigger Telegram commands via Bridge (synthetic update).
+# - bridge/sync: convenience wrappers around bridgectl for the "GAS pipeline".
+# - tent: manage GAS Tent Centre (clasp deploy, status, doctor).
 
+GASCTL_VERSION="1.1.0"
 APP="gasctl"
 
-msg() { printf "[%s] %s\n" "$APP" "$*"; }
-die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
-
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
-
-HB_HOST_DEFAULT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
-
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" )")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Load shared env (optional). This is where AOS_GAS_WEBHOOK_URL usually lives.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
+
+# Shared UI helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+
+msg() { printf "[%s] %s\n" "$APP" "$*"; }
+warn() { printf "[%s] WARN: %s\n" "$APP" "$*" >&2; }
+die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
+
+HB_HOST_DEFAULT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
+
+env_override=""
+gas_tent_dir_override=""
+cmd=""
 
 usage() {
   cat <<EOF
@@ -29,50 +39,34 @@ $APP — GAS helper
 
 Usage:
   $APP [--env FILE] ping
+  $APP [--env FILE] trigger <telegram-command>
   $APP [--env FILE] systemstatus
+  $APP [--env FILE] bridge [bridgectl-args...]
+  $APP [--env FILE] sync <status|pull|push|abort> [--dry-run]
+  $APP [--env FILE] tent <deploy|status|webhook|test|logs|open|url|props|doctor|version|help>
+
+Options:
+  --env FILE       Load env overrides (default: $ROOT_DIR/.env/aos.env)
+  --tent-dir PATH  Override GAS Tent dir (default: $ROOT_DIR/gas-tent-dev)
 
 Env:
   AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
   HB_URL / AOS_GAS_WEBHOOK_URL   GAS webhook /exec URL
   HB_HOST                       Host label (default: $HB_HOST_DEFAULT)
+  AOS_GAS_TENT_DIR               GAS Tent project dir (default: $ROOT_DIR/gas-tent-dev)
 EOF
 }
 
-ping() {
-  has_cmd curl || die "curl not found"
-  [[ -n "${HB_URL:-}" ]] || die "Missing HB_URL (set HB_URL or AOS_GAS_WEBHOOK_URL)"
-  msg "ping -> GAS"
-  curl -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
-    --connect-timeout 5 --max-time 10 -o /dev/null -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"kind\":\"heartbeat\",\"host\":\"${HB_HOST}\",\"manual\":true}" \
-    "${HB_URL}"
-  msg "OK"
-}
-
-systemstatus() {
-  if has_cmd systemstatusctl; then
-    exec systemstatusctl trigger --cmd /systemstatus
-  fi
-  die "systemstatusctl not found (expected in aos-hub/scripts/systemstatusctl)"
-}
-
-cmd="ping"
-env_override=""
-
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
-    ping|"")
-      cmd="ping"
-      shift || true
-      ;;
-    systemstatus)
-      cmd="systemstatus"
-      shift || true
-      ;;
     --env)
       env_override="${2:-}"
       [[ -n "$env_override" ]] || die "--env requires a file path"
+      shift 2
+      ;;
+    --tent-dir)
+      gas_tent_dir_override="${2:-}"
+      [[ -n "$gas_tent_dir_override" ]] || die "--tent-dir requires a path"
       shift 2
       ;;
     -h|--help|help)
@@ -80,7 +74,9 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      die "unknown arg: $1 (try: gasctl help)"
+      cmd="${1:-}"
+      shift || true
+      break
       ;;
   esac
 done
@@ -92,8 +88,415 @@ fi
 HB_HOST="${HB_HOST:-$HB_HOST_DEFAULT}"
 HB_URL="${HB_URL:-${AOS_GAS_WEBHOOK_URL:-}}"
 
+GAS_TENT_DIR="${gas_tent_dir_override:-${AOS_GAS_TENT_DIR:-$ROOT_DIR/gas-tent-dev}}"
+
+ping() {
+  has_cmd curl || die "curl not found"
+  [[ -n "${HB_URL:-}" ]] || die "Missing HB_URL (set HB_URL or AOS_GAS_WEBHOOK_URL)"
+  msg "ping -> GAS"
+  # Prefer GET for stability: Google Apps Script often redirects; POST may flip to GET on redirect.
+  local sep='?'
+  [[ "$HB_URL" == *\?* ]] && sep='&'
+  local url="${HB_URL}${sep}kind=heartbeat&host=${HB_HOST}&manual=1"
+  curl -fsSL --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
+    --connect-timeout 5 --max-time 10 -o /dev/null \
+    "$url"
+  msg "OK"
+}
+
+systemstatusctl_path() {
+  local p="$SCRIPT_DIR/systemstatusctl"
+  if [[ -x "$p" ]]; then
+    echo "$p"
+    return 0
+  fi
+  if has_cmd systemstatusctl; then
+    command -v systemstatusctl
+    return 0
+  fi
+  return 1
+}
+
+trigger() {
+  local cmd_in="${1:-}"
+  [[ -n "$cmd_in" ]] || die "missing command (example: gasctl trigger /systemstatus)"
+  local bin
+  bin="$(systemstatusctl_path)" || die "systemstatusctl not found"
+  exec "$bin" trigger --cmd "$cmd_in"
+}
+
+systemstatus() {
+  trigger "/systemstatus"
+}
+
+bridge() {
+  if [[ $# -eq 0 ]]; then
+    exec bridgectl doctor
+  fi
+  exec bridgectl "$@"
+}
+
+sync() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    status) exec bridgectl sync-status ;;
+    pull) exec bridgectl sync-pull "$@" ;;
+    push) exec bridgectl sync-push "$@" ;;
+    abort) exec bridgectl sync-abort ;;
+    *)
+      die "unknown sync subcommand: $sub (use: status|pull|push|abort)"
+      ;;
+  esac
+}
+
+open_url() {
+  local url="$1"
+  if has_cmd xdg-open; then
+    xdg-open "$url" >/dev/null 2>&1 || true
+  elif has_cmd open; then
+    open "$url" >/dev/null 2>&1 || true
+  else
+    echo "$url"
+  fi
+}
+
+read_script_id() {
+  local json_path="$1"
+  if [[ ! -f "$json_path" ]]; then
+    echo ""
+    return 0
+  fi
+  if has_cmd jq; then
+    jq -r '.scriptId // empty' "$json_path" 2>/dev/null || true
+    return 0
+  fi
+  if has_cmd python3; then
+    python3 - <<'PY' "$json_path" 2>/dev/null || true
+import json
+import sys
+path = sys.argv[1]
+try:
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    print(data.get('scriptId',''))
+except Exception:
+    pass
+PY
+    return 0
+  fi
+  echo ""
+}
+
+tent_paths() {
+  CLASP_JSON="$GAS_TENT_DIR/.clasp.json"
+  GAS_SCRIPT_ID="$(read_script_id "$CLASP_JSON")"
+}
+
+tent_require_dir() {
+  if [[ ! -d "$GAS_TENT_DIR" ]]; then
+    die "GAS Tent dir not found: $GAS_TENT_DIR"
+  fi
+}
+
+tent_check_clasp() {
+  tent_require_dir
+  need_cmd clasp
+  tent_paths
+  if [[ ! -f "$CLASP_JSON" ]]; then
+    die ".clasp.json not found: $CLASP_JSON"
+  fi
+  if [[ -z "$GAS_SCRIPT_ID" ]]; then
+    die "No scriptId in .clasp.json"
+  fi
+}
+
+tent_help() {
+  cat <<'EOF_TENT'
+GAS Tent Centre (gasctl tent)
+
+Usage:
+  gasctl tent <command>
+
+Commands:
+  deploy       Push code to GAS via clasp
+  status       Check GAS deployment status
+  webhook      Manage Telegram webhook (set|info|delete)
+  test         Run smoke tests (backend|ticktick|digest|full)
+  logs         Open GAS execution logs (browser)
+  open         Open GAS editor in browser
+  edit         Alias for open
+  url          Show deployment URLs
+  props        Script Properties (show|set)
+  doctor       Health check
+  version      Show version
+  help         Show this help
+
+Env:
+  AOS_GAS_TENT_DIR=/path/to/gas-tent-dev
+EOF_TENT
+}
+
+tent_deploy() {
+  ui_title "gasctl tent deploy"
+  ui_info "Deploying to GAS..."
+
+  tent_check_clasp
+
+  (cd "$GAS_TENT_DIR" && clasp push --force)
+
+  ui_ok "Code pushed to GAS"
+  ui_info "Script ID: $GAS_SCRIPT_ID"
+  ui_info "Next steps:"
+  ui_info "1) gasctl tent props set"
+  ui_info "2) Deploy Web App in GAS editor"
+  ui_info "3) gasctl tent webhook set"
+}
+
+tent_status() {
+  ui_title "gasctl tent status"
+
+  tent_check_clasp
+
+  ui_info "Script ID: $GAS_SCRIPT_ID"
+  ui_info ""
+  ui_info "Tracked files:"
+  local lines
+  lines=$(cd "$GAS_TENT_DIR" && clasp status 2>/dev/null | grep "-" || true)
+  if [[ -n "$lines" ]]; then
+    echo "$lines" | sed 's/^/  /'
+  else
+    ui_info "(no tracked files listed)"
+  fi
+
+  ui_ok "Status check complete"
+}
+
+tent_webhook() {
+  local action="${1:-info}"
+
+  tent_check_clasp
+
+  case "$action" in
+    set)
+      ui_info "Setting Telegram webhook..."
+      ui_warn "Requires in GAS Script Properties:"
+      ui_info "- TELEGRAM_BOT_TOKEN"
+      ui_info "- TENT_WEBAPP_URL"
+      ui_info ""
+      ui_info "Run in GAS editor:"
+      ui_info "  setTentWebhook()"
+      ;;
+    info)
+      ui_info "Getting webhook info..."
+      ui_info "Run in GAS editor:"
+      ui_info "  getTentWebhookInfo()"
+      ;;
+    delete)
+      ui_warn "Deleting webhook..."
+      ui_info "Run in GAS editor:"
+      ui_info "  deleteTentWebhook()"
+      ;;
+    *)
+      die "Unknown webhook action: $action (use: set|info|delete)"
+      ;;
+  esac
+}
+
+tent_test() {
+  local test_type="${1:-full}"
+
+  tent_check_clasp
+
+  ui_title "gasctl tent test"
+  ui_info "Test type: $test_type"
+  ui_info ""
+
+  case "$test_type" in
+    backend)
+      ui_info "Run in GAS editor:"
+      ui_info "  statusTent()"
+      ;;
+    ticktick)
+      ui_info "Run in GAS editor:"
+      ui_info "  ticktickSmokeTest()"
+      ;;
+    digest)
+      ui_info "Run in GAS editor:"
+      ui_info "  testBuildDigest()"
+      ;;
+    full)
+      ui_info "Run in GAS editor:"
+      ui_info "  tentSetupSmokeTest()"
+      ui_info ""
+      ui_info "Or run individually:"
+      ui_info "  statusTent()"
+      ui_info "  ticktickSmokeTest()"
+      ui_info "  testBuildDigest()"
+      ;;
+    *)
+      die "Unknown test: $test_type (use: backend|ticktick|digest|full)"
+      ;;
+  esac
+}
+
+tent_logs() {
+  tent_check_clasp
+
+  ui_info "Opening GAS logs..."
+  ui_info "Logs are in browser: Executions -> View executions"
+  open_url "https://script.google.com/d/$GAS_SCRIPT_ID/edit"
+}
+
+tent_open() {
+  tent_check_clasp
+
+  ui_info "Opening GAS editor"
+  open_url "https://script.google.com/d/$GAS_SCRIPT_ID/edit"
+}
+
+tent_url() {
+  tent_check_clasp
+
+  ui_info "GAS Project URLs:"
+  ui_info ""
+  ui_info "Editor:"
+  echo "  https://script.google.com/d/$GAS_SCRIPT_ID/edit"
+  ui_info ""
+  ui_info "Deployment URL:"
+  ui_warn "  (Get from: Deploy -> Manage deployments -> Web app URL)"
+  ui_info ""
+  ui_info "Script ID:"
+  echo "  $GAS_SCRIPT_ID"
+}
+
+tent_props() {
+  local action="${1:-show}"
+
+  tent_check_clasp
+
+  case "$action" in
+    show)
+      ui_info "Script Properties (configured in GAS):"
+      ui_info ""
+      ui_info "Run in GAS editor to view:"
+      ui_info "  checkTentProperties()"
+      ui_info ""
+      ui_info "Or manually:"
+      ui_info "Project Settings -> Script properties"
+      ;;
+    set)
+      ui_info "Setting Script Properties..."
+      ui_info ""
+      ui_info "1) gasctl tent open"
+      ui_info "2) Run in GAS editor:"
+      ui_info "   setupTentProperties()"
+      ui_info "3) Edit tokens/URLs in the function"
+      ui_info "4) Run it"
+      ui_info ""
+      ui_info "See: SETUP_PROPERTIES.js for details"
+      ;;
+    *)
+      die "Unknown props action: $action (use: show|set)"
+      ;;
+  esac
+}
+
+tent_doctor() {
+  ui_title "gasctl tent doctor"
+  ui_info "Running health checks..."
+  ui_info ""
+
+  tent_require_dir
+  tent_paths
+
+  if [[ -f "$CLASP_JSON" ]]; then
+    ui_ok ".clasp.json found"
+  else
+    ui_err ".clasp.json missing"
+  fi
+
+  if [[ -n "$GAS_SCRIPT_ID" ]]; then
+    ui_ok "Script ID: $GAS_SCRIPT_ID"
+  else
+    ui_err "No script ID"
+  fi
+
+  if has_cmd clasp; then
+    ui_ok "clasp installed: $(clasp --version 2>&1 | head -1 || echo 'unknown')"
+  else
+    ui_err "clasp not installed"
+    ui_info "Install: npm install -g @google/clasp"
+  fi
+
+  local required_files=(
+    "backend.gs"
+    "config.gs"
+    "webapp.gs"
+    "ticktick_functions.gs"
+    "ticktick_fetch.gs"
+    "tent_digest.gs"
+    "telegram_bot.gs"
+    "Index.html"
+    "appsscript.json"
+  )
+
+  local missing=0
+  local f
+  for f in "${required_files[@]}"; do
+    if [[ -f "$GAS_TENT_DIR/$f" ]]; then
+      ui_ok "$f"
+    else
+      ui_err "$f missing"
+      ((missing++))
+    fi
+  done
+
+  ui_info ""
+  if [[ $missing -eq 0 ]]; then
+    ui_ok "All files present"
+  else
+    ui_err "$missing files missing"
+  fi
+
+  ui_info ""
+  ui_info "For full test, run in GAS editor:"
+  ui_info "  tentSetupSmokeTest()"
+}
+
+tent_version() {
+  echo "gasctl tent version 1.0.0"
+  if has_cmd clasp; then
+    clasp --version 2>&1 | head -1 || true
+  fi
+}
+
+tent() {
+  local sub="${1:-help}"
+  shift || true
+  case "$sub" in
+    deploy) tent_deploy "$@" ;;
+    status) tent_status "$@" ;;
+    webhook) tent_webhook "$@" ;;
+    test) tent_test "$@" ;;
+    logs) tent_logs "$@" ;;
+    open|edit) tent_open "$@" ;;
+    url) tent_url "$@" ;;
+    props) tent_props "$@" ;;
+    doctor) tent_doctor "$@" ;;
+    version) tent_version ;;
+    help|-h|--help) tent_help ;;
+    *) die "unknown tent command: $sub (try: gasctl tent help)" ;;
+  esac
+}
+
 case "$cmd" in
-  ping) ping ;;
+  ""|ping) ping ;;
+  trigger) trigger "${1:-}" ;;
   systemstatus) systemstatus ;;
+  bridge) bridge "$@" ;;
+  sync) sync "$@" ;;
+  tent) tent "$@" ;;
+  help|-h|--help) usage ;;
   *) die "unknown command: $cmd (try: gasctl help)" ;;
 esac

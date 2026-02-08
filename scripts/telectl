@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# telectl — Telegram dispatch + "send this output" convenience wrappers.
+#
+# Philosophy:
+# - Keep it usable with one command (`telectl ...`) across shells.
+# - Prefer delegating to existing tools (tele, firectl, bridgectl, routerctl, gasctl).
+
+APP="telectl"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+has_gum() { command -v gum >/dev/null 2>&1; }
+has_fzf() { command -v fzf >/dev/null 2>&1; }
+
+# Load global env (optional): pulls AOS_TELE_BIN and friends from aos.env
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" >/dev/null 2>&1 || true
+
+msg() { printf "[%s] %s\n" "$APP" "$*"; }
+die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
+
+ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "$APP" || msg "$APP"; }
+ui_info() { has_gum && gum style --faint "$*" || msg "$*"; }
+ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || msg "✔ $*"; }
+ui_err()  { has_gum && gum style --foreground 9  "✘ $*" || msg "✘ $*"; }
+
+choose() {
+  if has_fzf; then
+    printf "%s\n" "$@" | fzf --prompt="$APP> " --height=18 --reverse --border
+    return 0
+  fi
+  if has_gum; then
+    gum choose "$@"
+    return 0
+  fi
+  ui_info "Choose one:"
+  select opt in "$@"; do echo "$opt"; break; done
+}
+
+TELE_BIN="${AOS_TELE_BIN:-${TELE_BIN:-tele}}"
+SILENT_DEFAULT="${AOS_TELE_SILENT:-1}"
+
+need_tele() {
+  has_cmd "$TELE_BIN" || die "tele not found: $TELE_BIN"
+}
+
+tele_send() {
+  local silent="${1:-$SILENT_DEFAULT}"; shift || true
+  need_tele
+  if [[ "$silent" == "1" ]]; then
+    "$TELE_BIN" -s "$@"
+  else
+    "$TELE_BIN" "$@"
+  fi
+}
+
+tele_send_text() {
+  local silent="${1:-$SILENT_DEFAULT}"; shift || true
+  [[ $# -gt 0 ]] || die "missing message text"
+  tele_send "$silent" "$*"
+}
+
+tele_send_doc() {
+  local silent="${1:-$SILENT_DEFAULT}"; shift || true
+  local file="${1:-}"; shift || true
+  [[ -n "$file" ]] || die "missing file"
+  [[ -f "$file" ]] || die "file not found: $file"
+  local caption="${*:-}"
+  if [[ -n "$caption" ]]; then
+    tele_send "$silent" --document "$file" --caption "$caption"
+  else
+    tele_send "$silent" --document "$file"
+  fi
+}
+
+tele_send_button() {
+  local silent="${1:-$SILENT_DEFAULT}"; shift || true
+  local label="${1:-}"; local url="${2:-}"; shift 2 || true
+  [[ -n "$label" && -n "$url" ]] || die "usage: telectl button <label> <url> [text...]"
+  local text="${*:-$url}"
+  tele_send "$silent" --button "$label" "$url" "$text"
+}
+
+tmpfile() {
+  local prefix="${1:-telectl}"
+  mktemp "/tmp/${prefix}.XXXXXX"
+}
+
+send_output() {
+  # Send stdout of a command.
+  # Default: send as document to avoid TG length issues.
+  local silent="${1:-$SILENT_DEFAULT}"; shift || true
+  local mode="${1:-doc}"; shift || true # doc|text
+  local title="${1:-output}"; shift || true
+  [[ $# -gt 0 ]] || die "send_output: missing command"
+
+  local out
+  out="$(tmpfile telectl)"
+  if ! "$@" >"$out" 2>&1; then
+    # still send the output (it contains the error)
+    :
+  fi
+
+  if [[ "$mode" == "text" ]]; then
+    local body
+    body="$(cat "$out" | head -c 3500)"
+    tele_send_text "$silent" "$title"$'\n\n'"$body"
+  else
+    tele_send_doc "$silent" "$out" "$title"
+  fi
+  rm -f "$out" >/dev/null 2>&1 || true
+}
+
+fire() {
+  local scope="${1:-daily}"; shift || true
+  case "$scope" in
+    daily|weekly) ;;
+    *) die "usage: telectl fire daily|weekly [--text]" ;;
+  esac
+  local mode="doc"
+  if [[ "${1:-}" == "--text" ]]; then
+    mode="text"
+    shift
+  fi
+  has_cmd firectl || die "firectl not found"
+  send_output "$SILENT_DEFAULT" "$mode" "Fire ${scope}" firectl print "$scope"
+}
+
+blueprint() {
+  local sub="${1:-send}"; shift || true
+  has_cmd blueprintctl || die "blueprintctl not found"
+  case "$sub" in
+    send) exec blueprintctl send "$@" ;;
+    status|list|next|reset) exec blueprintctl "$sub" "$@" ;;
+    *) die "usage: telectl blueprint send|status|list|next|reset" ;;
+  esac
+}
+
+bridge() {
+  local sub="${1:-doctor}"; shift || true
+  has_cmd bridgectl || die "bridgectl not found"
+  send_output "$SILENT_DEFAULT" "doc" "Bridge ${sub}" bridgectl "$sub" "$@"
+}
+
+router() {
+  local sub="${1:-doctor}"; shift || true
+  has_cmd routerctl || die "routerctl not found"
+  send_output "$SILENT_DEFAULT" "doc" "Router ${sub}" routerctl "$sub" "$@"
+}
+
+gas() {
+  # GAS-triggered status gets sent by GAS itself (not via tele).
+  local sub="${1:-systemstatus}"; shift || true
+  has_cmd gasctl || die "gasctl not found"
+  exec gasctl "$sub" "$@"
+}
+
+menu() {
+  ui_title
+  local action
+  action="$(choose \
+    "send (silent)" \
+    "send (loud)" \
+    "fire daily" \
+    "fire weekly" \
+    "blueprint send" \
+    "gas systemstatus" \
+    "bridge doctor -> telegram" \
+    "router doctor -> telegram" \
+    "tele status" \
+    "quit")"
+
+  case "$action" in
+    "send (silent)")
+      has_gum || die "gum required for interactive send"
+      local text
+      text="$(gum input --placeholder "Message")"
+      [[ -n "$text" ]] || exit 0
+      tele_send_text 1 "$text"
+      ;;
+    "send (loud)")
+      has_gum || die "gum required for interactive send"
+      local text
+      text="$(gum input --placeholder "Message")"
+      [[ -n "$text" ]] || exit 0
+      tele_send_text 0 "$text"
+      ;;
+    "fire daily") fire daily ;;
+    "fire weekly") fire weekly ;;
+    "blueprint send") blueprint send ;;
+    "gas systemstatus") gas systemstatus ;;
+    "bridge doctor -> telegram") bridge doctor ;;
+    "router doctor -> telegram") router doctor ;;
+    "tele status") exec "$TELE_BIN" --status ;;
+    "quit"|*) exit 0 ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+$APP — Telegram control + wrappers
+
+Usage:
+  $APP menu
+  $APP send [--loud] <text...>
+  $APP doc [--loud] <file> [caption...]
+  $APP button [--loud] <label> <url> [text...]
+  $APP status
+
+Wrappers:
+  $APP fire daily|weekly [--text]         # uses firectl print + sends via tele (silent by default)
+  $APP blueprint <send|status|list|next|reset> ...
+  $APP bridge [bridgectl args...]         # sends output as telegram document
+  $APP router [routerctl args...]         # sends output as telegram document
+  $APP gas [gasctl args...]               # triggers GAS pipeline (GAS sends the message)
+
+Env:
+  AOS_TELE_BIN=tele
+  AOS_TELE_SILENT=1
+EOF
+}
+
+cmd="${1:-menu}"
+shift || true
+
+silent="$SILENT_DEFAULT"
+if [[ "${1:-}" == "--loud" ]]; then
+  silent="0"
+  shift
+elif [[ "${1:-}" == "--silent" ]]; then
+  silent="1"
+  shift
+fi
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  menu) menu ;;
+  status) need_tele; exec "$TELE_BIN" --status ;;
+
+  send)
+    tele_send_text "$silent" "$@"
+    ;;
+  doc)
+    tele_send_doc "$silent" "${1:-}" "${@:2}"
+    ;;
+  button)
+    tele_send_button "$silent" "${1:-}" "${2:-}" "${@:3}"
+    ;;
+
+  fire) fire "${1:-daily}" "${@:2}" ;;
+  blueprint) blueprint "${@:-send}" ;;
+  bridge) bridge "${@:-doctor}" ;;
+  router) router "${@:-doctor}" ;;
+  gas) gas "${@:-systemstatus}" ;;
+
+  raw)
+    # Pass-through to tele for advanced usage.
+    need_tele
+    exec "$TELE_BIN" "$@"
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+

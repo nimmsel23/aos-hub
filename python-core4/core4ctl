@@ -1,340 +1,88 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CORE4_BIN="${CORE4_BIN:-$HOME/bin/core4}"
-HUB_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
-UNIT_SRC_DIR="${HUB_DIR}/systemd"
-UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-CORE4_LOCAL_DIR="${AOS_CORE4_LOCAL_DIR:-$HOME/AlphaOS-Vault/Core4}"
-CORE4_MOUNT_DIR="${AOS_CORE4_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_Core4}"
-CORE4_REMOTE="${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
-CORE4_MOUNT_SERVICE="${AOS_CORE4_MOUNT_SERVICE:-rclone-alpha-core4.service}"
+# core4ctl — thin dispatcher
+# Keep this file small; real logic lives in:
+#   - core4-trackctl  (tracker + taskwarrior wrappers)
+#   - core4-syncctl   (rclone/vault sync)
+#   - core4-servicectl (systemd mount/timers)
+#   - core4-clinctl   (install/doctor)
+#   - core4-menuctl   (interactive menu)
 
-# Core4 habits: habit:domain:DisplayLabel  (must stay in sync with GAS CORE4_HABITS)
-CORE4_HABITS_DEF=(
-  "fitness:body:Fitness"
-  "fuel:body:Fuel"
-  "meditation:being:Meditation"
-  "memoirs:being:Memoirs"
-  "partner:balance:Partner"
-  "posterity:balance:Posterity"
-  "discover:business:Discover"
-  "declare:business:Declare"
-)
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-have() { command -v "$1" >/dev/null 2>&1; }
-need_systemctl() {
-  if ! have systemctl; then
-    echo "core4ctl: systemctl not found" >&2
-    exit 127
-  fi
-}
-systemctl_user() { systemctl --user "$@"; }
-
-vaultctl_cmd() {
-  local repo_vaultctl="${HUB_DIR}/scripts/sync-utils/vaultctl"
-  local repo_alt="${HUB_DIR}/scripts/utils/vaultctl"
-  if [[ -x "$repo_vaultctl" ]]; then
-    echo "$repo_vaultctl"
-    return 0
-  fi
-  if [[ -x "$repo_alt" ]]; then
-    echo "$repo_alt"
-    return 0
-  fi
-  if have vaultctl; then
-    echo "vaultctl"
-    return 0
-  fi
-  if [[ -x "$HOME/.dotfiles/bin/vaultctl" ]]; then
-    echo "$HOME/.dotfiles/bin/vaultctl"
-    return 0
-  fi
-  return 1
-}
-
-notify_tele() {
-  local msg="$1"
-  if command -v tele >/dev/null 2>&1; then
-    tele -s "$msg" &
-  fi
-}
-
-run_rclone_copy() {
-  local label="$1"
-  local src="$2"
-  local dst="$3"
-  shift 3
-  local rclone_bin
-  rclone_bin="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
-  if [[ -z "${rclone_bin:-}" || ! -x "$rclone_bin" ]]; then
-    echo "core4ctl: rclone not found" >&2
-    return 1
-  fi
-  local output
-  local rc=0
-  output="$("$rclone_bin" copy "$src" "$dst" "$@" \
-    --stats=1s \
-    --stats-one-line \
-    --contimeout 5s \
-    --timeout 30s \
-    --retries 1 \
-    --low-level-retries 1 \
-    2>&1)" || rc=$?
-  if [ "$rc" -ne 0 ]; then
-    echo "$output" >&2
-    return "$rc"
-  fi
-  local last
-  last="$(printf "%s\n" "$output" | tail -n 1)"
-  local transferred
-  transferred="$(printf "%s\n" "$last" | sed -n 's/.*Transferred:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p')"
-  if [[ -z "${transferred:-}" ]]; then
-    return 0
-  fi
-  if [[ "$transferred" != "0" ]]; then
-    notify_tele "Core4 ${label}: transferred ${transferred}"
-  fi
-  return 0
-}
-
-core4_filter_args() {
-  # Sync only append-only ledger + sealed artifacts; derived JSON is rebuilt locally.
-  :
-}
+trackctl() { exec "$APP_DIR/core4-trackctl" "$@"; }
+syncctl() { exec "$APP_DIR/core4-syncctl" "$@"; }
+servicectl() { exec "$APP_DIR/core4-servicectl" "$@"; }
+clinctl() { exec "$APP_DIR/core4-clinctl" "$@"; }
+menuctl() { exec "$APP_DIR/core4-menuctl" "$@"; }
 
 usage() {
-  cat <<'EOF'
-core4ctl
+  cat <<EOF
+Usage: core4ctl <command>
 
-Convenience wrapper around `core4` plus optional systemd timer templates.
+Core:
+  core4ctl menu
+  core4ctl doctor
+  core4ctl install-cli [TARGET]
 
-Commands
-  status                         Show quick Core4 status + scores
-  menu                           Gum menu (if available)
-  build                          Rebuild week/day artifacts (prints nothing on success)
-  seed-week [--force] [--dry-run]  Seed 8 Core4 habits × 7 days for current ISO week
-  sync                           Push Core4 vault to Drive (via vaultctl copy)
-  sync-core4                     Push Core4 only via rclone (copy from Core4)
-  pull-core4                     Pull Core4 only via rclone (copy to Alpha_Core4)
-  export-daily [--days N]         Regenerate rolling `core4_daily.csv`
-  prune [--keep-weeks N]          Prune local event files older than the window
-  finalize-month [YYYY-MM]        Write `core4_YYYY-MM.csv` (month close; idempotent)
-  mount-status                   Show Core4 mount service status
-  mount-enable                   Enable + start Core4 mount service
-  mount-disable                  Disable + stop Core4 mount service
-  mount-restart                  Restart Core4 mount service
-  mount-logs                     Show recent Core4 mount logs
-  install-timers                 Copy systemd user units to ~/.config/systemd/user
+Tracker:
+  core4ctl status
+  core4ctl sources
+  core4ctl build
+  core4ctl seed-week [args...]
+  core4ctl export-daily [args...]
+  core4ctl prune-events [args...]
+  core4ctl finalize-month [args...]
+  core4ctl finalize-week [args...]
 
-Notes
-  - Timers are only installed (copied), not enabled automatically.
-  - Enable manually:
-      systemctl --user daemon-reload
-      systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer core4-seed-week.timer
+Taskwarrior:
+  core4ctl list|today|week|done [task-args...]
+
+Sync:
+  core4ctl sync        # vaultctl sync (whole vault)
+  core4ctl pull-core4  # pull .core4/** from Drive + rebuild
+  core4ctl sync-core4  # push .core4/** to Drive
+
+Systemd:
+  core4ctl mount-status|mount-enable|mount-disable|mount-restart|mount-logs
+  core4ctl install-timers
 EOF
 }
 
-need_core4() {
-  if [[ ! -x "$CORE4_BIN" ]]; then
-    echo "core4ctl: core4 not found/executable: $CORE4_BIN" >&2
-    exit 127
+cmd="${1:-}"
+if [[ -z "${cmd:-}" ]]; then
+  if [[ -t 0 && -t 1 ]]; then
+    cmd="menu"
+  else
+    cmd="help"
   fi
-}
+else
+  shift || true
+fi
 
-cmd_status() {
-  need_core4
-  echo "core4ctl status"
-  echo ""
-  echo "- core4: $CORE4_BIN"
-  echo "- vault: ${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
-  echo ""
-  "$CORE4_BIN" -d --quiet || true
-  "$CORE4_BIN" -w --quiet || true
-  echo ""
-  if [[ -d "$HOME/AlphaOS-Vault/Core4/.python-core4/events" ]]; then
-    echo "events (local):"
-    find "$HOME/AlphaOS-Vault/Core4/.python-core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
-  fi
-  if [[ -f "$HOME/AlphaOS-Vault/Core4/core4_daily.csv" ]]; then
-    echo "daily csv: $HOME/AlphaOS-Vault/Core4/core4_daily.csv"
-  fi
-}
+case "$cmd" in
+  -h|--help|help) usage ;;
+  help) usage ;;
+  menu) menuctl menu ;;
 
-cmd_sync() {
-  local vaultctl
-  vaultctl="$(vaultctl_cmd || true)"
-  if [[ -z "${vaultctl:-}" ]]; then
-    echo "core4ctl: vaultctl not found" >&2
-    exit 1
-  fi
-  "$vaultctl" sync
-}
+  doctor) clinctl doctor ;;
+  install-cli) clinctl install-cli "${1:-}" ;;
 
-cmd_sync_core4() {
-  if [[ ! -d "$CORE4_LOCAL_DIR" ]]; then
-    echo "core4ctl: missing local Core4 dir: $CORE4_LOCAL_DIR" >&2
-    exit 1
-  fi
-  # Only push the ledger; avoid Drive duplicates for derived JSON.
-  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" --filter "+ .core4/**" --filter "- *"
-}
-
-cmd_pull_core4() {
-  mkdir -p "$CORE4_MOUNT_DIR"
-  run_rclone_copy "pull" "$CORE4_REMOTE" "$CORE4_MOUNT_DIR" --filter "+ .core4/**" --filter "- *"
-  # Rebuild derived week/day locally from all available sources (Core4 + Alpha_Core4).
-  cmd_build >/dev/null 2>&1 || true
-}
-
-cmd_mount_status() {
-  need_systemctl
-  systemctl_user status "$CORE4_MOUNT_SERVICE" --no-pager
-}
-
-cmd_mount_enable() {
-  need_systemctl
-  systemctl_user enable --now "$CORE4_MOUNT_SERVICE"
-}
-
-cmd_mount_disable() {
-  need_systemctl
-  systemctl_user disable --now "$CORE4_MOUNT_SERVICE"
-}
-
-cmd_mount_restart() {
-  need_systemctl
-  systemctl_user restart "$CORE4_MOUNT_SERVICE"
-}
-
-cmd_mount_logs() {
-  need_systemctl
-  journalctl --user -u "$CORE4_MOUNT_SERVICE" -n 200 --no-pager
-}
-
-cmd_build() {
-  need_core4
-  "$CORE4_BIN" -w --quiet >/dev/null
-  "$CORE4_BIN" -d --quiet >/dev/null
-}
-
-cmd_seed_week() {
-  need_core4
-  exec "$CORE4_BIN" seed-week "$@"
-}
-
-cmd_menu() {
-  if ! have gum; then
-    usage
-    return 0
-  fi
-  if [[ ! -t 0 || ! -t 1 ]]; then
-    usage
-    return 0
-  fi
-  need_core4
-
-  while true; do
-    local choice
-    choice="$(
-      printf "%s\n" \
-        "Status" \
-        "Seed week" \
-        "Build (rebuild day/week)" \
-        "Sync Core4 (vaultctl copy)" \
-        "Sync Core4 only (rclone copy)" \
-        "Pull Core4 only (rclone copy)" \
-        "Mount status (Alpha_Core4)" \
-        "Mount enable (Alpha_Core4)" \
-        "Mount disable (Alpha_Core4)" \
-        "Mount restart (Alpha_Core4)" \
-        "Mount logs (Alpha_Core4)" \
-        "Export daily CSV (56d)" \
-        "Prune events (keep 8w)" \
-        "Finalize month (YYYY-MM)" \
-        "Install timers (copy units)" \
-        "Exit" \
-        | gum choose --header "Core4 — core4ctl"
-    )" || return 0
-
-    case "$choice" in
-      "Status") cmd_status ;;
-      "Seed week") cmd_seed_week ;;
-      "Build (rebuild day/week)") cmd_build ;;
-      "Sync Core4 (vaultctl copy)") cmd_sync ;;
-      "Sync Core4 only (rclone copy)") cmd_sync_core4 ;;
-      "Pull Core4 only (rclone copy)") cmd_pull_core4 ;;
-      "Mount status (Alpha_Core4)") cmd_mount_status ;;
-      "Mount enable (Alpha_Core4)") cmd_mount_enable ;;
-      "Mount disable (Alpha_Core4)") cmd_mount_disable ;;
-      "Mount restart (Alpha_Core4)") cmd_mount_restart ;;
-      "Mount logs (Alpha_Core4)") cmd_mount_logs ;;
-      "Export daily CSV (56d)") "$CORE4_BIN" export-daily --days=56 >/dev/null && echo "ok" ;;
-      "Prune events (keep 8w)") "$CORE4_BIN" prune-events --keep-weeks=8 ;;
-      "Finalize month (YYYY-MM)")
-        local m
-        m="$(date +%Y-%m)"
-        if have gum; then
-          m="$(printf "%s" "$m" | gum input --prompt "Month (YYYY-MM): " --value "$m")" || continue
-        fi
-        "$CORE4_BIN" finalize-month "$m"
-        ;;
-      "Install timers (copy units)") cmd_install_timers ;;
-      "Exit") return 0 ;;
-    esac
-    echo ""
-  done
-}
-
-cmd_install_timers() {
-  mkdir -p "$UNIT_DST_DIR"
-  for f in core4-daily.service core4-daily.timer core4-prune.service core4-prune.timer core4-month-close.service core4-month-close.timer core4-seed-week.service core4-seed-week.timer; do
-    if [[ ! -f "$UNIT_SRC_DIR/$f" ]]; then
-      echo "core4ctl: missing unit template: $UNIT_SRC_DIR/$f" >&2
-      exit 1
-    fi
-    cp -f "$UNIT_SRC_DIR/$f" "$UNIT_DST_DIR/$f"
-  done
-  echo "Installed units to $UNIT_DST_DIR"
-  echo "Next:"
-  echo "  systemctl --user daemon-reload"
-  echo "  systemctl --user enable --now core4-daily.timer core4-prune.timer core4-month-close.timer core4-seed-week.timer"
-}
-
-case "${1:-}" in
-  ""|-h|--help|help) usage ;;
-  menu) cmd_menu ;;
-  status) cmd_status ;;
-  build) cmd_build ;;
-  sync) cmd_sync ;;
-  sync-core4) cmd_sync_core4 ;;
-  pull-core4) cmd_pull_core4 ;;
-  mount-status) cmd_mount_status ;;
-  mount-enable) cmd_mount_enable ;;
-  mount-disable) cmd_mount_disable ;;
-  mount-restart) cmd_mount_restart ;;
-  mount-logs) cmd_mount_logs ;;
-  export-daily)
-    need_core4
-    exec "$CORE4_BIN" export-daily "${@:2}"
+  status|sources|build|seed-week|export-daily|prune|prune-events|finalize-month|seal-month|month-close|finalize-week|seal-week|list|ls|today|week|done|completed)
+    trackctl "$cmd" "$@"
     ;;
-  prune|prune-events)
-    need_core4
-    exec "$CORE4_BIN" prune-events "${@:2}"
+
+  sync|sync-core4|push|push-core4|pull|pull-core4)
+    syncctl "$cmd" "$@"
     ;;
-  finalize-month|seal-month|month-close)
-    need_core4
-    exec "$CORE4_BIN" finalize-month "${@:2}"
+
+  mount-status|mount-enable|mount-disable|mount-restart|mount-logs|install-timers)
+    servicectl "$cmd" "$@"
     ;;
-  finalize-week|seal-week)
-    need_core4
-    exec "$CORE4_BIN" finalize-week "${@:2}"
-    ;;
-  seed-week) cmd_seed_week "${@:2}" ;;
-  install-timers) cmd_install_timers ;;
+
   *)
-    echo "core4ctl: unknown command: $1" >&2
     usage
-    exit 2
+    exit 1
     ;;
 esac

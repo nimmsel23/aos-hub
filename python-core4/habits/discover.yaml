@@ -1,0 +1,10 @@
+# Discover — Learning & Research
+
+default:
+  title: "Discover — {date}"
+  description: "Read, research, course work, or skill development"
+
+schedule:
+  sunday:
+    title: "Deep Learning — {date}"
+    description: "Focused study session, course module, or book chapter"

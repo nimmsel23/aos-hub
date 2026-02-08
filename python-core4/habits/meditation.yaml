@@ -1,0 +1,5 @@
+# Meditation — Daily Practice
+
+default:
+  title: "Meditation — {date}"
+  description: "10-20min practice (breath, body scan, or mantra)"

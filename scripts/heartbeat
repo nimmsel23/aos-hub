@@ -36,6 +36,11 @@ write_units() {
   local curl_bin
   curl_bin="$(command -v curl 2>/dev/null || true)"
   [[ -n "$curl_bin" ]] || die "Missing: curl"
+
+  # Use GET with query params for stability (Apps Script redirects are common).
+  local sep='?'
+  [[ "$HB_URL" == *\?* ]] && sep='&'
+  local url="${HB_URL}${sep}kind=heartbeat&host=%H"
   cat >"$HB_SERVICE_FILE" <<EOF
 [Unit]
 Description=AlphaOS Heartbeat -> Index GAS
@@ -44,11 +49,9 @@ Description=AlphaOS Heartbeat -> Index GAS
 Type=oneshot
 TimeoutStartSec=15
 SuccessExitStatus=28
-ExecStart=${curl_bin} -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \\
-  --connect-timeout 5 --max-time 10 -o /dev/null -X POST \\
-  -H 'Content-Type: application/json' \\
-  -d '{"kind":"heartbeat","host":"%H"}' \\
-  "${HB_URL}"
+ExecStart=${curl_bin} -fsSL --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \\
+  --connect-timeout 5 --max-time 10 -o /dev/null \\
+  "${url}"
 EOF
 
   cat >"$HB_TIMER_FILE" <<EOF
@@ -104,11 +107,12 @@ ping_once() {
 
   need_cmd curl
   msg "Pinging heartbeat endpoint..."
-  curl -fsS --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
-    --connect-timeout 5 --max-time 10 -o /dev/null -X POST \
-    -H 'Content-Type: application/json' \
-    -d "{\"kind\":\"heartbeat\",\"host\":\"${HB_HOST}\",\"manual\":true}" \
-    "${HB_URL}"
+  local sep='?'
+  [[ "$HB_URL" == *\?* ]] && sep='&'
+  local url="${HB_URL}${sep}kind=heartbeat&host=${HB_HOST}&manual=1"
+  curl -fsSL --retry 2 --retry-delay 1 --retry-connrefused --retry-all-errors \
+    --connect-timeout 5 --max-time 10 -o /dev/null \
+    "$url"
   msg "Ping OK."
 }
 

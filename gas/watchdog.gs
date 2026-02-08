@@ -650,6 +650,20 @@ function bridge_syncPush(options) {
 // Core4 pull trigger (Bridge core4ctl pull-core4)
 // ------------------------------------------------
 function bridge_core4Pull(options) {
+  // This is intentionally best-effort + throttled.
+  // Why: Core4 logs can happen fast (Telegram buttons, batch logging, etc).
+  // We only need to *hint* the laptop to pull GDrive ledger updates; pulling too often wastes time and
+  // can amplify temporary rclone auth/network issues.
+  var opts = options || {};
+  var throttleSec = Number(opts.throttleSec || 20);
+  if (throttleSec > 0) {
+    try {
+      var cache = CacheService.getScriptCache();
+      var k = 'core4_pull_throttle';
+      if (cache.get(k)) return { ok: true, skipped: true, reason: 'throttled' };
+      cache.put(k, '1', throttleSec);
+    } catch (e) {}
+  }
   var base = (typeof getBridgeUrl_ === 'function' ? getBridgeUrl_() : '') || '';
   if (!base) return { ok: false, error: 'bridge URL not set' };
   base = String(base || '').replace(/\/$/, '');

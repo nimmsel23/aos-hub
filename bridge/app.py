@@ -32,9 +32,11 @@ TZ = ZoneInfo(DEFAULT_TZ)
 
 VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "AlphaOS-Vault")).expanduser()
 
-# Core4 storage model:
-# - Append-only event ledger lives under `.core4/events/<YYYY-MM-DD>/...json`
-# - Derived artifacts live in the Core4 root (rclone push copies Core4 -> Alpha_Core4)
+# Core4 storage model (important):
+# - Truth = append-only event ledger under `.core4/events/<YYYY-MM-DD>/*.json`
+# - Derived artifacts (`core4_week_*.json`, `core4_day_*.json`, CSV) are rebuildable snapshots and
+#   MUST NOT be treated as source-of-truth.
+# - Sync rule: we only sync `.core4/**` to/from Drive to avoid duplicate-name issues for derived files.
 CORE4_LOCAL_DIR = Path(os.getenv("AOS_CORE4_LOCAL_DIR", VAULT_DIR / "Core4")).expanduser()
 CORE4_MOUNT_DIR = Path(os.getenv("AOS_CORE4_MOUNT_DIR", VAULT_DIR / "Alpha_Core4")).expanduser()
 FRUITS_DIR = Path(os.getenv("AOS_FRUITS_DIR", VAULT_DIR / "Alpha_Fruits")).expanduser()

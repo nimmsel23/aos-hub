@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = 'aos-theme';
-  const THEMES = ['matrix', 'neutral', 'cyan'];
+  const THEMES = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
 
   // Get saved theme or default to 'matrix'
   let currentTheme = localStorage.getItem(STORAGE_KEY) || 'matrix';
@@ -42,9 +42,11 @@
 
   function getThemeLabel(theme) {
     const labels = {
-      'matrix': '⚡ Matrix',
-      'neutral': '🌙 Neutral',
-      'cyan': '💎 Cyan'
+      'matrix': '⚡ Matrix', 'neutral': '🌙 Neutral', 'cyan': '💎 Cyan',
+      'obsidian': '🔮 Obsidian', 'aurora': '🌌 Aurora', 'dawn': '🌅 Dawn',
+      'monk': '📜 Monk', 'copper': '🪙 Copper', 'forestnight': '🌲 Forest',
+      'inkgold': '✨ Ink&Gold', 'bloodred': '🩸 BloodRed',
+      'github': '💻 GitHub', 'ocean': '🌊 Ocean', 'blackred': '⚫ Black/Red'
     };
     return labels[theme] || theme;
   }

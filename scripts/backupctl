@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+BACKUPCTL_VERSION="1.1.0"
+
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -8,6 +10,10 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
+
+# Shared UI helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
 
 SERVICE_NAME="aos-hub-backup-daily.service"
 TIMER_NAME="aos-hub-backup-daily.timer"
@@ -20,15 +26,8 @@ AOS_HUB_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
 SYNCVAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncvaultctl"
 VAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/sync-utils/vaultctl"
 
-have_gum() { command -v gum >/dev/null 2>&1; }
-have_fzf() { command -v fzf >/dev/null 2>&1; }
-have_tty() { [[ -t 0 || -t 1 || -t 2 ]] || [[ -r /dev/tty ]]; }
-
 need_systemctl() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo "backupctl: systemctl not found" >&2
-    exit 127
-  fi
+  need_cmd systemctl
 }
 
 systemctl_user() { systemctl --user "$@"; }
@@ -36,27 +35,11 @@ systemctl_user() { systemctl --user "$@"; }
 choose() {
   local prompt="$1"
   shift
-  local opts=("$@")
-  if have_fzf; then
-    printf "%s\n" "${opts[@]}" | fzf --prompt="backupctl> " --height=18 --reverse --border
-    return $?
-  fi
-  if have_gum; then
-    printf "%s\n" "${opts[@]}" | gum choose --header "$prompt"
-    return $?
-  fi
-  if have_tty; then
-    echo "$prompt"
-    select opt in "${opts[@]}"; do
-      echo "$opt"
-      return 0
-    done
-  fi
-  return 1
+  ui_choose "$prompt" "$@"
 }
 
 usage() {
-  cat <<'EOF'
+  cat <<'EOF_HELP'
 backupctl - manage/monitor daily aos-hub backup
 
 Usage:
@@ -68,15 +51,17 @@ Usage:
   backupctl run
   backupctl logs
   backupctl check
+  backupctl doctor
   backupctl config
   backupctl sync
   backupctl pull
   backupctl sync-menu
+  backupctl version
 
 Notes:
   - enable/disable operates on the timer
   - start runs the service once
-EOF
+EOF_HELP
 }
 
 cmd_status() {
@@ -103,7 +88,7 @@ cmd_start() {
 
 cmd_run() {
   if [[ ! -x "$BACKUP_SCRIPT" ]]; then
-    echo "backupctl: script missing: $BACKUP_SCRIPT" >&2
+    ui_err "script missing: $BACKUP_SCRIPT"
     exit 1
   fi
   "$BACKUP_SCRIPT"
@@ -115,42 +100,46 @@ cmd_logs() {
 }
 
 cmd_check() {
-  echo "backupctl check"
-  echo "- src: $SRC_DIR"
-  echo "- dst: $DST_DIR"
+  ui_title "backupctl check"
+  ui_info "src: $SRC_DIR"
+  ui_info "dst: $DST_DIR"
   if [[ -d "$SRC_DIR" ]]; then
-    echo "  src: OK"
+    ui_ok "src present"
   else
-    echo "  src: MISSING"
+    ui_warn "src missing"
   fi
   if mountpoint -q "$USB_MOUNT"; then
-    echo "  usb: mounted ($USB_MOUNT)"
+    ui_ok "usb mounted ($USB_MOUNT)"
     df -h "$USB_MOUNT" 2>/dev/null || true
   else
-    echo "  usb: not mounted ($USB_MOUNT)"
+    ui_warn "usb not mounted ($USB_MOUNT)"
   fi
+}
+
+cmd_doctor() {
+  cmd_check
 }
 
 cmd_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "backupctl: config not found: $CONFIG_FILE"
+    ui_warn "config not found: $CONFIG_FILE"
     return 0
   fi
   if [[ -r "$CONFIG_FILE" ]]; then
     cat "$CONFIG_FILE"
     return 0
   fi
-  if command -v sudo >/dev/null 2>&1; then
+  if has_cmd sudo; then
     if sudo -n true 2>/dev/null; then
       sudo cat "$CONFIG_FILE"
       return 0
     fi
   fi
-  echo "backupctl: config requires sudo: $CONFIG_FILE"
+  ui_warn "config requires sudo: $CONFIG_FILE"
 }
 
 syncvaultctl_bin() {
-  if command -v syncvaultctl >/dev/null 2>&1; then
+  if has_cmd syncvaultctl; then
     echo "syncvaultctl"
     return 0
   fi
@@ -162,7 +151,7 @@ syncvaultctl_bin() {
 }
 
 vaultctl_bin() {
-  if command -v vaultctl >/dev/null 2>&1; then
+  if has_cmd vaultctl; then
     echo "vaultctl"
     return 0
   fi
@@ -183,7 +172,7 @@ cmd_sync() {
     "$bin" sync
     return 0
   fi
-  echo "backupctl: syncvaultctl/vaultctl not found" >&2
+  ui_err "syncvaultctl/vaultctl not found"
   exit 1
 }
 
@@ -197,7 +186,7 @@ cmd_pull() {
     "$bin" pull
     return 0
   fi
-  echo "backupctl: syncvaultctl/vaultctl not found" >&2
+  ui_err "syncvaultctl/vaultctl not found"
   exit 1
 }
 
@@ -211,7 +200,7 @@ cmd_sync_menu() {
     "$bin" menu
     return 0
   fi
-  echo "backupctl: syncvaultctl/vaultctl not found" >&2
+  ui_err "syncvaultctl/vaultctl not found"
   exit 1
 }
 
@@ -238,6 +227,10 @@ cmd_menu() {
   done
 }
 
+cmd_version() {
+  echo "backupctl version $BACKUPCTL_VERSION"
+}
+
 case "${1:-}" in
   ""|menu) cmd_menu ;;
   -h|--help|help) usage ;;
@@ -248,12 +241,14 @@ case "${1:-}" in
   run) cmd_run ;;
   logs) cmd_logs ;;
   check) cmd_check ;;
+  doctor) cmd_doctor ;;
   config) cmd_config ;;
   sync) cmd_sync ;;
   pull) cmd_pull ;;
   sync-menu) cmd_sync_menu ;;
+  version) cmd_version ;;
   *)
-    echo "backupctl: unknown command: $1" >&2
+    ui_err "unknown command: $1"
     usage
     exit 2
     ;;

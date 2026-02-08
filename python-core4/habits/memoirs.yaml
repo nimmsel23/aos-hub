@@ -1,0 +1,5 @@
+# Memoirs — Daily Journaling
+
+default:
+  title: "Memoirs — {date}"
+  description: "Evening reflection, gratitude, lessons learned"

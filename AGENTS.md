@@ -6,7 +6,7 @@
 - `bridge/` is the aiohttp service (Core4/Fruits/Tent/task routing, port `8080`, optional token auth).
 - `gas/` holds the Apps Script fallback HQ snapshot.
 - `python-warstack/` and `python-firemap/` are auxiliary bots.
-- `scripts/` and `systemd/` provide operational tooling and units.
+- `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
 - `DOCS/` keeps project notes and cheatsheets.
 
 ## Build, Test, and Development Commands
@@ -15,13 +15,26 @@
 - `cd router && pip install -r requirements.txt && python router_bot.py` runs the Telegram router.
 - `cd bridge && python app.py --host 0.0.0.0 --port 8080` runs the bridge.
 - `./scripts/aos-doctor` or `./hubctl doctor` produces a multi-service health report.
-- `./router/routerctl status` and `./bridge/bridgectl health` check service status.
+- Service CLIs:
+  - `./hubctl router ...` (→ `router/routerctl`)
+  - `./hubctl bridge ...` (→ `bridge/bridgectl`)
+  - `./hubctl heartbeat ...` (→ `scripts/heartbeat`)
+  - `./hubctl tele ...` (→ `scripts/telectl`)
+  - `./hubctl doctor` (multi-service)
+- Bridge CLI is intentionally split for readability but kept stable:
+  - `bridge/bridgectl` (dispatcher) → `bridge/bridge-servicectl`, `bridge/bridge-apictl`, `bridge/bridge-tsctl`.
 
 ## Coding Style & Naming Conventions
 - Follow component-specific guides in `index-node/AGENTS.md`, `router/AGENTS.md`, `bridge/AGENTS.md`, and `gas/AGENTS.md`.
 - Node.js code uses 2-space indentation and double quotes; keep pages lowercase with hyphenated names.
 - Keep handlers small and stateless in router/bridge code; return JSON errors on invalid payloads.
 - `index-node/menu.yaml` is the single source of truth for centre routes; do not hardcode URLs.
+- When touching multi-writer pipelines (Core4, Door, Fruits, Fire), add/maintain documentation and code comments that explain:
+  - source of truth vs derived/cache artifacts
+  - writers/readers and how they converge (pull/push triggers, throttling, idempotency)
+  - safety rules (what must never be overwritten; what is rebuildable)
+  - quick debug/runbook commands (curl/ctl helpers)
+- Prefer a single "mental model" doc per system in `DOCS/` (e.g. `DOCS/CORE4_SYSTEM.md`) and link to it from component READMEs.
 
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
@@ -29,6 +42,7 @@
 - For public access, use Tailscale funnel on `/bridge` and set GAS `LAPTOP_URL` to `https://<host>.ts.net/bridge`.
 - Telegram Mini App URL: `https://ideapad.tail7a15d6.ts.net/tele.html` (BotFather domain: `https://ideapad.tail7a15d6.ts.net`).
 - Prefer `bridge/selftest.py` when port binding is unavailable.
+- Heartbeat is a standalone systemd user timer written by `scripts/heartbeat` (routerctl only wraps it).
 
 ## Commit & Pull Request Guidelines
 - Commit messages are short and imperative (e.g., “Fix Door Hot List title parsing”).
@@ -39,5 +53,7 @@
 - Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.
 - Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
 - Keep secrets out of git; document required vars in component READMEs or AGENTS.
-- To send messages/links/blocks to your phone, run `tele <text>` from the shell.
+- To send messages/links/blocks to your phone:
+  - `tele <text>` (raw sender)
+  - `telectl ...` (wrappers: fire/blueprint/bridge/router)
 - Use `scripts/aos-aliasctl` (or `aos-aliasctl` on PATH) to add/manage aliases.

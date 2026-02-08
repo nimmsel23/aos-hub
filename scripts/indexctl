@@ -11,7 +11,8 @@ aos_env_load "" "$ROOT_DIR" || true
 SERVICE_NAME="aos-index.service"
 UNIT_SRC="$ROOT_DIR/systemd/$SERVICE_NAME"
 UNIT_DST="/etc/systemd/system/$SERVICE_NAME"
-ENV_FILE="${AOS_INDEX_ENV_FILE:-$HOME/.env/alphaos-index.env}"
+# Keep this aligned with `systemd/aos-index.service` which reads from `/etc/alphaos-hub/alphaos-index.env`.
+ENV_FILE="${AOS_INDEX_ENV_FILE:-/etc/alphaos-hub/alphaos-index.env}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
 
@@ -28,9 +29,9 @@ write_env_file() {
   if [[ -f "$ENV_FILE" ]]; then
     return 0
   fi
-  mkdir -p "$(dirname -- "$ENV_FILE")"
-  cat >"$ENV_FILE" <<'EOF'
-# AlphaOS Index Node env (systemd reads: ~/.env/alphaos-index.env)
+  sudo_cmd mkdir -p "$(dirname -- "$ENV_FILE")"
+  sudo_cmd tee "$ENV_FILE" >/dev/null <<'EOF'
+# AlphaOS Index Node env (systemd reads: /etc/alphaos-hub/alphaos-index.env)
 
 # Bind / listen
 HOST=0.0.0.0
@@ -45,7 +46,7 @@ MENU_YAML=./menu.yaml
 # Optional: Telegram CLI path used by /api/tele/send
 # TELE_BIN=/home/alpha/bin/utils/tele
 EOF
-  chmod 600 "$ENV_FILE" || true
+  sudo_cmd chmod 600 "$ENV_FILE" || true
   msg "✅ Created env file: $ENV_FILE"
 }
 
@@ -73,8 +74,16 @@ enable_svc() { sudo_cmd systemctl enable "$SERVICE_NAME"; }
 disable_svc() { sudo_cmd systemctl disable "$SERVICE_NAME"; }
 logs_svc() { sudo_cmd journalctl -u "$SERVICE_NAME" -f; }
 
-env_edit() { write_env_file; "${EDITOR:-nano}" "$ENV_FILE"; }
-env_show() { [[ -f "$ENV_FILE" ]] && cat "$ENV_FILE" || warn "missing env: $ENV_FILE"; }
+env_edit() {
+  write_env_file
+  # `/etc/...` needs sudo; `sudoedit` keeps editor UX consistent.
+  if [[ "$ENV_FILE" == /etc/* ]] && has_cmd sudoedit; then
+    sudoedit "$ENV_FILE"
+    return 0
+  fi
+  sudo_cmd "${EDITOR:-nano}" "$ENV_FILE"
+}
+env_show() { [[ -f "$ENV_FILE" ]] && sudo_cmd cat "$ENV_FILE" || warn "missing env: $ENV_FILE"; }
 
 health_check() {
   if ! has_cmd curl; then
@@ -136,7 +145,7 @@ Usage:
   scripts/indexctl hub-doctor
 
 Env:
-  AOS_INDEX_ENV_FILE=$HOME/.env/alphaos-index.env
+  AOS_INDEX_ENV_FILE=/etc/alphaos-hub/alphaos-index.env
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor
 EOF

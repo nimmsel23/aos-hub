@@ -57,6 +57,7 @@ Usage:
   $APP bridge <bridgectl-args...>
   $APP router <routerctl-args...>
   $APP heartbeat <cmd>   (standalone heartbeat manager)
+  $APP systemstatus      (trigger GAS system status via local Bridge)
   $APP index  <indexctl-args...>
   $APP sync   <syncctl-args...>
   $APP git    <gitctl-args...>
@@ -66,6 +67,7 @@ Usage:
   $APP core4  <core4ctl-args...>
   $APP tent   <tentctl-args...>
   $APP firectl <firectl-args...>
+  $APP tele  <telectl-args...>
   $APP door   <doorctl-args...>
   $APP game   <gamectl-args...>
   $APP voice  <voicectl-args...>
@@ -81,6 +83,7 @@ Examples:
   $APP bridge health
   $APP router doctor
   $APP heartbeat status
+  $APP systemstatus
   $APP index doctor
   $APP sync status
   $APP git status
@@ -90,6 +93,7 @@ Examples:
   $APP core4 status
   $APP tent status
   $APP firectl status
+  $APP tele status
   $APP door status
   $APP game status
   $APP voice status
@@ -137,6 +141,7 @@ case "$cmd" in
   bridge) repo_exec "bridge/bridgectl" "$@" ;;
   router) repo_exec "router/routerctl" "$@" ;;
   heartbeat) repo_exec "scripts/heartbeat" "${1:-status}" ;;
+  systemstatus) repo_exec "scripts/systemstatusctl" trigger "$@" ;;
   index) repo_exec "scripts/indexctl" "$@" ;;
   sync) repo_exec "scripts/syncctl" "$@" ;;
   git) repo_exec "scripts/gitctl" "$@" ;;
@@ -146,6 +151,7 @@ case "$cmd" in
   core4) repo_exec "python-core4/core4ctl" "$@" ;;
   tent|tentctl) repo_exec "gas-tent-dev/tentctl" "$@" ;;
   firectl) repo_exec "scripts/firectl" "$@" ;;
+  tele|telectl) repo_exec "scripts/telectl" "$@" ;;
   door|doorctl) repo_exec "scripts/doorctl" "$@" ;;
   game|gamectl) repo_exec "scripts/gamectl" "$@" ;;
   voice|voicectl) repo_exec "scripts/voicectl" "$@" ;;

@@ -1,0 +1,14 @@
+# Partner — Quality Time
+
+default:
+  title: "Partner — {date}"
+  description: "Quality time, deep conversation, or shared activity"
+
+schedule:
+  friday:
+    title: "Date Night — {date}"
+    description: "Planned date or special evening together"
+
+  sunday:
+    title: "Chill Day — {date}"
+    description: "Relaxed quality time, no agenda"

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MOUNTCTL_VERSION="1.1.0"
+
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -9,16 +11,21 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
+# Shared UI helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+
+SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
+JOURNALCTL_BIN="${JOURNALCTL_BIN:-journalctl}"
+SYSTEMCTL_USER=("$SYSTEMCTL_BIN" --user)
+JOURNALCTL_USER=("$JOURNALCTL_BIN" --user)
+
 SERVICE_CORE4="${AOS_CORE4_MOUNT_SERVICE:-rclone-alpha-core4.service}"
 SERVICE_VOICE="${AOS_VOICE_MOUNT_SERVICE:-rclone-alpha-voice.service}"
 SERVICE_DOOR="${AOS_DOOR_MOUNT_SERVICE:-rclone-alpha-door.service}"
 SERVICE_GAME="${AOS_GAME_MOUNT_SERVICE:-rclone-alpha-game.service}"
 
-targets_order=("core4" "voice" "door" "game")
-
-have_gum() { command -v gum >/dev/null 2>&1; }
-have_fzf() { command -v fzf >/dev/null 2>&1; }
-have_tty() { [[ -t 0 && -t 1 ]]; }
+TARGETS=(core4 voice door game)
 
 service_for() {
   case "$1" in
@@ -26,159 +33,174 @@ service_for() {
     voice) echo "$SERVICE_VOICE" ;;
     door) echo "$SERVICE_DOOR" ;;
     game) echo "$SERVICE_GAME" ;;
-    *)
-      return 1
-      ;;
+    *) return 1 ;;
   esac
-}
-
-usage() {
-  cat <<'EOF'
-mountctl - manage Alpha_* rclone mounts (user services)
-
-Usage:
-  mountctl [menu]
-  mountctl status [name|all]
-  mountctl enable [name|all]
-  mountctl disable [name|all]
-  mountctl restart [name|all]
-  mountctl logs [name]
-  mountctl list
-
-Names:
-  core4 | voice | door | game
-EOF
-}
-
-need_systemctl() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo "mountctl: systemctl not found" >&2
-    exit 127
-  fi
-}
-
-systemctl_user() { systemctl --user "$@"; }
-
-choose() {
-  local prompt="$1"
-  shift
-  local opts=("$@")
-  if have_gum && have_tty; then
-    printf "%s\n" "${opts[@]}" | gum choose --header "$prompt"
-    return $?
-  fi
-  if have_fzf && have_tty; then
-    printf "%s\n" "${opts[@]}" | fzf --prompt "$prompt > "
-    return $?
-  fi
-  return 1
 }
 
 resolve_targets() {
   local arg="${1:-all}"
   if [[ "$arg" == "all" || -z "$arg" ]]; then
-    printf "%s\n" "${targets_order[@]}"
+    printf '%s\n' "${TARGETS[@]}"
     return 0
   fi
   case "$arg" in
-    core4|voice|door|game) printf "%s\n" "$arg" ;;
+    core4|voice|door|game) printf '%s\n' "$arg" ;;
     *)
-      echo "mountctl: unknown target: $arg" >&2
+      ui_err "Unknown target: $arg"
       exit 2
       ;;
   esac
 }
 
+show_help() {
+  cat <<'EOF_HELP'
+mountctl - manage Alpha_* rclone mounts (user services)
+
+Usage:
+  mountctl <command> [args...]
+
+Commands:
+  list                       List managed targets
+  status [name|all]          Show status
+  enable [name|all]          Enable + start
+  disable [name|all]         Disable + stop
+  restart [name|all]         Restart
+  logs [name]                Show logs (single target)
+  doctor                     Health check (units)
+  menu                       Interactive menu
+  version                    Show version
+  help                        Show this help
+
+Targets:
+  core4 | voice | door | game
+EOF_HELP
+}
+
 cmd_list() {
-  for t in "${targets_order[@]}"; do
+  local t
+  for t in "${TARGETS[@]}"; do
     echo "$t -> $(service_for "$t")"
   done
 }
 
 cmd_status() {
-  need_systemctl
+  need_cmd "$SYSTEMCTL_BIN"
   local target="${1:-all}"
   while read -r t; do
-    systemctl_user status "$(service_for "$t")" --no-pager
+    "${SYSTEMCTL_USER[@]}" status "$(service_for "$t")" --no-pager
     echo ""
   done < <(resolve_targets "$target")
 }
 
 cmd_enable() {
-  need_systemctl
+  need_cmd "$SYSTEMCTL_BIN"
   local target="${1:-all}"
   while read -r t; do
-    systemctl_user enable --now "$(service_for "$t")"
+    "${SYSTEMCTL_USER[@]}" enable --now "$(service_for "$t")"
   done < <(resolve_targets "$target")
 }
 
 cmd_disable() {
-  need_systemctl
+  need_cmd "$SYSTEMCTL_BIN"
   local target="${1:-all}"
   while read -r t; do
-    systemctl_user disable --now "$(service_for "$t")"
+    "${SYSTEMCTL_USER[@]}" disable --now "$(service_for "$t")"
   done < <(resolve_targets "$target")
 }
 
 cmd_restart() {
-  need_systemctl
+  need_cmd "$SYSTEMCTL_BIN"
   local target="${1:-all}"
   while read -r t; do
-    systemctl_user restart "$(service_for "$t")"
+    "${SYSTEMCTL_USER[@]}" restart "$(service_for "$t")"
   done < <(resolve_targets "$target")
 }
 
 cmd_logs() {
-  need_systemctl
+  need_cmd "$JOURNALCTL_BIN"
   local target="${1:-}"
   if [[ -z "$target" ]]; then
-    echo "mountctl: logs requires a target (core4|voice|door|game)" >&2
+    ui_err "logs requires a target (core4|voice|door|game)"
     exit 2
   fi
-  journalctl --user -u "$(service_for "$target")" -n 200 --no-pager
+  "${JOURNALCTL_USER[@]}" -u "$(service_for "$target")" -n 200 --no-pager
 }
 
-cmd_menu() {
-  if ! have_tty; then
-    usage
+cmd_doctor() {
+  ui_title "mountctl doctor"
+  if ! has_cmd "$SYSTEMCTL_BIN"; then
+    ui_err "systemctl not found"
     return 1
   fi
-  local actions=("status" "enable" "disable" "restart" "logs" "list" "quit")
-  while true; do
-    local action
-    action="$(choose "mountctl" "${actions[@]}")" || { usage; return 1; }
-    case "$action" in
-      quit) return 0 ;;
-      list)
-        cmd_list
-        ;;
-      logs)
-        local target
-        target="$(choose "logs target" "${targets_order[@]}")" || continue
-        cmd_logs "$target"
-        ;;
-      status|enable|disable|restart)
-        local target
-        target="$(choose "$action target" "all" "${targets_order[@]}")" || continue
-        "cmd_${action}" "$target"
-        ;;
-    esac
-    echo ""
+
+  local t
+  for t in "${TARGETS[@]}"; do
+    local unit
+    unit="$(service_for "$t")"
+    if "${SYSTEMCTL_USER[@]}" is-active --quiet "$unit"; then
+      ui_ok "$t: active"
+    else
+      ui_warn "$t: inactive"
+    fi
   done
 }
 
-case "${1:-}" in
-  ""|menu) cmd_menu ;;
-  -h|--help|help) usage ;;
-  list) cmd_list ;;
-  status) cmd_status "${2:-all}" ;;
-  enable) cmd_enable "${2:-all}" ;;
-  disable) cmd_disable "${2:-all}" ;;
-  restart) cmd_restart "${2:-all}" ;;
-  logs) cmd_logs "${2:-}" ;;
-  *)
-    echo "mountctl: unknown command: $1" >&2
-    usage
-    exit 2
-    ;;
-esac
+cmd_menu() {
+  ui_title "mountctl"
+  local action
+  action=$(ui_choose "Select" \
+    "status" \
+    "enable" \
+    "disable" \
+    "restart" \
+    "logs" \
+    "doctor" \
+    "list" \
+    "quit")
+
+  case "$action" in
+    quit) exit 0 ;;
+    list) cmd_list ;;
+    logs)
+      local target
+      target=$(ui_choose "logs target" "${TARGETS[@]}") || exit 1
+      cmd_logs "$target"
+      ;;
+    status|enable|disable|restart)
+      local target
+      target=$(ui_choose "$action target" all "${TARGETS[@]}") || exit 1
+      "cmd_${action}" "$target"
+      ;;
+    doctor) cmd_doctor ;;
+    *) exit 0 ;;
+  esac
+}
+
+cmd_version() {
+  echo "mountctl version $MOUNTCTL_VERSION"
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    list) cmd_list ;;
+    status) cmd_status "${1:-all}" ;;
+    enable) cmd_enable "${1:-all}" ;;
+    disable) cmd_disable "${1:-all}" ;;
+    restart) cmd_restart "${1:-all}" ;;
+    logs) cmd_logs "${1:-}" ;;
+    doctor) cmd_doctor ;;
+    menu) cmd_menu ;;
+    version) cmd_version ;;
+    help|-h|--help) show_help ;;
+    *)
+      ui_err "Unknown command: $cmd"
+      show_help
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

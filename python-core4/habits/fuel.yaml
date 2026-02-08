@@ -1,0 +1,18 @@
+# Fuel — Nutrition Tracking
+
+default:
+  title: "Fuel — {date}"
+  description: "Track meals, hydration, supplements"
+
+schedule:
+  monday:
+    title: "Meal Prep — {date}"
+    description: "Prep 3-4 meals, protein focus"
+
+  saturday:
+    title: "Flexible Fuel — {date}"
+    description: "Social meals allowed, stay mindful"
+
+  sunday:
+    title: "Flexible Fuel — {date}"
+    description: "Social meals allowed, stay mindful"

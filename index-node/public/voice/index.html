@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>αOS Voice Centre</title>
-  <link rel="stylesheet" href="/themes.css">
-  <link rel="stylesheet" href="/themes-voice-legacy.css">
+  <link rel="stylesheet" href="/themes-all.css">
   <script src="/vendor/marked/marked.min.js"></script>
   <script src="/matrix.js" defer></script>
   <style>
@@ -391,20 +390,22 @@
     <div class="theme-switcher">
       <label for="theme-select">Style:</label>
       <select id="theme-select" aria-label="Theme Auswahl">
-        <!-- New unified themes -->
         <option value="matrix">⚡ Matrix</option>
         <option value="neutral">🌙 Neutral</option>
         <option value="cyan">💎 Cyan</option>
         <option disabled>────────────</option>
-        <!-- Legacy themes -->
-        <option value="obsidian">Obsidian Ritual</option>
-        <option value="aurora">Aurora</option>
-        <option value="dawn">Dawn Sand</option>
-        <option value="monk">Monk Paper</option>
-        <option value="copper">Copper</option>
-        <option value="forestnight">Forest Night</option>
-        <option value="inkgold">Ink & Gold</option>
-        <option value="bloodred">Blood Red</option>
+        <option value="obsidian">🔮 Obsidian</option>
+        <option value="aurora">🌌 Aurora</option>
+        <option value="dawn">🌅 Dawn</option>
+        <option value="monk">📜 Monk</option>
+        <option value="copper">🪙 Copper</option>
+        <option value="forestnight">🌲 Forest Night</option>
+        <option value="inkgold">✨ Ink & Gold</option>
+        <option value="bloodred">🩸 Blood Red</option>
+        <option disabled>────────────</option>
+        <option value="github">💻 GitHub</option>
+        <option value="ocean">🌊 Ocean</option>
+        <option value="blackred">⚫ Black/Red</option>
       </select>
     </div>
   </footer>
@@ -1128,28 +1129,18 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       const themeSelect = document.getElementById('theme-select');
 
       function applyTheme(themeKey = 'matrix') {
-        const body = document.body;
         const html = document.documentElement;
+        const body = document.body;
 
-        // New unified themes
-        const unifiedThemes = ['matrix', 'neutral', 'cyan'];
-        // Legacy themes
-        const legacyThemes = ['obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred'];
-        const legacyClasses = legacyThemes.map(t => `theme-${t}`);
+        // All 14 themes use data-theme now
+        const allThemes = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
 
-        if (unifiedThemes.includes(themeKey)) {
-          // Use new unified theme system
+        if (allThemes.includes(themeKey)) {
           html.setAttribute('data-theme', themeKey);
-          legacyClasses.forEach(c => body.classList.remove(c));
-        } else if (legacyThemes.includes(themeKey)) {
-          // Use legacy theme system
-          html.removeAttribute('data-theme');
-          legacyClasses.forEach(c => body.classList.remove(c));
-          body.classList.add(`theme-${themeKey}`);
+          // Clean up any legacy classes
+          body.className = body.className.replace(/theme-\w+/g, '').trim();
         } else {
-          // Fallback to matrix
           html.setAttribute('data-theme', 'matrix');
-          legacyClasses.forEach(c => body.classList.remove(c));
         }
 
         if (themeSelect) themeSelect.value = themeKey;
