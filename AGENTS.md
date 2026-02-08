@@ -15,6 +15,7 @@
 - `cd router && pip install -r requirements.txt && python router_bot.py` runs the Telegram router.
 - `cd bridge && python app.py --host 0.0.0.0 --port 8080` runs the bridge.
 - `./scripts/aos-doctor` or `./hubctl doctor` produces a multi-service health report.
+- `./nodectl monitor` checks the Node index service (systemd + health).
 - Service CLIs:
   - `./hubctl router ...` (→ `router/routerctl`)
   - `./hubctl bridge ...` (→ `bridge/bridgectl`)
@@ -53,6 +54,8 @@
 - Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.
 - Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
 - Keep secrets out of git; document required vars in component READMEs or AGENTS.
+- Telegram tokens: never share one bot token across multiple consumers (e.g. Router polling + GAS webhook/polling).
+- Apps Script ops: functions show up in the editor Run dropdown only if they are top-level (this repo often uses a trailing `_` for internal helpers; add public wrappers for admin actions).
 - To send messages/links/blocks to your phone:
   - `tele <text>` (raw sender)
   - `telectl ...` (wrappers: fire/blueprint/bridge/router)
