@@ -1,5 +1,62 @@
 <script>
   const state = { data: null, answers: {} };
+  const USER_KEY = "<?= userKey ?>";
+
+  function fruitsGetUserKey_() {
+    try {
+      if (USER_KEY && String(USER_KEY).trim()) return String(USER_KEY).trim();
+    } catch (_) {}
+    try {
+      return String(localStorage.getItem("aos_fruits_user_key") || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function fruitsRedirectToKey_(key) {
+    const k = String(key || "").trim();
+    if (!k) return false;
+    try { localStorage.setItem("aos_fruits_user_key", k); } catch (_) {}
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("k", k);
+      window.location.replace(url.toString());
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function fruitsEnsureUserKey_(onReady) {
+    const current = fruitsGetUserKey_();
+    if (current && String(USER_KEY || "").trim()) {
+      try { localStorage.setItem("aos_fruits_user_key", current); } catch (_) {}
+      if (typeof onReady === "function") onReady();
+      return;
+    }
+    if (current && !String(USER_KEY || "").trim()) {
+      if (fruitsRedirectToKey_(current)) return;
+    }
+
+    if (!(window.google && google.script && google.script.run)) {
+      if (typeof onReady === "function") onReady();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        const key = res && res.userKey ? String(res.userKey || "").trim() : "";
+        if (!key) {
+          if (typeof onReady === "function") onReady();
+          return;
+        }
+        fruitsRedirectToKey_(key);
+      })
+      .withFailureHandler(() => {
+        if (typeof onReady === "function") onReady();
+      })
+      .fruits_registerAnonUser();
+  }
 
   function showOverlay(on, title = '') {
     const overlay = document.getElementById('loading-overlay');
@@ -11,14 +68,24 @@
     overlay.classList.toggle('active', !!on);
   }
 
-  function randEmoji() {
-    const e = (state.data && state.data.emojis) || [];
-    return e.length ? e[Math.floor(Math.random() * e.length)] : '🍎';
-  }
+	  function randEmoji() {
+	    const e = (state.data && state.data.emojis) || [];
+	    return e.length ? e[Math.floor(Math.random() * e.length)] : '🍎';
+	  }
 
-  function boot() {
-    showOverlay(true, 'Loading Facts...');
-    google.script.run
+	  function escapeHtml(text) {
+	    return String(text || "")
+	      .replace(/&/g, "&amp;")
+	      .replace(/</g, "&lt;")
+	      .replace(/>/g, "&gt;")
+	      .replace(/\"/g, "&quot;")
+	      .replace(/'/g, "&#039;");
+	  }
+
+	  function boot() {
+	    showOverlay(true, 'Loading Facts...');
+      const userKey = fruitsGetUserKey_();
+	    google.script.run
       .withSuccessHandler(p => {
         state.data = p;
         state.answers = p.answers || {};
@@ -30,7 +97,7 @@
         alert('Fehler beim Laden der Facts');
         showOverlay(false);
       })
-      .fruits_getAllData();
+      .fruits_getAllData(userKey);
   }
 
   function render() {
@@ -41,29 +108,35 @@
     const container = document.getElementById('content');
     container.innerHTML = '';
 
-    const sections = Object.keys(data.questions);
+    const sections = (Array.isArray(data.sectionOrder) && data.sectionOrder.length)
+      ? data.sectionOrder
+      : Object.keys(data.questions || {});
 
     let currentFound = false;
     let allDone = true;
+    let qIndex = 0;
 
-    for (const section of sections) {
-      const secDiv = document.createElement('div');
-      secDiv.className = 'section';
+	    for (const section of sections) {
+	      const secDiv = document.createElement('div');
+	      secDiv.className = 'section';
 
-      const header = document.createElement('div');
-      header.className = 'section-header';
-      header.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
-      secDiv.appendChild(header);
+	      const header = document.createElement('div');
+	      header.className = 'section-header';
+	      header.innerHTML = `${randEmoji()} <strong>${escapeHtml(section)}</strong> ${randEmoji()}`;
+	      secDiv.appendChild(header);
 
-      for (const q of data.questions[section]) {
-        const qDiv = document.createElement('div');
-        qDiv.className = 'question';
+	      for (const q of (data.questions[section] || [])) {
+	        const qDiv = document.createElement('div');
+	        qDiv.className = 'question';
+	        const safeQ = escapeHtml(q);
+          qIndex += 1;
+          const label = `${qIndex}. ${safeQ}`;
 
-        if (allAnswers[q]) {
-          if (allAnswers[q] === '_geskippt_') {
-            allDone = false;
-            qDiv.classList.add('skipped');
-            qDiv.innerHTML = `<strong>${q}</strong><br><br><em>Geskippt – bitte später beantworten.</em>`;
+	        if (allAnswers[q]) {
+	          if (allAnswers[q] === '_geskippt_') {
+	            allDone = false;
+	            qDiv.classList.add('skipped');
+	            qDiv.innerHTML = `<strong>${label}</strong><br><br><em>Geskippt – bitte später beantworten.</em>`;
 
             const textarea = document.createElement('textarea');
             textarea.placeholder = 'Antwort nachholen...';
@@ -86,19 +159,19 @@
                   }
                   boot();
                 })
-                .fruits_saveAnswer(section, q, ans);
+                .fruits_saveAnswer(section, q, ans, fruitsGetUserKey_());
             };
             qDiv.appendChild(saveSkippedBtn);
-          } else {
-            qDiv.classList.add('answered');
-            qDiv.innerHTML = `<strong>${q}</strong><br><br>${allAnswers[q].replace(/\n/g, '<br>')}`;
-          }
-        } else {
-          allDone = false;
+	          } else {
+	            qDiv.classList.add('answered');
+	            qDiv.innerHTML = `<strong>${label}</strong><br><br>${escapeHtml(allAnswers[q]).replace(/\n/g, '<br>')}`;
+	          }
+	        } else {
+	          allDone = false;
 
-          if (!currentFound) {
-            currentFound = true;
-            qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${q} ${randEmoji()}</strong>`;
+	            if (!currentFound) {
+	              currentFound = true;
+	              qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${label} ${randEmoji()}</strong>`;
 
             const textarea = document.createElement('textarea');
             textarea.placeholder = "Raw & Honest Facts – no illusions...";
@@ -121,7 +194,7 @@
                   }
                   boot();
                 })
-                .fruits_saveAnswer(section, q, ans);
+                .fruits_saveAnswer(section, q, ans, fruitsGetUserKey_());
             };
             qDiv.appendChild(saveBtn);
 
@@ -142,21 +215,21 @@
               }
               if (confirm("Diese Frage überspringen? Du kannst später zurück.")) {
                 google.script.run
-                  .withSuccessHandler(res => {
-                    if (res && res.ok === false) {
-                      alert(res.error || 'Skip fehlgeschlagen.');
-                      return;
-                    }
-                    boot();
-                  })
-                  .fruits_saveAnswer(section, q, '_geskippt_');
+                .withSuccessHandler(res => {
+                  if (res && res.ok === false) {
+                    alert(res.error || 'Skip fehlgeschlagen.');
+                    return;
+                  }
+                  boot();
+                })
+                  .fruits_saveAnswer(section, q, '_geskippt_', fruitsGetUserKey_());
               }
             };
             qDiv.appendChild(skipBtn);
-          } else {
-            qDiv.innerHTML = `<em>${q}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
-          }
-        }
+	          } else {
+	            qDiv.innerHTML = `<em>${label}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
+	          }
+	        }
 
         secDiv.appendChild(qDiv);
       }
@@ -172,6 +245,7 @@
 
   function exportAll() {
     showOverlay(true, 'Exportiere Map...');
+    const userKey = fruitsGetUserKey_();
     google.script.run
       .withSuccessHandler(res => {
         showOverlay(false);
@@ -182,11 +256,11 @@
         console.error(err);
         alert('Export fehlgeschlagen.');
       })
-      .fruits_exportCompleteMap();
+      .fruits_exportCompleteMap(userKey);
   }
 
   window.addEventListener('load', () => {
     setTimeout(() => showOverlay(false), 1200);
-    boot();
+    fruitsEnsureUserKey_(boot);
   });
 </script>
