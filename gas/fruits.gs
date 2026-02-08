@@ -103,7 +103,9 @@ function fruits_ensureWebhook_() {
 function fruits_getWebhookInfo() {
   const token = fruits_getBotToken_();
   if (!token) throw new Error('fruits_getWebhookInfo: primary bot token not set');
-  return tg_getWebhookInfo_(token);
+  const info = tg_getWebhookInfo_(token);
+  try { Logger.log(JSON.stringify(info, null, 2)); } catch (_) {}
+  return info;
 }
 
 // -----------------------------------------------------------------------------
@@ -656,14 +658,20 @@ function fruits_setupWebhook(deployUrl) {
   return fruits_setWebhook(deployUrl);
 }
 
-function fruits_disableWebhook_() {
+function fruits_disableWebhook_(dropPendingUpdates) {
   // Remove webhook so polling can be used.
   const props = PropertiesService.getScriptProperties();
   const token = fruits_getBotToken_();
   if (!token) throw new Error('fruits_disableWebhook_: bot token missing');
 
   const apiBase = tg_getApiBase_(token);
-  const res = UrlFetchApp.fetch(apiBase + '/deleteWebhook', { method: 'post', muteHttpExceptions: true });
+  const payload = { drop_pending_updates: dropPendingUpdates !== false };
+  const res = UrlFetchApp.fetch(apiBase + '/deleteWebhook', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
   props.deleteProperty(FRUITS_CONFIG.PROP_WEBHOOK_URL);
   try {
     return JSON.parse(res.getContentText());
@@ -672,46 +680,103 @@ function fruits_disableWebhook_() {
   }
 }
 
+// Admin-friendly wrappers (show up in Apps Script UI; stable names)
+function fruits_disableWebhook() {
+  return fruits_disableWebhook_(true);
+}
+
+function fruits_logWebhookInfo() {
+  const info = fruits_getWebhookInfo();
+  try { console.log(JSON.stringify(info)); } catch (_) {}
+  try { Logger.log(JSON.stringify(info)); } catch (_) {}
+  return info;
+}
+
+function fruits_logDisableWebhook() {
+  const res = fruits_disableWebhook_(true);
+  try { console.log(JSON.stringify(res)); } catch (_) {}
+  try { Logger.log(JSON.stringify(res)); } catch (_) {}
+  return res;
+}
+
+function fruits_enablePolling(minutes) {
+  const disabled = fruits_disableWebhook_(true);
+  const trig = fruits_setupPollingTrigger(minutes);
+  return { ok: true, webhook: disabled, polling: trig };
+}
+
+function fruits_disablePolling() {
+  return fruits_disablePolling_();
+}
+
+function fruits_dropPendingUpdates() {
+  return fruits_dropPendingUpdates_();
+}
+
 function fruits_pollTelegram_() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) {
+    return { ok: true, skipped: true, reason: 'locked' };
+  }
   const props = PropertiesService.getScriptProperties();
   const token = fruits_getBotToken_();
-  if (!token) throw new Error('fruits_pollTelegram_: bot token missing');
-
-  // Polling must be disabled if a webhook is active to avoid double-processing.
-  const info = tg_getWebhookInfo_(token);
-  const currentUrl = info && info.ok && info.result ? String(info.result.url || '') : '';
-  if (currentUrl) {
-    return { ok: false, error: 'Webhook active; polling disabled.' };
+  if (!token) {
+    lock.releaseLock();
+    throw new Error('fruits_pollTelegram_: bot token missing');
   }
 
-  const lastId = Number(props.getProperty('FRUITS_LAST_UPDATE_ID') || 0);
-  let url = tg_getApiBase_(token) + '/getUpdates?timeout=0&allowed_updates=message';
-  if (lastId) url += '&offset=' + (lastId + 1);
-
-  const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
-  let data = null;
   try {
-    data = JSON.parse(res.getContentText());
-  } catch (_) {
-    data = null;
-  }
-  if (!data || !data.ok) {
-    return { ok: false, error: (data && data.description) || res.getContentText() };
-  }
-
-  const updates = data.result || [];
-  let maxId = lastId;
-  updates.forEach((u) => {
-    if (u && typeof u.update_id === 'number' && u.update_id > maxId) {
-      maxId = u.update_id;
+    // Polling must be disabled if a webhook is active to avoid double-processing.
+    const info = tg_getWebhookInfo_(token);
+    const currentUrl = info && info.ok && info.result ? String(info.result.url || '') : '';
+    if (currentUrl) {
+      return { ok: false, error: 'Webhook active; polling disabled.' };
     }
-    if (u && u.message) {
-      fruits_handleTelegramMessage_(u.message);
-    }
-  });
 
-  if (maxId > lastId) props.setProperty('FRUITS_LAST_UPDATE_ID', String(maxId));
-  return { ok: true, count: updates.length, lastUpdateId: maxId };
+    const lastId = Number(props.getProperty('FRUITS_LAST_UPDATE_ID') || 0);
+    let url = tg_getApiBase_(token) + '/getUpdates?timeout=0&allowed_updates=message&limit=100';
+    if (lastId) url += '&offset=' + (lastId + 1);
+
+    const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+    let data = null;
+    try {
+      data = JSON.parse(res.getContentText());
+    } catch (_) {
+      data = null;
+    }
+    if (!data || !data.ok) {
+      return { ok: false, error: (data && data.description) || res.getContentText() };
+    }
+
+    const cache = CacheService.getScriptCache();
+    const updates = data.result || [];
+    let maxId = lastId;
+    updates.forEach((u) => {
+      const updateId = u ? Number(u.update_id || 0) : 0;
+      if (updateId && updateId > maxId) {
+        maxId = updateId;
+      }
+      if (u && u.message) {
+        const chatId = u.message.chat && u.message.chat.id ? String(u.message.chat.id) : '';
+        const messageId = u.message.message_id ? String(u.message.message_id) : '';
+        if (chatId && messageId) {
+          const key = 'fruits:poll:msg:' + chatId + ':' + messageId;
+          if (cache.get(key)) return;
+          cache.put(key, '1', 21600);
+        }
+        try {
+          fruits_handleTelegramMessage_(u.message);
+        } catch (e) {
+          Logger.log('fruits_pollTelegram_: handler error: ' + String(e));
+        }
+      }
+    });
+
+    if (maxId > lastId) props.setProperty('FRUITS_LAST_UPDATE_ID', String(maxId));
+    return { ok: true, count: updates.length, lastUpdateId: maxId };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function fruits_setupPollingTrigger(minutes) {
@@ -740,6 +805,44 @@ function fruits_disablePolling_() {
   });
   PropertiesService.getScriptProperties().deleteProperty('FRUITS_LAST_UPDATE_ID');
   return { ok: true };
+}
+
+function fruits_dropPendingUpdates_() {
+  // Mark all currently pending Telegram updates as processed (advances offset without handling).
+  const props = PropertiesService.getScriptProperties();
+  const token = fruits_getBotToken_();
+  if (!token) throw new Error('fruits_dropPendingUpdates_: bot token missing');
+
+  const info = tg_getWebhookInfo_(token);
+  const currentUrl = info && info.ok && info.result ? String(info.result.url || '') : '';
+  if (currentUrl) {
+    return { ok: false, error: 'Webhook active; cannot drop updates via polling.' };
+  }
+
+  const lastId = Number(props.getProperty('FRUITS_LAST_UPDATE_ID') || 0);
+  let url = tg_getApiBase_(token) + '/getUpdates?timeout=0&allowed_updates=message&limit=100';
+  if (lastId) url += '&offset=' + (lastId + 1);
+
+  const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+  let data = null;
+  try {
+    data = JSON.parse(res.getContentText());
+  } catch (_) {
+    data = null;
+  }
+  if (!data || !data.ok) {
+    return { ok: false, error: (data && data.description) || res.getContentText() };
+  }
+
+  const updates = data.result || [];
+  let maxId = lastId;
+  updates.forEach((u) => {
+    const updateId = u ? Number(u.update_id || 0) : 0;
+    if (updateId && updateId > maxId) maxId = updateId;
+  });
+
+  if (maxId > lastId) props.setProperty('FRUITS_LAST_UPDATE_ID', String(maxId));
+  return { ok: true, dropped: updates.length, lastUpdateId: maxId };
 }
 
 function fruits_setupComplete(config) {
@@ -777,7 +880,6 @@ function fruits_dailyQuestion() {
     return;
   }
   fruits_initIfNeeded_();
-  fruits_ensureWebhook_();
   const store = fruits_loadStore_();
   const users = store.users || {};
   let sent = false;

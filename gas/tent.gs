@@ -412,38 +412,27 @@ function sendTelegramMessage(text) {
 // MAIN FUNCTIONS
 // ============================================================================
 
-/**
- * doPost - Receive Tent data from Bridge
- */
-function doPost(e) {
+function tent_handleTentSync_(data) {
   try {
-    const data = JSON.parse(e.postData.contents);
-
-    if (data.type === 'tent_sync') {
-      const week = data.week;
-      const tentData = data.data;
-
-      Logger.log(`📥 Received Tent sync for ${week}`);
-
-      const saved = saveTentReport(week, tentData);
-
-      return ContentService.createTextOutput(JSON.stringify({
-        ok: saved,
-        message: saved ? 'Tent report saved' : 'Save failed'
-      })).setMimeType(ContentService.MimeType.JSON);
+    if (!data || typeof data !== 'object') {
+      return { ok: false, error: 'missing payload' };
     }
 
-    return ContentService.createTextOutput(JSON.stringify({
-      ok: false,
-      error: 'Unknown request type'
-    })).setMimeType(ContentService.MimeType.JSON);
+    const week = data.week;
+    const tentData = data.data;
+    if (!week) return { ok: false, error: 'missing week' };
+    if (!tentData) return { ok: false, error: 'missing data' };
 
+    Logger.log(`📥 Received Tent sync for ${week}`);
+    const saved = saveTentReport(week, tentData);
+
+    return {
+      ok: Boolean(saved),
+      message: saved ? 'Tent report saved' : 'Save failed'
+    };
   } catch (err) {
-    Logger.log(`❌ doPost error: ${err}`);
-    return ContentService.createTextOutput(JSON.stringify({
-      ok: false,
-      error: String(err)
-    })).setMimeType(ContentService.MimeType.JSON);
+    Logger.log(`❌ tent_handleTentSync_ error: ${err}`);
+    return { ok: false, error: String(err) };
   }
 }
 

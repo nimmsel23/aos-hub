@@ -2,9 +2,50 @@
 // ROUTER DOPOST (SINGLE ENTRYPOINT)
 // ================================================================
 
+function tg_isDuplicate_(update) {
+  try {
+    const hasCbq = Boolean(update && update.callback_query && update.callback_query.id);
+    const msg = update && update.message;
+    const hasMsg = Boolean(msg && msg.chat && msg.chat.id && msg.message_id);
+    if (!hasCbq && !hasMsg) return false;
+
+    const cache = CacheService.getScriptCache();
+    const lock = LockService.getScriptLock();
+    const gotLock = lock.tryLock(300);
+    if (!gotLock) return true;
+
+    try {
+      if (hasCbq) {
+        const id = String(update.callback_query.id);
+        const key = 'tg:cbq:' + id;
+        if (cache.get(key)) return true;
+        cache.put(key, '1', 21600);
+        return false;
+      }
+
+      const chatId = msg.chat.id;
+      const messageId = msg.message_id;
+
+      const key = 'tg:msg:' + String(chatId) + ':' + String(messageId);
+      if (cache.get(key)) return true;
+      cache.put(key, '1', 21600);
+      return false;
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (_) {
+    return false;
+  }
+}
+
 function doPost(e) {
   try {
     const update = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+
+    // Telegram may retry webhooks on non-200/timeouts; dedupe to prevent spam.
+    if (tg_isDuplicate_(update)) {
+      return ContentService.createTextOutput('OK');
+    }
 
     if (update && update.kind === 'heartbeat') {
       if (typeof watchdog_handleHeartbeat_ === 'function') {

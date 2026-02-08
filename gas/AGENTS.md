@@ -17,6 +17,12 @@ Use this when the session focus is **GAS HQ only**.
 - `gas/Index_client.html` (HQ logic)
 - `gas/door.gs` / `gas/core4.gs` / `gas/fruits.gs`
 
+## Telegram Webhook vs Polling (GAS bots)
+- Keep **exactly one** webhook entrypoint: `doPost()` must live only in `gas/entrypoints.gs`.
+  - For other modules, add `*_handleX_(payload)` helpers and route from `entrypoints.gs`.
+- Polling bots must **not** have a webhook set for the same token (Telegram will retry/conflict).
+- Never share one Telegram bot token between GAS and Router/aiogram.
+
 ## Current Door Flow (summary)
 
 - Hot List → `Alpha_Door/1-Potential`
