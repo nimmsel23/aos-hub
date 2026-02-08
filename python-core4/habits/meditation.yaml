@@ -1,4 +1,6 @@
 # Meditation — Daily Practice
+#
+# TIP: Add day-specific practices if needed (e.g., sunday: "Deep Meditation")
 
 default:
   title: "Meditation — {date}"

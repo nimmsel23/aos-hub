@@ -59,7 +59,8 @@ FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
 FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap/firemap_bot.py" || true)"
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
-TENTCTL="$(resolve_bin "$SCRIPT_DIR/gas-tent-dev/tentctl" || true)"
+TENTCTL="$(resolve_bin "$SCRIPT_DIR/python-tent-bot/tentctl" || true)"
+GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
 HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
@@ -100,11 +101,12 @@ COMPONENTS:
   game        Game mount tooling (gamectl)
   voice       Voice mount tooling (voicectl)
   firectl     Fire bot wrapper (firectl)
-  tentctl     GAS Tent Centre Manager (tentctl)
+  tentctl     Tent Bot manager (python-tent-bot)
+  gas         GAS Tent Centre manager (gasctl)
   core4ctl    Core4 tooling (core4ctl)
   fruits      Fruits CLI (JSON store)
   creatorking CreatorKing CLI (JSON store)
-  tent        General's Tent Centre (GAS deployment manager)
+  tent        Tent Bot manager (alias for tentctl)
   centre      Desktop centres (menu.yaml routing)
   env         Environment manager (envctl)
   alias       Alias manager (aos-aliasctl)
@@ -527,8 +529,12 @@ route_component() {
       "$FIRECTL_BIN" "$@"
       ;;
     tent|tentctl)
-      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/gas-tent-dev/tentctl"
+      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/python-tent-bot/tentctl"
       "$TENTCTL" "$@"
+      ;;
+    gas|gasctl)
+      [[ -n "$GASCTL" ]] || die "gasctl not found at $SCRIPT_DIR/scripts/gasctl"
+      "$GASCTL" "$@"
       ;;
     env)
       env_cmd "$@"
@@ -539,7 +545,7 @@ route_component() {
     *)
       ui_err "Unknown component: $component"
       msg ""
-      msg "Available components: hub, index, router, bridge, core4, vault, sync, git, fire, backup, mount, hook, door, game, voice, tent, centre, env, alias"
+      msg "Available components: hub, index, router, bridge, core4, vault, sync, git, fire, backup, mount, hook, door, game, voice, tent, gas, centre, env, alias"
       msg "Run 'aosctl help' for usage"
       exit 1
       ;;
@@ -776,7 +782,7 @@ main() {
     version|-v|--version) show_version ;;
     doctor|doc) run_doctor ;;
     centre|centres|center|centers) centre_cmd "$@" ;;
-    hub|index|router|bridge|core4|core4ctl|vault|sync|git|backup|mount|hook|hooks|door|doorctl|game|gamectl|voice|voicectl|firectl|tent|tentctl|env|alias) route_component "$cmd" "$@" ;;
+    hub|index|router|bridge|core4|core4ctl|vault|sync|git|backup|mount|hook|hooks|door|doorctl|game|gamectl|voice|voicectl|firectl|tent|tentctl|gas|gasctl|env|alias) route_component "$cmd" "$@" ;;
     fire) fire_cmd "$@" ;;
     fruits) fruits_cmd "$@" ;;
     creatorking) creatorking_cmd "$@" ;;

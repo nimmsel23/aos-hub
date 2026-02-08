@@ -1,4 +1,7 @@
 # Posterity — Legacy Building
+#
+# ⚠️  DUMMY PERSONALIZATION - CUSTOMIZE THIS!
+# These are example schedules. Adjust to your content/teaching patterns.
 
 default:
   title: "Posterity — {date}"

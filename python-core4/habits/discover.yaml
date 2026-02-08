@@ -1,4 +1,7 @@
 # Discover — Learning & Research
+#
+# NOTE: Deep Learning Sunday is an AlphaOS standard (focused study day).
+# Adjust if your learning rhythm differs.
 
 default:
   title: "Discover — {date}"

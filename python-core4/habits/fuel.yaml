@@ -1,4 +1,7 @@
 # Fuel — Nutrition Tracking
+#
+# ⚠️  DUMMY PERSONALIZATION - CUSTOMIZE THIS!
+# These are example schedules. Adjust to your meal prep/eating patterns.
 
 default:
   title: "Fuel — {date}"

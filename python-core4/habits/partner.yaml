@@ -1,4 +1,7 @@
 # Partner — Quality Time
+#
+# ⚠️  DUMMY PERSONALIZATION - CUSTOMIZE THIS!
+# These are example schedules. Adjust to your relationship patterns.
 
 default:
   title: "Partner — {date}"

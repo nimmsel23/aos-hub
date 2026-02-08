@@ -1,4 +1,7 @@
 # Declare — Action & Execution
+#
+# NOTE: Weekly Strike (Monday) + Weekly Review (Friday) are AlphaOS standards.
+# Adjust timings if needed, but keep the rhythm.
 
 default:
   title: "Declare — {date}"

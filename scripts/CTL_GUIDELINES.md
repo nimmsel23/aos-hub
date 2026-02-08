@@ -394,7 +394,7 @@ Before committing a new ctl script:
 **Study these for patterns:**
 - `router/routerctl` - Full-featured (service + heartbeat)
 - `bridge/bridgectl` - Service management
-- `gas-tent-dev/tentctl` - API/webhook management
+- `scripts/gasctl` (gasctl tent ...) - GAS Tent Centre management
 - `scripts/firectl` - Report generation
 
 ## Questions?

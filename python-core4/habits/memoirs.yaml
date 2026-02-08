@@ -1,4 +1,6 @@
 # Memoirs — Daily Journaling
+#
+# TIP: Add day-specific prompts if needed (e.g., sunday: "Weekly Review")
 
 default:
   title: "Memoirs — {date}"

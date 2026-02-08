@@ -66,6 +66,7 @@ Usage:
   $APP hook   <hookctl-args...>
   $APP core4  <core4ctl-args...>
   $APP tent   <tentctl-args...>
+  $APP gas    <gasctl-args...>
   $APP firectl <firectl-args...>
   $APP tele  <telectl-args...>
   $APP door   <doorctl-args...>
@@ -92,6 +93,7 @@ Examples:
   $APP hook status
   $APP core4 status
   $APP tent status
+  $APP gas tent status
   $APP firectl status
   $APP tele status
   $APP door status
@@ -149,7 +151,8 @@ case "$cmd" in
   mount) repo_exec "scripts/mountctl" "$@" ;;
   hook|hooks) repo_exec "scripts/hookctl" "$@" ;;
   core4) repo_exec "python-core4/core4ctl" "$@" ;;
-  tent|tentctl) repo_exec "gas-tent-dev/tentctl" "$@" ;;
+  tent|tentctl) repo_exec "python-tent-bot/tentctl" "$@" ;;
+  gas|gasctl) repo_exec "scripts/gasctl" "$@" ;;
   firectl) repo_exec "scripts/firectl" "$@" ;;
   tele|telectl) repo_exec "scripts/telectl" "$@" ;;
   door|doorctl) repo_exec "scripts/doorctl" "$@" ;;
