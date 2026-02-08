@@ -6,6 +6,7 @@
   <title>αOS Voice Centre</title>
   <link rel="stylesheet" href="/themes-all.css">
   <script src="/vendor/marked/marked.min.js"></script>
+  <script src="/theme-manager.js"></script>
   <script src="/matrix.js" defer></script>
   <style>
     :root{
@@ -792,23 +793,6 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
       }
     }
 
-    function applyTheme(themeKey='obsidian'){
-      const body = document.body;
-      const keys = ['obsidian','dawn','monk','aurora','copper','forestnight','inkgold','bloodred','matrix'];
-      body.classList.forEach(c=>{ if(c.startsWith('theme-')) body.classList.remove(c); });
-      const safe = keys.includes(themeKey)?themeKey:'obsidian';
-      body.classList.add(`theme-${safe}`);
-      const sel = document.getElementById('theme-select');
-      if(sel) sel.value = safe;
-      try{ localStorage.setItem('voice_theme', safe); }catch(_){}
-    }
-
-    function initTheme(){
-      let stored = 'obsidian';
-      try{ stored = localStorage.getItem('voice_theme') || 'obsidian'; }catch(_){}
-      applyTheme(stored);
-      document.getElementById('theme-select')?.addEventListener('change', e=>applyTheme(e.target.value));
-    }
 
     function restoreTextareas(){
       TEXTAREA_IDS.forEach(id=>{
@@ -1125,35 +1109,8 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         }
       }, 200);
 
-      // Theme Switcher
-      const themeSelect = document.getElementById('theme-select');
-
-      function applyTheme(themeKey = 'matrix') {
-        const html = document.documentElement;
-        const body = document.body;
-
-        // All 14 themes use data-theme now
-        const allThemes = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
-
-        if (allThemes.includes(themeKey)) {
-          html.setAttribute('data-theme', themeKey);
-          // Clean up any legacy classes
-          body.className = body.className.replace(/theme-\w+/g, '').trim();
-        } else {
-          html.setAttribute('data-theme', 'matrix');
-        }
-
-        if (themeSelect) themeSelect.value = themeKey;
-        try { localStorage.setItem('voice_theme', themeKey); } catch (_) {}
-      }
-
-      (function initTheme() {
-        let stored = 'matrix';
-        try { stored = localStorage.getItem('voice_theme') || 'matrix'; } catch (_) {}
-        applyTheme(stored);
-      })();
-
-      themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+      // Initialize theme system
+      ThemeManager.init('voice_theme', { mode: 'dropdown', selectId: 'theme-select' });
     });
   </script>
 </body>

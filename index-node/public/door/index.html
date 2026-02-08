@@ -251,38 +251,16 @@
   </div>
 </footer>
 
+<script src="/theme-manager.js"></script>
 <script src="/matrix.js"></script>
 <script>
+  // Door-specific navigation
   function openPhase(phase) {
     window.location.href = `/door/${phase}`;
   }
 
-  // Theme Switcher
-  const themeSelect = document.getElementById('theme-select');
-
-  function applyTheme(themeKey = 'matrix') {
-    const html = document.documentElement;
-    const body = document.body;
-    const allThemes = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
-
-    if (allThemes.includes(themeKey)) {
-      html.setAttribute('data-theme', themeKey);
-      body.className = body.className.replace(/theme-\w+/g, '').trim();
-    } else {
-      html.setAttribute('data-theme', 'matrix');
-    }
-
-    if (themeSelect) themeSelect.value = themeKey;
-    try { localStorage.setItem('door_theme', themeKey); } catch (_) {}
-  }
-
-  (function initTheme() {
-    let stored = 'matrix';
-    try { stored = localStorage.getItem('door_theme') || 'matrix'; } catch (_) {}
-    applyTheme(stored);
-  })();
-
-  themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+  // Initialize theme system
+  ThemeManager.init('door_theme', { mode: 'dropdown', selectId: 'theme-select' });
 </script>
 </body>
 </html>

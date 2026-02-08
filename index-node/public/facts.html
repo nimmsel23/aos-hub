@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fruit Fact Maps</title>
   <link rel="stylesheet" href="/themes-all.css">
+  <script src="/theme-manager.js"></script>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
 
@@ -313,10 +314,18 @@
       const mapTitle = document.getElementById('mapTitle');
       const mapSubtitle = document.getElementById('mapSubtitle');
       if (mapTitle && data.mapTitle) mapTitle.textContent = data.mapTitle;
-      if (mapSubtitle && data.mapSubtitle) mapSubtitle.textContent = data.mapSubtitle;
       if (data.mapTitle) document.title = data.mapTitle;
 
       const sections = Object.keys(data.questions || {});
+      const totalQuestions = sections.reduce((acc, sec) => acc + (data.questions?.[sec]?.length || 0), 0);
+      const answeredCount = Object.values(allAnswers).filter((a) => a && a !== '_geskippt_').length;
+      const skippedCount = Object.values(allAnswers).filter((a) => a === '_geskippt_').length;
+      if (mapSubtitle && data.mapSubtitle) {
+        const parts = [data.mapSubtitle];
+        if (totalQuestions) parts.push(`${answeredCount}/${totalQuestions} answered`);
+        if (skippedCount) parts.push(`${skippedCount} skipped`);
+        mapSubtitle.textContent = parts.join(' • ');
+      }
       let currentFound = false;
       let allDone = true;
 
@@ -326,18 +335,19 @@
 
         const header = document.createElement('div');
         header.className = 'section-header';
-        header.innerHTML = `${randEmoji()} <strong>${section}</strong> ${randEmoji()}`;
+        header.innerHTML = `${randEmoji()} <strong>${escapeHtml(section)}</strong> ${randEmoji()}`;
         secDiv.appendChild(header);
 
         for (const q of data.questions[section] || []) {
           const qDiv = document.createElement('div');
           qDiv.className = 'question';
+          const safeQ = escapeHtml(q);
 
           if (allAnswers[q]) {
             if (allAnswers[q] === '_geskippt_') {
               allDone = false;
               qDiv.classList.add('skipped');
-              qDiv.innerHTML = `<strong>${q}</strong><br><br><em>Geskippt - bitte spaeter beantworten.</em>`;
+              qDiv.innerHTML = `<strong>${safeQ}</strong><br><br><em>Geskippt - bitte spaeter beantworten.</em>`;
 
               const textarea = document.createElement('textarea');
               textarea.placeholder = 'Antwort nachholen...';
@@ -358,14 +368,52 @@
               qDiv.appendChild(saveSkippedBtn);
             } else {
               qDiv.classList.add('answered');
-              qDiv.innerHTML = `<strong>${q}</strong><br><br>${escapeHtml(allAnswers[q]).replace(/\n/g, '<br>')}`;
+              const showAnsweredView = () => {
+                qDiv.innerHTML = `<strong>${safeQ}</strong><br><br>${escapeHtml(allAnswers[q]).replace(/\n/g, '<br>')}`;
+
+                const editBtn = document.createElement('button');
+                editBtn.textContent = 'Edit / Revise';
+                editBtn.className = 'secondary';
+                editBtn.style.marginTop = '16px';
+                editBtn.onclick = () => {
+                  const current = String(allAnswers[q] || '');
+                  qDiv.innerHTML = `<strong>${safeQ}</strong><br><br>`;
+
+                  const textarea = document.createElement('textarea');
+                  textarea.value = current;
+                  textarea.rows = 8;
+                  qDiv.appendChild(textarea);
+
+                  const saveBtn = document.createElement('button');
+                  saveBtn.textContent = 'Update Fact';
+                  saveBtn.onclick = async () => {
+                    const ans = textarea.value.trim();
+                    if (!ans) {
+                      alert('Bitte eine Antwort eingeben (leer ist nicht erlaubt).');
+                      return;
+                    }
+                    const ok = await saveAnswer(section, q, ans);
+                    if (ok) boot();
+                  };
+                  qDiv.appendChild(saveBtn);
+
+                  const cancelBtn = document.createElement('button');
+                  cancelBtn.textContent = 'Cancel';
+                  cancelBtn.className = 'secondary';
+                  cancelBtn.style.marginLeft = '10px';
+                  cancelBtn.onclick = () => showAnsweredView();
+                  qDiv.appendChild(cancelBtn);
+                };
+                qDiv.appendChild(editBtn);
+              };
+              showAnsweredView();
             }
           } else {
             allDone = false;
 
             if (!currentFound) {
               currentFound = true;
-              qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${q} ${randEmoji()}</strong>`;
+              qDiv.innerHTML = `<strong class="active-question">${randEmoji()} ${safeQ} ${randEmoji()}</strong>`;
 
               const textarea = document.createElement('textarea');
               textarea.placeholder = 'Raw & Honest Facts - no illusions...';
@@ -407,7 +455,7 @@
               };
               qDiv.appendChild(skipBtn);
             } else {
-              qDiv.innerHTML = `<em>${q}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
+              qDiv.innerHTML = `<em>${safeQ}<br><small>(wird freigeschaltet, wenn alle vorherigen beantwortet sind)</small></em>`;
             }
           }
 
@@ -514,28 +562,8 @@
     `;
     document.body.appendChild(themeToggle);
 
-    const themeSelect = document.getElementById('theme-select');
-
-    function applyTheme(themeKey = 'matrix') {
-      const allThemes = ['matrix', 'neutral', 'cyan', 'obsidian', 'aurora', 'dawn', 'monk', 'copper', 'forestnight', 'inkgold', 'bloodred', 'github', 'ocean', 'blackred'];
-
-      if (allThemes.includes(themeKey)) {
-        document.documentElement.setAttribute('data-theme', themeKey);
-      } else {
-        document.documentElement.setAttribute('data-theme', 'matrix');
-      }
-
-      if (themeSelect) themeSelect.value = themeKey;
-      try { localStorage.setItem('facts_theme', themeKey); } catch (_) {}
-    }
-
-    (function initTheme() {
-      let stored = 'matrix';
-      try { stored = localStorage.getItem('facts_theme') || 'matrix'; } catch (_) {}
-      applyTheme(stored);
-    })();
-
-    themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+    // Initialize theme system
+    ThemeManager.init('facts_theme', { mode: 'dropdown', selectId: 'theme-select' });
   </script>
 </body>
 </html>
