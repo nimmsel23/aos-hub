@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily 00:00 AlphaOS safe rclone push
+Requires=alphaos-safe-rclone-push.service
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+OnBootSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+

@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily AlphaOS safe rclone push (copy, skip symlinks)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/aos-hub/scripts/sync-utils/aos-safe-rclone-push.sh
+WorkingDirectory=%h
+Environment=HOME=%h
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin
+StandardOutput=append:%h/.local/share/alphaos/logs/alphaos-safe-rclone-push.log
+StandardError=append:%h/.local/share/alphaos/logs/alphaos-safe-rclone-push.log
+ExecCondition=/bin/test -f %h/.config/rclone/rclone.conf
+TimeoutStartSec=6h
