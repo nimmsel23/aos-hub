@@ -52,6 +52,25 @@ router/router.env
 tele
 aliasctl
 
+# Local vault/blueprints convenience symlinks
+Vault
+blueprints
+
+# Local docs symlink
+index-node/docs
+
+# Local Codex skill scratch (do not commit)
+skills/
+
+# Local core4 helper scripts (experimental)
+python-core4/core4-lib.sh
+python-core4/core4-*ctl
+
+# Local imported blueprint chapters (do not commit)
+AlphaOS - THE *.md
+AlphaOS-THE-*.md
+AphaOS-THE-*.md
+
 # IDE
 .vscode/
 .idea/
