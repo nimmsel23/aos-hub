@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>αOS Game Centre</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.14);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+      --accent: #00e5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(0,229,255,0.16), transparent 60%),
+                  radial-gradient(1200px 600px at 80% 30%, rgba(255,92,138,0.10), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      min-height: 100vh;
+    }
+    header {
+      padding: 36px 18px 18px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 32px; letter-spacing: 2px; }
+    .sub { margin: 10px 0 0; color: var(--muted); }
+    main { max-width: 980px; margin: 22px auto 60px; padding: 0 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    a.card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      transition: transform 160ms ease, border-color 160ms ease;
+    }
+    a.card:hover { transform: translateY(-3px); border-color: rgba(0,229,255,0.55); }
+    .pill { display: inline-block; font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 1px; }
+    .title { margin: 8px 0 6px; font-size: 20px; font-weight: 900; }
+    .desc { margin: 0; color: var(--muted); line-height: 1.5; }
+    .meta { margin-top: 14px; color: rgba(255,255,255,0.48); font-size: 12px; }
+    code { color: rgba(255,255,255,0.85); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>αOS GAME CENTRE</h1>
+    <p class="sub">Frame → Freedom → Focus → Fire</p>
+  </header>
+
+  <main>
+    <div class="grid">
+      <a class="card" href="<?= baseUrl ?>?page=frame&k=<?= userKey || '' ?>">
+        <span class="pill">MAP</span>
+        <div class="title">Frame</div>
+        <p class="desc">Current reality. 4 domains. 20 truths.</p>
+      </a>
+      <a class="card" href="<?= baseUrl ?>?page=freedom&k=<?= userKey || '' ?>">
+        <span class="pill">MAP</span>
+        <div class="title">Freedom</div>
+        <p class="desc">Horizon vision. Manifest the IPW.</p>
+      </a>
+      <a class="card" href="<?= baseUrl ?>?page=focus&k=<?= userKey || '' ?>">
+        <span class="pill">MAP</span>
+        <div class="title">Focus</div>
+        <p class="desc">Monthly mission. Habits / Routines / Additions / Eliminations.</p>
+      </a>
+      <a class="card" href="<?= baseUrl ?>?page=fire&k=<?= userKey || '' ?>">
+        <span class="pill">MAP</span>
+        <div class="title">Fire</div>
+        <p class="desc">Weekly execution. Lock the strikes.</p>
+      </a>
+    </div>
+
+    <p class="meta">Workspace key: <code><?= userKey || '' ?></code></p>
+  </main>
+
+  <?!= include('Client'); ?>
+</body>
+</html>

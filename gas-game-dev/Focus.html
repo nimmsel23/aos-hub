@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>FOCUS MAP Centre</title>
+  <?!= include('Game_Focus_Style'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<nav>
+  <div class="domain-tabs" style="display:flex; gap:25px;">
+    <button class="domain-tab active" data-domain="BODY">BODY</button>
+    <button class="domain-tab" data-domain="BEING">BEING</button>
+    <button class="domain-tab" data-domain="BALANCE">BALANCE</button>
+    <button class="domain-tab" data-domain="BUSINESS">BUSINESS</button>
+  </div>
+   <a href="<?= baseUrl ?>?k=<?= userKey || '' ?>" style="font-size:32px; font-weight:900; letter-spacing:5px; color:#fff;">αOS:::</a>
+</nav>
+
+<div class="master-grid" style="grid-template-columns: 1fr 420px; gap:40px; margin-top:140px; padding:0 40px;">
+  <!-- LINKS: Haupt-Kriegsraum -->
+  <div class="tool-column">
+    <div class="container">
+
+      <!-- Mission Area -->
+      <div class="mission-area">
+        <h2 id="missionTitle" style="text-align:center; font-size:36px; margin-bottom:40px;">BODY – CURRENT MONTH</h2>
+        <div class="pillar"><h3>HABITS</h3><textarea id="habitsText" placeholder="Täglich. Non-negotiable."></textarea></div>
+        <div class="pillar"><h3>ROUTINES</h3><textarea id="routinesText" placeholder="Zeitblöcke. Eisenhart."></textarea></div>
+        <div class="pillar"><h3>ADDITIONS</h3><textarea id="additionsText" placeholder="Neue Waffen. Neue Brüder."></textarea></div>
+        <div class="pillar"><h3>ELIMINATIONS</h3><textarea id="eliminationsText" placeholder="Totgewicht verbrennen."></textarea></div>
+        <button id="lockBtn">LOCK THIS MISSION</button>
+      </div>
+
+      <!-- SAVED MAPS SECTION -->
+      <div class="saved-maps-section">
+        <h3 class="saved-maps-title">SAVED FOCUS MAPS</h3>
+        <div class="load-status" id="loadStatus">Loading saved maps...</div>
+        <div class="saved-maps-grid" id="savedMapsGrid"></div>
+      </div>
+
+      <!-- CHAPTER 34 – LEISE, TIEF, EHRENVOLL -->
+      <div class="chapter-wrapper">
+        <h2 class="chapter-title">FOKUS</h2>
+        <div class="chapter-body">
+        <?!= include('Game_Focus_Chapter34'); ?>
+      </div>
+    </div>
+
+    </div>
+  </div>
+  <!-- RECHTS: Zeitphasen-Cards senkrecht -->
+  <div style="display:flex; flex-direction:column; gap:30px; padding:40px 0; align-items:center;">
+                  <!-- FOCUS RITE -->
+      <?!= include('Game_Focus_Rite'); ?>
+    <div class="month-card active" data-month="current"><div class="icon">CURRENT</div><h2>DECEMBER 2025</h2></div>
+    <div class="month-card" data-month="q1"><div class="icon">Q1</div><h2>JAN – MAR 2026</h2></div>
+    <div class="month-card" data-month="q2"><div class="icon">Q2</div><h2>APR – JUN 2026</h2></div>
+    <div class="month-card" data-month="q3"><div class="icon">Q3</div><h2>JUL – SEP 2026</h2></div>
+    <div class="month-card" data-month="q4"><div class="icon">Q4</div><h2>OCT – DEC 2026</h2></div>
+  </div>
+
+</div>
+
+<?!= include('Game_Focus_Script'); ?>
+
+<script>
+console.log("JS läuft");
+document.addEventListener('click', () => console.log("click"));
+document.addEventListener('keydown', (e) => console.log("key", e.key));
+</script>
+
+<?!= include('Client'); ?>
+</body>
+</html>

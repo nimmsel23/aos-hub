@@ -1,0 +1,70 @@
+<script>
+const USER_KEY = "<?= userKey ?>";
+
+function gameGetUserKey_() {
+  try {
+    if (USER_KEY && String(USER_KEY).trim()) return String(USER_KEY).trim();
+  } catch (_) {}
+  try {
+    return String(localStorage.getItem("aos_game_user_key") || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function gameRedirectToKey_(key) {
+  const k = String(key || "").trim();
+  if (!k) return false;
+  try { localStorage.setItem("aos_game_user_key", k); } catch (_) {}
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("k", k);
+    window.location.replace(url.toString());
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function gameEnsureUserKey_(onReady) {
+  const current = gameGetUserKey_();
+  const injected = String(USER_KEY || "").trim();
+
+  if (current && injected) {
+    try { localStorage.setItem("aos_game_user_key", current); } catch (_) {}
+    if (typeof onReady === "function") onReady();
+    return;
+  }
+  if (current && !injected) {
+    if (gameRedirectToKey_(current)) return;
+  }
+
+  if (!(window.google && google.script && google.script.run)) {
+    if (typeof onReady === "function") onReady();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      const key = res && res.userKey ? String(res.userKey || "").trim() : "";
+      if (!key) {
+        if (typeof onReady === "function") onReady();
+        return;
+      }
+      gameRedirectToKey_(key);
+    })
+    .withFailureHandler(() => {
+      if (typeof onReady === "function") onReady();
+    })
+    .game_registerAnonUser();
+}
+
+window.gameGetUserKey_ = gameGetUserKey_;
+window.gameEnsureUserKey_ = gameEnsureUserKey_;
+
+(function initGameStandalone() {
+  // Ensure workspace key exists early; pages will reload with ?k=...
+  gameEnsureUserKey_();
+})();
+</script>
+
