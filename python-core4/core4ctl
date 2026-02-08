@@ -36,6 +36,9 @@ Tracker:
   core4ctl finalize-month [args...]
   core4ctl finalize-week [args...]
 
+Habits:
+  core4ctl edit-habit [habit-name]   # Edit per-habit config
+
 Taskwarrior:
   core4ctl list|today|week|done [task-args...]
 
@@ -69,7 +72,7 @@ case "$cmd" in
   doctor) clinctl doctor ;;
   install-cli) clinctl install-cli "${1:-}" ;;
 
-  status|sources|build|seed-week|export-daily|prune|prune-events|finalize-month|seal-month|month-close|finalize-week|seal-week|list|ls|today|week|done|completed)
+  status|sources|build|seed-week|export-daily|prune|prune-events|finalize-month|seal-month|month-close|finalize-week|seal-week|edit-habit|edit|list|ls|today|week|done|completed)
     trackctl "$cmd" "$@"
     ;;
 

@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+status() {
+  need_core4_tracker
+  msg "core4ctl status"
+  msg ""
+  msg "- core4: $CORE4_TRACKER"
+  msg "- vault: ${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+  msg ""
+  "$CORE4_TRACKER" -d --quiet || true
+  "$CORE4_TRACKER" -w --quiet || true
+  msg ""
+  if [[ -d "$HOME/AlphaOS-Vault/Core4/.core4/events" ]]; then
+    msg "events (local):"
+    find "$HOME/AlphaOS-Vault/Core4/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
+  fi
+  if [[ -f "$HOME/AlphaOS-Vault/Core4/core4_daily.csv" ]]; then
+    msg "daily csv: $HOME/AlphaOS-Vault/Core4/core4_daily.csv"
+  fi
+}
+
+sources() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" sources
+}
+
+build() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" build
+}
+
+seed_week() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" seed-week "$@"
+}
+
+export_daily() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" export-daily "$@"
+}
+
+prune_events() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" prune-events "$@"
+}
+
+finalize_month() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" finalize-month "$@"
+}
+
+finalize_week() {
+  need_core4_tracker
+  exec "$CORE4_TRACKER" finalize-week "$@"
+}
+
+edit_habit() {
+  local habits_dir="$APP_DIR/habits"
+  local habit="${1:-}"
+
+  if [[ ! -d "$habits_dir" ]]; then
+    die "habits directory not found: $habits_dir"
+  fi
+
+  # If no habit specified, show interactive menu
+  if [[ -z "$habit" ]]; then
+    msg "Available habits:"
+    local i=1
+    local habit_files=()
+    for f in "$habits_dir"/*.yaml; do
+      local base=$(basename "$f" .yaml)
+      habit_files+=("$base")
+      msg "  $i) $base"
+      ((i++))
+    done
+    msg ""
+    read -r -p "Select habit (1-${#habit_files[@]}) or name: " choice
+
+    # Try numeric selection
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#habit_files[@]} )); then
+      habit="${habit_files[$((choice - 1))]}"
+    else
+      habit="$choice"
+    fi
+  fi
+
+  local habit_file="$habits_dir/${habit}.yaml"
+  if [[ ! -f "$habit_file" ]]; then
+    die "habit config not found: $habit_file"
+  fi
+
+  msg "Editing: $habit_file"
+  "${EDITOR:-vim}" "$habit_file"
+
+  # Validate YAML syntax
+  if command -v python3 &>/dev/null; then
+    if ! python3 -c "import yaml; yaml.safe_load(open('$habit_file'))" 2>/dev/null; then
+      warn "⚠ YAML syntax error detected! Please fix before using."
+    else
+      msg "✓ YAML syntax valid"
+    fi
+  fi
+
+  # Offer dry-run preview
+  msg ""
+  read -r -p "Preview tasks with this config? (y/N): " preview
+  if [[ "$preview" =~ ^[Yy] ]]; then
+    msg ""
+    msg "=== Dry-run preview (current week) ==="
+    need_core4_seeder
+    "$CORE4_SEEDER" --dry-run
+  fi
+}
+
+tw_list() { exec task +core4 "$@"; }
+tw_today() { exec task +core4 due:today "$@"; }
+tw_week() { exec task +core4 due:thisweek "$@"; }
+tw_done() { exec task +core4 status:completed "$@"; }
+
+usage() {
+  cat <<EOF
+Usage: core4-trackctl <command>
+
+Core:
+  status
+  sources
+  build
+
+Tracker:
+  seed-week [args...]
+  export-daily [args...]
+  prune-events [args...]
+  finalize-month [args...]
+  finalize-week [args...]
+
+Habits:
+  edit-habit [habit-name]    # Edit per-habit config (interactive if no name)
+
+Taskwarrior:
+  list|today|week|done [task-args...]
+EOF
+}
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  status) status ;;
+  sources) sources ;;
+  build) build ;;
+  seed-week) seed_week "$@" ;;
+  export-daily) export_daily "$@" ;;
+  prune|prune-events) prune_events "$@" ;;
+  finalize-month|seal-month|month-close) finalize_month "$@" ;;
+  finalize-week|seal-week) finalize_week "$@" ;;
+  edit-habit|edit) edit_habit "$@" ;;
+  list|ls) tw_list "$@" ;;
+  today) tw_today "$@" ;;
+  week) tw_week "$@" ;;
+  done|completed) tw_done "$@" ;;
+  *) usage; exit 1 ;;
+esac
