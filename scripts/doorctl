@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOORCTL_VERSION="1.1.0"
+DOORCTL_VERSION="2.0.0"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -20,180 +20,414 @@ aos_env_load "" "$ROOT_DIR" || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/ctl-lib.sh"
 
-SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
-JOURNALCTL_BIN="${JOURNALCTL_BIN:-journalctl}"
-SYSTEMCTL_USER=("$SYSTEMCTL_BIN" --user)
-JOURNALCTL_USER=("$JOURNALCTL_BIN" --user)
+# Config
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+STALLED_DAYS="${AOS_DOOR_STALLED_DAYS:-7}"
+TASK_BIN="${TASK_BIN:-task}"
 
-UNITS=(
-  "${AOS_DOOR_WARSTACK_SERVICE:-warstack-bot.service}"
-)
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || { ui_err "Missing: $1"; exit 1; }
+}
 
-get_units() {
-  local out=()
-  local unit
-  for unit in "${UNITS[@]}"; do
-    [[ -n "$unit" ]] && out+=("$unit")
+# Parse task JSON export for doors
+get_doors() {
+  need_cmd "$TASK_BIN"
+  need_cmd jq
+
+  # Get all tasks with door_name UDA
+  "$TASK_BIN" export status:pending 2>/dev/null | jq -r '
+    map(select(.door_name != null and .door_name != ""))
+    | group_by(.door_name)
+    | map({
+        name: .[0].door_name,
+        count: length,
+        done: map(select(.status == "completed")) | length,
+        pending: map(select(.status == "pending")) | length,
+        project: (.[0].project // ""),
+        tags: (.[0].tags // []),
+        due: (map(.due) | sort | .[0] // null),
+        modified: (map(.modified) | sort | reverse | .[0] // null)
+      })
+    | .[]
+  ' | jq -s '.'
+}
+
+get_door_tasks() {
+  local door_name="$1"
+  need_cmd "$TASK_BIN"
+
+  "$TASK_BIN" export door_name:"$door_name" status:pending 2>/dev/null
+}
+
+get_door_phase() {
+  local tags="$1"
+
+  # Heuristic: check tags for phase indicators
+  if echo "$tags" | jq -r '.[]' | grep -q "potential"; then
+    echo "potential"
+  elif echo "$tags" | jq -r '.[]' | grep -q "plan"; then
+    echo "plan"
+  elif echo "$tags" | jq -r '.[]' | grep -q "production\|hit\|strike"; then
+    echo "production"
+  elif echo "$tags" | jq -r '.[]' | grep -q "profit\|done"; then
+    echo "profit"
+  else
+    echo "unknown"
+  fi
+}
+
+format_phase() {
+  case "$1" in
+    potential) echo "💡 Pot" ;;
+    plan) echo "📋 Plan" ;;
+    production) echo "🔨 Prod" ;;
+    profit) echo "💰 Profit" ;;
+    *) echo "❓ ???" ;;
+  esac
+}
+
+time_ago() {
+  local timestamp="$1"
+  [[ -z "$timestamp" ]] && { echo "never"; return; }
+
+  # Parse ISO timestamp (20260209T105635Z)
+  local ts_epoch
+  ts_epoch=$(date -d "${timestamp}" +%s 2>/dev/null || echo "0")
+  [[ "$ts_epoch" == "0" ]] && { echo "?"; return; }
+
+  local now_epoch
+  now_epoch=$(date +%s)
+  local diff=$((now_epoch - ts_epoch))
+
+  if ((diff < 60)); then
+    echo "${diff}s ago"
+  elif ((diff < 3600)); then
+    echo "$((diff / 60))m ago"
+  elif ((diff < 86400)); then
+    echo "$((diff / 3600))h ago"
+  else
+    echo "$((diff / 86400))d ago"
+  fi
+}
+
+is_stalled() {
+  local modified="$1"
+  [[ -z "$modified" ]] && return 0
+
+  local ts_epoch
+  ts_epoch=$(date -d "${modified}" +%s 2>/dev/null || echo "0")
+  [[ "$ts_epoch" == "0" ]] && return 0
+
+  local now_epoch
+  now_epoch=$(date +%s)
+  local diff=$((now_epoch - ts_epoch))
+  local stalled_threshold=$((STALLED_DAYS * 86400))
+
+  ((diff > stalled_threshold))
+}
+
+cmd_list() {
+  ui_title "Active Doors"
+
+  local doors
+  doors=$(get_doors)
+
+  if [[ "$doors" == "[]" || -z "$doors" ]]; then
+    ui_info "No doors found. Create your first door with: doorctl create"
+    return 0
+  fi
+
+  # Table header
+  printf "╔═══════════════════╦═══════════╦══════╦══════╦══════╦═══════════════╗\n"
+  printf "║ %-17s ║ %-9s ║ %4s ║ %4s ║ %4s ║ %-13s ║\n" \
+    "DOOR" "PHASE" "HITS" "DONE" "%" "LAST ACTIVITY"
+  printf "╠═══════════════════╬═══════════╬══════╬══════╬══════╬═══════════════╣\n"
+
+  # Parse and display each door
+  echo "$doors" | jq -r '.[] | @json' | while IFS= read -r door; do
+    local name
+    name=$(echo "$door" | jq -r '.name')
+    local count
+    count=$(echo "$door" | jq -r '.count')
+    local done
+    done=$(echo "$door" | jq -r '.done')
+    local pending
+    pending=$(echo "$door" | jq -r '.pending')
+    local tags
+    tags=$(echo "$door" | jq -r '.tags')
+    local modified
+    modified=$(echo "$door" | jq -r '.modified')
+
+    local phase
+    phase=$(get_door_phase "$tags")
+    local phase_icon
+    phase_icon=$(format_phase "$phase")
+
+    local pct="-"
+    if ((count > 0)); then
+      pct=$(printf "%.0f%%" $(echo "scale=2; $done * 100 / $count" | bc))
+    fi
+
+    local activity
+    activity=$(time_ago "$modified")
+
+    # Check if stalled
+    local alert=""
+    if is_stalled "$modified"; then
+      alert="🔥"
+    elif [[ "$activity" == *"d ago"* ]]; then
+      local days=${activity%d*}
+      days=${days## }
+      if ((days >= 3)); then
+        alert="⚠️ "
+      fi
+    fi
+
+    printf "║ %-17s ║ %-9s ║ %4s ║ %4s ║ %4s ║ %-13s ║\n" \
+      "${name:0:17}" \
+      "$phase_icon" \
+      "$count" \
+      "$done" \
+      "$pct" \
+      "${activity:0:10} $alert"
   done
-  printf '%s\n' "${out[@]}"
+
+  printf "╚═══════════════════╩═══════════╩══════╩══════╩══════╩═══════════════╝\n"
+  echo
+  ui_info "Symbols: 💡 Potential | 📋 Plan | 🔨 Production | 💰 Profit"
+  ui_info "Alerts: ⚠️  Needs attention (3+ days) | 🔥 Stalled ($STALLED_DAYS+ days)"
+}
+
+cmd_show() {
+  local door_name="$1"
+  [[ -z "$door_name" ]] && { ui_err "Usage: doorctl show <door-name>"; exit 1; }
+
+  ui_title "Door: $door_name"
+
+  local tasks
+  tasks=$(get_door_tasks "$door_name")
+
+  if [[ "$tasks" == "[]" || -z "$tasks" ]]; then
+    ui_err "Door not found: $door_name"
+    return 1
+  fi
+
+  # Door metadata
+  local count
+  count=$(echo "$tasks" | jq 'length')
+  local done
+  done=$(echo "$tasks" | jq '[.[] | select(.status == "completed")] | length')
+  local pending
+  pending=$(echo "$tasks" | jq '[.[] | select(.status == "pending")] | length')
+  local project
+  project=$(echo "$tasks" | jq -r '.[0].project // "N/A"')
+  local tags
+  tags=$(echo "$tasks" | jq -r '.[0].tags | join(", ")')
+  local phase
+  phase=$(get_door_phase "$(echo "$tasks" | jq -r '.[0].tags')")
+
+  echo "Phase: $(format_phase "$phase")"
+  echo "Project: $project"
+  echo "Tags: $tags"
+  echo "Hits: $count total, $done done, $pending pending"
+  echo
+
+  # Progress bar
+  if ((count > 0)); then
+    local pct=$((done * 100 / count))
+    local filled=$((pct / 5))
+    local empty=$((20 - filled))
+    printf "Progress: ["
+    printf '█%.0s' $(seq 1 $filled)
+    printf '░%.0s' $(seq 1 $empty)
+    printf "] %d%%\n\n" "$pct"
+  fi
+
+  # Task list
+  ui_info "Pending Hits:"
+  echo "$tasks" | jq -r '.[] | select(.status == "pending") |
+    "  🔲 \(.description) (due: \(.due // "none"), priority: \(.priority // "M"))"'
+
+  echo
+  ui_info "Completed Hits:"
+  echo "$tasks" | jq -r '.[] | select(.status == "completed") |
+    "  ✅ \(.description) (done: \(.end // "?"))"'
+}
+
+cmd_hits() {
+  local door_name="${1:-}"
+  local status_filter="${2:-pending}"
+
+  if [[ -z "$door_name" ]]; then
+    # Show all hits across all doors
+    ui_title "All Hits"
+    need_cmd "$TASK_BIN"
+    "$TASK_BIN" +hit status:"$status_filter"
+    return
+  fi
+
+  ui_title "Hits for: $door_name"
+
+  local tasks
+  tasks=$(get_door_tasks "$door_name")
+
+  if [[ "$tasks" == "[]" || -z "$tasks" ]]; then
+    ui_err "No hits found for door: $door_name"
+    return 1
+  fi
+
+  echo "$tasks" | jq -r --arg status "$status_filter" '
+    .[] | select(.status == $status) |
+    "[\(.uuid[0:7])] \(.description) (due: \(.due // "none"), priority: \(.priority // "M"))"
+  '
+}
+
+cmd_next() {
+  local door_name="${1:-}"
+
+  ui_title "Next Hit"
+
+  need_cmd "$TASK_BIN"
+
+  if [[ -n "$door_name" ]]; then
+    # Next hit for specific door
+    "$TASK_BIN" next door_name:"$door_name" limit:1 2>/dev/null
+  else
+    # Next hit across all doors
+    "$TASK_BIN" next +door limit:3 2>/dev/null
+  fi
+}
+
+cmd_done() {
+  local uuid_prefix="$1"
+  [[ -z "$uuid_prefix" ]] && { ui_err "Usage: doorctl done <uuid-prefix>"; exit 1; }
+
+  need_cmd "$TASK_BIN"
+  "$TASK_BIN" "$uuid_prefix" done
+  ui_ok "Hit marked done: $uuid_prefix"
+}
+
+cmd_hitlist() {
+  ui_title "Hit List (All Pending Hits)"
+  need_cmd "$TASK_BIN"
+  "$TASK_BIN" +hit status:pending
+}
+
+cmd_health() {
+  ui_title "Door Health Check"
+
+  local doors
+  doors=$(get_doors)
+
+  if [[ "$doors" == "[]" || -z "$doors" ]]; then
+    ui_info "No doors to check."
+    return 0
+  fi
+
+  echo "$doors" | jq -r '.[] | @json' | while IFS= read -r door; do
+    local name
+    name=$(echo "$door" | jq -r '.name')
+    local modified
+    modified=$(echo "$door" | jq -r '.modified')
+    local activity
+    activity=$(time_ago "$modified")
+
+    if is_stalled "$modified"; then
+      ui_err "🔥 $name: STALLED ($activity)"
+    elif [[ "$activity" == *"d ago"* ]]; then
+      local days=${activity%d*}
+      days=${days## }
+      if ((days >= 3)); then
+        ui_warn "⚠️  $name: Needs attention ($activity)"
+      else
+        ui_ok "✅ $name: Healthy ($activity)"
+      fi
+    else
+      ui_ok "✅ $name: Healthy ($activity)"
+    fi
+  done
+
+  echo
+  ui_info "Stalled = no activity in $STALLED_DAYS+ days"
+  ui_info "Needs attention = no activity in 3+ days"
+}
+
+cmd_stalled() {
+  ui_title "Stalled Doors"
+
+  local doors
+  doors=$(get_doors)
+
+  if [[ "$doors" == "[]" || -z "$doors" ]]; then
+    ui_info "No doors found."
+    return 0
+  fi
+
+  local found=0
+  echo "$doors" | jq -r '.[] | @json' | while IFS= read -r door; do
+    local name
+    name=$(echo "$door" | jq -r '.name')
+    local modified
+    modified=$(echo "$door" | jq -r '.modified')
+    local activity
+    activity=$(time_ago "$modified")
+
+    if is_stalled "$modified"; then
+      echo "- $name ($activity)"
+      found=1
+    fi
+  done
+
+  if ((found == 0)); then
+    ui_ok "No stalled doors!"
+  fi
+}
+
+cmd_focus() {
+  ui_title "Today's Focus (Top 3 Hits)"
+  need_cmd "$TASK_BIN"
+  "$TASK_BIN" +door +hit status:pending limit:3
 }
 
 show_help() {
-  cat <<'EOF_HELP'
-doorctl - Door/Warstack service manager
+  cat <<'EOF'
+doorctl v2.0 - Door Task Management System
 
 Usage:
   doorctl <command> [args...]
 
 Commands:
-  list                       List managed units
-  status                     Show status for all units
-  start                      Start all units
-  stop                       Stop all units
-  restart                    Restart all units
-  enable                     Enable all units
-  disable                    Disable all units
-  logs [--follow|-f] [unit]  Show logs for a unit (defaults to all units)
-  doctor                     Health check (units + systemd)
-  menu                       Interactive menu
-  version                    Show version
-  help                        Show this help
+  list                    List all active doors with status
+  show <door>             Show detail view for specific door
+  hits [door] [status]    List hits for door (default: pending)
+  next [door]             Show next hit to work on
+  done <uuid>             Mark hit as completed
+  hitlist                 Show all pending hits across all doors
+  focus                   Show today's focus (top 3 hits)
+  health                  Check door health (stalled, needs attention)
+  stalled                 List stalled doors only
+
+  version                 Show version
+  help                    Show this help
+
+Examples:
+  doorctl list
+  doorctl show Ausbildung
+  doorctl hits Ausbildung
+  doorctl next
+  doorctl done 123abc
+  doorctl health
+
+Config (env vars):
+  AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
+  AOS_DOOR_STALLED_DAYS   Days before door is stalled (default: 7)
+  TASK_BIN                Taskwarrior binary (default: task)
 
 Notes:
-  - Uses systemd user units (systemctl --user).
-  - Override unit via AOS_DOOR_WARSTACK_SERVICE.
-EOF_HELP
-}
-
-cmd_list() {
-  get_units
-}
-
-cmd_status() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  if ((${#units[@]} == 0)); then
-    ui_warn "No units configured"
-    return 0
-  fi
-  "${SYSTEMCTL_USER[@]}" status "${units[@]}"
-}
-
-cmd_start() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" start "${units[@]}"
-}
-
-cmd_stop() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" stop "${units[@]}"
-}
-
-cmd_restart() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" restart "${units[@]}"
-}
-
-cmd_enable() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" enable "${units[@]}"
-}
-
-cmd_disable() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" disable "${units[@]}"
-}
-
-cmd_logs() {
-  need_cmd "$JOURNALCTL_BIN"
-  local follow=""
-  local unit=""
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -f|--follow) follow="--follow" ;;
-      *) unit="$1" ;;
-    esac
-    shift
-  done
-
-  if [[ -n "$unit" ]]; then
-    "${JOURNALCTL_USER[@]}" $follow -u "$unit"
-    return
-  fi
-
-  mapfile -t units < <(get_units)
-  if ((${#units[@]} == 0)); then
-    ui_warn "No units configured"
-    return 0
-  fi
-
-  "${JOURNALCTL_USER[@]}" $follow "${units[@]/#/-u }"
-}
-
-cmd_doctor() {
-  ui_title "doorctl doctor"
-  if ! has_cmd "$SYSTEMCTL_BIN"; then
-    ui_err "systemctl not found"
-    return 1
-  fi
-
-  mapfile -t units < <(get_units)
-  if ((${#units[@]} == 0)); then
-    ui_warn "No units configured"
-    return 0
-  fi
-
-  for unit in "${units[@]}"; do
-    if "${SYSTEMCTL_USER[@]}" is-active --quiet "$unit"; then
-      ui_ok "$unit active"
-    else
-      ui_warn "$unit inactive"
-    fi
-  done
-}
-
-cmd_menu() {
-  ui_title "doorctl"
-  local action
-  action=$(ui_choose "Select" \
-    "status" \
-    "start" \
-    "stop" \
-    "restart" \
-    "enable" \
-    "disable" \
-    "logs" \
-    "doctor" \
-    "list" \
-    "quit")
-
-  case "$action" in
-    status) cmd_status ;;
-    start) cmd_start ;;
-    stop) cmd_stop ;;
-    restart) cmd_restart ;;
-    enable) cmd_enable ;;
-    disable) cmd_disable ;;
-    logs) cmd_logs ;;
-    doctor) cmd_doctor ;;
-    list) cmd_list ;;
-    quit) exit 0 ;;
-    *) exit 0 ;;
-  esac
-}
-
-cmd_version() {
-  echo "doorctl version $DOORCTL_VERSION"
+  - Requires Taskwarrior with door_name UDA
+  - Tasks must have +door or +hit tags
+  - Uses task export for data
+EOF
 }
 
 main() {
@@ -201,17 +435,16 @@ main() {
   shift || true
 
   case "$cmd" in
-    list) cmd_list ;;
-    status) cmd_status ;;
-    start) cmd_start ;;
-    stop) cmd_stop ;;
-    restart) cmd_restart ;;
-    enable) cmd_enable ;;
-    disable) cmd_disable ;;
-    logs) cmd_logs "$@" ;;
-    doctor) cmd_doctor ;;
-    menu) cmd_menu ;;
-    version) cmd_version ;;
+    list|ls) cmd_list ;;
+    show) cmd_show "$@" ;;
+    hits) cmd_hits "$@" ;;
+    next) cmd_next "$@" ;;
+    done) cmd_done "$@" ;;
+    hitlist|all) cmd_hitlist ;;
+    focus|today) cmd_focus ;;
+    health) cmd_health ;;
+    stalled) cmd_stalled ;;
+    version) echo "doorctl v$DOORCTL_VERSION" ;;
     help|-h|--help) show_help ;;
     *)
       ui_err "Unknown command: $cmd"
