@@ -6,6 +6,11 @@ APP="hubctl"
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Codex session helper: hubctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "hubctl" "$@" && exit 0
+
 # Load global env (optional) so subcommands inherit exported AOS_* vars.
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/aos-env.sh"

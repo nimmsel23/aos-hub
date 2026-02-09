@@ -2,6 +2,7 @@
 
 ## Purpose
 Drive the 4P flow (Potential -> Plan -> Production -> Profit) and turn ideas into weekly execution.
+Standalone pattern overview: `DOCS/gas/standalone.md`.
 
 ## Entry
 - HQ UI (Door Centre): `gas/Door_Index.html` (inline map in HQ)

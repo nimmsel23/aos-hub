@@ -15,6 +15,11 @@ APP="gasctl"
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" )")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Codex session helper: gasctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "gasctl" "$@" && exit 0
+
 # Load shared env (optional). This is where AOS_GAS_WEBHOOK_URL usually lives.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"

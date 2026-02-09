@@ -7,6 +7,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 HOOK_SRC_DIR="$ROOT_DIR/scripts/taskwarrior"
 
+# Codex session helper: hookctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "hookctl" "$@" && exit 0
+
 # Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"

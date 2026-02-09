@@ -11,6 +11,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Codex session helper: aos-syncctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "aos-syncctl" "$@" && exit 0
+
 # Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"

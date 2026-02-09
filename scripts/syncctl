@@ -23,6 +23,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 have_tty() { [[ -t 0 && -t 1 ]]; }
 
 SYNCCTL_DRY_RUN="${AOS_DRY_RUN:-0}"
+UI_POINTER=">"
+UI_HR_CHAR="-"
+
+ui_is_utf8() {
+  local loc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+  [[ "$loc" == *"UTF-8"* || "$loc" == *"utf8"* ]]
+}
 
 ui_has_color() {
   [[ -t 1 ]] || return 1
@@ -48,6 +55,14 @@ ui_init() {
     UI_GREEN=""
     UI_YELLOW=""
   fi
+
+  if ui_is_utf8; then
+    UI_POINTER="▸"
+    UI_HR_CHAR="─"
+  else
+    UI_POINTER=">"
+    UI_HR_CHAR="-"
+  fi
 }
 
 ui_term_cols() {
@@ -71,7 +86,10 @@ ui_hr() {
   local cols
   cols="$(ui_term_cols)"
   local w=$((cols < 88 ? cols : 88))
-  printf "%*s" "$w" "" | tr " " "─"
+  local line
+  printf -v line "%*s" "$w" ""
+  line="${line// /$UI_HR_CHAR}"
+  printf "%s" "$line"
 }
 
 ui_mode_badge() {
@@ -134,9 +152,9 @@ ui_choose() {
     for i in "${!items[@]}"; do
       if [[ "$i" -eq "$cursor" ]]; then
         if ui_has_color; then
-          printf "%s%s  ▸ %s%s\n" "$UI_CYAN" "$UI_BOLD" "${items[$i]}" "$UI_RESET"
+          printf "%s  %s %s%s\n" "$UI_INV" "$UI_POINTER" "${items[$i]}" "$UI_RESET"
         else
-          printf "> %s\n" "${items[$i]}"
+          printf "%s %s\n" "$UI_POINTER" "${items[$i]}"
         fi
       else
         printf "    %s\n" "${items[$i]}"

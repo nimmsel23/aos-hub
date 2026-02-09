@@ -2,6 +2,7 @@
 
 ## Purpose
 Daily fact questions (Fruits Map). See `DOCS/fruits-centre.md` for the unified overview.
+Standalone pattern overview: `DOCS/gas/standalone.md`.
 
 ## Telegram Bot Mode (GAS)
 GAS Fruits supports both webhook and polling, but **polling is the intended mode** for the

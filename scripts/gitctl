@@ -7,6 +7,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 LIB_DIR="${SCRIPT_DIR}/syncvaultctl.d"
 
+# Codex session helper: gitctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "gitctl" "$@" && exit 0
+
 if [[ ! -d "$LIB_DIR" ]]; then
   echo "gitctl: missing library dir: $LIB_DIR" >&2
   exit 1

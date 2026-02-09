@@ -18,6 +18,12 @@ ROUTERCTL_VERSION="0.3.1"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
+
+# Codex session helper: routerctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "routerctl" "$@" && exit 0
+
 # shellcheck disable=SC1090
 source "$ROOT_DIR/scripts/ctl-lib.sh"
 : "${CTL_CHOOSE_PROMPT:=routerctl}"
