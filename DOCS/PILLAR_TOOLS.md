@@ -10,7 +10,7 @@ AlphaOS implements the 5 Pillars as CLI tools:
 |--------|------|---------|--------|
 | **THE DOOR** | `doorctl` | Weekly Tactics (4P Flow) | ✅ v2.0 |
 | **THE GAME** | `gamectl` | Strategic Maps (Cascade) | ✅ v2.0 |
-| **THE VOICE** | `voicectl` | Mental Mastery (4-Step) | ⏳ Basic |
+| **THE VOICE** | `voicectl` | Mental Mastery (4-Step) | ✅ v2.0 |
 | **THE CORE FOUR** | `core4ctl` | Daily Tracking (28-or-Die) | ✅ v2.0 |
 | **THE CODE** | `aosctl code` | Philosophy Viewer | ✅ v1.0 |
 | **Meta** | `aosctl` | Unified Launcher | ✅ v1.0 |
@@ -29,6 +29,7 @@ aosctl core status
 # Or use direct commands
 doorctl health
 gamectl review
+voicectl start
 core4ctl streak
 ```
 
@@ -204,8 +205,103 @@ Fire needs update (depends on Focus)
 
 ### See Also
 
-- `game/README.md` - Full documentation (to be created)
+- `game/README.md` - Full documentation
 - Elliott Hulse's THE GAME philosophy
+
+## THE VOICE (voicectl)
+
+**Purpose:** Mental Mastery - Pattern interruption through 4-step process
+
+### Key Commands
+
+```bash
+voicectl start                  # Interactive 4-step session
+voicectl list [limit]           # List sessions
+voicectl recent [count]         # Recent N sessions
+voicectl show <id>              # View session
+voicectl edit <id>              # Edit session
+voicectl search <query>         # Search content
+voicectl stats                  # Statistics
+voicectl strike <id>            # Extract STRIKE
+```
+
+### Features
+
+- **4-Step Process** - STOP → SUBMIT → STRUGGLE → STRIKE
+- **Interactive facilitation** - gum integration for enhanced prompts
+- **Session management** - List, search, view with glow/bat
+- **Pattern interruption** - Systematic mental mastery
+- **Integration ready** - STRIKE feeds Door War Stacks
+- **Markdown storage** - Sessions in `~/AlphaOs-Vault/VOICE/` or `~/Voice/`
+
+### 4-Step Process
+
+| Step | Emoji | Purpose |
+|------|-------|---------|
+| **STOP** | 🛑 | Interrupt destructive pattern |
+| **SUBMIT** | 🙏 | Face truth, surrender |
+| **STRUGGLE** | ⚔️ | Rewrite narrative |
+| **STRIKE** | ⚡ | Decisive action |
+
+### Session File Format
+
+```markdown
+# VOICE Session - YYYY-MM-DD HH:MM
+
+## STOP - Pattern Interrupt
+**What pattern needs interrupting?**
+[content]
+
+## SUBMIT - Face Truth
+**What truth must be faced?**
+[content]
+
+## STRUGGLE - Rewrite Story
+**What story needs rewriting?**
+[content]
+
+## STRIKE - Decisive Action
+**What action follows?**
+[content]
+```
+
+### Integration Points
+
+**With THE DOOR:**
+```bash
+# Extract STRIKE from session
+voicectl strike 2026-02-09
+
+# Use as War Stack input
+doorctl war create  # Paste STRIKE content
+```
+
+**With THE GAME:**
+```bash
+# Review sessions for Frame insights
+voicectl recent 10
+
+# Update Frame Map
+gamectl edit frame being
+```
+
+### Vault Storage
+
+```
+~/AlphaOs-Vault/VOICE/
+└── VOICE-YYYY-MM-DD_HHMM.md
+```
+
+Or fallback:
+```
+~/Voice/
+└── VOICE-YYYY-MM-DD_HHMM.md
+```
+
+### See Also
+
+- `voice/README.md` - Full documentation
+- Elliott Hulse's THE VOICE philosophy
 
 ## THE CORE FOUR (core4ctl)
 
