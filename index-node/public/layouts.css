@@ -1,0 +1,232 @@
+/* ===============================
+ *   COMPLETE LAYOUT SYSTEM
+ *   Changes ENTIRE page structure
+ *   =============================== */
+
+/* === CLASSIC LAYOUT (Default - Sidebar + Grid) === */
+[data-layout="grid"] body {
+  /* Default layout, no changes */
+}
+
+/* === FULLSCREEN LAYOUT (No sidebars, just cards) === */
+[data-layout="compact"] .doc-panel,
+[data-layout="compact"] .gpt-panel {
+  display: none !important;
+}
+
+[data-layout="compact"] .index-layout {
+  display: block;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+[data-layout="compact"] .menu-panel {
+  width: 100%;
+}
+
+[data-layout="compact"] .core4-panel {
+  margin-bottom: 20px;
+}
+
+[data-layout="compact"] .grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+[data-layout="compact"] #menuGrid a {
+  padding: 12px 14px;
+  min-height: 60px;
+  font-size: 1em;
+  border-radius: 12px;
+}
+
+/* === TERMINAL LAYOUT (Pure list, no sidebars) === */
+[data-layout="list"] .doc-panel,
+[data-layout="list"] .gpt-panel {
+  display: none !important;
+}
+
+[data-layout="list"] .index-layout {
+  display: block;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+[data-layout="list"] .core4-panel {
+  margin-bottom: 20px;
+}
+
+[data-layout="list"] .grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-layout="list"] #menuGrid a {
+  padding: 14px 18px;
+  min-height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 8px;
+  border-width: 1px;
+}
+
+[data-layout="list"] #menuGrid a::after {
+  content: "→";
+  opacity: 0.5;
+  font-size: 1.3em;
+  transition: all 0.2s ease;
+}
+
+[data-layout="list"] #menuGrid a:hover::after {
+  transform: translateX(6px);
+  opacity: 1;
+}
+
+/* === DASHBOARD LAYOUT (Wide cards, no sidebars) === */
+[data-layout="wide"] .doc-panel,
+[data-layout="wide"] .gpt-panel {
+  display: none !important;
+}
+
+[data-layout="wide"] .index-layout {
+  display: block;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+[data-layout="wide"] .core4-panel {
+  margin-bottom: 24px;
+}
+
+[data-layout="wide"] .grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+[data-layout="wide"] #menuGrid a {
+  padding: 32px 28px;
+  min-height: 130px;
+  font-size: 1.4em;
+  border-radius: 16px;
+}
+
+/* === MINIMAL LAYOUT (Text only, ultra clean) === */
+[data-layout="minimal"] .doc-panel,
+[data-layout="minimal"] .gpt-panel,
+[data-layout="minimal"] .core4-panel {
+  display: none !important;
+}
+
+[data-layout="minimal"] body {
+  padding: 80px 40px;
+}
+
+[data-layout="minimal"] .index-layout {
+  display: block;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+[data-layout="minimal"] .grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-layout="minimal"] #menuGrid a {
+  padding: 16px 20px;
+  min-height: auto;
+  border: none;
+  border-left: 2px solid var(--border-primary);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.2em;
+  transition: all 0.2s ease;
+}
+
+[data-layout="minimal"] #menuGrid a:hover {
+  background: var(--bg-secondary);
+  border-left-width: 4px;
+  border-left-color: var(--text-accent);
+  padding-left: 28px;
+}
+
+/* === FOCUS LAYOUT (Only Core4 + 3 main cards) === */
+[data-layout="masonry"] .doc-panel,
+[data-layout="masonry"] .gpt-panel {
+  display: none !important;
+}
+
+[data-layout="masonry"] .index-layout {
+  display: block;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+[data-layout="masonry"] .grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+[data-layout="masonry"] #menuGrid a:nth-child(n+4) {
+  display: none; /* Hide everything after first 3 */
+}
+
+[data-layout="masonry"] #menuGrid a {
+  padding: 40px 24px;
+  min-height: 180px;
+  font-size: 1.6em;
+  border-radius: 20px;
+}
+
+/* === ZEN LAYOUT (Just menu, nothing else) === */
+[data-layout="cards"] .doc-panel,
+[data-layout="cards"] .gpt-panel,
+[data-layout="cards"] .core4-panel {
+  display: none !important;
+}
+
+[data-layout="cards"] body {
+  padding: 60px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+[data-layout="cards"] .index-layout {
+  display: block;
+  width: 100%;
+  max-width: 1100px;
+}
+
+[data-layout="cards"] .grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+[data-layout="cards"] #menuGrid a {
+  padding: 32px 24px;
+  min-height: 140px;
+  border-radius: 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* === Mobile Responsiveness === */
+@media (max-width: 768px) {
+  [data-layout="wide"] .grid,
+  [data-layout="masonry"] .grid {
+    grid-template-columns: 1fr;
+  }
+
+  [data-layout="masonry"] #menuGrid a:nth-child(n+4) {
+    display: block;
+  }
+}

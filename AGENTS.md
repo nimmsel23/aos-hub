@@ -49,6 +49,14 @@
 - Commit messages are short and imperative (e.g., “Fix Door Hot List title parsing”).
 - PRs should include a concise summary, affected components/routes, and screenshots for UI changes.
 
+## Codex Sessions & Branch Hygiene
+- Prefer one git branch per Codex session (so `resume` shows the correct branch context).
+- Base branches live under `centre/*` (e.g. `centre/game-standalone`, `centre/index-node-game`).
+- For fish jump-shortcuts, keep using `scripts/aos-aliasctl` and the helper `scripts/codexsess`:
+  - `scripts/codexsess new game multiuser-drive` (creates `sess/...` branch + a `cx_*` alias to switch back)
+  - `scripts/codexsess alias syncctl main` (creates `cx_syncctl` -> `git switch main`)
+- Keep this shortcut registry maintained as part of normal session creation.
+
 ## Configuration & Secrets
 - Use `.env` files for the router and `systemd/alphaos-hub.env.example` for service env layout.
 - Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.

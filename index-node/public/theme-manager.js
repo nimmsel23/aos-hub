@@ -1,6 +1,7 @@
 /**
- * ThemeManager - Centralized theme management for all αOS centres
- * Supports 14 themes: 3 unified (Matrix, Neutral, Cyan) + 11 legacy
+ * ThemeManager - Centralized theme management with dynamic CSS loading
+ * Each theme has its own CSS file in /themes/ directory
+ * Supports 14 themes with individual fonts and styles
  */
 (() => {
   const THEMES = [
@@ -29,12 +30,13 @@
 
   let currentTheme = 'matrix';
   let storageKey = 'aos-theme';
+  let themeLink = null; // <link> element for theme CSS
 
   const ThemeManager = {
     /**
      * Initialize theme system
      * @param {string} key - localStorage key for this centre
-     * @param {Object} options - { mode: 'dropdown'|'toggle', selectId: 'theme-select' }
+     * @param {Object} options - { mode: 'dropdown', selectId: 'theme-select' }
      */
     init(key = 'aos-theme', options = {}) {
       storageKey = key;
@@ -51,8 +53,8 @@
 
       // Setup UI based on mode
       if (options.mode === 'toggle') {
-        this.setupToggleButton(options.container);
-      } else if (options.mode === 'dropdown') {
+        this.setupToggleButton();
+      } else if (options.mode === 'dropdown' || !options.mode) {
         this.setupDropdown(options.selectId);
       }
 
@@ -60,7 +62,7 @@
     },
 
     /**
-     * Apply a theme
+     * Apply a theme by loading its CSS file
      * @param {string} themeKey - Theme identifier
      */
     applyTheme(themeKey) {
@@ -69,16 +71,12 @@
       }
 
       currentTheme = themeKey;
-      const html = document.documentElement;
-      const body = document.body;
 
-      // Apply data-theme attribute (primary method)
-      html.setAttribute('data-theme', themeKey);
+      // Set data-theme attribute
+      document.documentElement.setAttribute('data-theme', themeKey);
 
-      // Clean up legacy class-based themes
-      if (body) {
-        body.className = body.className.replace(/theme-\w+/g, '').trim();
-      }
+      // Load theme CSS file
+      this.loadThemeCSS(themeKey);
 
       // Save to localStorage
       try {
@@ -89,6 +87,26 @@
 
       // Update UI elements
       this.updateUI(themeKey);
+    },
+
+    /**
+     * Dynamically load theme CSS file
+     * @param {string} themeKey - Theme identifier
+     */
+    loadThemeCSS(themeKey) {
+      // Remove old theme link if exists
+      if (themeLink && themeLink.parentNode) {
+        themeLink.parentNode.removeChild(themeLink);
+      }
+
+      // Create new link element
+      themeLink = document.createElement('link');
+      themeLink.rel = 'stylesheet';
+      themeLink.href = `/themes/${themeKey}.css`;
+      themeLink.id = 'dynamic-theme';
+
+      // Add to head
+      document.head.appendChild(themeLink);
     },
 
     /**
@@ -196,13 +214,13 @@
 
     /**
      * Setup toggle button mode (for Index page)
-     * @param {HTMLElement} container - Container to append button to
      */
-    setupToggleButton(container) {
+    setupToggleButton() {
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'theme-toggle';
       toggleBtn.textContent = this.getThemeLabel(currentTheme);
       toggleBtn.setAttribute('aria-label', 'Switch theme');
+      toggleBtn.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1000; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer; font-family: inherit;';
 
       toggleBtn.addEventListener('click', () => {
         const currentIndex = THEMES.indexOf(currentTheme);
@@ -210,10 +228,8 @@
         this.applyTheme(THEMES[nextIndex]);
       });
 
-      // Append to container or body
-      if (container) {
-        container.appendChild(toggleBtn);
-      } else if (document.body) {
+      // Append to body
+      if (document.body) {
         document.body.appendChild(toggleBtn);
       } else {
         document.addEventListener('DOMContentLoaded', () => {

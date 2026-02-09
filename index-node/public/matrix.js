@@ -2,7 +2,6 @@
   const canvas = document.getElementById("matrix-rain");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
-  const menuEl = document.getElementById("menuGrid");
 
   function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -36,19 +35,28 @@
         text: '#0ff',
         fade: 'rgba(0, 0, 0, 0.06)',
         scanline: 'rgba(0, 255, 255, 0.03)'
-      },
-      neutral: {
-        text: '#6cb6ff',
-        fade: 'rgba(26, 29, 35, 0.06)',
-        scanline: 'rgba(100, 180, 255, 0.02)'
       }
     };
 
-    return colors[theme] || colors.matrix;
+    return colors[theme] || null;
+  }
+
+  function shouldRenderRain() {
+    const theme = document.documentElement.getAttribute('data-theme') || 'matrix';
+    return theme === 'matrix' || theme === 'cyan';
   }
 
   function drawRain() {
+    if (!shouldRenderRain()) {
+      // Clear canvas if theme doesn't support rain
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.opacity = '0';
+      return;
+    }
+
+    canvas.style.opacity = '1';
     const colors = getThemeColors();
+    if (!colors) return;
 
     ctx.fillStyle = colors.fade;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -68,7 +76,11 @@
   function draw() {
     drawRain();
 
+    if (!shouldRenderRain()) return;
+
     const colors = getThemeColors();
+    if (!colors) return;
+
     ctx.strokeStyle = colors.scanline;
     for (let i = 0; i < canvas.height; i += 5) {
       ctx.beginPath();

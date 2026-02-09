@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>αOS Door Centre</title>
-  <link rel="stylesheet" href="/themes-all.css">
+  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/themes-voice-legacy.css">
   <style>
     /* Default fallback (only when no theme is set) */
     html:not([data-theme]) body:not([class*="theme-"]) {
@@ -251,7 +252,6 @@
   </div>
 </footer>
 
-<script src="/theme-manager.js"></script>
 <script src="/matrix.js"></script>
 <script>
   // Door-specific navigation
@@ -259,8 +259,20 @@
     window.location.href = `/door/${phase}`;
   }
 
-  // Initialize theme system
-  ThemeManager.init('door_theme', { mode: 'dropdown', selectId: 'theme-select' });
+  // Theme Switcher
+  const themeSelect = document.getElementById('theme-select');
+  function applyTheme(themeKey = 'matrix') {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', themeKey);
+    if (themeSelect) themeSelect.value = themeKey;
+    try { localStorage.setItem('door_theme', themeKey); } catch (_) {}
+  }
+  (function initTheme() {
+    let stored = 'matrix';
+    try { stored = localStorage.getItem('door_theme') || 'matrix'; } catch (_) {}
+    applyTheme(stored);
+  })();
+  themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
 </script>
 </body>
 </html>

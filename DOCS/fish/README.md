@@ -24,6 +24,7 @@ This repo uses Fish as the primary CLI entry point for AlphaOS.
 ## Related docs
 
 - Hot List CLI: `aos-hub/DOCS/fish/aos-hot.md`
+- Codex branch shortcuts: `aos-hub/DOCS/fish/codex-sessions.md`
 - Dotfiles Fish README: `~/.dotfiles/config/fish/README.md`
 
 ## Notes

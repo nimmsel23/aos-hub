@@ -22,6 +22,147 @@ FADARO_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-fadaro-push.sh"
 have() { command -v "$1" >/dev/null 2>&1; }
 have_tty() { [[ -t 0 && -t 1 ]]; }
 
+SYNCCTL_DRY_RUN="${AOS_DRY_RUN:-0}"
+
+ui_has_color() {
+  [[ -t 1 ]] || return 1
+  [[ -z "${NO_COLOR:-}" ]] || return 1
+  return 0
+}
+
+ui_init() {
+  if ui_has_color; then
+    UI_RESET=$'\033[0m'
+    UI_BOLD=$'\033[1m'
+    UI_DIM=$'\033[2m'
+    UI_INV=$'\033[7m'
+    UI_CYAN=$'\033[36m'
+    UI_GREEN=$'\033[32m'
+    UI_YELLOW=$'\033[33m'
+  else
+    UI_RESET=""
+    UI_BOLD=""
+    UI_DIM=""
+    UI_INV=""
+    UI_CYAN=""
+    UI_GREEN=""
+    UI_YELLOW=""
+  fi
+}
+
+ui_term_cols() {
+  local cols="${COLUMNS:-}"
+  if command -v tput >/dev/null 2>&1; then
+    cols="$(tput cols 2>/dev/null || true)"
+  fi
+  if [[ -z "$cols" || ! "$cols" =~ ^[0-9]+$ || "$cols" -lt 40 ]]; then
+    cols=80
+  fi
+  printf "%s" "$cols"
+}
+
+ui_clear() {
+  if have_tty; then
+    printf "\033[H\033[2J\033[3J"
+  fi
+}
+
+ui_hr() {
+  local cols
+  cols="$(ui_term_cols)"
+  local w=$((cols < 88 ? cols : 88))
+  printf "%*s" "$w" "" | tr " " "─"
+}
+
+ui_mode_badge() {
+  if ! ui_has_color; then
+    [[ "${SYNCCTL_DRY_RUN}" == "1" ]] && printf "DRY-RUN" || printf "RUN"
+    return 0
+  fi
+
+  if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+    printf "\033[30;43m DRY-RUN \033[0m"
+  else
+    printf "\033[30;42m RUN \033[0m"
+  fi
+}
+
+ui_footer_hint() {
+  local allow_dry="${1:-1}"
+  if [[ "$allow_dry" == "1" ]]; then
+    printf "%s↑/↓ select  Enter run  ←/→ (or d) dry-run  q back%s\n" "$UI_DIM" "$UI_RESET"
+  else
+    printf "%s↑/↓ select  Enter run  q back%s\n" "$UI_DIM" "$UI_RESET"
+  fi
+}
+
+ui_read_key() {
+  local key rest
+  IFS= read -rsn1 key || return 1
+  if [[ "$key" == $'\x1b' ]]; then
+    IFS= read -rsn2 rest || true
+    key+="$rest"
+  fi
+  printf "%s" "$key"
+}
+
+ui_toggle_dry_run() {
+  if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+    SYNCCTL_DRY_RUN=0
+  else
+    SYNCCTL_DRY_RUN=1
+  fi
+}
+
+ui_choose() {
+  local title="$1"
+  local subtitle="$2"
+  local allow_dry="${3:-1}"
+  shift 3
+
+  local -a items=("$@")
+  local cursor=0
+
+  while true; do
+    ui_clear
+    printf "%s%s%s  %s[%s]%s\n" "$UI_BOLD" "$title" "$UI_RESET" "$UI_DIM" "$(ui_mode_badge)" "$UI_RESET"
+    if [[ -n "$subtitle" ]]; then
+      printf "%s%s%s\n" "$UI_DIM" "$subtitle" "$UI_RESET"
+    fi
+    printf "%s%s%s\n\n" "$UI_DIM" "$(ui_hr)" "$UI_RESET"
+
+    for i in "${!items[@]}"; do
+      if [[ "$i" -eq "$cursor" ]]; then
+        if ui_has_color; then
+          printf "%s%s  ▸ %s%s\n" "$UI_CYAN" "$UI_BOLD" "${items[$i]}" "$UI_RESET"
+        else
+          printf "> %s\n" "${items[$i]}"
+        fi
+      else
+        printf "    %s\n" "${items[$i]}"
+      fi
+    done
+
+    printf "\n"
+    ui_footer_hint "$allow_dry"
+
+    local key
+    key="$(ui_read_key)" || return 1
+    case "$key" in
+      $'\x1b[A'|k) ((cursor > 0)) && cursor=$((cursor - 1)) ;;
+      $'\x1b[B'|j) ((cursor < ${#items[@]} - 1)) && cursor=$((cursor + 1)) ;;
+      $'\x1b[C'|l) [[ "$allow_dry" == "1" ]] && SYNCCTL_DRY_RUN=1 ;;
+      $'\x1b[D'|h) [[ "$allow_dry" == "1" ]] && SYNCCTL_DRY_RUN=0 ;;
+      d|D) [[ "$allow_dry" == "1" ]] && ui_toggle_dry_run ;;
+      q|Q) return 1 ;;
+      ""|$'\x0d')
+        printf "%s" "${items[$cursor]}"
+        return 0
+        ;;
+    esac
+  done
+}
+
 pause_screen() {
   if have_tty; then
     read -r -p "Press Enter to continue..." _ || true
@@ -67,14 +208,14 @@ Targets (aos-sync/aos-syncctl):
   syncctl doctor <target>
 
 Vault copy (vaultctl):
-  syncctl vault <status|sync|pull|logs|timers|watch> [args...]
+  syncctl vault <status|sync|pull|sync-root|pull-root|sync-all|pull-all|sync-vitaltrainer|pull-vitaltrainer|logs|timers|watch> [args...]
 
 Domain copy (rclone-domain-sync.sh):
-  syncctl domains <DOMAIN> <push|pull|push-sync|sync|status|log>
+  syncctl domains <DOMAIN> <push|pull|push-sync|sync|status|log> [--dry-run]
   syncctl domains status-all
 
 Vitaltrainer copy:
-  syncctl vitaltrainer <push|pull|status>
+  syncctl vitaltrainer <push|pull|status> [--dry-run]
 
 FADARO push:
   syncctl fadaro [--dry-run]
@@ -102,27 +243,99 @@ run_targets() {
   exec "$bin" "$cmd" "$@"
 }
 
+menu_targets_ui() {
+  local bin
+  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
+
+  local -a targets=()
+  mapfile -t targets < <("$bin" list 2>/dev/null || true)
+  if [[ "${#targets[@]}" -eq 0 ]]; then
+    ui_clear
+    echo "No targets found."
+    pause_screen
+    return 0
+  fi
+
+  while true; do
+    local target
+    target="$(ui_choose "Targets" "Select a target" 1 "${targets[@]}" "Back")" || return 0
+    [[ "$target" == "Back" ]] && return 0
+
+    while true; do
+      local action
+      action="$(ui_choose "Target: $target" "Choose action" 1 \
+        "Status" \
+        "Run (sync)" \
+        "Run (bisync)" \
+        "Enable timer" \
+        "Disable timer" \
+        "Logs" \
+        "Doctor" \
+        "Back")" || break
+
+      case "$action" in
+        "Status") ("$bin" status "$target") ;;
+        "Run (sync)")
+          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+            ("$bin" run "$target" --dry --mode sync)
+          else
+            ("$bin" run "$target" --mode sync)
+          fi
+          ;;
+        "Run (bisync)")
+          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+            ("$bin" run "$target" --dry --mode bisync)
+          else
+            ("$bin" run "$target" --mode bisync)
+          fi
+          ;;
+        "Enable timer")
+          local at=""
+          read -r -p "Enable at (HH:MM, empty=default): " at || true
+          if [[ -n "$at" ]]; then
+            ("$bin" enable "$target" --at "$at")
+          else
+            ("$bin" enable "$target")
+          fi
+          ;;
+        "Disable timer") ("$bin" disable "$target") ;;
+        "Logs") ("$bin" logs "$target") ;;
+        "Doctor") ("$bin" doctor "$target") ;;
+        "Back") break ;;
+      esac
+      pause_screen
+    done
+  done
+}
+
 menu_vault() {
   while true; do
     local choice
-    choice="$(printf "%s\n" \
+    choice="$(ui_choose "Vault copy" "copy push/pull (no deletes)" 1 \
       "Status" \
       "Push now (copy)" \
-      "Push dry-run (copy)" \
       "Pull now (copy)" \
-      "Pull dry-run (copy)" \
+      "Push vault root (copy)" \
+      "Pull vault root (copy)" \
+      "Push all (root + sections)" \
+      "Pull all (root + sections)" \
+      "Push Vitaltrainer (copy)" \
+      "Pull Vitaltrainer (copy)" \
       "Logs" \
       "Timers" \
       "Watch" \
-      "Back" \
-      | gum choose --header "Vault copy")"
+      "Back")" || return 0
 
     case "$choice" in
       "Status") (run_vault status) ;;
-      "Push now (copy)") (run_vault sync) ;;
-      "Push dry-run (copy)") (run_vault sync --dry-run) ;;
-      "Pull now (copy)") (run_vault pull) ;;
-      "Pull dry-run (copy)") (run_vault pull --dry-run) ;;
+      "Push now (copy)") (run_vault sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Pull now (copy)") (run_vault pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Push vault root (copy)") (run_vault sync-root $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Pull vault root (copy)") (run_vault pull-root $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Push all (root + sections)") (run_vault sync-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Pull all (root + sections)") (run_vault pull-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Push Vitaltrainer (copy)") (run_vault sync-vitaltrainer $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Pull Vitaltrainer (copy)") (run_vault pull-vitaltrainer $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
       "Logs") (run_vault logs) ;;
       "Timers") (run_vault timers) ;;
       "Watch") (run_vault watch) ;;
@@ -135,14 +348,13 @@ menu_vault() {
 menu_domains() {
   while true; do
     local domain
-    domain="$(printf "%s\n" \
+    domain="$(ui_choose "Domains copy" "BODY / BEING / BALANCE / BUSINESS" 1 \
       "BODY" \
       "BEING" \
       "BALANCE" \
       "BUSINESS" \
       "Status all" \
-      "Back" \
-      | gum choose --header "Domains")"
+      "Back")" || return 0
 
     case "$domain" in
       "Back") return 0 ;;
@@ -153,42 +365,42 @@ menu_domains() {
         ;;
     esac
 
-    local action
-    action="$(printf "%s\n" \
-      "Status" \
-      "Push now (copy)" \
-      "Pull now (copy)" \
-      "Push-sync (delete remote)" \
-      "Log" \
-      "Back" \
-      | gum choose --header "Domain: $domain")"
+    while true; do
+      local action
+      action="$(ui_choose "Domain: $domain" "copy push/pull; push-sync deletes remote" 1 \
+        "Status" \
+        "Push now (copy)" \
+        "Pull now (copy)" \
+        "Push-sync (delete remote)" \
+        "Log" \
+        "Back")" || break
 
-    case "$action" in
-      "Status") (run_domains "$domain" status) ;;
-      "Push now (copy)") (run_domains "$domain" push) ;;
-      "Pull now (copy)") (run_domains "$domain" pull) ;;
-      "Push-sync (delete remote)") (run_domains "$domain" push-sync) ;;
-      "Log") (run_domains "$domain" log) ;;
-      "Back") ;;
-    esac
-    pause_screen
+      case "$action" in
+        "Status") (run_domains "$domain" status) ;;
+        "Push now (copy)") (run_domains "$domain" push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+        "Pull now (copy)") (run_domains "$domain" pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+        "Push-sync (delete remote)") (run_domains "$domain" push-sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+        "Log") (run_domains "$domain" log) ;;
+        "Back") break ;;
+      esac
+      pause_screen
+    done
   done
 }
 
 menu_vitaltrainer() {
   while true; do
     local choice
-    choice="$(printf "%s\n" \
+    choice="$(ui_choose "Vitaltrainer copy" "" 1 \
       "Status" \
       "Push now (copy)" \
       "Pull now (copy)" \
-      "Back" \
-      | gum choose --header "Vitaltrainer copy")"
+      "Back")" || return 0
 
     case "$choice" in
       "Status") (run_vitaltrainer status) ;;
-      "Push now (copy)") (run_vitaltrainer push) ;;
-      "Pull now (copy)") (run_vitaltrainer pull) ;;
+      "Push now (copy)") (run_vitaltrainer push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
+      "Pull now (copy)") (run_vitaltrainer pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
       "Back") return 0 ;;
     esac
     pause_screen
@@ -198,15 +410,12 @@ menu_vitaltrainer() {
 menu_fadaro() {
   while true; do
     local choice
-    choice="$(printf "%s\n" \
+    choice="$(ui_choose "FADARO push" "" 1 \
       "Push now" \
-      "Push dry-run" \
-      "Back" \
-      | gum choose --header "FADARO push")"
+      "Back")" || return 0
 
     case "$choice" in
-      "Push now") (run_fadaro) ;;
-      "Push dry-run") (run_fadaro --dry-run) ;;
+      "Push now") (run_fadaro $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
       "Back") return 0 ;;
     esac
     pause_screen
@@ -214,7 +423,8 @@ menu_fadaro() {
 }
 
 run_menu() {
-  if ! have gum || ! have_tty; then
+  ui_init
+  if ! have_tty; then
     local bin
     if bin="$(pick_bin "$AOS_SYNCCTL" "" "aos-syncctl")"; then
       exec "$bin"
@@ -224,25 +434,17 @@ run_menu() {
 
   while true; do
     local choice
-    choice="$(printf "%s\n" \
-      "Targets (aos-syncctl)" \
+    choice="$(ui_choose "syncctl" "frontdoor (toggle dry-run globally)" 1 \
+      "Targets" \
       "Vault copy" \
       "Domains copy" \
       "Vitaltrainer copy" \
       "FADARO push" \
       "Help" \
-      "Quit" \
-      | gum choose --header "syncctl")"
+      "Quit")" || return 0
 
     case "$choice" in
-      "Targets (aos-syncctl)")
-        local bin
-        if bin="$(pick_bin "$AOS_SYNCCTL" "" "aos-syncctl")"; then
-          "$bin"
-        else
-          (run_targets menu)
-        fi
-        ;;
+      "Targets") menu_targets_ui ;;
       "Vault copy") menu_vault ;;
       "Domains copy") menu_domains ;;
       "Vitaltrainer copy") menu_vitaltrainer ;;

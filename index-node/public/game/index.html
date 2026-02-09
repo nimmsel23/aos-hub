@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>αOS Game Centre</title>
-  <link rel="stylesheet" href="/themes-all.css">
-  <script src="/theme-manager.js"></script>
+  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/themes-voice-legacy.css">
   <style>
     /* Default fallback (only when no theme is set) */
     html:not([data-theme]) body:not([class*="theme-"]) {
@@ -482,8 +482,20 @@ const CENTRES = {
 
   loadGameChapters();
 
-  // Initialize theme system
-  ThemeManager.init('game_theme', { mode: 'dropdown', selectId: 'theme-select' });
+  // Theme Switcher
+  const themeSelect = document.getElementById('theme-select');
+  function applyTheme(themeKey = 'matrix') {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', themeKey);
+    if (themeSelect) themeSelect.value = themeKey;
+    try { localStorage.setItem('game_theme', themeKey); } catch (_) {}
+  }
+  (function initTheme() {
+    let stored = 'matrix';
+    try { stored = localStorage.getItem('game_theme') || 'matrix'; } catch (_) {}
+    applyTheme(stored);
+  })();
+  themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
 </script>
 </body>
 </html>

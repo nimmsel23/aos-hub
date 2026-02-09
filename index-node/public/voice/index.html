@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>αOS Voice Centre</title>
-  <link rel="stylesheet" href="/themes-all.css">
+  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/themes-voice-legacy.css">
   <script src="/vendor/marked/marked.min.js"></script>
-  <script src="/theme-manager.js"></script>
   <script src="/matrix.js" defer></script>
   <style>
     :root{
@@ -1109,8 +1109,20 @@ In the end, it’s not the brilliance of our thoughts but the strength of our ac
         }
       }, 200);
 
-      // Initialize theme system
-      ThemeManager.init('voice_theme', { mode: 'dropdown', selectId: 'theme-select' });
+      // Theme Switcher (Voice legacy themes)
+      const themeSelect = document.getElementById('theme-select');
+      function applyTheme(themeKey = 'obsidian') {
+        const html = document.documentElement;
+        html.setAttribute('data-theme', themeKey);
+        if (themeSelect) themeSelect.value = themeKey;
+        try { localStorage.setItem('voice_theme', themeKey); } catch (_) {}
+      }
+      (function initTheme() {
+        let stored = 'obsidian';
+        try { stored = localStorage.getItem('voice_theme') || 'obsidian'; } catch (_) {}
+        applyTheme(stored);
+      })();
+      themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
     });
   </script>
 </body>

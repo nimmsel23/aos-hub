@@ -4,18 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>αOS Index (Local)</title>
-  <link rel="stylesheet" href="/themes-all.css" />
+  <link rel="stylesheet" href="/themes.css" />
+  <link rel="stylesheet" href="/themes-voice-legacy.css" />
+  <link rel="stylesheet" href="/layouts.css" />
   <link rel="stylesheet" href="/style.css" />
   <base target="_blank" />
-  <script src="/theme-manager.js"></script>
+  <script src="/theme-switch.js"></script>
+  <script src="/layout-switch.js"></script>
+  <script src="/sidebar-collapse.js"></script>
   <script src="/menu.js" defer></script>
   <script src="/matrix.js" defer></script>
-  <script>
-    // Initialize theme system with toggle button
-    document.addEventListener('DOMContentLoaded', () => {
-      ThemeManager.init('aos-theme', { mode: 'toggle' });
-    });
-  </script>
 </head>
 <body>
   <canvas id="matrix-rain"></canvas>

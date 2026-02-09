@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# codexsess - create per-session git branches + shell shortcuts
+#
+# Goal:
+# - Keep Codex sessions isolated: one branch per session.
+# - Make it fast to jump back into the right branch from fish:
+#   create a shell alias via scripts/aos-aliasctl.
+#
+# This script is safe to run repeatedly; it will not overwrite
+# existing branches (it will fail and tell you).
+# ============================================================
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+ALIASCTL="$ROOT_DIR/scripts/aos-aliasctl"
+
+die() { echo "[codexsess] $*" >&2; exit 1; }
+info() { echo "[codexsess] $*" >&2; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+require_git_repo() {
+  git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not a git repo: $ROOT_DIR"
+}
+
+now_stamp() {
+  date +"%Y%m%d-%H%M"
+}
+
+sanitize_slug() {
+  # Keep only letters/digits/-, convert to hyphen-separated, trim, lowercase.
+  local s
+  s="$(printf "%s" "${1:-}" | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$//' | tr 'A-Z' 'a-z')"
+  [[ -n "$s" ]] || die "Invalid slug"
+  printf "%s" "$s"
+}
+
+alias_name_from() {
+  # fish/bash/zsh alias name must be: [A-Za-z_][A-Za-z0-9_]*
+  local s
+  s="$(printf "%s" "${1:-}" | tr -c 'A-Za-z0-9' '_' )"
+  s="cx_${s}"
+  s="${s%%_}"
+  [[ "$s" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die "Could not build a valid alias name from: $1"
+  printf "%s" "$s"
+}
+
+centre_base_branch() {
+  # Map logical centres to long-lived base branches.
+  # Accept raw git branch names too.
+  local c="${1:-}"
+  case "$c" in
+    game) echo "centre/game-standalone" ;;
+    door) echo "centre/door-standalone" ;;
+    tent) echo "centre/tent-standalone" ;;
+    node) echo "centre/index-node-game" ;;
+    main) echo "main" ;;
+    *)
+      # assume user passed a branch name
+      echo "$c"
+      ;;
+  esac
+}
+
+git_branch_exists() {
+  git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/$1"
+}
+
+cmd_new() {
+  local centre="$1"
+  local slug_raw="$2"
+
+  local base
+  base="$(centre_base_branch "$centre")"
+  [[ -n "$base" ]] || die "Missing base branch"
+
+  local slug
+  slug="$(sanitize_slug "$slug_raw")"
+
+  require_git_repo
+
+  # Ensure base exists locally.
+  if ! git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/$base"; then
+    die "Base branch not found locally: $base"
+  fi
+
+  local stamp branch
+  stamp="$(now_stamp)"
+  branch="sess/${centre}/${slug}-${stamp}"
+
+  if git_branch_exists "$branch"; then
+    die "Branch already exists: $branch"
+  fi
+
+  info "Switching to base: $base"
+  git -C "$ROOT_DIR" switch "$base" >/dev/null
+  info "Creating session branch: $branch"
+  git -C "$ROOT_DIR" switch -c "$branch" >/dev/null
+
+  local an
+  an="$(alias_name_from "${centre}_${slug}")"
+
+  if [[ -x "$ALIASCTL" ]]; then
+    info "Creating shell alias: $an"
+    # This writes to ~/.config/shell-aliases and autoloads in fish (conf.d symlink).
+    "$ALIASCTL" add "$an" "cd $ROOT_DIR && git switch $branch"
+  else
+    info "Alias manager missing: $ALIASCTL"
+    info "You can add the shortcut manually with: scripts/aos-aliasctl add $an \"cd $ROOT_DIR && git switch $branch\""
+  fi
+
+  cat <<EOF
+OK
+- branch: $branch
+- alias:  $an
+
+Next:
+1) Start a Codex session from this branch (so resume shows the right branch).
+2) Later, type '$an' in fish to jump back to the session branch.
+EOF
+}
+
+cmd_alias() {
+  local name="$1"
+  local branch="$2"
+
+  require_git_repo
+  git_branch_exists "$branch" || die "Branch does not exist: $branch"
+
+  local an
+  an="$(alias_name_from "$name")"
+
+  [[ -x "$ALIASCTL" ]] || die "Missing alias manager: $ALIASCTL"
+  "$ALIASCTL" add "$an" "cd $ROOT_DIR && git switch $branch"
+  info "Saved alias: $an -> git switch $branch"
+}
+
+usage() {
+  cat <<'EOF'
+codexsess - branches + fish shortcuts for Codex sessions
+
+Usage:
+  scripts/codexsess new <centre> <slug>
+    centre: game|door|tent|node|main|<branch>
+    slug:   short session purpose (e.g. "saved-maps", "multiuser-key")
+
+  scripts/codexsess alias <name> <branch>
+    Create/update a shortcut alias that switches to an existing branch.
+
+Examples:
+  scripts/codexsess new game multiuser-drive
+  scripts/codexsess new tent telegram-mapping
+  scripts/codexsess alias syncctl main
+EOF
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    new)
+      [[ $# -eq 3 ]] || die "Usage: scripts/codexsess new <centre> <slug>"
+      cmd_new "$2" "$3"
+      ;;
+    alias)
+      [[ $# -eq 3 ]] || die "Usage: scripts/codexsess alias <name> <branch>"
+      cmd_alias "$2" "$3"
+      ;;
+    -h|--help|help|"")
+      usage
+      ;;
+    *)
+      die "Unknown command: $cmd (try: scripts/codexsess help)"
+      ;;
+  esac
+}
+
+main "$@"
+
