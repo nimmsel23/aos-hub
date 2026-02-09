@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# voicectl - THE VOICE Management (Mental Mastery)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/../lib"
+
+# Source libraries
+source "$LIB_DIR/voice_data.sh"
+source "$LIB_DIR/voice_session.sh"
+source "$LIB_DIR/voice_format.sh"
+source "$SCRIPT_DIR/../../scripts/ctl-lib.sh"
+
+# Environment
+EDITOR="${EDITOR:-nano}"
+if command -v micro >/dev/null 2>&1; then
+  EDITOR=micro
+fi
+
+#─────────────────────────────────────────────────────────────────────────
+# Commands
+#─────────────────────────────────────────────────────────────────────────
+
+cmd_list() {
+  local limit="${1:-50}"
+  local sessions
+  sessions=$(list_sessions "$limit")
+  draw_sessions_table "$sessions"
+}
+
+cmd_start() {
+  ui_title "VOICE Session - 4 Steps to Mental Mastery"
+  echo ""
+  ui_info "This will guide you through:"
+  ui_info "  🛑 STOP - Pattern interrupt"
+  ui_info "  🙏 SUBMIT - Face truth"
+  ui_info "  ⚔️  STRUGGLE - Rewrite story"
+  ui_info "  ⚡ STRIKE - Decisive action"
+  echo ""
+
+  if ui_confirm "Start interactive session?"; then
+    local file
+    file=$(interactive_session)
+    echo ""
+    ui_ok "Session complete!"
+
+    if ui_confirm "Open in editor?"; then
+      "$EDITOR" "$file"
+    fi
+
+    if ui_confirm "View with glow?"; then
+      format_session "$file"
+    fi
+  else
+    ui_info "Creating template only..."
+    local file
+    file=$(quick_session)
+    ui_ok "Template created: $file"
+    "$EDITOR" "$file"
+  fi
+}
+
+cmd_show() {
+  local id="$1"
+
+  if ! session_exists "$id"; then
+    ui_err "Session not found: $id"
+    return 1
+  fi
+
+  local file
+  file=$(get_session_file "$id")
+
+  ui_title "VOICE Session: $(basename "$file")"
+  echo ""
+  format_session "$file"
+}
+
+cmd_edit() {
+  local id="$1"
+
+  if ! session_exists "$id"; then
+    ui_err "Session not found: $id"
+    return 1
+  fi
+
+  local file
+  file=$(get_session_file "$id")
+  "$EDITOR" "$file"
+  ui_ok "Session edited: $(basename "$file")"
+}
+
+cmd_search() {
+  local query="$1"
+  local results
+  results=$(search_sessions "$query")
+  draw_search_results "$results" "$query"
+}
+
+cmd_recent() {
+  local count="${1:-10}"
+  cmd_list "$count"
+}
+
+cmd_stats() {
+  local stats
+  stats=$(get_stats)
+  draw_stats "$stats"
+}
+
+cmd_strike() {
+  local id="$1"
+
+  if ! session_exists "$id"; then
+    ui_err "Session not found: $id"
+    return 1
+  fi
+
+  local file
+  file=$(get_session_file "$id")
+
+  ui_title "STRIKE from Session"
+  echo ""
+  extract_strike "$file"
+  echo ""
+}
+
+cmd_dir() {
+  local vdir
+  vdir=$(get_voice_dir)
+  echo "$vdir"
+}
+
+#─────────────────────────────────────────────────────────────────────────
+# Help
+#─────────────────────────────────────────────────────────────────────────
+
+cmd_help() {
+  cat <<EOF
+voicectl - THE VOICE Management (Mental Mastery)
+
+USAGE:
+  voicectl <command> [options]
+
+COMMANDS:
+  start                       Start new VOICE session (interactive 4-step)
+  list [limit]                List recent sessions (default: 50)
+  recent [count]              Show recent sessions (default: 10)
+  show <id>                   View session with glow
+  edit <id>                   Edit session in editor
+  search <query>              Search sessions by content
+  stats                       Session statistics
+  strike <id>                 Extract STRIKE from session
+  dir                         Show VOICE directory path
+
+EXAMPLES:
+  voicectl start              # Interactive 4-step session
+  voicectl list               # Show all sessions
+  voicectl recent 5           # Last 5 sessions
+  voicectl show 2026-02-09    # View specific session
+  voicectl search "pattern"   # Search for keyword
+  voicectl stats              # Statistics
+
+THE VOICE - 4 Steps:
+  🛑 STOP    - Interrupt destructive pattern
+  🙏 SUBMIT  - Face truth, surrender
+  ⚔️  STRUGGLE - Rewrite narrative
+  ⚡ STRIKE  - Decisive action
+
+Integration:
+  - VOICE → DOOR: Strike becomes War Stack
+  - VOICE → GAME: Insights update Frame Map
+  - 61 sessions Q3/Q4 = deep material for Maps
+
+VOICE Directory: $(get_voice_dir)
+EOF
+}
+
+#─────────────────────────────────────────────────────────────────────────
+# Main
+#─────────────────────────────────────────────────────────────────────────
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    start)
+      cmd_start "$@"
+      ;;
+    list|ls)
+      cmd_list "$@"
+      ;;
+    show|view)
+      if [[ $# -eq 0 ]]; then
+        ui_err "Usage: voicectl show <session-id>"
+        exit 1
+      fi
+      cmd_show "$@"
+      ;;
+    edit)
+      if [[ $# -eq 0 ]]; then
+        ui_err "Usage: voicectl edit <session-id>"
+        exit 1
+      fi
+      cmd_edit "$@"
+      ;;
+    search)
+      if [[ $# -eq 0 ]]; then
+        ui_err "Usage: voicectl search <query>"
+        exit 1
+      fi
+      cmd_search "$@"
+      ;;
+    recent)
+      cmd_recent "$@"
+      ;;
+    stats)
+      cmd_stats "$@"
+      ;;
+    strike)
+      if [[ $# -eq 0 ]]; then
+        ui_err "Usage: voicectl strike <session-id>"
+        exit 1
+      fi
+      cmd_strike "$@"
+      ;;
+    dir)
+      cmd_dir "$@"
+      ;;
+    help|--help|-h)
+      cmd_help
+      ;;
+    *)
+      ui_err "Unknown command: $cmd"
+      cmd_help
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
