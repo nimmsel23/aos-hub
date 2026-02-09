@@ -18,16 +18,7 @@
       --muted: #9ca3af;
     }
 
-    /* Legacy theme (if someone uses body.theme-matrix class) */
-    body.theme-matrix {
-      --bg: #000000;
-      --card: rgba(0, 0, 0, 0.7);
-      --border: #00ff00;
-      --text: #00ff00;
-      --accent: #00ff00;
-      --glow: rgba(0, 255, 0, 0.4);
-      --muted: rgba(0, 255, 0, 0.6);
-    }
+    /* Themes loaded from themes.css and themes-voice-legacy.css */
 
     * { box-sizing: border-box; }
 
@@ -285,7 +276,7 @@
     }
   </style>
 </head>
-<body class="theme-matrix">
+<body>
 <canvas id="matrix-rain" aria-hidden="true"></canvas>
 
 <main class="game-layout">
