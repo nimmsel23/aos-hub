@@ -1,0 +1,136 @@
+# ════════════════════════════════════════════════════════════════
+# AlphaOS Door Management - Taskwarrior Configuration
+# ════════════════════════════════════════════════════════════════
+# Add this to your ~/.taskrc or ~/.config/task/taskrc
+
+# ════════════════════════════════════════════════════════════════
+# DOOR UDAs - User Defined Attributes
+# ════════════════════════════════════════════════════════════════
+
+# Door Name (which door this belongs to)
+uda.door.name.type=string
+uda.door.name.label=Door
+
+# Phase (4P Flow: Potential → Plan → Production → Profit)
+uda.door.phase.type=string
+uda.door.phase.label=Phase
+uda.door.phase.values=potential,plan,production,profit
+uda.door.phase.default=potential
+
+# Type (what kind of task)
+uda.door.type.type=string
+uda.door.type.label=Type
+uda.door.type.values=door,hit,strike,bigrock,warstack,idea
+uda.door.type.default=hit
+
+# Domain (AlphaOS 4 Domains)
+uda.door.domain.type=string
+uda.door.domain.label=Domain
+uda.door.domain.values=body,being,balance,business
+uda.door.domain.default=business
+
+# War Stack ID (links hit to war stack)
+uda.door.warstack.type=string
+uda.door.warstack.label=WarStack
+
+# Hit Number (1-4 from war stack)
+uda.door.hit.type=numeric
+uda.door.hit.label=Hit#
+uda.door.hit.default=0
+
+# Domino Door (opens other doors)
+uda.door.domino.type=string
+uda.door.domino.label=Domino
+uda.door.domino.values=yes,no
+uda.door.domino.default=no
+
+# ════════════════════════════════════════════════════════════════
+# DOOR REPORTS - Custom views
+# ════════════════════════════════════════════════════════════════
+
+# All active doors
+report.doors.description=All active doors
+report.doors.columns=id,door.name,door.phase,door.domain,door.type,description.count,urgency
+report.doors.labels=ID,Door,Phase,Domain,Type,Desc,Urg
+report.doors.filter=status:pending door.name.any:
+report.doors.sort=door.domain+,door.name+,urgency-
+
+# Hits for specific door
+report.hits.description=Hits for door
+report.hits.columns=id,door.hit,description,due,priority,urgency
+report.hits.labels=ID,Hit#,Description,Due,Pri,Urg
+report.hits.filter=status:pending door.type:hit
+report.hits.sort=door.hit+,urgency-
+
+# Production phase (active work)
+report.production.description=Active production hits
+report.production.columns=id,door.name,door.hit,description,due,priority
+report.production.labels=ID,Door,Hit#,Description,Due,Pri
+report.production.filter=status:pending door.phase:production
+report.production.sort=urgency-
+
+# Stalled doors (7+ days no activity)
+report.stalled.description=Stalled doors
+report.stalled.columns=id,door.name,door.phase,modified.age,description
+report.stalled.labels=ID,Door,Phase,Age,Desc
+report.stalled.filter=status:pending door.name.any: modified.before:now-7days
+report.stalled.sort=modified+
+
+# ════════════════════════════════════════════════════════════════
+# DOOR CONTEXTS - Quick filters
+# ════════════════════════════════════════════════════════════════
+
+context.door=door.name.any:
+context.body=door.domain:body
+context.being=door.domain:being
+context.balance=door.domain:balance
+context.business=door.domain:business
+
+# ════════════════════════════════════════════════════════════════
+# DOOR URGENCY - Custom scoring
+# ════════════════════════════════════════════════════════════════
+
+# Boost urgency for production phase
+urgency.uda.door.phase.production.coefficient=3.0
+urgency.uda.door.phase.plan.coefficient=2.0
+urgency.uda.door.phase.potential.coefficient=1.0
+
+# Boost for hits vs other types
+urgency.uda.door.type.hit.coefficient=2.0
+urgency.uda.door.type.strike.coefficient=3.0
+urgency.uda.door.type.bigrock.coefficient=2.5
+
+# Domain priority (adjust to your needs)
+urgency.uda.door.domain.business.coefficient=2.0
+urgency.uda.door.domain.body.coefficient=1.5
+urgency.uda.door.domain.being.coefficient=1.5
+urgency.uda.door.domain.balance.coefficient=1.5
+
+# Domino doors get extra urgency
+urgency.uda.door.domino.yes.coefficient=2.0
+
+# ════════════════════════════════════════════════════════════════
+# USAGE EXAMPLES
+# ════════════════════════════════════════════════════════════════
+
+# Create door:
+#   task add "Vitaltrainer Zertifikat" \
+#     door.name:Ausbildung door.type:door door.phase:production \
+#     door.domain:business door.domino:yes project:BUSINESS.Ausbildung \
+#     due:2026-03-30 priority:H
+
+# Create hit:
+#   task add "Theorieblock 1" \
+#     door.name:Ausbildung door.type:hit door.phase:production \
+#     door.domain:business door.warstack:WS-2025-11-15 door.hit:1 \
+#     project:BUSINESS.Ausbildung due:2025-12-15 priority:H
+
+# View reports:
+#   task doors                      # All doors
+#   task hits door.name:Ausbildung  # Hits for door
+#   task production                 # Active work
+#   task stalled                    # Stalled doors
+
+# Contexts:
+#   task context business
+#   task list                       # Only business doors

@@ -251,6 +251,149 @@ cmd_focus() {
   "$TASK_BIN" +door +hit status:pending limit:3
 }
 
+cmd_edit() {
+  local uuid_prefix="$1"
+  [[ -z "$uuid_prefix" ]] && { ui_err "Usage: doorctl edit <uuid-prefix>"; exit 1; }
+
+  # Detect best available editor
+  local editor="${EDITOR:-nano}"
+  if command -v micro >/dev/null 2>&1; then
+    editor=micro
+  elif command -v nano >/dev/null 2>&1; then
+    editor=nano
+  fi
+
+  # Use task edit (interactive)
+  "$TASK_BIN" "$uuid_prefix" edit
+
+  ui_ok "Task edited: $uuid_prefix"
+}
+
+cmd_open() {
+  local uuid_prefix="$1"
+  [[ -z "$uuid_prefix" ]] && { ui_err "Usage: doorctl open <uuid-prefix>"; exit 1; }
+
+  if ! command -v taskopen >/dev/null 2>&1; then
+    ui_err "taskopen not installed. Install: yay -S taskopen"
+    return 1
+  fi
+
+  taskopen "$uuid_prefix"
+}
+
+cmd_war() {
+  local door_name="$1"
+  local action="${2:-show}"
+
+  [[ -z "$door_name" ]] && { ui_err "Usage: doorctl war <door-name> [show|edit]"; exit 1; }
+
+  local warstack_file="$VAULT_DIR/Door/War-Stacks/${door_name}.md"
+
+  case "$action" in
+    show|view)
+      if [[ ! -f "$warstack_file" ]]; then
+        ui_err "War Stack not found: $warstack_file"
+        ui_info "Create one first with warstack bot or Index Node"
+        return 1
+      fi
+
+      # Use glow for pretty rendering if available
+      if command -v glow >/dev/null 2>&1; then
+        glow -p "$warstack_file"
+      elif command -v bat >/dev/null 2>&1; then
+        bat --style=plain "$warstack_file"
+      else
+        cat "$warstack_file"
+      fi
+      ;;
+
+    edit)
+      local editor="${EDITOR:-nano}"
+
+      # Detect best editor
+      if command -v micro >/dev/null 2>&1; then
+        editor=micro
+      elif command -v nano >/dev/null 2>&1; then
+        editor=nano
+      fi
+
+      # Create if doesn't exist
+      if [[ ! -f "$warstack_file" ]]; then
+        mkdir -p "$(dirname "$warstack_file")"
+        cat > "$warstack_file" <<'EOF'
+# War Stack: DOOR_NAME
+
+## FACT
+What is the objective reality?
+
+## OBSTACLE
+What's in the way?
+
+## STRIKE
+What decisive action will overcome the obstacle?
+
+## RESPONSIBILITY
+What is my commitment?
+
+---
+
+## 4 Hits
+
+1. [ ] Hit 1
+2. [ ] Hit 2
+3. [ ] Hit 3
+4. [ ] Hit 4
+EOF
+        sed -i "s/DOOR_NAME/$door_name/" "$warstack_file"
+        ui_info "Created template: $warstack_file"
+      fi
+
+      $editor "$warstack_file"
+      ui_ok "War Stack edited: $door_name"
+      ;;
+
+    *)
+      ui_err "Unknown action: $action (use show|edit)"
+      return 1
+      ;;
+  esac
+}
+
+cmd_note() {
+  local door_name="$1"
+  [[ -z "$door_name" ]] && { ui_err "Usage: doorctl note <door-name>"; exit 1; }
+
+  local note_file="$VAULT_DIR/Door/notes/${door_name}.md"
+  local editor="${EDITOR:-nano}"
+
+  # Detect best editor
+  if command -v micro >/dev/null 2>&1; then
+    editor=micro
+  elif command -v nano >/dev/null 2>&1; then
+    editor=nano
+  fi
+
+  # Create if doesn't exist
+  if [[ ! -f "$note_file" ]]; then
+    mkdir -p "$(dirname "$note_file")"
+    cat > "$note_file" <<EOF
+# Notes: $door_name
+
+Date: $(date +%Y-%m-%d)
+
+## Ideas
+
+## Blockers
+
+## Next Steps
+EOF
+    ui_info "Created note: $note_file"
+  fi
+
+  $editor "$note_file"
+  ui_ok "Note saved: $door_name"
+}
+
 #───────────────────────────────────────────────────────────────────────────────
 # Help & Main
 #───────────────────────────────────────────────────────────────────────────────
@@ -268,10 +411,14 @@ Commands:
   hits [door] [status]    List hits for door (default: pending)
   next [door]             Show next hit to work on
   done <uuid>             Mark hit as completed
+  edit <uuid>             Edit hit in editor (nano/micro/$EDITOR)
+  open <uuid>             Open hit with taskopen
   hitlist                 Show all pending hits across all doors
   focus                   Show today's focus (top 3 hits)
   health                  Check door health (stalled, needs attention)
   stalled                 List stalled doors only
+  war <door> [show|edit]  View/edit war stack (with glow/bat/cat)
+  note <door>             Edit door notes
 
   version                 Show version
   help                    Show this help
@@ -282,12 +429,25 @@ Examples:
   doorctl hits Ausbildung
   doorctl next
   doorctl done 123abc
+  doorctl edit 123abc
+  doorctl open 123abc
+  doorctl war Ausbildung
+  doorctl war Ausbildung edit
+  doorctl note Ausbildung
   doorctl health
 
 Config (env vars):
   AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
   AOS_DOOR_STALLED_DAYS   Days before door is stalled (default: 7)
   TASK_BIN                Taskwarrior binary (default: task)
+  EDITOR                  Preferred editor (default: nano)
+
+Optional tools:
+  micro                   Modern terminal editor (preferred)
+  nano                    Simple editor (fallback)
+  taskopen                Open tasks with external tools
+  glow                    Beautiful markdown rendering
+  bat                     Pretty file viewer
 
 Notes:
   - Requires Taskwarrior with door_name UDA
@@ -307,10 +467,14 @@ main() {
     hits) cmd_hits "$@" ;;
     next) cmd_next "$@" ;;
     done) cmd_done "$@" ;;
+    edit) cmd_edit "$@" ;;
+    open) cmd_open "$@" ;;
     hitlist|all) cmd_hitlist ;;
     focus|today) cmd_focus ;;
     health) cmd_health ;;
     stalled) cmd_stalled ;;
+    war) cmd_war "$@" ;;
+    note|notes) cmd_note "$@" ;;
     version) echo "doorctl v$DOORCTL_VERSION" ;;
     help|-h|--help) show_help ;;
     *)
