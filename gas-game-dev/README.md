@@ -16,6 +16,10 @@ Standalone Google Apps Script project for the Game Centre (Frame/Freedom/Focus/F
   - `Alpha_Game_Standalone/Users/<userKey>/Focus`
   - `Alpha_Game_Standalone/Users/<userKey>/Fire`
 
+## Debug endpoints
+- `...?action=health[&k=...]` returns JSON with base folder + base URL.
+- `...?action=register` returns JSON `{userKey, shareUrl}` (creates a new workspace key).
+
 ## Setup (clasp)
 
 From repo root:
@@ -27,4 +31,3 @@ From repo root:
 Then deploy as Web App in the Apps Script UI:
 - Execute as: **Me**
 - Who has access: **Anyone**
-

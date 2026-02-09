@@ -20,11 +20,23 @@ function doGet(e) {
 
   if (action === "health" || page === "health") {
     const base = gameGetBaseFolder_();
+    const userKey = game_normalizeUserKey_(rawKey);
     const out = {
       ok: true,
       now: new Date().toISOString(),
+      baseUrl: game_getWebUrl_(),
+      userKey: userKey,
       baseFolder: { id: base.getId(), name: base.getName() }
     };
+    return ContentService
+      .createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "register") {
+    const out = (typeof game_registerAnonUser === "function")
+      ? game_registerAnonUser()
+      : { ok: false, error: "game_registerAnonUser not available" };
     return ContentService
       .createTextOutput(JSON.stringify(out))
       .setMimeType(ContentService.MimeType.JSON);
@@ -39,4 +51,3 @@ function doGet(e) {
     .setTitle("αOS Game Centre")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
-

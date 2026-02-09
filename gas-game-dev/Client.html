@@ -1,5 +1,99 @@
 <script>
 const USER_KEY = "<?= userKey ?>";
+const BASE_URL = "<?= baseUrl ?>";
+
+function gameBaseUrl_() {
+  const fromTpl = String(BASE_URL || "").trim();
+  if (fromTpl) return fromTpl.replace(/\?[^#]*$/, "");
+  try {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+function gameShareUrl_(userKey) {
+  const k = String(userKey || "").trim();
+  if (!k) return "";
+  const base = gameBaseUrl_();
+  if (!base) return "";
+  const glue = base.indexOf("?") === -1 ? "?" : "&";
+  return base + glue + "k=" + encodeURIComponent(k);
+}
+
+function gameRenderWorkspaceInfo_() {
+  const key = gameGetUserKey_();
+  if (!key) return;
+
+  // Single widget across all pages, injected by JS.
+  const existing = document.getElementById("aos-game-workspace");
+  if (existing) return;
+
+  const root = document.createElement("div");
+  root.id = "aos-game-workspace";
+  root.innerHTML = `
+    <div class="aos-game-workspace-card">
+      <div class="aos-game-workspace-title">Workspace</div>
+      <div class="aos-game-workspace-row">
+        <div class="aos-game-workspace-label">Key</div>
+        <code class="aos-game-workspace-key"></code>
+      </div>
+      <div class="aos-game-workspace-row aos-game-workspace-row-url">
+        <input class="aos-game-workspace-url" readonly value="" aria-label="Share URL" />
+        <button type="button" class="aos-game-workspace-copy">Copy</button>
+      </div>
+    </div>
+  `;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #aos-game-workspace { position: sticky; top: 8px; z-index: 9999; display: flex; justify-content: center; margin: 8px 12px; }
+    .aos-game-workspace-card { width: min(820px, 100%); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 14px; padding: 10px 12px; background: rgba(2, 6, 23, 0.75); backdrop-filter: blur(10px); }
+    .aos-game-workspace-title { font-weight: 900; font-size: 12px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px; }
+    .aos-game-workspace-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; margin: 6px 0; }
+    .aos-game-workspace-row-url { grid-template-columns: 1fr auto; }
+    .aos-game-workspace-label { font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.7; font-weight: 800; }
+    .aos-game-workspace-card code { display: inline-block; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(59, 130, 246, 0.12); word-break: break-all; }
+    .aos-game-workspace-card input { width: 100%; margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(2, 6, 23, 0.65); color: inherit; font-size: 12px; }
+    .aos-game-workspace-card button { margin: 0; padding: 10px 12px; border-radius: 12px; border: 0; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; background: linear-gradient(135deg, #22d3ee, #a855f7); color: #0b1222; cursor: pointer; }
+  `;
+
+  try {
+    document.head.appendChild(style);
+  } catch (_) {}
+
+  const keyEl = root.querySelector(".aos-game-workspace-key");
+  const urlEl = root.querySelector(".aos-game-workspace-url");
+  const copyBtn = root.querySelector(".aos-game-workspace-copy");
+
+  const share = gameShareUrl_(key);
+  if (keyEl) keyEl.textContent = key;
+  if (urlEl) urlEl.value = share || "";
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const text = urlEl ? (urlEl.value || "") : "";
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        return;
+      }
+      if (urlEl) {
+        urlEl.focus();
+        urlEl.select();
+      }
+      try { document.execCommand("copy"); } catch (_) {}
+    });
+  }
+
+  // Insert at top of body (safe for all templates).
+  try {
+    document.body.insertBefore(root, document.body.firstChild);
+  } catch (_) {}
+}
 
 function gameGetUserKey_() {
   try {
@@ -32,6 +126,7 @@ function gameEnsureUserKey_(onReady) {
 
   if (current && injected) {
     try { localStorage.setItem("aos_game_user_key", current); } catch (_) {}
+    gameRenderWorkspaceInfo_();
     if (typeof onReady === "function") onReady();
     return;
   }
@@ -48,12 +143,14 @@ function gameEnsureUserKey_(onReady) {
     .withSuccessHandler((res) => {
       const key = res && res.userKey ? String(res.userKey || "").trim() : "";
       if (!key) {
+        gameRenderWorkspaceInfo_();
         if (typeof onReady === "function") onReady();
         return;
       }
       gameRedirectToKey_(key);
     })
     .withFailureHandler(() => {
+      gameRenderWorkspaceInfo_();
       if (typeof onReady === "function") onReady();
     })
     .game_registerAnonUser();
@@ -67,4 +164,3 @@ window.gameEnsureUserKey_ = gameEnsureUserKey_;
   gameEnsureUserKey_();
 })();
 </script>
-
