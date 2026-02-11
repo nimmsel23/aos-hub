@@ -103,13 +103,22 @@ run_systemstatus() {
 
 doctor() {
   ui_title "bridgectl doctor"
-  "$APP_DIR/bridge-servicectl" status || true
+
+  local rc=0
+  if ! "$APP_DIR/bridge-servicectl" status; then
+    rc=1
+  fi
   msg ""
+
   "$APP_DIR/bridge-tsctl" status || true
   msg ""
+
   "$APP_DIR/bridge-apictl" health || true
   msg ""
+
   "$APP_DIR/bridge-apictl" debug || true
+
+  return "$rc"
 }
 
 menu() {
@@ -117,6 +126,7 @@ menu() {
   local action
   action="$(choose \
     "service status" "service logs" "service restart" "service enable" "service env" \
+    "systemd diagnose" "systemd fix" \
     "api health" "api debug" "api doctor" "api test-rpc" "api flush" \
     "api sync-status" "api sync-pull" "api sync-push" "api sync-pull (dry-run)" "api sync-push (dry-run)" "api sync-abort" \
     "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" \
@@ -131,6 +141,9 @@ menu() {
     "service restart") servicectl restart ;;
     "service enable") servicectl enable ;;
     "service env") servicectl env ;;
+
+    "systemd diagnose") servicectl diagnose ;;
+    "systemd fix") servicectl fix ;;
 
     "api health") apictl health ;;
     "api debug") apictl debug ;;
@@ -171,6 +184,8 @@ Usage: bridgectl <command>
 Core:
   bridgectl menu
   bridgectl doctor
+  bridgectl diagnose
+  bridgectl fix [--yes]
 
 Service:
   bridgectl status|enable|start|stop|restart|logs|env
@@ -200,7 +215,7 @@ case "$cmd" in
   menu) menu ;;
   doctor) doctor ;;
 
-  status|enable|start|stop|restart|logs|env|install-deps|link-service)
+  status|enable|start|stop|restart|logs|env|install-deps|link-service|diagnose|fix)
     servicectl "$cmd" "$@"
     ;;
 

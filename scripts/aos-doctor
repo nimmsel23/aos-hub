@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+set -o pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROUTERCTL="$ROOT_DIR/router/routerctl"
@@ -37,68 +38,103 @@ print_kv() {
 
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-run_cmd() {
-  local label="$1"
-  shift
-  printf "\n-- %s --\n" "$label"
-  if "$@"; then
-    return 0
-  fi
-  printf "ERR: command failed (%s)\n" "$label"
-  return 1
-}
-
 systemctl_user_ok() {
   systemctl --user show-environment >/dev/null 2>&1
 }
 
-unit_status() {
+systemctl_system_ok() {
+  systemctl list-units --no-pager >/dev/null 2>&1
+}
+
+# Summary counters (populated by check functions)
+SYSTEMD_USER_AVAILABLE=0
+SYSTEMD_SYSTEM_AVAILABLE=0
+
+USER_UNITS_TOTAL=0
+USER_UNITS_ACTIVE=0
+
+SYSTEM_UNITS_TOTAL=0
+SYSTEM_UNITS_ACTIVE=0
+
+HTTP_TOTAL=0
+HTTP_OK=0
+HTTP_FAIL=0
+HTTP_SKIPPED=0
+
+ROUTER_DOCTOR_STATUS="skipped"
+BRIDGE_DOCTOR_STATUS="skipped"
+
+unit_status_user() {
   local unit="$1"
-  local active="unknown"
-  local enabled="unknown"
+  local active enabled
   active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
   enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+
+  ((USER_UNITS_TOTAL++))
+  if [[ "$active" == "active" ]]; then
+    ((USER_UNITS_ACTIVE++))
+  fi
+
   printf "%-32s active=%-10s enabled=%s\n" "$unit" "$active" "$enabled"
 }
 
-show_units() {
+show_units_user() {
   if ! has_cmd systemctl; then
     echo "systemctl not found."
+    SYSTEMD_USER_AVAILABLE=0
     return 0
   fi
   if ! systemctl_user_ok; then
     echo "systemctl --user not available (no user bus)."
+    SYSTEMD_USER_AVAILABLE=0
     return 0
   fi
 
-local units=("${USER_UNITS_DEFAULT[@]}")
-if [[ -n "${AOS_USER_UNITS:-}" ]]; then
-  read -r -a units <<<"${AOS_USER_UNITS}"
-fi
+  SYSTEMD_USER_AVAILABLE=1
 
-for unit in "${units[@]}"; do
-  unit_status "$unit"
-done
+  local units=("${USER_UNITS_DEFAULT[@]}")
+  if [[ -n "${AOS_USER_UNITS:-}" ]]; then
+    read -r -a units <<<"${AOS_USER_UNITS}"
+  fi
+
+  for unit in "${units[@]}"; do
+    unit_status_user "$unit"
+  done
 }
 
 unit_status_system() {
   local unit="$1"
-  local active="unknown"
-  local enabled="unknown"
+  local active enabled
   active="$(systemctl is-active "$unit" 2>/dev/null || true)"
   enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+
+  ((SYSTEM_UNITS_TOTAL++))
+  if [[ "$active" == "active" ]]; then
+    ((SYSTEM_UNITS_ACTIVE++))
+  fi
+
   printf "%-32s active=%-10s enabled=%s\n" "$unit" "$active" "$enabled"
 }
 
-show_system_units() {
+show_units_system() {
   if ! has_cmd systemctl; then
     echo "systemctl not found."
+    SYSTEMD_SYSTEM_AVAILABLE=0
     return 0
   fi
+  if ! systemctl_system_ok; then
+    echo "systemctl (system) not available (no system bus)."
+    SYSTEMD_SYSTEM_AVAILABLE=0
+    return 0
+  fi
+
+  SYSTEMD_SYSTEM_AVAILABLE=1
+
   local units=("${SYSTEM_UNITS_DEFAULT[@]}")
   if [[ -n "${AOS_SYSTEM_UNITS:-}" ]]; then
     read -r -a units <<<"${AOS_SYSTEM_UNITS}"
   fi
+
   for unit in "${units[@]}"; do
     unit_status_system "$unit"
   done
@@ -107,19 +143,28 @@ show_system_units() {
 http_check() {
   local label="$1"
   local url="$2"
+
+  ((HTTP_TOTAL++))
+
   if ! has_cmd curl; then
-    printf "%s: curl not found\n" "$label"
+    ((HTTP_SKIPPED++))
+    printf "%s: SKIP (curl not found)\n" "$label"
+    return 2
+  fi
+
+  if curl -fsS -o /dev/null "$url"; then
+    ((HTTP_OK++))
+    printf "%s: OK (%s)\n" "$label" "$url"
     return 0
   fi
-  if curl -fsS -o /dev/null "$url"; then
-    printf "%s: OK (%s)\n" "$label" "$url"
-  else
-    printf "%s: FAIL (%s)\n" "$label" "$url"
-  fi
+
+  ((HTTP_FAIL++))
+  printf "%s: FAIL (%s)\n" "$label" "$url"
+  return 1
 }
 
 print_help() {
-  cat <<EOF
+  cat <<'__HELP__'
 aos-doctor — combined status report
 
 Usage:
@@ -130,7 +175,7 @@ Env overrides:
   AOS_BRIDGE_HEALTH_URL=http://127.0.0.1:8080/health
   AOS_USER_UNITS="unit1.service unit2.timer"
   AOS_SYSTEM_UNITS="unit1.service unit2.timer"
-EOF
+__HELP__
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
@@ -145,27 +190,61 @@ print_kv "routerctl" "$ROUTERCTL"
 print_kv "bridgectl" "$BRIDGECTL"
 
 print_title "Systemd (user)"
-show_units
+show_units_user
 
 print_title "Systemd (system)"
-show_system_units
+show_units_system
 
 print_title "HTTP checks"
-http_check "Index API" "$INDEX_URL"
-http_check "Bridge health" "$BRIDGE_HEALTH_URL"
+http_check "Index API" "$INDEX_URL" || true
+http_check "Bridge health" "$BRIDGE_HEALTH_URL" || true
 
+print_title "routerctl doctor"
 if [[ -x "$ROUTERCTL" ]]; then
-  print_title "routerctl doctor"
-  "$ROUTERCTL" doctor || true
+  if "$ROUTERCTL" doctor; then
+    ROUTER_DOCTOR_STATUS="ok"
+  else
+    ROUTER_DOCTOR_STATUS="fail"
+  fi
 else
-  print_title "routerctl doctor"
+  ROUTER_DOCTOR_STATUS="missing"
   echo "routerctl not found or not executable."
 fi
 
+print_title "bridgectl doctor"
 if [[ -x "$BRIDGECTL" ]]; then
-  print_title "bridgectl doctor"
-  "$BRIDGECTL" doctor || true
+  if "$BRIDGECTL" doctor; then
+    BRIDGE_DOCTOR_STATUS="ok"
+  else
+    BRIDGE_DOCTOR_STATUS="fail"
+  fi
 else
-  print_title "bridgectl doctor"
+  BRIDGE_DOCTOR_STATUS="missing"
   echo "bridgectl not found or not executable."
 fi
+
+print_title "Summary"
+if ((SYSTEMD_USER_AVAILABLE)); then
+  printf "Systemd (user):   %s/%s active\n" "$USER_UNITS_ACTIVE" "$USER_UNITS_TOTAL"
+else
+  printf "Systemd (user):   skipped\n"
+fi
+
+if ((SYSTEMD_SYSTEM_AVAILABLE)); then
+  printf "Systemd (system): %s/%s active\n" "$SYSTEM_UNITS_ACTIVE" "$SYSTEM_UNITS_TOTAL"
+else
+  printf "Systemd (system): skipped\n"
+fi
+
+if ((HTTP_TOTAL)); then
+  printf "HTTP checks:      %s ok, %s fail" "$HTTP_OK" "$HTTP_FAIL"
+  if ((HTTP_SKIPPED)); then
+    printf ", %s skipped" "$HTTP_SKIPPED"
+  fi
+  printf "\n"
+else
+  printf "HTTP checks:      skipped\n"
+fi
+
+printf "routerctl doctor: %s\n" "$ROUTER_DOCTOR_STATUS"
+printf "bridgectl doctor: %s\n" "$BRIDGE_DOCTOR_STATUS"

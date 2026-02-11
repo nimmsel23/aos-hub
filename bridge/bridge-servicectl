@@ -17,9 +17,110 @@ else
 fi
 USER_SERVICE_DIR="$HOME/.config/systemd/user"
 
+AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
 ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
 
 systemctl_user() { systemctl --user "$@"; }
+
+systemd_user_available() {
+  has_cmd systemctl || return 1
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+unit_dst_path() {
+  echo "$USER_SERVICE_DIR/$SERVICE_NAME"
+}
+
+show_installed_unit_ref() {
+  local dst
+  dst="$(unit_dst_path)"
+  if [[ -L "$dst" ]]; then
+    local target=""
+    target="$(readlink -f -- "$dst" 2>/dev/null || readlink -- "$dst" 2>/dev/null || true)"
+    ui_info "Installed unit: $dst -> ${target:-<unknown>}"
+    return 0
+  fi
+  if [[ -e "$dst" ]]; then
+    ui_info "Installed unit: $dst (not a symlink)"
+    return 0
+  fi
+  ui_info "Installed unit: (not linked)"
+}
+
+diagnose_systemd() {
+  ui_title "bridgectl systemd diagnose"
+
+  show_installed_unit_ref
+  ui_info "Repo unit: $SERVICE_PATH"
+
+  load_env_file_if_present "$AOS_ENV_FILE" || true
+  load_env_file_if_present "$ENV_FILE" || true
+
+  if [[ -n "${AOS_HUB_DIR:-}" ]]; then
+    ui_info "AOS_HUB_DIR: $AOS_HUB_DIR"
+  else
+    ui_info "AOS_HUB_DIR: (unset)"
+  fi
+  if [[ "${AOS_HUB_DIR:-}" == "/" ]]; then
+    ui_warn "AOS_HUB_DIR is '/', ExecStart will try: cd /bridge"
+  fi
+
+  if ! systemd_user_available; then
+    ui_warn "systemctl --user not available (no user bus)."
+    return 2
+  fi
+
+  msg ""
+  msg "-- systemctl --user cat ${SERVICE_NAME} --"
+  systemctl_user cat "$SERVICE_NAME" --no-pager 2>/dev/null || true
+
+  msg ""
+  msg "-- systemctl --user show (selected) --"
+  systemctl_user show "$SERVICE_NAME" -p FragmentPath -p DropInPaths -p ExecStart -p EnvironmentFiles 2>/dev/null || true
+
+  msg ""
+  msg "-- systemctl --user status --"
+  systemctl_user status "$SERVICE_NAME" --no-pager 2>/dev/null || true
+}
+
+fix_systemd() {
+  ui_title "bridgectl systemd fix"
+
+  local assume_yes=0
+  if [[ "${1:-}" == "--yes" || "${1:-}" == "-y" ]]; then
+    assume_yes=1
+  fi
+
+  if ! systemd_user_available; then
+    ui_err "systemctl --user not available (no user bus)."
+    return 2
+  fi
+
+  show_installed_unit_ref
+  msg ""
+
+  if ((assume_yes)); then
+    ui_info "Applying: link-service --force + daemon-reload + restart"
+  else
+    ui_info "This will update the installed unit symlink and restart the service."
+    ui_confirm "Proceed?" || return 0
+  fi
+
+  link_service --force
+  systemctl_user daemon-reload
+  systemctl_user restart "$SERVICE_NAME" || true
+
+  msg ""
+  systemctl_user status "$SERVICE_NAME" --no-pager || true
+
+  if has_cmd journalctl; then
+    msg ""
+    msg "-- recent logs --"
+    journalctl --user -u "$SERVICE_NAME" -n 60 --no-pager || true
+  fi
+
+  status
+}
 
 install_deps() {
   if ! has_cmd pacman; then
@@ -30,17 +131,36 @@ install_deps() {
 }
 
 link_service() {
-  mkdir -p "$USER_SERVICE_DIR"
-  if [[ -e "$USER_SERVICE_DIR/$SERVICE_NAME" ]]; then
-    msg "Service already linked: $USER_SERVICE_DIR/$SERVICE_NAME"
-    return
+  local force=0
+  if [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]]; then
+    force=1
   fi
-  ln -s "$SERVICE_PATH" "$USER_SERVICE_DIR/$SERVICE_NAME"
-  msg "Linked service: $USER_SERVICE_DIR/$SERVICE_NAME"
+
+  mkdir -p "$USER_SERVICE_DIR"
+
+  local dst="$USER_SERVICE_DIR/$SERVICE_NAME"
+  if [[ -e "$dst" ]]; then
+    if ((force)); then
+      local ts="$(date +%s)"
+      if [[ -L "$dst" ]]; then
+        rm -f "$dst"
+      else
+        mv "$dst" "$dst.bak.$ts"
+      fi
+    else
+      msg "Service already linked: $dst"
+      msg "Tip: bridge-servicectl link-service --force"
+      return 0
+    fi
+  fi
+
+  ln -s "$SERVICE_PATH" "$dst"
+  msg "Linked service: $dst"
 }
 
 status() {
   msg "Bridge status:"
+
   if has_cmd python; then
     python - <<'PY' || true
 import importlib.util
@@ -49,14 +169,49 @@ spec = importlib.util.find_spec("aiohttp")
 print("aiohttp:", "ok" if spec else "missing")
 PY
   else
-    warn "python not found"
+    ui_warn "python not found"
   fi
 
-  if has_cmd systemctl; then
-    systemctl_user status "$SERVICE_NAME" --no-pager || true
+  msg ""
+  msg "Env:"
+  if [[ -f "$AOS_ENV_FILE" ]]; then
+    ui_ok "AOS env present: $AOS_ENV_FILE"
   else
-    warn "systemctl not found"
+    ui_warn "AOS env missing: $AOS_ENV_FILE"
   fi
+  if [[ -f "$ENV_FILE" ]]; then
+    ui_ok "Bridge env present: $ENV_FILE"
+  else
+    ui_warn "Bridge env missing: $ENV_FILE"
+  fi
+
+  load_env_file_if_present "$AOS_ENV_FILE" || true
+  load_env_file_if_present "$ENV_FILE" || true
+
+  if [[ -n "${AOS_HUB_DIR:-}" ]]; then
+    ui_ok "AOS_HUB_DIR: $AOS_HUB_DIR"
+  else
+    ui_info "AOS_HUB_DIR not set (default: $HOME/aos-hub)"
+  fi
+
+  local rc=0
+  msg ""
+  if systemd_user_available; then
+    local active enabled
+    active="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
+    enabled="$(systemctl_user is-enabled "$SERVICE_NAME" 2>/dev/null || true)"
+
+    msg "Systemd (user): active=$active enabled=$enabled"
+    systemctl_user status "$SERVICE_NAME" --no-pager || true
+
+    if [[ "$active" != "active" ]]; then
+      rc=1
+    fi
+  else
+    ui_warn "systemctl --user not available (no user bus)."
+  fi
+
+  return "$rc"
 }
 
 logs() { journalctl --user -u "$SERVICE_NAME" -n 200 -f; }
@@ -64,7 +219,7 @@ logs() { journalctl --user -u "$SERVICE_NAME" -n 200 -f; }
 env_edit() { "${EDITOR:-nano}" "$ENV_FILE"; }
 
 usage() {
-  cat <<EOF
+  cat <<'__HELP__'
 bridge-servicectl
 
 Usage: bridge-servicectl <command>
@@ -72,7 +227,9 @@ Usage: bridge-servicectl <command>
 Commands:
   status
   install-deps
-  link-service
+  link-service [--force]
+  diagnose
+  fix [--yes]
   enable
   start|stop|restart
   logs
@@ -80,7 +237,7 @@ Commands:
 
 Env:
   AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
-EOF
+__HELP__
 }
 
 cmd="${1:-status}"
@@ -90,8 +247,10 @@ case "$cmd" in
   -h|--help|help) usage ;;
   status) status ;;
   install-deps) install_deps ;;
-  link-service) link_service ;;
-  enable) link_service; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
+  link-service) link_service "${1:-}" ;;
+  diagnose) diagnose_systemd ;;
+  fix) fix_systemd "${1:-}" ;;
+  enable) link_service --force; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
   start) systemctl_user start "$SERVICE_NAME" ;;
   stop) systemctl_user stop "$SERVICE_NAME" ;;
   restart) systemctl_user restart "$SERVICE_NAME" ;;
@@ -99,4 +258,3 @@ case "$cmd" in
   env) env_edit ;;
   *) usage; exit 1 ;;
 esac
-
