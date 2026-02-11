@@ -1,7 +1,7 @@
 # Centre: Fruits
 
 ## Purpose
-Daily fact questions (Fruits Map). See `DOCS/fruits-centre.md` for the unified overview.
+Daily fact questions (Fruits Map). See `DOCS/fruits.md` for the unified overview.
 Standalone pattern overview: `DOCS/gas/standalone.md`.
 
 ## Telegram Bot Mode (GAS)
@@ -65,7 +65,7 @@ Quick recovery if the bot repeats the same message:
 - Skips are stored as `_geskippt_` and block another skip until answered.
 
 ## Terminal CLI (python-fruits)
-- See `DOCS/fruits-centre.md` for CLI details.
+- See `DOCS/fruits.md` for CLI details.
 
 ## Notes
 - WebApp and Bot share the same JSON store.

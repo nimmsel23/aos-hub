@@ -342,10 +342,10 @@ curl "http://localhost:8799/api/taskwarrior/tasks?status=pending&tags=fire"
 ## Related Documentation
 
 - **[Main README](../README.md)** - Complete AOS Hub documentation
-- **[VOICE_CENTRE_RESTRUCTURED.md](../VOICE_CENTRE_RESTRUCTURED.md)** - VOICE implementation details
-- **[GAME_CENTRE_RESTRUCTURED.md](../GAME_CENTRE_RESTRUCTURED.md)** - Game implementation details
-- **[CORE4_CENTRE_RESTRUCTURED.md](../CORE4_CENTRE_RESTRUCTURED.md)** - Core4 implementation details
-- **[FRUITS_CENTRE_RESTRUCTURED.md](../FRUITS_CENTRE_RESTRUCTURED.md)** - Fruits implementation details
+- **[voice.md](../voice.md)** - VOICE implementation details
+- **[game.md](../game.md)** - Game implementation details
+- **[core4.md](../core4.md)** - Core4 implementation details
+- **[fruits.md](../fruits.md)** - Fruits implementation details
 
 ---
 

@@ -23,12 +23,12 @@ AOS Hub is the **integration layer** connecting Fish shell, Node.js server, GAS 
 ### AlphaOS Centres (Philosophy + Implementation)
 
 **Complete Centre Documentation:**
-- **[DOOR CENTRE](./DOOR_CENTRE_RESTRUCTURED.md)** - 4P Flow (Potential→Plan→Production→Profit)
-- **[GAME CENTRE](./GAME_CENTRE_RESTRUCTURED.md)** - Fact Maps Flow (Frame→Freedom→Focus→Fire→Tent)
-- **[VOICE CENTRE](./VOICE_CENTRE_RESTRUCTURED.md)** - Mental Mastery (STOP→SUBMIT→STRUGGLE→STRIKE)
-- **[CORE4 CENTRE](./CORE4_CENTRE_RESTRUCTURED.md)** - 28-or-Die Daily Habits
-- **[FRUITS CENTRE](./FRUITS_CENTRE_RESTRUCTURED.md)** - Daily Results Tracking (4 Fs)
-- **[FIRE CENTRE](./FIRE_CENTRE_RESTRUCTURED.md)** - Weekly War (detailed)
+- **[DOOR CENTRE](./door.md)** - 4P Flow (Potential→Plan→Production→Profit)
+- **[GAME CENTRE](./game.md)** - Fact Maps Flow (Frame→Freedom→Focus→Fire→Tent)
+- **[VOICE CENTRE](./voice.md)** - Mental Mastery (STOP→SUBMIT→STRUGGLE→STRIKE)
+- **[CORE4 CENTRE](./core4.md)** - 28-or-Die Daily Habits
+- **[FRUITS CENTRE](./fruits.md)** - Daily Results Tracking (4 Fs)
+- **[FIRE CENTRE](./fire.md)** - Weekly War (detailed)
 
 **Structure:** Each doc contains:
 - **AlphaOS Philosophy: What MUST Be** (Elliott Hulse blueprints)
@@ -503,7 +503,7 @@ http://localhost:8799/core4
 ~/aos-hub/
 ├── DOCS/                           # This documentation
 │   ├── README.md                   # This file
-│   ├── *_RESTRUCTURED.md           # Centre docs (Philosophy + Implementation)
+│   ├── <centre>.md                 # Centre docs (Philosophy + Implementation)
 │   ├── gas/                        # GAS-specific docs (legacy)
 │   └── node/                       # Node.js-specific docs (legacy)
 │
