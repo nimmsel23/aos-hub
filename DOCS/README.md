@@ -1,6 +1,9 @@
 
 # AOS Hub - Documentation
 
+Current frontdoor:
+- Start at `DOCS/INDEX.md` (Primary `index-node`, selective offload + active fallback via `gas`).
+
 **Version:** 2.1 (2026-01-10)
 **Purpose:** Central documentation for αOS Hub ecosystem
 
@@ -789,4 +792,3 @@ Optional but recommended for remote access to the local HQ and bridge. Typical s
 - `ROADMAP.md`
 - `router/ARCHITECTURE.md`
 - `bridge/README.md`
-
