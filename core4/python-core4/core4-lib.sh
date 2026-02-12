@@ -5,7 +5,8 @@ set -euo pipefail
 # Generic UI/env helpers live in `scripts/ctl-lib.sh`.
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-ROOT_DIR="$(cd "$APP_DIR/.." && pwd -P)"
+# Repo root (…/aos-hub). This file lives at `core4/python-core4/core4-lib.sh`.
+ROOT_DIR="$(cd "$APP_DIR/../.." && pwd -P)"
 
 # shellcheck disable=SC1090
 source "$ROOT_DIR/scripts/ctl-lib.sh"
