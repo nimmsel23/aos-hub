@@ -2,6 +2,12 @@
 
 Complete door lifecycle management for αOS - from Potential to Profit.
 
+## Docs
+
+- Architecture: `door/ARCHITECTURE.md`
+- Cheatsheet: `door/CHEATSHEET.md`
+- Changelog: `door/CHANGELOG.md`
+
 ## Quick Start
 
 ```bash

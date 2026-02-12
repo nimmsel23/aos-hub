@@ -2,6 +2,12 @@
 
 28-or-Die pattern for mastering all 4 domains of life.
 
+## Docs
+
+- Architecture: `core4/ARCHITECTURE.md`
+- Cheatsheet: `core4/CHEATSHEET.md`
+- Changelog: `core4/CHANGELOG.md`
+
 ## Quick Start
 
 ```bash
