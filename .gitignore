@@ -63,9 +63,36 @@ index-node/docs
 skills/
 
 # Local imported blueprint chapters (do not commit)
+AlphaOS-blueprints
 AlphaOS - THE *.md
 AlphaOS-THE-*.md
 AphaOS-THE-*.md
+
+# Blueprint chapter symlinks inside component folders (do not commit)
+core4/[0-9][0-9] - *.md
+door/[0-9][0-9] - *.md
+fire/[0-9][0-9] - *.md
+focus/[0-9][0-9] - *.md
+frame/[0-9][0-9] - *.md
+freedom/[0-9][0-9] - *.md
+game/[0-9][0-9] - *.md
+voice/[0-9][0-9] - *.md
+
+# Component symlink shortcuts (do not commit)
+core4/python-core4
+door/gas-door-dev
+door/python-hot
+door/python-warstack
+fire/python-firemap
+game/fire
+game/focus
+game/frame
+game/freedom
+game/gas-game-dev
+game/python-firemap
+game/python-tent-bot
+index-node/bridge
+index-node/router
 
 # IDE
 .vscode/
