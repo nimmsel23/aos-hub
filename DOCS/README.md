@@ -2,13 +2,13 @@
 # AOS Hub - Documentation
 
 **Version:** 2.1 (2026-01-10)
-**Purpose:** Central documentation for AlphaOS Hub ecosystem
+**Purpose:** Central documentation for αOS Hub ecosystem
 
 ---
 
 ## Overview
 
-AOS Hub is the **integration layer** connecting Fish shell, Node.js server, GAS cloud services, Telegram bots, and Taskwarrior for the AlphaOS system.
+AOS Hub is the **integration layer** connecting Fish shell, Node.js server, GAS cloud services, Telegram bots, and Taskwarrior for the αOS system.
 
 **Architecture:** Hub-and-Spoke model
 - **Index Node** (Node.js :8799) - Local menu server
@@ -20,7 +20,7 @@ AOS Hub is the **integration layer** connecting Fish shell, Node.js server, GAS 
 
 ## Documentation Index
 
-### AlphaOS Centres (Philosophy + Implementation)
+### αOS Centres (Philosophy + Implementation)
 
 **Complete Centre Documentation:**
 - **[DOOR CENTRE](./door.md)** - 4P Flow (Potential→Plan→Production→Profit)
@@ -31,7 +31,7 @@ AOS Hub is the **integration layer** connecting Fish shell, Node.js server, GAS 
 - **[FIRE CENTRE](./fire.md)** - Weekly War (detailed)
 
 **Structure:** Each doc contains:
-- **AlphaOS Philosophy: What MUST Be** (Elliott Hulse blueprints)
+- **αOS Philosophy: What MUST Be** (Elliott Hulse blueprints)
 - **Implementation: What IS** (GAS + Node.js + Python/CLI status)
 - **Data Flow** (complete system diagrams)
 - **Testing** (smoke tests)
@@ -582,7 +582,7 @@ http://localhost:8799/core4
 ---
 # αOS Hub
 
-Central infrastructure for the AlphaOS ecosystem. Primary HQ runs on the laptop (Node). GAS is the fallback HQ when the laptop is offline. Telegram routing + bridge + sync keep data flowing.
+Central infrastructure for the αOS ecosystem. Primary HQ runs on the laptop (Node). GAS is the fallback HQ when the laptop is offline. Telegram routing + bridge + sync keep data flowing.
 
 ## Architecture (High-Level)
 

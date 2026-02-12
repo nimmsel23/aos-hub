@@ -1,5 +1,5 @@
 [Unit]
-Description=AlphaOS Vault push on shutdown (local -> remote) with backups
+Description=αOS Vault push on shutdown (local -> remote) with backups
 DefaultDependencies=no
 Before=poweroff.target shutdown.target reboot.target halt.target
 Wants=network-online.target

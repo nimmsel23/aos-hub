@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Daily "AlphaOS blueprints" chapter sender (Telegram via `tele`).
+# Daily "αOS blueprints" chapter sender (Telegram via `tele`).
 # - Keeps a cursor so you get the next chapter each run.
 # - Default: sends as document (Markdown file) with a short caption.
 
@@ -342,7 +342,7 @@ PY
     [[ -n "$path" ]] || die "no chapters found for scope=$scope in $BLUEPRINT_DIR"
     [[ -f "$path" ]] || die "chapter missing: $path"
 
-    caption="AlphaOS Blueprints — ${n} - ${title} ($((idx+1))/${total})"
+    caption="αOS Blueprints — ${n} - ${title} ($((idx+1))/${total})"
     if (( as_text )); then
       split_and_send_text "$caption" "$path" "$silent"
     else

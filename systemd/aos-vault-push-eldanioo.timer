@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily AlphaOS Vault push to eldanioo
+Description=Daily αOS Vault push to eldanioo
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

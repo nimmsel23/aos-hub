@@ -31,7 +31,7 @@ source "${LIB_DIR}/git.sh"
 
 usage() {
   cat <<'EOF'
-gitctl — Git sync control for AlphaOS
+gitctl — Git sync control for αOS
 
 Usage:
   gitctl status

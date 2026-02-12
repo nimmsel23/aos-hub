@@ -316,7 +316,7 @@ export AOS_VAULT_DIR=~/AlphaOS-Vault    # Vault location
 - `door/README.md` - Weekly Tactics (THE DOOR)
 - `game/README.md` - Strategic Maps (THE GAME)
 - `DOCS/AOSCTL.md` - Unified launcher
-- Elliott Hulse's AlphaOS philosophy (THE CODE)
+- Elliott Hulse's αOS philosophy (THE CODE)
 
 ## Philosophy
 

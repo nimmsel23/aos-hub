@@ -1,6 +1,6 @@
 # Core4 Pipeline — 28-or-Die System
 
-**Pillar:** THE CORE (AlphaOS Pillar #2)
+**Pillar:** THE CORE (αOS Pillar #2)
 **Goal:** Daily investment in all 4 Domains (BODY/BEING/BALANCE/BUSINESS)
 **Mechanics:** 8 habits × 7 days = 56 tasks/week. Each done = 0.5 points. 28+ points = week won.
 

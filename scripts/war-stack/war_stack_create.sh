@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # war_stack_create.sh - Auto-create TickTick list + Taskwarrior tasks from War Stack
-# Part of AlphaOS Door 4P Workflow Automation (Phase 2)
+# Part of αOS Door 4P Workflow Automation (Phase 2)
 
 set -euo pipefail
 

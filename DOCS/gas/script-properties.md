@@ -1,7 +1,7 @@
 # GAS Script Properties
 
 Dieses Dokument beschreibt die Script Properties (PropertiesService) fuer das
-AlphaOS GAS HQ. Alle Keys sind Strings in den Script Properties.
+αOS GAS HQ. Alle Keys sind Strings in den Script Properties.
 
 ## Core (Pflicht)
 

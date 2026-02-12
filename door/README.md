@@ -1,6 +1,6 @@
 # Door Management Component
 
-Complete door lifecycle management for AlphaOS - from Potential to Profit.
+Complete door lifecycle management for αOS - from Potential to Profit.
 
 ## Quick Start
 

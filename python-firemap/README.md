@@ -1,4 +1,4 @@
-# AlphaOS Fire Bot (Firemap)
+# αOS Fire Bot (Firemap)
 
 Telegram sender for Fire snapshots (Taskwarrior -> Markdown-formatted text -> Telegram).
 Designed to run on demand (not as a daemon).

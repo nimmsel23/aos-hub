@@ -1,5 +1,5 @@
 [Unit]
-Description=AlphaOS Sync (%i)
+Description=αOS Sync (%i)
 After=network-online.target
 Wants=network-online.target
 

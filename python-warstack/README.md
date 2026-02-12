@@ -1,4 +1,4 @@
-# AlphaOS War Stack Bot
+# αOS War Stack Bot
 
 Telegram bot for War Stack creation with delayed Gemini strategist feedback.
 Designed to run on demand (not as a permanent daemon).

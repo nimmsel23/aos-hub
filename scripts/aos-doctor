@@ -183,7 +183,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
   exit 0
 fi
 
-print_title "AlphaOS Doctor"
+print_title "αOS Doctor"
 print_kv "Root" "$ROOT_DIR"
 print_kv "Env" "${AOS_ENV_FILE_EFFECTIVE:-$ROOT_DIR/.env/aos.env (missing)}"
 print_kv "routerctl" "$ROUTERCTL"

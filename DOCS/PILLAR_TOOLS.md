@@ -1,10 +1,10 @@
-# AlphaOS Pillar Tools
+# αOS Pillar Tools
 
 Complete guide to doorctl, gamectl, core4ctl, and aosctl.
 
 ## Overview
 
-AlphaOS implements the 5 Pillars as CLI tools:
+αOS implements the 5 Pillars as CLI tools:
 
 | Pillar | Tool | Purpose | Status |
 |--------|------|---------|--------|

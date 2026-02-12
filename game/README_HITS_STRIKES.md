@@ -152,7 +152,7 @@ ln -sf ~/.dotfiles/bin/aos-glossary ~/.local/bin/aos-glossary
 #!/usr/bin/env bash
 set -euo pipefail
 
-# aos-glossary — AlphaOS terminology quick reference
+# aos-glossary — αOS terminology quick reference
 # Location (recommended): ~/.dotfiles/bin/aos-glossary
 
 cmd="${1:-}"; shift || true

@@ -5,7 +5,7 @@ Scope
 - Includes Index client dependencies.
 
 1) Project setup wrapper
-- `setupAlphaOSSingleProject()` (only function still in `gas/alphaos_single_project.gs`)
+- `setupαOSSingleProject()` (only function still in `gas/alphaos_single_project.gs`)
 
 Index client dependencies
 - `gas/Index_client.html` calls:

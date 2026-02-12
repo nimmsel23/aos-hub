@@ -33,7 +33,7 @@ GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 
 usage() {
   cat <<EOF
-$APP — AlphaOS frontdoor (stable bash overview)
+$APP — αOS frontdoor (stable bash overview)
 
 Usage:
   $APP menu                         # gum menu (if available)
@@ -87,7 +87,7 @@ menu() {
     "Aliases: manage (aos-alias)" \
     "Help" \
     "Quit" \
-    | gum choose --header "AlphaOS — aos")"
+    | gum choose --header "αOS — aos")"
 
   case "$choice" in
     "Sync: menu (syncctl)")

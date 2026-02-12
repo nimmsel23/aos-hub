@@ -94,7 +94,7 @@ ensure_env_file() {
     return
   fi
   cat >"$ENV_FILE" <<'EOF'
-# AlphaOS Taskwarrior Hooks
+# αOS Taskwarrior Hooks
 # Optional overrides (no secrets needed)
 # AOS_HOOK_TELE_BIN=tele
 # AOS_HOOK_TELE_SILENT=1

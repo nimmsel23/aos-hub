@@ -1,6 +1,6 @@
 # AOS Hub
 
-Single control surface for AlphaOS services, scripts, and centres.
+Single control surface for αOS services, scripts, and centres.
 
 ## Core Entry Points
 

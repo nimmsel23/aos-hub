@@ -1,6 +1,6 @@
 # syncvaultctl
 
-syncvaultctl is the unified CLI + menu to control git and rclone sync jobs across the AlphaOS stack. It wraps existing tools (`vaultctl`, `aos-sync`) and uses repo-local copy scripts in `scripts/sync-utils/` (with optional fallback to dotfiles wrappers).
+syncvaultctl is the unified CLI + menu to control git and rclone sync jobs across the αOS stack. It wraps existing tools (`vaultctl`, `aos-sync`) and uses repo-local copy scripts in `scripts/sync-utils/` (with optional fallback to dotfiles wrappers).
 
 ## Features
 - Status and timer overview for core sync units.

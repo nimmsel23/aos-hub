@@ -43,7 +43,7 @@ write_units() {
   local url="${HB_URL}${sep}kind=heartbeat&host=%H"
   cat >"$HB_SERVICE_FILE" <<EOF
 [Unit]
-Description=AlphaOS Heartbeat -> Index GAS
+Description=αOS Heartbeat -> Index GAS
 
 [Service]
 Type=oneshot
@@ -56,7 +56,7 @@ EOF
 
   cat >"$HB_TIMER_FILE" <<EOF
 [Unit]
-Description=AlphaOS Heartbeat Timer
+Description=αOS Heartbeat Timer
 
 [Timer]
 OnBootSec=${HB_BOOT_DELAY}

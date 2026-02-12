@@ -152,7 +152,7 @@ write_systemd_units() {
 
   cat >"$SYSTEMD_DIR/$SERVICE_DAILY" <<EOF
 [Unit]
-Description=AlphaOS Fire Daily Send
+Description=αOS Fire Daily Send
 
 [Service]
 Type=oneshot
@@ -161,7 +161,7 @@ EOF
 
   cat >"$SYSTEMD_DIR/$TIMER_DAILY" <<'EOF'
 [Unit]
-Description=AlphaOS Fire Daily Send (08:00)
+Description=αOS Fire Daily Send (08:00)
 
 [Timer]
 OnCalendar=*-*-* 08:00:00
@@ -173,7 +173,7 @@ EOF
 
   cat >"$SYSTEMD_DIR/$SERVICE_WEEKLY" <<EOF
 [Unit]
-Description=AlphaOS Fire Weekly Send
+Description=αOS Fire Weekly Send
 
 [Service]
 Type=oneshot
@@ -182,7 +182,7 @@ EOF
 
   cat >"$SYSTEMD_DIR/$TIMER_WEEKLY" <<'EOF'
 [Unit]
-Description=AlphaOS Fire Weekly Send (Mon 08:05)
+Description=αOS Fire Weekly Send (Mon 08:05)
 
 [Timer]
 OnCalendar=Mon *-*-* 08:05:00

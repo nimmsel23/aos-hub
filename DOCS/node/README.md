@@ -1,7 +1,7 @@
 # Node.js Implementation (Index Node)
 
 **Version:** 2.0 (2026-01-10)
-**Purpose:** Local Node.js server for AlphaOS Centres
+**Purpose:** Local Node.js server for αOS Centres
 
 ---
 
@@ -575,12 +575,12 @@ links:
    - `/reload`
 
    
-   # AlphaOS Local Index Node
+   # αOS Local Index Node
 
-> **Private Repository** — Local Entry Interface + Router Service for AlphaOS
+> **Private Repository** — Local Entry Interface + Router Service for αOS
 
-The **AlphaOS Local Index Node** is a hybrid system combining a **local visual interface** with a **minimal routing service**.  
-It replaces the need for a hosted index while keeping the exact same UI and semantics used across the AlphaOS ecosystem.
+The **αOS Local Index Node** is a hybrid system combining a **local visual interface** with a **minimal routing service**.  
+It replaces the need for a hosted index while keeping the exact same UI and semantics used across the αOS ecosystem.
 
 This project is intentionally simple: it **routes**, it does **not decide**.
 
@@ -591,7 +591,7 @@ This project is intentionally simple: it **routes**, it does **not decide**.
 This repository implements **A + B**:
 
 - **A — Local Interface**  
-  A browser-based command interface (Matrix UI + Grid) used as the primary AlphaOS entry point.
+  A browser-based command interface (Matrix UI + Grid) used as the primary αOS entry point.
 
 - **B — Local Router Service**  
   A minimal Node.js service that exposes menu data from a single configuration file.
@@ -792,7 +792,7 @@ Telegram:
 
 Docs:
 
-- `GET /api/doc?name=foundation|code|core|door|game|voice` - AlphaOS docs from vault
+- `GET /api/doc?name=foundation|code|core|door|game|voice` - αOS docs from vault
 
 Terminal:
 
@@ -1062,7 +1062,7 @@ This repository will never:
 
 - store user data
 - track usage
-- perform AlphaOS logic
+- perform αOS logic
 - replace Centres
 - expose public endpoints
 
@@ -1078,4 +1078,4 @@ Changes are structural, not frequent.
 
 ## License
 
-Private — internal AlphaOS infrastructure.
+Private — internal αOS infrastructure.

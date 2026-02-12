@@ -20,7 +20,7 @@ show_usage() {
   cat << EOF
 Usage: $0 <FIRE_MAP_FILE> [OPTIONS]
 
-Convert Fire Map Hits to Taskwarrior tasks with AlphaOS UDAs.
+Convert Fire Map Hits to Taskwarrior tasks with αOS UDAs.
 
 ARGUMENTS:
     FIRE_MAP_FILE    Path to Fire Map markdown file (e.g., FIRE_MAP_BODY_KW49_2025.md)

@@ -58,7 +58,7 @@
 - Core4/Fruits/Voice:
   - Drive/Sheet IDs (e.g., `CORE4_DRIVE_FOLDER_ID`, `FRUITS_DRIVE_FOLDER_ID`, `VOICE_DRIVE_FOLDER_ID`)
 - General:
-  - Any centre-specific prop overrides; fallback is Drive folder auto-create inside `AlphaOS`/`Centres`.
+  - Any centre-specific prop overrides; fallback is Drive folder auto-create inside `αOS`/`Centres`.
   - `AOS_TASK_EXPORT_FILE_ID` (task_export.json file id cache)
   - `AOS_TASK_EXPORT_CACHE_ID` (fallback snapshot file id)
 

@@ -1,6 +1,6 @@
 # hookctl
 
-Taskwarrior hook manager for AlphaOS.
+Taskwarrior hook manager for αOS.
 
 ## What it does
 

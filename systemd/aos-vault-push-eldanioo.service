@@ -1,5 +1,5 @@
 [Unit]
-Description=AlphaOS Vault push to eldanioo (GDrive)
+Description=αOS Vault push to eldanioo (GDrive)
 After=network-online.target
 Wants=network-online.target
 

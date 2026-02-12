@@ -1,5 +1,5 @@
 [Unit]
-Description=AlphaOS Vault pull on boot (remote -> local)
+Description=αOS Vault pull on boot (remote -> local)
 Wants=network-online.target
 After=network-online.target
 

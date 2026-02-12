@@ -1,8 +1,8 @@
 # alphaos-router
 
-**Dumb Telegram router bot for AlphaOS centres** with modular extension system.
+**Dumb Telegram router bot for αOS centres** with modular extension system.
 
-The core bot is a simple URL router that fetches centre links from the local AlphaOS Index Node and routes Telegram commands (`/game`, `/door`, `/voice`, etc.) to the appropriate URLs. Additional functionality can be added via extensions without modifying the core routing logic.
+The core bot is a simple URL router that fetches centre links from the local αOS Index Node and routes Telegram commands (`/game`, `/door`, `/voice`, etc.) to the appropriate URLs. Additional functionality can be added via extensions without modifying the core routing logic.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ The core bot is a simple URL router that fetches centre links from the local Alp
 
 - Local web apps (`http://127.0.0.1`) are not reachable from outside the laptop
 - The bot provides remote access to centre URLs (GAS links for remote, local links for on-laptop)
-- `menu.yaml` (in AlphaOS Index Node) remains the single source of truth for centre routes
+- `menu.yaml` (in αOS Index Node) remains the single source of truth for centre routes
 - Part of the **Hub-and-Spoke** pattern: GAS Bot → Status Check → Router Bot (if online) → Local Centres
 
 ## Setup

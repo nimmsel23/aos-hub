@@ -373,7 +373,7 @@ case "${1:-sync}" in
     render
     ;;
   help|-h|--help)
-    echo "vaultctl - AlphaOS Vault sync manager"
+    echo "vaultctl - αOS Vault sync manager"
     echo ""
     echo "Usage:"
     echo "  vaultctl [command]"

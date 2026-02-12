@@ -10,7 +10,7 @@ hotopen	Hot Open	hotopen	tool	manual	Open HOT file
 document_with_gemini	Gemini Docs	document-with-gemini.py	python	dotfiles_bin	AI documentation with Gemini API
 ticktick_sync	TickTick Sync	python-ticktick/ticktick_sync.py	python	aos-hub	Taskwarrior ↔ TickTick sync
 alphaos_launcher	Python Launcher	alphaos-launcher	python	dotfiles_bin	Extended features (YAML/plugins)
-router_bot	Router Bot	router_bot.py	python	dotfiles_bin	Telegram AlphaOS Router Bot
+router_bot	Router Bot	router_bot.py	python	dotfiles_bin	Telegram αOS Router Bot
 obsidian_tw_sync	Obsidian-TW Sync	obsidian_tw_sync.sh	python	dotfiles_bin	Obsidian ↔ Taskwarrior sync
 generals	General's Tent	generals	tool	manual	Strategic review (THE GAME)
 tent	General's Tent	tent	tool	manual	Alias for generals
@@ -23,7 +23,7 @@ routerctl	Router Control	routerctl	infra	manual	Start/stop/logs router bot servi
 aos_sync	AOS Sync	aos-sync	infra	manual	Rclone sync management (menu/run/enable)
 aos_syncctl	AOS SyncCtl	aos-syncctl	infra	manual	Sync control (systemd integration)
 door_watcher	Door Watcher	door_file_watcher.sh	infra	dotfiles_bin	Watch DOOR files for changes
-index_node	Index Node	node ~/aos-hub/index-node/server.js	infra	external	Local AlphaOS Index Server
+index_node	Index Node	node ~/aos-hub/index-node/server.js	infra	external	Local αOS Index Server
 taskwarrior	Taskwarrior	task	cli	manual	Task management (alias: t)
 calcurse	Calcurse	calcurse	cli	manual	Calendar & scheduling (alias: c)
 alpha	alpha	/home/alpha/.dotfiles/bin/alpha-os/alpha	script	dotfiles_bin	

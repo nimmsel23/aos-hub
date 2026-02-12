@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# AlphaOS ZSH helpers (router/bridge/index-node)
+# αOS ZSH helpers (router/bridge/index-node)
 
 : ${AOS_INDEX_URL:="http://127.0.0.1:8799"}
 : ${AOS_BRIDGE_URL:="http://127.0.0.1:8080"}

@@ -43,7 +43,7 @@ The GAS Tent Bot provides weekly Strategic Intelligence reports via Telegram, wi
 ### 1. Deploy GAS Web App
 
 1. Open Google Apps Script Editor
-2. Create new project or open existing AlphaOS project
+2. Create new project or open existing αOS project
 3. Add `tent.gs` file with code from `~/aos-hub/gas/tent.gs`
 4. Deploy as Web App:
    - Click "Deploy" → "New deployment"

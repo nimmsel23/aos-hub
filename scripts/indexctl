@@ -36,7 +36,7 @@ write_env_file() {
   fi
   sudo_cmd mkdir -p "$(dirname -- "$ENV_FILE")"
   sudo_cmd tee "$ENV_FILE" >/dev/null <<'EOF'
-# AlphaOS Index Node env (systemd reads: /etc/alphaos-hub/alphaos-index.env)
+# αOS Index Node env (systemd reads: /etc/alphaos-hub/alphaos-index.env)
 
 # Bind / listen
 HOST=0.0.0.0
@@ -139,7 +139,7 @@ hub_doctor() {
 
 usage() {
   cat <<EOF
-indexctl - manage AlphaOS index-node service
+indexctl - manage αOS index-node service
 
 Usage:
   scripts/indexctl install

@@ -65,7 +65,7 @@ Result: Instead of generic "Fitness — 2026-02-03" every day, you get:
 - `partner.yaml` - Example date night (Friday) + chill day (Sunday)
 - `posterity.yaml` - Example content creation (Saturday)
 
-**AlphaOS Standards (adjust timings if needed):**
+**αOS Standards (adjust timings if needed):**
 - `declare.yaml` - Weekly Strike (Monday) + Weekly Review (Friday)
 - `discover.yaml` - Deep Learning (Sunday)
 

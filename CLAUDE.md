@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-**aos-hub** is the central infrastructure for the AlphaOS ecosystem - a Hub-and-Spoke architecture combining a local Node.js server (Index Node), a Python Telegram router bot, an aiohttp bridge service, and Google Apps Script fallback centres.
+**aos-hub** is the central infrastructure for the αOS ecosystem - a Hub-and-Spoke architecture combining a local Node.js server (Index Node), a Python Telegram router bot, an aiohttp bridge service, and Google Apps Script fallback centres.
 
 ## Component-Specific Guidelines
 

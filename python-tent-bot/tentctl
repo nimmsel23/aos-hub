@@ -14,7 +14,7 @@ cmd_install() {
 
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=AlphaOS Tent Bot - Strategic Intelligence Reports
+Description=αOS Tent Bot - Strategic Intelligence Reports
 After=network.target
 
 [Service]

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`alphaos-router` is a **dumb Telegram router bot** that routes commands to AlphaOS centre URLs. It follows a **modular extension pattern** where the core is minimal (routing only) and additional functionality is provided by loadable extensions.
+`alphaos-router` is a **dumb Telegram router bot** that routes commands to αOS centre URLs. It follows a **modular extension pattern** where the core is minimal (routing only) and additional functionality is provided by loadable extensions.
 
 The bot is part of a larger **Hub-and-Spoke** architecture where a GAS (Google Apps Script) bot acts as the primary interface and delegates to the router bot when the laptop is online.
 
@@ -230,7 +230,7 @@ Option 3: Web UI (GAS - Remote fallback)
 - `core4_actions` - Taskwarrior shortcuts for Core4 domains (optional, disabled by default)
 - *(more to come)*
 
-### Index API (AlphaOS Index Node)
+### Index API (αOS Index Node)
 
 **Endpoint:** `http://100.76.197.55:8799/api/centres`
 
@@ -466,7 +466,7 @@ It only TRIGGERS the War Stack Bot (separate service).
 
 ## Related Systems
 
-- **AlphaOS Index Node** (`alphaos-index-node/`) - Local centre registry + web UI server
+- **αOS Index Node** (`alphaos-index-node/`) - Local centre registry + web UI server
 - **GAS Centres** - Cloud-based web apps for Voice, Door, Game, etc. (fallback)
 - **Status Bot (8080)** - Laptop online/offline health check (Hub-and-Spoke)
 - **War Stack Bot** - Dedicated Telegram bot for War Stack creation (standalone, 1200 lines)

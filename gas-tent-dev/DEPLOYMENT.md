@@ -11,7 +11,7 @@
 
 1. Go to https://script.google.com
 2. New Project
-3. Name: "AlphaOS Tent Centre"
+3. Name: "αOS Tent Centre"
 
 ## Step 2: Upload Files
 
@@ -87,7 +87,7 @@ Check execution log for any errors.
 
 1. **Deploy** → **New deployment**
 2. **Type:** Web app
-3. **Description:** AlphaOS Tent Centre v1
+3. **Description:** αOS Tent Centre v1
 4. **Execute as:** Me
 5. **Who has access:** Anyone (or Anyone with link)
 6. **Deploy**
@@ -117,7 +117,7 @@ Talk to @BotFather on Telegram:
 
 ```
 /newbot
-Name: AlphaOS Tent
+Name: αOS Tent
 Username: alphaos_tent_bot
 ```
 

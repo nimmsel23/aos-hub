@@ -1,8 +1,8 @@
-# AlphaOS Scripts Collection
+# αOS Scripts Collection
 
 **Location:** `aos-hub/scripts/`
 
-Collection of utility scripts for AlphaOS Door Centre, Core4, and TickTick integration.
+Collection of utility scripts for αOS Door Centre, Core4, and TickTick integration.
 
 ---
 

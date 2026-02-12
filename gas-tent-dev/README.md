@@ -2,7 +2,7 @@
 
 **Standalone Google Apps Script deployment for General's Tent**
 
-Part of the AlphaOS Hub-and-Spoke architecture.
+Part of the αOS Hub-and-Spoke architecture.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ Router Bot → /tent → Tent Centre (GAS)
 ### 1. Create GAS Project
 
 1. Go to https://script.google.com
-2. New Project → Name: "AlphaOS Tent Centre"
+2. New Project → Name: "αOS Tent Centre"
 3. Copy all `.gs` and `.html` files
 
 ### 2. Set Script Properties
@@ -62,7 +62,7 @@ PropertiesService.getScriptProperties().setProperties({
 ```bash
 # Via @BotFather
 /newbot
-Name: AlphaOS Tent
+Name: αOS Tent
 Username: alphaos_tent_bot
 
 # Set webhook

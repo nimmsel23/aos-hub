@@ -35,7 +35,7 @@ write_env_file() {
     return
   fi
   cat >"$ENV_FILE" <<'EOF'
-# AlphaOS Taskwarrior Hooks
+# αOS Taskwarrior Hooks
 # Optional overrides (no secrets needed)
 # AOS_HOOK_TELE_BIN=tele
 # AOS_HOOK_TARGET=tele
@@ -47,7 +47,7 @@ EOF
 
 usage() {
   cat <<EOF
-setup-alpha-hooks.sh - install AlphaOS Taskwarrior hooks
+setup-alpha-hooks.sh - install αOS Taskwarrior hooks
 
 Usage:
   scripts/setup-alpha-hooks.sh

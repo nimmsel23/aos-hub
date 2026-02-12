@@ -2,11 +2,11 @@
 
 ## TL;DR
 
-**Standalone Google Apps Script deployment** for General's Tent - the weekly strategic intelligence & review module of AlphaOS.
+**Standalone Google Apps Script deployment** for General's Tent - the weekly strategic intelligence & review module of αOS.
 
 ## Why Standalone?
 
-In the AlphaOS Hub-and-Spoke architecture:
+In the αOS Hub-and-Spoke architecture:
 
 ```
 Router Bot (Telegram)
@@ -89,7 +89,7 @@ User (Telegram) → Tent Bot → GAS Tent Centre
 - `README.md` - Overview
 - `DEPLOYMENT.md` - Setup guide
 
-## How It Fits Into AlphaOS
+## How It Fits Into αOS
 
 ### The 5 Pillars
 

@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════════
-# AlphaOS Door Management - Taskwarrior Configuration
+# αOS Door Management - Taskwarrior Configuration
 # ════════════════════════════════════════════════════════════════
 # Add this to your ~/.taskrc or ~/.config/task/taskrc
 
@@ -23,7 +23,7 @@ uda.door.type.label=Type
 uda.door.type.values=door,hit,strike,bigrock,warstack,idea
 uda.door.type.default=hit
 
-# Domain (AlphaOS 4 Domains)
+# Domain (αOS 4 Domains)
 uda.door.domain.type=string
 uda.door.domain.label=Domain
 uda.door.domain.values=body,being,balance,business

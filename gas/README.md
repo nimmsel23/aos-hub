@@ -1,4 +1,4 @@
-# AlphaOS GAS HQ (single project)
+# αOS GAS HQ (single project)
 
 Single Google Apps Script project that powers the HQ web app and all inline
 centres (Door, Voice, Frame, Freedom, Focus, Fire, Tent, Fruits).

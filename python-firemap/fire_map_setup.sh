@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AlphaOS Fire Map Setup (Taskwarrior-first)
+# αOS Fire Map Setup (Taskwarrior-first)
 # Uses repo scripts + systemd timer; no pip, no cron.
 
 set -euo pipefail
@@ -14,7 +14,7 @@ die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-msg "🔥 AlphaOS Fire Map Setup (Taskwarrior-first)"
+msg "🔥 αOS Fire Map Setup (Taskwarrior-first)"
 
 need_cmd task || die "taskwarrior not found"
 need_cmd rg || warn "rg not found; setup script will still run"

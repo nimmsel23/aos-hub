@@ -14,14 +14,14 @@ die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing: $1"; }
 
 ensure_block() {
-  if [[ -f "$TASKRC" ]] && rg -q "AlphaOS Fire Reports" "$TASKRC"; then
+  if [[ -f "$TASKRC" ]] && rg -q "αOS Fire Reports" "$TASKRC"; then
     msg "✅ Fire reports already present in $TASKRC"
     return
   fi
 
   cat >>"$TASKRC" <<'EOF'
 
-# AlphaOS Fire Reports (daily + weekly)
+# αOS Fire Reports (daily + weekly)
 #
 # Daily: due-today style execution list.
 report.fired.description=Fire Daily (due soon)

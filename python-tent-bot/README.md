@@ -1,4 +1,4 @@
-# AlphaOS Tent Bot
+# αOS Tent Bot
 
 Strategic Intelligence Weekly Reports via Telegram.
 
@@ -140,7 +140,7 @@ BUSINESS  ⚪   ⚪      ⚪      ⚪
 React with ✅ when reviewed
 ```
 
-## Integration with AlphaOS Ecosystem
+## Integration with αOS Ecosystem
 
 **Related Services:**
 - **Index Node** (port 8799) - Provides Tent APIs
@@ -199,4 +199,4 @@ Edit `weekly_report_loop()` in `tent_bot.py` to change schedule (default: Sunday
 
 ## License
 
-Part of AlphaOS ecosystem. See main repo for license.
+Part of αOS ecosystem. See main repo for license.

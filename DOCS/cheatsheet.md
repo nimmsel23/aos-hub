@@ -36,7 +36,7 @@ Taskwarrior bridge:
 - `POST /api/taskwarrior/add`
 - `POST /api/taskwarrior/push`
 - Taskwarrior hooks: `scripts/setup-alpha-hooks.sh` + set `AOS_HOOK_TARGET=bridge` in `~/.config/alpha-os/hooks.env`
- - AlphaOS Taskwarrior notes: `DOCS/taskwarrior.md`
+ - αOS Taskwarrior notes: `DOCS/taskwarrior.md`
  - Taskwarrior on-exit snapshot hook: `scripts/setup-alpha-on-exit-hook.sh`
  - GAS: set Script Property `AOS_TASK_EXPORT_FILE_ID` to the Drive file id for `AlphaOS-Vault/.alphaos/task_export.json`
 

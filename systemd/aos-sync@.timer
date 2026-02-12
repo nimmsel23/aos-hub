@@ -1,5 +1,5 @@
 [Unit]
-Description=AlphaOS Sync Timer (%i)
+Description=αOS Sync Timer (%i)
 
 [Timer]
 # default schedule (override per-target with --at)

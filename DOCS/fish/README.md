@@ -1,6 +1,6 @@
 # Fish CLI overview
 
-This repo uses Fish as the primary CLI entry point for AlphaOS.
+This repo uses Fish as the primary CLI entry point for αOS.
 
 ## Entry points
 

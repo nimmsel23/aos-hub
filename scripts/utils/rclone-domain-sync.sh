@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rclone AlphaOS Domain Copy Script
-# Push/pull copy of AlphaOS domains to Google Drive (push-sync deletes remote files)
+# Rclone αOS Domain Copy Script
+# Push/pull copy of αOS domains to Google Drive (push-sync deletes remote files)
 # Usage: rclone-domain-sync.sh <DOMAIN> [push|pull|push-sync|sync|status|log]
 
 set -euo pipefail

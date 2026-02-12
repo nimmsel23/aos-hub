@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# aos-syncctl — Gum UI for AlphaOS rclone targets (*.env)
+# aos-syncctl — Gum UI for αOS rclone targets (*.env)
 # - list/create/edit targets
 # - pick rclone remote path via `rclone lsf` browser
 # - enable/disable systemd timers per target (optional)

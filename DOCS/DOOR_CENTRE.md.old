@@ -1,6 +1,6 @@
 # Door Centre Documentation
 
-**Door Centre** implements the **DOOR Pillar** from AlphaOS - the weekly tactics system using the 4P Flow:
+**Door Centre** implements the **DOOR Pillar** from αOS - the weekly tactics system using the 4P Flow:
 **Potential → Plan → Production → Profit**
 
 This document covers the complete Door Centre implementation across all aos-hub components.
@@ -394,7 +394,7 @@ curl -X POST http://127.0.0.1:8799/api/door/export \
 
 **Markdown Export Location:**
 - Path: `~/AlphaOS-Vault/Door/War-Stacks/YYYY-MM-DD_Title.md`
-- Format: AlphaOS War Stack template (Trigger/Narrative/Validation/Impact + 4 Hits)
+- Format: αOS War Stack template (Trigger/Narrative/Validation/Impact + 4 Hits)
 
 **Taskwarrior Integration:**
 - Tags: `+door +warstack +<domain>`
@@ -797,7 +797,7 @@ open http://127.0.0.1:8799/door
 
 ## References
 
-- **AlphaOS DOOR Pillar:** Elliott Hulse's 4P Flow (Potential → Plan → Production → Profit)
+- **αOS DOOR Pillar:** Elliott Hulse's 4P Flow (Potential → Plan → Production → Profit)
 - **Eisenhower Matrix:** Importance + Urgency quadrant classification
 - **Domino Door Principle:** One strategic door unlocks multiple opportunities
 - **War Stack Format:** Trigger/Narrative/Validation/Impact → 4 Hits (Fact/Obstacle/Strike/Responsibility)

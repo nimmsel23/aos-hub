@@ -831,4 +831,4 @@ curl -X POST http://localhost:8799/api/tent/init
 
 **Version:** 1.0.0
 **Last Updated:** 2026-01-18
-**Author:** AlphaOS Index Node Development Team
+**Author:** αOS Index Node Development Team

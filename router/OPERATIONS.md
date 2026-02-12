@@ -41,7 +41,7 @@ core4_actions:
 ```
 
 ### 4. Verify Index Node
-Ensure AlphaOS Index Node is running:
+Ensure αOS Index Node is running:
 ```bash
 # Check if Index API is accessible
 curl http://100.76.197.55:8799/api/centres
@@ -77,7 +77,7 @@ python router_bot.py
 Create `/etc/systemd/system/alphaos-router.service`:
 ```ini
 [Unit]
-Description=AlphaOS Router Bot
+Description=αOS Router Bot
 After=network.target
 
 [Service]

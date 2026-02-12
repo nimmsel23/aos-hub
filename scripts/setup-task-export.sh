@@ -19,7 +19,7 @@ write_env_file() {
     return
   fi
   cat >"$ENV_FILE" <<'EOF'
-# AlphaOS Taskwarrior export snapshot (optional overrides)
+# αOS Taskwarrior export snapshot (optional overrides)
 # AOS_TASK_EXPORT_FILTER=status:pending
 # AOS_TASK_EXPORT_PATH=$HOME/.local/share/alphaos/task_export.json
 # AOS_TASK_EXPORT_VAULT_PATH=$HOME/AlphaOS-Vault/.alphaos/task_export.json
@@ -32,7 +32,7 @@ write_units() {
 
   cat >"$SYSTEMD_DIR/alphaos-task-export.service" <<EOF
 [Unit]
-Description=AlphaOS Taskwarrior export snapshot
+Description=αOS Taskwarrior export snapshot
 
 [Service]
 Type=oneshot
@@ -42,7 +42,7 @@ EOF
 
   cat >"$SYSTEMD_DIR/alphaos-task-export.timer" <<'EOF'
 [Unit]
-Description=AlphaOS Taskwarrior export snapshot (every 5 minutes)
+Description=αOS Taskwarrior export snapshot (every 5 minutes)
 
 [Timer]
 OnBootSec=2m

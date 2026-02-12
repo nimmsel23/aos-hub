@@ -1,4 +1,4 @@
-# AlphaOS Components Overview
+# αOS Components Overview
 
 Quick, human-readable map of what each subsystem does, what actually runs in production, and where to look next.
 

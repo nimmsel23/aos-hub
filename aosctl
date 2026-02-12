@@ -20,7 +20,7 @@ fi
 
 # shellcheck disable=SC1090
 source "$SCRIPT_DIR/scripts/ctl-lib.sh"
-: "${CTL_CHOOSE_PROMPT:=AlphaOS — aosctl}"
+: "${CTL_CHOOSE_PROMPT:=αOS — aosctl}"
 : "${CTL_CHOOSE_PREFER:=gum}"
 : "${CTL_UI_OK_PREFIX:=✔}"
 : "${CTL_UI_ERR_PREFIX:=✘}"
@@ -153,7 +153,7 @@ __HELP__
 }
 
 show_menu() {
-  ui_title "AlphaOS — aosctl"
+  ui_title "αOS — aosctl"
 
   local choices=()
   [[ -n "$INDEXCTL" ]] && choices+=("Index: status")
@@ -258,7 +258,7 @@ show_version() {
 }
 
 run_status() {
-  msg "AlphaOS status (no logs)"
+  msg "αOS status (no logs)"
   msg ""
 
   if [[ -n "$INDEXCTL" ]]; then

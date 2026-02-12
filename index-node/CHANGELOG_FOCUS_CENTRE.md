@@ -651,14 +651,14 @@ UserProperties:
 ## Contributors
 
 - **Implementation:** Claude Code (Anthropic)
-- **Design & Architecture:** alpha (AlphaOS System User)
-- **Philosophy Foundation:** Elliott Hulse (AlphaOS Creator)
+- **Design & Architecture:** alpha (αOS System User)
+- **Philosophy Foundation:** Elliott Hulse (αOS Creator)
 
 ---
 
 ## References
 
-- [AlphaOS Documentation](../DOCS/)
+- [αOS Documentation](../DOCS/)
 - [Index Node README](./README.md)
 - [GAS AGENTS.md](../gas/AGENTS.md)
 - [Focus Centre Philosophy](../DOCS/gas/game.md)

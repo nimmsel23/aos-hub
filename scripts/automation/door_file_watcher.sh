@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# door_file_watcher.sh - inotify daemon for AlphaOS Door automation
+# door_file_watcher.sh - inotify daemon for αOS Door automation
 # Watches /Door/2-Plan/ for new War Stacks and triggers automation
 
 set -euo pipefail

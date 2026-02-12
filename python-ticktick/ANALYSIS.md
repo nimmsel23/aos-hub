@@ -51,7 +51,7 @@ classify_subtask_gemini("Call mom") → "partner"
 
 ### 8 Core4 Subtasks
 
-Mapped to AlphaOS 4 Domains:
+Mapped to αOS 4 Domains:
 
 | Subtask | Domain | Description |
 |---------|--------|-------------|

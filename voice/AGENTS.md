@@ -4,7 +4,7 @@ Guidelines for Claude Code when working on THE VOICE component.
 
 ## Architecture Overview
 
-THE VOICE follows the standard AlphaOS component architecture:
+THE VOICE follows the standard αOS component architecture:
 
 ```
 voice/
@@ -303,7 +303,7 @@ module.exports = { listSessions };
 - `POST /api/voice/start` → interactive_session (websocket?)
 - `GET /api/voice/strike?id=...` → extract_strike
 
-## Integration with AlphaOS Agents
+## Integration with αOS Agents
 
 ### voice-pillar-agent
 

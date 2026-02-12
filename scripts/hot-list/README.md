@@ -23,7 +23,7 @@ hot_to_md.sh <UUID> "<DESCRIPTION>"
   - Frontmatter with YAML metadata
   - Direct Taskwarrior integration (`project:HotList +hot +potential`)
   - rclone sync to Google Drive
-  - Consistent with AlphaOS Command Center
+  - Consistent with αOS Command Center
 
 **Migration:**
 Instead of:

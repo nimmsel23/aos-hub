@@ -4,7 +4,7 @@
 
 ### 1. Create GAS Project
 
-https://script.google.com → New Project → "AlphaOS Tent Centre"
+https://script.google.com → New Project → "αOS Tent Centre"
 
 ### 2. Upload Files
 
