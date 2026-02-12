@@ -5,7 +5,7 @@
 - `router/` is the Telegram router bot (aiogram) and extensions.
 - `bridge/` is the aiohttp service (Core4/Fruits/Tent/task routing, port `8080`, optional token auth).
 - `gas/` holds the Apps Script fallback HQ snapshot.
-- `python-warstack/` and `python-firemap/` are auxiliary bots.
+- `door/python-warstack/` and `game/python-firemap/` are auxiliary bots (kept under their pillars).
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
 - `DOCS/` keeps project notes and cheatsheets.
 

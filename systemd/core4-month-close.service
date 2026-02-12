@@ -1,7 +1,7 @@
 [Unit]
 Description=Core4 month close (write monthly CSV for previous month)
-ConditionPathExists=%h/aos-hub/python-core4/core4-month-close
+ConditionPathExists=%h/aos-hub/core4/python-core4/core4-month-close
 
 [Service]
 Type=oneshot
-ExecStart=%h/aos-hub/python-core4/core4-month-close
+ExecStart=%h/aos-hub/core4/python-core4/core4-month-close

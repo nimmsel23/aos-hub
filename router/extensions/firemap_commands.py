@@ -42,7 +42,7 @@ class FireMapCommandsExtension(Extension):
         self.daily_unit = str(config.get("daily_unit", "alphaos-fire-daily.service")).strip()
         self.weekly_unit = str(config.get("weekly_unit", "alphaos-fire-weekly.service")).strip()
         self.python_bin = config.get("python_bin", "python3")
-        self.script = config.get("script", "python-firemap/firemap_bot.py")
+        self.script = config.get("script", "game/python-firemap/firemap_bot.py")
         self.daily_mode = config.get("daily_mode", "daily")
         self.weekly_mode = config.get("weekly_mode", "weekly")
         self._run_lock = asyncio.Lock()

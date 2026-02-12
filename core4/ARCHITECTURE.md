@@ -29,7 +29,7 @@ Exact paths can vary by machine; prefer “find by convention” in code, not ha
 
 **Writers (create events):**
 - Bridge Core4 endpoints (laptop-plane API)
-- Local CLI/tracker (`python-core4/`)
+- Local CLI/tracker (`core4/python-core4/`)
 - Optional GAS/Core4 centre (cloud-plane capture, then synced down)
 
 **Readers (consume derived summaries):**
@@ -39,7 +39,7 @@ Exact paths can vary by machine; prefer “find by convention” in code, not ha
 
 ## Components in this repo
 
-- `python-core4/` — CLI + tracker + ops (`core4ctl`)
+- `core4/python-core4/` — CLI + tracker + ops (`core4ctl`)
 - `bridge/` — Core4 API endpoints that write to the ledger and rebuild derived JSON
 - `index-node/` — UI/API that reads summaries and displays status
 
@@ -63,4 +63,3 @@ bridgectl health
 - Entry: `core4/README.md`
 - Commands: `core4/CHEATSHEET.md`
 - Changes: `core4/CHANGELOG.md`
-

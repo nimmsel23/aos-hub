@@ -611,8 +611,8 @@ If you only remember one thing:
 
 | # | Component | Code | Purpose |
 |---|-----------|------|---------|
-| 1 | **Core4 CLI** | `python-core4/tracker.py` | Fastest capture path; offline/local-first via ledger fallback |
-| 2 | **core4ctl** | `python-core4/core4ctl` | Ops wrapper (track, sync, service, install, menu sub-tools) |
+| 1 | **Core4 CLI** | `core4/python-core4/tracker.py` | Fastest capture path; offline/local-first via ledger fallback |
+| 2 | **core4ctl** | `core4/python-core4/core4ctl` | Ops wrapper (track, sync, service, install, menu sub-tools) |
 | 3 | **Bridge** | `bridge/app.py` | Local HTTP API convergence point for all portals |
 | 4 | **GAS** | `gas/core4.gs` | Cloud/mobile-first; writes events to Drive |
 | 5 | **TW Hook** | `on-modify.99-alphaos.py` | Side effects pipeline (Bridge log + TickTick + Telegram) |
@@ -669,7 +669,7 @@ Google Drive can create duplicate names for derived JSON. To avoid this:
 
 | Writer | Code | Writes To |
 |--------|------|-----------|
-| **Local CLI** | `python-core4/tracker.py` | Local ledger + rebuilds day/week JSON |
+| **Local CLI** | `core4/python-core4/tracker.py` | Local ledger + rebuilds day/week JSON |
 | **Bridge** | `bridge/app.py` | Local ledger + rebuilds day/week JSON |
 | **GAS** | `gas/core4.gs` | Drive `Alpha_Core4/.core4/events/` |
 | **TW Hook** | `on-modify.99-alphaos.py` | Bridge (fallback: local event) |
@@ -716,7 +716,7 @@ Reports:
 
 Templates live in `aos-hub/systemd/` and are intentionally not enabled automatically.
 
-**Install:** `aos-hub/python-core4/core4ctl install-timers`
+**Install:** `aos-hub/core4/python-core4/core4ctl install-timers`
 
 **Enable:**
 ```bash

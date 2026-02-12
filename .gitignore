@@ -37,12 +37,12 @@ env.bak/
 venv.bak/
 
 # Fire runtime files
-fire/fire.env
-python-firemap/.offset
+game/fire/fire.env
+game/python-firemap/.offset
 
 # Local env convenience files (untracked)
-python-firemap/firemap.env
-python-warstack/warstack.env
+game/python-firemap/firemap.env
+door/python-warstack/warstack.env
 router/router.env
 
 # Local scratch
@@ -51,12 +51,12 @@ router/router.env
 # Local convenience symlinks (avoid committing absolute links)
 tele
 aliasctl
-gas-creatorking-dev
-gas-door-dev
-gas-fruits-dev
-gas-game-dev
-gas-tent-dev
-gas-voice-dev
+/gas-creatorking-dev
+/gas-door-dev
+/gas-fruits-dev
+/gas-game-dev
+/gas-tent-dev
+/gas-voice-dev
 
 # Local vault/blueprints convenience symlinks
 Vault

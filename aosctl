@@ -51,15 +51,15 @@ SYNCVAULTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
 SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
 AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
 ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
-CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/python-core4/core4ctl" || true)"
 ENVCTL="$(resolve_bin "envctl" || true)"
 FIREMAP_BIN="$(resolve_bin "$SCRIPT_DIR/firemap" || true)"
 FIREMAP_SETUP="$(resolve_bin "$SCRIPT_DIR/scripts/setup-fire-map.sh" || true)"
 FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
-FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/python-firemap/firemap_bot.py" || true)"
+CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/core4/python-core4/core4ctl" || true)"
+FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/game/python-firemap/firemap_bot.py" || true)"
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
-TENTCTL="$(resolve_bin "$SCRIPT_DIR/python-tent-bot/tentctl" || true)"
+TENTCTL="$(resolve_bin "$SCRIPT_DIR/game/python-tent-bot/tentctl" || true)"
 GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
@@ -101,7 +101,7 @@ COMPONENTS:
   game        Game mount tooling (gamectl)
   voice       Voice mount tooling (voicectl)
   firectl     Fire bot wrapper (firectl)
-  tentctl     Tent Bot manager (python-tent-bot)
+  tentctl     Tent Bot manager (game/python-tent-bot)
   gas         GAS Tent Centre manager (gasctl)
   core4ctl    Core4 tooling (core4ctl)
   fruits      Fruits CLI (JSON store)
@@ -529,7 +529,7 @@ route_component() {
       "$FIRECTL_BIN" "$@"
       ;;
     tent|tentctl)
-      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/python-tent-bot/tentctl"
+      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/game/python-tent-bot/tentctl"
       "$TENTCTL" "$@"
       ;;
     gas|gasctl)
@@ -553,7 +553,7 @@ route_component() {
 }
 
 core4_cmd() {
-  [[ -n "$CORE4CTL" ]] || die "core4ctl not found (expected at ~/aos-hub/python-core4/core4ctl)"
+  [[ -n "$CORE4CTL" ]] || die "core4ctl not found (expected at ~/aos-hub/core4/python-core4/core4ctl)"
   local action="${1:-status}"
   shift || true
   case "$action" in

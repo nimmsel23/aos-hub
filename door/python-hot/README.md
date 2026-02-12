@@ -6,13 +6,13 @@ Universal CLI wrapper for AOS Hot List (bash/zsh/fish compatible).
 
 **Symlink to ~/bin:**
 ```bash
-ln -s ~/aos-hub/python-hot/hot.py ~/bin/hot
-chmod +x ~/aos-hub/python-hot/hot.py
+ln -s ~/aos-hub/door/python-hot/hot.py ~/bin/hot
+chmod +x ~/aos-hub/door/python-hot/hot.py
 ```
 
 **Or add alias to .bashrc / .zshrc:**
 ```bash
-alias hot='python3 ~/aos-hub/python-hot/hot.py'
+alias hot='python3 ~/aos-hub/door/python-hot/hot.py'
 ```
 
 **Fish users:** Continue using the native Fish function in `.config/fish/functions/aos-hot.fish`

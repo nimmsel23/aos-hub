@@ -21,7 +21,7 @@ core4_load_env() {
 
 core4_recompute_config() {
   HUB_DIR="${AOS_HUB_DIR:-$ROOT_DIR}"
-  CORE4_TRACKER="${CORE4_TRACKER:-$HUB_DIR/python-core4/tracker.py}"
+  CORE4_TRACKER="${CORE4_TRACKER:-$HUB_DIR/core4/python-core4/tracker.py}"
 
   UNIT_SRC_DIR="${HUB_DIR}/systemd"
   UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
@@ -41,7 +41,7 @@ need_core4_tracker() {
 }
 
 need_core4_seeder() {
-  CORE4_SEEDER="${CORE4_SEEDER:-$HUB_DIR/python-core4/seed_week.py}"
+  CORE4_SEEDER="${CORE4_SEEDER:-$HUB_DIR/core4/python-core4/seed_week.py}"
   if [[ ! -f "$CORE4_SEEDER" ]]; then
     die "core4 seeder not found: $CORE4_SEEDER"
   fi
@@ -117,4 +117,3 @@ vaultctl_cmd() {
   fi
   return 1
 }
-

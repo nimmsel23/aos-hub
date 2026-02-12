@@ -164,8 +164,8 @@ case "$cmd" in
   backup) repo_exec "scripts/backupctl" "$@" ;;
   mount) repo_exec "scripts/mountctl" "$@" ;;
   hook|hooks) repo_exec "scripts/hookctl" "$@" ;;
-  core4) repo_exec "python-core4/core4ctl" "$@" ;;
-  tent|tentctl) repo_exec "python-tent-bot/tentctl" "$@" ;;
+  core4) repo_exec "core4/python-core4/core4ctl" "$@" ;;
+  tent|tentctl) repo_exec "game/python-tent-bot/tentctl" "$@" ;;
   gas|gasctl) repo_exec "scripts/gasctl" "$@" ;;
   firectl) repo_exec "scripts/firectl" "$@" ;;
   tele|telectl) repo_exec "scripts/telectl" "$@" ;;

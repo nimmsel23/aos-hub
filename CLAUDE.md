@@ -16,8 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Router Bot** | `router/AGENTS.md` | routerctl usage, extension patterns |
 | **Bridge** | `bridge/AGENTS.md` | bridgectl, selftest.py, handler patterns |
 | **GAS HQ** | `gas/AGENTS.md` | **Scope isolation** - work only in gas/ |
-| **War Stack Bot** | `python-warstack/AGENTS.md` | Idle timeout, resume flow |
-| **Fire Map Bot** | `python-firemap/AGENTS.md` | On-demand usage, tele fallback |
+| **War Stack Bot** | `door/python-warstack/AGENTS.md` | Idle timeout, resume flow |
+| **Fire Map Bot** | `game/python-firemap/AGENTS.md` | On-demand usage, tele fallback |
 
 **Pattern:** Each component has focused guidelines. This CLAUDE.md provides the high-level architecture, component AGENTS.md files provide detailed implementation notes.
 
@@ -485,8 +485,8 @@ journalctl -u aos-index -f             # If system service
 - `router/AGENTS.md` - Router bot patterns, extension system
 - `bridge/AGENTS.md` - Bridge patterns, non-throwing handlers
 - `gas/AGENTS.md` - **CRITICAL:** Scope isolation - do NOT edit other components in GAS session
-- `python-warstack/AGENTS.md` - War Stack bot specific patterns
-- `python-firemap/AGENTS.md` - Fire Map bot specific patterns
+- `door/python-warstack/AGENTS.md` - War Stack bot specific patterns
+- `game/python-firemap/AGENTS.md` - Fire Map bot specific patterns
 
 ## Future Directions
 

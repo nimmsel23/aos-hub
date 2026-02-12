@@ -10,7 +10,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-No extra deps required (uses stdlib). Firemap logic lives in `python-firemap/firemap.py`.
+No extra deps required (uses stdlib). Firemap logic lives in `game/python-firemap/firemap.py`.
 
 ## Environment
 
@@ -20,7 +20,7 @@ Create `.env` from the template (auto-loaded by `firemap_bot.py`):
 cp .env.example .env
 ```
 
-Recommended: keep a shared env at `~/.env/fire.env` (or set `AOS_FIRE_ENV_FILE=/path/to/fire.env`) and only use `python-firemap/.env` as a local fallback.
+Recommended: keep a shared env at `~/.env/fire.env` (or set `AOS_FIRE_ENV_FILE=/path/to/fire.env`) and only use `game/python-firemap/.env` as a local fallback.
 
 - `AOS_FIREMAP_BOT_TOKEN` (optional; Telegram API)
 - `AOS_FIREMAP_CHAT_ID` (required if using bot token)

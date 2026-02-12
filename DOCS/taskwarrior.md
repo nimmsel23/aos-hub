@@ -140,7 +140,7 @@ Generiert Fire Map Markdown, delegiert Taskwarrior-Sync an `fire-to-tasks.sh`.
 
 ### Bot-Snapshots (firemap.py)
 
-Der firemap-Bot (`~/aos-hub/python-firemap/`) filtert nach Tags (`+fire`, `+hit`, `+production`), nicht nach UDAs.
+Der firemap-Bot (`~/aos-hub/game/python-firemap/`) filtert nach Tags (`+fire`, `+hit`, `+production`), nicht nach UDAs.
 Config via `~/.env/fire.env` oder `AOS_FIREMAP_*` Umgebungsvariablen.
 
 ### Systemd-Timer

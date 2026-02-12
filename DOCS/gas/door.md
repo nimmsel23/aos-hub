@@ -6,12 +6,12 @@ Standalone pattern overview: `DOCS/gas/standalone.md`.
 
 ## Entry
 - HQ UI (Door Centre): `gas/Door_Index.html` (inline map in HQ)
-- Standalone dev: `gas-door-dev/Door_Index.html` (separate GAS project)
-- Client logic: `gas/Door_Client.html` (and copied into `gas-door-dev/`)
-- Backend: `gas/door.gs` (and copied into `gas-door-dev/`)
+- Standalone dev: `door/gas-door-dev/Door_Index.html` (separate GAS project)
+- Client logic: `gas/Door_Client.html` (and copied into `door/gas-door-dev/`)
+- Backend: `gas/door.gs` (and copied into `door/gas-door-dev/`)
 
 Note:
-- The **Door War Eisenhower Matrix block** was removed from the **HQ home**; Door War now lives inside the Door Centre (and `gas-door-dev/` for standalone deployments).
+- The **Door War Eisenhower Matrix block** was removed from the **HQ home**; Door War now lives inside the Door Centre (and `door/gas-door-dev/` for standalone deployments).
 
 ## Flow (short)
 - Hot List -> `Alpha_Door/1-Potential`

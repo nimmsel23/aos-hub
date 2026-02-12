@@ -78,7 +78,7 @@ Result: Instead of generic "Fitness — 2026-02-03" every day, you get:
 Preview tasks without creating them:
 
 ```bash
-cd ~/aos-hub/python-core4
+cd ~/aos-hub/core4/python-core4
 python3 seed_week.py --dry-run
 ```
 
@@ -93,7 +93,7 @@ After editing configs:
 python3 seed_week.py --force
 
 # Or via wrapper
-~/aos-hub/python-core4/core4ctl seed-week --force
+~/aos-hub/core4/python-core4/core4ctl seed-week --force
 ```
 
 **Note:** Without `--force`, seed_week.py is idempotent and won't recreate existing tasks.

@@ -1,6 +1,6 @@
 # Core4 CLI (local habit tracker)
 
-`core4` is a thin wrapper around `aos-hub/python-core4/tracker.py`. It logs one Core4 habit as done and persists it as an append-only event (`.json` per done).
+`core4` is a thin wrapper around `aos-hub/core4/python-core4/tracker.py`. It logs one Core4 habit as done and persists it as an append-only event (`.json` per done).
 
 See `aos-hub/DOCS/CORE4.md` for the full “how it works”.
 For the complete end-to-end mental model (Bridge/GAS/index-node/hooks/sync), see:
@@ -60,16 +60,16 @@ To avoid multiple drifting installs (e.g. `~/.local/bin/core4` vs `~/bin/core4`)
 
 ```bash
 cd ~/aos-hub
-./python-core4/core4ctl install-cli
-./python-core4/core4ctl doctor
+./core4/python-core4/core4ctl install-cli
+./core4/python-core4/core4ctl doctor
 ```
 
 ## core4ctl (modular)
 
-`python-core4/core4ctl` is a thin dispatcher (like `bridgectl`). Implementation is split into:
+`core4/python-core4/core4ctl` is a thin dispatcher (like `bridgectl`). Implementation is split into:
 
-- `python-core4/core4-trackctl` (tracker wrappers + Taskwarrior)
-- `python-core4/core4-syncctl` (pull/push only `.core4/**`)
-- `python-core4/core4-servicectl` (mount + timers)
-- `python-core4/core4-clinctl` (install/doctor)
-- `python-core4/core4-menuctl` (interactive menu)
+- `core4/python-core4/core4-trackctl` (tracker wrappers + Taskwarrior)
+- `core4/python-core4/core4-syncctl` (pull/push only `.core4/**`)
+- `core4/python-core4/core4-servicectl` (mount + timers)
+- `core4/python-core4/core4-clinctl` (install/doctor)
+- `core4/python-core4/core4-menuctl` (interactive menu)

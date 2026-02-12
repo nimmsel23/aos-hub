@@ -7,8 +7,8 @@
 ## Key Entry Points
 - Taskwarrior (terminal): `task fire` (custom report in `~/.taskrc`)
 - Fire tooling: `scripts/firectl` (send to Telegram, export markdown, setup timers)
-- Firemap engine: `python-firemap/firemap.py`
-- Firemap sender CLI: `python-firemap/firemap_bot.py`
+- Firemap engine: `game/python-firemap/firemap.py`
+- Firemap sender CLI: `game/python-firemap/firemap_bot.py`
 - Index Node Fire API/UI: `index-node/server.js` (`/api/fire/day`, `/api/fire/week`, `/game/fire`)
 - Router trigger: `router/extensions/firemap_commands.py` (triggers systemd units first)
 
@@ -21,8 +21,7 @@
   - Index Node `/api/fire/*` Taskwarrior fallback
 
 ## Quick Debug Commands
-- Firemap dry output: `python python-firemap/firemap_bot.py print --scope daily`
-- Firemap counts: `python python-firemap/firemap_bot.py test --debug --scope daily`
+- Firemap dry output: `python game/python-firemap/firemap_bot.py print --scope daily`
+- Firemap counts: `python game/python-firemap/firemap_bot.py test --debug --scope daily`
 - Fire timers: `systemctl --user status alphaos-fire-daily.timer alphaos-fire-weekly.timer`
 - Fire logs: `journalctl --user -u alphaos-fire-daily.service -u alphaos-fire-weekly.service -n 200 --no-pager`
-

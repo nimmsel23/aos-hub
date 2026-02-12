@@ -121,9 +121,9 @@ nodectl open            # open best URL (tailscale preferred)
 
 ### Fire tooling ✅
 
-**Engine:** `python-firemap/firemap.py` (Taskwarrior → Markdown-formatted text messages)
+**Engine:** `game/python-firemap/firemap.py` (Taskwarrior → Markdown-formatted text messages)
 
-**Bot:** `python-firemap/firemap_bot.py` (sends `/fire` style snapshots)
+**Bot:** `game/python-firemap/firemap_bot.py` (sends `/fire` style snapshots)
 
 **Wrappers:**
 - `scripts/firectl` — wrapper + installers: `doctor`, `fix`, `status/logs`, `setup-reports`, `setup-systemd`
@@ -217,7 +217,7 @@ cd ~/aos-hub/python-ticktick
 
 - [DOOR_CENTRE.md](../DOOR_CENTRE.md) - Complete Door Centre architecture
 - [bridge/README.md](../bridge/README.md) - Bridge API documentation
-- [python-warstack/README.md](../python-warstack/README.md) - Telegram War Stack Bot
+- [door/python-warstack/README.md](../door/python-warstack/README.md) - Telegram War Stack Bot
 - [gas/README.md](../gas/README.md) - Google Apps Script centres
 
 ---

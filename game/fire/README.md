@@ -13,8 +13,8 @@ This folder is the documentation home for everything Fire-related in `aos-hub`.
 
 - Terminal report setup: `scripts/setup-fire-map.sh`
 - Fire tooling CLI: `scripts/firectl`
-- Firemap engine: `python-firemap/firemap.py`
-- Firemap sender: `python-firemap/firemap_bot.py`
+- Firemap engine: `game/python-firemap/firemap.py`
+- Firemap sender: `game/python-firemap/firemap_bot.py`
 - Index Node endpoints: `index-node/server.js` (`/api/fire/day`, `/api/fire/week`)
 - Router trigger extension: `router/extensions/firemap_commands.py`
 
@@ -42,7 +42,7 @@ Router `/fire` and `/fireweek` prefers `systemctl --user start` on these units (
 
 ## Environment (No Secrets In Git)
 
-Firemap sender reads env (recommended: shared file) and also auto-loads `python-firemap/.env` as a fallback:
+Firemap sender reads env (recommended: shared file) and also auto-loads `game/python-firemap/.env` as a fallback:
 - Shared env (preferred): `~/.env/fire.env` (or set `AOS_FIRE_ENV_FILE=/path/to/fire.env`)
 - Repo-local (untracked) option: `fire/fire.env` (useful for local Codex sessions in this repo)
 - `AOS_FIREMAP_BOT_TOKEN`, `AOS_FIREMAP_CHAT_ID` (Telegram API)
@@ -64,7 +64,7 @@ Index Node Fire Taskwarrior fallback can be tuned via:
 If the daily Telegram Firemap suddenly shows too few overdue tasks:
 - Check whether overdue tasks in Taskwarrior actually have `due|scheduled|wait` set.
 - Verify the Firemap engine isn’t accidentally tag-filtering dated tasks (it shouldn’t).
-- Use `firectl doctor` and `python python-firemap/firemap_bot.py test --debug --scope daily` for counts.
+- Use `firectl doctor` and `python game/python-firemap/firemap_bot.py test --debug --scope daily` for counts.
 
 ## Fire Git (Vault)
 

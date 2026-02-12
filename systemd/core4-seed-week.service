@@ -1,7 +1,7 @@
 [Unit]
 Description=Core4 weekly task seeding (8 habits × 7 days)
-ConditionPathExists=%h/aos-hub/python-core4/core4ctl
+ConditionPathExists=%h/aos-hub/core4/python-core4/core4ctl
 
 [Service]
 Type=oneshot
-ExecStart=%h/aos-hub/python-core4/core4ctl seed-week
+ExecStart=%h/aos-hub/core4/python-core4/core4ctl seed-week
