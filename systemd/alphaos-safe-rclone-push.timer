@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily 00:00 αOS safe rclone push
+Description=Daily 00:00 safe rclone push
 Requires=alphaos-safe-rclone-push.service
 
 [Timer]

@@ -13,6 +13,7 @@ RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 REMOTE_NAME="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
 
 COPY_LINKS_MODE="${AOS_DOMAIN_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
+DRY_RUN="${AOS_DRY_RUN:-0}"
 
 DOMAIN="${1^^}"
 if [[ ! "$DOMAIN" =~ ^(BODY|BEING|BALANCE|BUSINESS)$ ]]; then
@@ -35,7 +36,6 @@ fi
 LOCK_FILE="${AOS_DOMAIN_LOCK_DIR:-/tmp}/rclone-${DOMAIN,,}-sync.lock"
 
 RCLONE_OPTIONS=(--verbose --checksum --create-empty-src-dirs \
-  --copy-links \
   --exclude '*.tmp' \
   --exclude '.DS_Store' \
   --exclude 'Thumbs.db' \
@@ -46,6 +46,21 @@ RCLONE_OPTIONS=(--verbose --checksum --create-empty-src-dirs \
   --exclude '.smart-env/' \
   --exclude '.makemd/' \
   --exclude '.space/')
+
+if [ "${COPY_LINKS_MODE}" = "1" ]; then
+  RCLONE_OPTIONS+=(--copy-links)
+else
+  RCLONE_OPTIONS+=(--skip-links)
+fi
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run|--dry) DRY_RUN=1; shift ;;
+      *) shift ;;
+    esac
+  done
+}
 
 log_limit() {
   local limit="${AOS_LOG_LIMIT:-10}"
@@ -122,8 +137,12 @@ run_copy() {
     push|sync)
       log "Starting copy push: $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
       rclone mkdir --config "$RCLONE_CONFIG" "${REMOTE_NAME}:${REMOTE_PATH}" 2>/dev/null || true
+      local -a dry_opts=()
+      if [ "$DRY_RUN" = "1" ]; then
+        dry_opts+=(--dry-run)
+      fi
       if rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" \
-        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
         success "${DOMAIN} push completed"
         return 0
       fi
@@ -131,8 +150,12 @@ run_copy() {
     pull)
       log "Starting copy pull: ${REMOTE_NAME}:${REMOTE_PATH} -> $LOCAL_PATH"
       mkdir -p "$LOCAL_PATH"
+      local -a dry_opts=()
+      if [ "$DRY_RUN" = "1" ]; then
+        dry_opts+=(--dry-run)
+      fi
       if rclone copy "${REMOTE_NAME}:${REMOTE_PATH}" "$LOCAL_PATH" \
-        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
         success "${DOMAIN} pull completed"
         return 0
       fi
@@ -173,8 +196,12 @@ run_push_sync() {
 
   log "Starting sync push (delete remote): $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
   rclone mkdir --config "$RCLONE_CONFIG" "${REMOTE_NAME}:${REMOTE_PATH}" 2>/dev/null || true
+  local -a dry_opts=()
+  if [ "$DRY_RUN" = "1" ]; then
+    dry_opts+=(--dry-run)
+  fi
   if rclone sync "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" \
-    --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     success "${DOMAIN} push-sync completed"
     return 0
   fi
@@ -262,6 +289,7 @@ show_status() {
 }
 
 main() {
+  parse_args "${@:3}"
   case "${2:-sync}" in
     push|sync) run_copy push ;;
     push-sync|pushsync) run_push_sync ;;
@@ -270,7 +298,7 @@ main() {
     status) show_status ;;
     init) echo "Init not required for copy mode. Use: $0 $DOMAIN push|pull" ;;
     *)
-      echo "Usage: $0 <DOMAIN> [push|pull|push-sync|sync|status|log]"
+      echo "Usage: $0 <DOMAIN> [push|pull|push-sync|sync|status|log] [--dry-run]"
       exit 1
       ;;
   esac

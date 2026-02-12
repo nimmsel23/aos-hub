@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily αOS safe rclone push (copy, skip symlinks)
+Description=Daily safe rclone push (copy, skip symlinks)
 After=network-online.target
 Wants=network-online.target
 

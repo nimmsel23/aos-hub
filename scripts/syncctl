@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# syncctl
+# A small, readable frontdoor for the various rclone helpers in this repo.
+#
+# Design goals:
+# - predictable behavior (no "silent nothing happens")
+# - safe defaults (dry-run and skip symlinks unless you turn it on)
+# - minimal interactive UI logic (gum if available, otherwise simple numbered prompts)
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
-# Load global env (optional) so AOS_* defaults come from a single place.
+# Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
 AOS_SYNC="${SCRIPT_DIR}/aos-sync"
-AOS_SYNCCTL="${SCRIPT_DIR}/aos-syncctl"
 VAULTCTL_PRIMARY="${SCRIPT_DIR}/sync-utils/vaultctl"
 VAULTCTL_FALLBACK="${SCRIPT_DIR}/utils/vaultctl"
 DOMAIN_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-domain-sync.sh"
@@ -21,171 +28,7 @@ FADARO_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-fadaro-push.sh"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 have_tty() { [[ -t 0 && -t 1 ]]; }
-
-SYNCCTL_DRY_RUN="${AOS_DRY_RUN:-0}"
-UI_POINTER=">"
-UI_HR_CHAR="-"
-
-ui_is_utf8() {
-  local loc="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
-  [[ "$loc" == *"UTF-8"* || "$loc" == *"utf8"* ]]
-}
-
-ui_has_color() {
-  [[ -t 1 ]] || return 1
-  [[ -z "${NO_COLOR:-}" ]] || return 1
-  return 0
-}
-
-ui_init() {
-  if ui_has_color; then
-    UI_RESET=$'\033[0m'
-    UI_BOLD=$'\033[1m'
-    UI_DIM=$'\033[2m'
-    UI_INV=$'\033[7m'
-    UI_CYAN=$'\033[36m'
-    UI_GREEN=$'\033[32m'
-    UI_YELLOW=$'\033[33m'
-  else
-    UI_RESET=""
-    UI_BOLD=""
-    UI_DIM=""
-    UI_INV=""
-    UI_CYAN=""
-    UI_GREEN=""
-    UI_YELLOW=""
-  fi
-
-  if ui_is_utf8; then
-    UI_POINTER="▸"
-    UI_HR_CHAR="─"
-  else
-    UI_POINTER=">"
-    UI_HR_CHAR="-"
-  fi
-}
-
-ui_term_cols() {
-  local cols="${COLUMNS:-}"
-  if command -v tput >/dev/null 2>&1; then
-    cols="$(tput cols 2>/dev/null || true)"
-  fi
-  if [[ -z "$cols" || ! "$cols" =~ ^[0-9]+$ || "$cols" -lt 40 ]]; then
-    cols=80
-  fi
-  printf "%s" "$cols"
-}
-
-ui_clear() {
-  if have_tty; then
-    printf "\033[H\033[2J\033[3J"
-  fi
-}
-
-ui_hr() {
-  local cols
-  cols="$(ui_term_cols)"
-  local w=$((cols < 88 ? cols : 88))
-  local line
-  printf -v line "%*s" "$w" ""
-  line="${line// /$UI_HR_CHAR}"
-  printf "%s" "$line"
-}
-
-ui_mode_badge() {
-  if ! ui_has_color; then
-    [[ "${SYNCCTL_DRY_RUN}" == "1" ]] && printf "DRY-RUN" || printf "RUN"
-    return 0
-  fi
-
-  if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
-    printf "\033[30;43m DRY-RUN \033[0m"
-  else
-    printf "\033[30;42m RUN \033[0m"
-  fi
-}
-
-ui_footer_hint() {
-  local allow_dry="${1:-1}"
-  if [[ "$allow_dry" == "1" ]]; then
-    printf "%s↑/↓ select  Enter run  ←/→ (or d) dry-run  q back%s\n" "$UI_DIM" "$UI_RESET"
-  else
-    printf "%s↑/↓ select  Enter run  q back%s\n" "$UI_DIM" "$UI_RESET"
-  fi
-}
-
-ui_read_key() {
-  local key rest
-  IFS= read -rsn1 key || return 1
-  if [[ "$key" == $'\x1b' ]]; then
-    IFS= read -rsn2 rest || true
-    key+="$rest"
-  fi
-  printf "%s" "$key"
-}
-
-ui_toggle_dry_run() {
-  if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
-    SYNCCTL_DRY_RUN=0
-  else
-    SYNCCTL_DRY_RUN=1
-  fi
-}
-
-ui_choose() {
-  local title="$1"
-  local subtitle="$2"
-  local allow_dry="${3:-1}"
-  shift 3
-
-  local -a items=("$@")
-  local cursor=0
-
-  while true; do
-    ui_clear
-    printf "%s%s%s  %s[%s]%s\n" "$UI_BOLD" "$title" "$UI_RESET" "$UI_DIM" "$(ui_mode_badge)" "$UI_RESET"
-    if [[ -n "$subtitle" ]]; then
-      printf "%s%s%s\n" "$UI_DIM" "$subtitle" "$UI_RESET"
-    fi
-    printf "%s%s%s\n\n" "$UI_DIM" "$(ui_hr)" "$UI_RESET"
-
-    for i in "${!items[@]}"; do
-      if [[ "$i" -eq "$cursor" ]]; then
-        if ui_has_color; then
-          printf "%s  %s %s%s\n" "$UI_INV" "$UI_POINTER" "${items[$i]}" "$UI_RESET"
-        else
-          printf "%s %s\n" "$UI_POINTER" "${items[$i]}"
-        fi
-      else
-        printf "    %s\n" "${items[$i]}"
-      fi
-    done
-
-    printf "\n"
-    ui_footer_hint "$allow_dry"
-
-    local key
-    key="$(ui_read_key)" || return 1
-    case "$key" in
-      $'\x1b[A'|k) ((cursor > 0)) && cursor=$((cursor - 1)) ;;
-      $'\x1b[B'|j) ((cursor < ${#items[@]} - 1)) && cursor=$((cursor + 1)) ;;
-      $'\x1b[C'|l) [[ "$allow_dry" == "1" ]] && SYNCCTL_DRY_RUN=1 ;;
-      $'\x1b[D'|h) [[ "$allow_dry" == "1" ]] && SYNCCTL_DRY_RUN=0 ;;
-      d|D) [[ "$allow_dry" == "1" ]] && ui_toggle_dry_run ;;
-      q|Q) return 1 ;;
-      ""|$'\x0d')
-        printf "%s" "${items[$cursor]}"
-        return 0
-        ;;
-    esac
-  done
-}
-
-pause_screen() {
-  if have_tty; then
-    read -r -p "Press Enter to continue..." _ || true
-  fi
-}
+have_gum() { have gum && [[ -t 1 ]]; }
 
 die() {
   echo "syncctl: $*" >&2
@@ -196,12 +39,13 @@ pick_bin() {
   local primary="$1"
   local fallback="$2"
   local name="$3"
+
   if [[ -n "$primary" && -x "$primary" ]]; then
-    echo "$primary"
+    printf "%s\n" "$primary"
     return 0
   fi
   if [[ -n "$fallback" && -x "$fallback" ]]; then
-    echo "$fallback"
+    printf "%s\n" "$fallback"
     return 0
   fi
   if [[ -n "$name" ]] && have "$name"; then
@@ -211,24 +55,126 @@ pick_bin() {
   return 1
 }
 
+doctor_tty() {
+  local in_tty="no" out_tty="no" err_tty="no"
+  [[ -t 0 ]] && in_tty="yes"
+  [[ -t 1 ]] && out_tty="yes"
+  [[ -t 2 ]] && err_tty="yes"
+
+  echo "syncctl doctor-tty"
+  echo "  stdin tty : $in_tty"
+  echo "  stdout tty: $out_tty"
+  echo "  stderr tty: $err_tty"
+  echo "  TERM      : ${TERM:-}"
+  echo "  SSH_TTY   : ${SSH_TTY:-}"
+  if [[ -e /dev/tty ]]; then
+    if [[ -r /dev/tty && -w /dev/tty ]]; then
+      echo "  /dev/tty  : readable+writable"
+    else
+      echo "  /dev/tty  : exists, but not readable/writable"
+    fi
+  else
+    echo "  /dev/tty  : missing"
+  fi
+}
+
+ensure_menu_tty() {
+  if have_tty; then
+    return 0
+  fi
+  if [[ -r /dev/tty && -w /dev/tty ]]; then
+    exec </dev/tty >/dev/tty 2>/dev/tty
+  fi
+  have_tty
+}
+
+SYNCCTL_DRY_RUN="${AOS_DRY_RUN:-0}"
+SYNCCTL_COPY_LINKS="${AOS_COPY_LINKS:-0}"
+export AOS_COPY_LINKS="${SYNCCTL_COPY_LINKS}"
+
+badge() {
+  local run links
+  [[ "${SYNCCTL_DRY_RUN}" == "1" ]] && run="DRY-RUN (no changes)" || run="RUN (makes changes)"
+  [[ "${SYNCCTL_COPY_LINKS}" == "1" ]] && links="Symlinks: COPY contents" || links="Symlinks: SKIP"
+  printf "%s | %s" "$run" "$links"
+}
+
+toggle_dry_run() {
+  if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+    SYNCCTL_DRY_RUN=0
+  else
+    SYNCCTL_DRY_RUN=1
+  fi
+}
+
+toggle_copy_links() {
+  if [[ "${SYNCCTL_COPY_LINKS}" == "1" ]]; then
+    SYNCCTL_COPY_LINKS=0
+  else
+    SYNCCTL_COPY_LINKS=1
+  fi
+  export AOS_COPY_LINKS="${SYNCCTL_COPY_LINKS}"
+}
+
+print_safety_notes() {
+  cat <<'EOF'
+Safety / mental model
+---------------------
+
+The two most common ways to lose data with rclone are:
+1) pointing at the wrong remote path, especially the Drive root, and
+2) using a destructive mode (sync/bisync) without a dry-run first.
+
+Remote paths:
+  - "eldanioo:" (no folder after the colon) means: Drive root.
+    That is almost never what you want because it can pull your entire "Meine Ablage"
+    into a local folder if you run a sync/bisync.
+  - Use a specific folder path instead, for example: "eldanioo:business" or "eldanioo:Dokumente".
+    A leading slash like "eldanioo:/business" is usually equivalent to "eldanioo:business".
+
+Modes (roughly from safest to most dangerous):
+  - copy push/pull: uploads/downloads new and changed files, but does not delete on the destination.
+  - sync: mirrors one side into the other and can delete files on the destination.
+  - bisync: two-way mirroring and can delete files on BOTH sides.
+
+Symlinks:
+  - Default here is to SKIP symlinks because they can point outside the folder.
+  - If you enable link copying, rclone copies the link target contents (it does not preserve the symlink).
+
+Dry-run:
+  - Dry-run prints what would happen, but does not upload/download/delete anything.
+  - If you are unsure, dry-run first.
+EOF
+}
+
 usage() {
   cat <<'EOF'
-syncctl — rclone sync control
+syncctl — rclone sync frontdoor
 
-Targets (aos-sync/aos-syncctl):
+This tool is intentionally small. Most of the real work happens in:
+  - aos-sync (targets + timers)
+  - vaultctl (copy push/pull)
+  - rclone-domain-sync.sh (domain copy)
+  - rclone-vitaltrainer-copy.sh (Vitaltrainer)
+
+Common:
   syncctl menu
+  syncctl safety
+  syncctl doctor-tty
+
+Targets (aos-sync):
   syncctl list
+  syncctl status [<target>]   (no target = show all targets)
   syncctl run <target> [--dry] [--mode sync|bisync] [--resync]
   syncctl enable <target> [--at HH:MM]
   syncctl disable <target>
-  syncctl status <target>
   syncctl logs <target> [--follow]
   syncctl doctor <target>
 
 Vault copy (vaultctl):
   syncctl vault <status|sync|pull|sync-root|pull-root|sync-all|pull-all|sync-vitaltrainer|pull-vitaltrainer|logs|timers|watch> [args...]
 
-Domain copy (rclone-domain-sync.sh):
+Domains copy:
   syncctl domains <DOMAIN> <push|pull|push-sync|sync|status|log> [--dry-run]
   syncctl domains status-all
 
@@ -240,237 +186,69 @@ FADARO push:
 EOF
 }
 
-run_targets() {
-  local cmd="$1"; shift || true
-  local bin
-  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
-  if [[ "$cmd" == "status" && $# -eq 0 ]]; then
-    local targets
-    targets="$("$bin" list 2>/dev/null || true)"
-    if [[ -z "$targets" ]]; then
-      echo "syncctl: no targets found"
-      exit 0
-    fi
-    while read -r t; do
-      [[ -z "$t" ]] && continue
-      "$bin" status "$t" || true
-      echo ""
-    done <<<"$targets"
-    exit 0
+choose_plain() {
+  local prompt="$1"
+  shift
+  local -a options=("$@")
+
+  echo ""
+  echo "$prompt"
+  local i=1
+  for opt in "${options[@]}"; do
+    printf "  [%s] %s\n" "$i" "$opt"
+    i=$((i + 1))
+  done
+  echo "  [q] Back/quit"
+  printf "> "
+
+  local reply
+  IFS= read -r reply || return 1
+  if [[ -z "$reply" || "$reply" =~ ^[qQ]$ ]]; then
+    return 1
   fi
-  exec "$bin" "$cmd" "$@"
-}
-
-menu_targets_ui() {
-  local bin
-  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
-
-  local -a targets=()
-  mapfile -t targets < <("$bin" list 2>/dev/null || true)
-  if [[ "${#targets[@]}" -eq 0 ]]; then
-    ui_clear
-    echo "No targets found."
-    pause_screen
+  if [[ "$reply" =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= ${#options[@]} )); then
+    printf "%s" "${options[$((reply - 1))]}"
     return 0
   fi
-
-  while true; do
-    local target
-    target="$(ui_choose "Targets" "Select a target" 1 "${targets[@]}" "Back")" || return 0
-    [[ "$target" == "Back" ]] && return 0
-
-    while true; do
-      local action
-      action="$(ui_choose "Target: $target" "Choose action" 1 \
-        "Status" \
-        "Run (sync)" \
-        "Run (bisync)" \
-        "Enable timer" \
-        "Disable timer" \
-        "Logs" \
-        "Doctor" \
-        "Back")" || break
-
-      case "$action" in
-        "Status") ("$bin" status "$target") ;;
-        "Run (sync)")
-          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
-            ("$bin" run "$target" --dry --mode sync)
-          else
-            ("$bin" run "$target" --mode sync)
-          fi
-          ;;
-        "Run (bisync)")
-          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
-            ("$bin" run "$target" --dry --mode bisync)
-          else
-            ("$bin" run "$target" --mode bisync)
-          fi
-          ;;
-        "Enable timer")
-          local at=""
-          read -r -p "Enable at (HH:MM, empty=default): " at || true
-          if [[ -n "$at" ]]; then
-            ("$bin" enable "$target" --at "$at")
-          else
-            ("$bin" enable "$target")
-          fi
-          ;;
-        "Disable timer") ("$bin" disable "$target") ;;
-        "Logs") ("$bin" logs "$target") ;;
-        "Doctor") ("$bin" doctor "$target") ;;
-        "Back") break ;;
-      esac
-      pause_screen
-    done
-  done
+  echo "Please enter a number from 1..${#options[@]}, or 'q'." >&2
+  return 2
 }
 
-menu_vault() {
-  while true; do
-    local choice
-    choice="$(ui_choose "Vault copy" "copy push/pull (no deletes)" 1 \
-      "Status" \
-      "Push now (copy)" \
-      "Pull now (copy)" \
-      "Push vault root (copy)" \
-      "Pull vault root (copy)" \
-      "Push all (root + sections)" \
-      "Pull all (root + sections)" \
-      "Push Vitaltrainer (copy)" \
-      "Pull Vitaltrainer (copy)" \
-      "Logs" \
-      "Timers" \
-      "Watch" \
-      "Back")" || return 0
+choose() {
+  local prompt="$1"
+  shift
+  local -a options=("$@")
 
-    case "$choice" in
-      "Status") (run_vault status) ;;
-      "Push now (copy)") (run_vault sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Pull now (copy)") (run_vault pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Push vault root (copy)") (run_vault sync-root $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Pull vault root (copy)") (run_vault pull-root $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Push all (root + sections)") (run_vault sync-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Pull all (root + sections)") (run_vault pull-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Push Vitaltrainer (copy)") (run_vault sync-vitaltrainer $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Pull Vitaltrainer (copy)") (run_vault pull-vitaltrainer $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Logs") (run_vault logs) ;;
-      "Timers") (run_vault timers) ;;
-      "Watch") (run_vault watch) ;;
-      "Back") return 0 ;;
-    esac
-    pause_screen
-  done
-}
-
-menu_domains() {
-  while true; do
-    local domain
-    domain="$(ui_choose "Domains copy" "BODY / BEING / BALANCE / BUSINESS" 1 \
-      "BODY" \
-      "BEING" \
-      "BALANCE" \
-      "BUSINESS" \
-      "Status all" \
-      "Back")" || return 0
-
-    case "$domain" in
-      "Back") return 0 ;;
-      "Status all")
-        (run_domains status-all)
-        pause_screen
-        continue
-        ;;
-    esac
-
-    while true; do
-      local action
-      action="$(ui_choose "Domain: $domain" "copy push/pull; push-sync deletes remote" 1 \
-        "Status" \
-        "Push now (copy)" \
-        "Pull now (copy)" \
-        "Push-sync (delete remote)" \
-        "Log" \
-        "Back")" || break
-
-      case "$action" in
-        "Status") (run_domains "$domain" status) ;;
-        "Push now (copy)") (run_domains "$domain" push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-        "Pull now (copy)") (run_domains "$domain" pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-        "Push-sync (delete remote)") (run_domains "$domain" push-sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-        "Log") (run_domains "$domain" log) ;;
-        "Back") break ;;
-      esac
-      pause_screen
-    done
-  done
-}
-
-menu_vitaltrainer() {
-  while true; do
-    local choice
-    choice="$(ui_choose "Vitaltrainer copy" "" 1 \
-      "Status" \
-      "Push now (copy)" \
-      "Pull now (copy)" \
-      "Back")" || return 0
-
-    case "$choice" in
-      "Status") (run_vitaltrainer status) ;;
-      "Push now (copy)") (run_vitaltrainer push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Pull now (copy)") (run_vitaltrainer pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Back") return 0 ;;
-    esac
-    pause_screen
-  done
-}
-
-menu_fadaro() {
-  while true; do
-    local choice
-    choice="$(ui_choose "FADARO push" "" 1 \
-      "Push now" \
-      "Back")" || return 0
-
-    case "$choice" in
-      "Push now") (run_fadaro $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run")) ;;
-      "Back") return 0 ;;
-    esac
-    pause_screen
-  done
-}
-
-run_menu() {
-  ui_init
-  if ! have_tty; then
-    local bin
-    if bin="$(pick_bin "$AOS_SYNCCTL" "" "aos-syncctl")"; then
-      exec "$bin"
-    fi
-    run_targets menu
+  if have_gum; then
+    gum choose --header "$prompt" "${options[@]}"
+    return $?
   fi
 
   while true; do
-    local choice
-    choice="$(ui_choose "syncctl" "frontdoor (toggle dry-run globally)" 1 \
-      "Targets" \
-      "Vault copy" \
-      "Domains copy" \
-      "Vitaltrainer copy" \
-      "FADARO push" \
-      "Help" \
-      "Quit")" || return 0
-
-    case "$choice" in
-      "Targets") menu_targets_ui ;;
-      "Vault copy") menu_vault ;;
-      "Domains copy") menu_domains ;;
-      "Vitaltrainer copy") menu_vitaltrainer ;;
-      "FADARO push") menu_fadaro ;;
-      "Help") usage; pause_screen ;;
-      "Quit") return 0 ;;
-    esac
+    local out=""
+    if out="$(choose_plain "$prompt" "${options[@]}")"; then
+      printf "%s" "$out"
+      return 0
+    fi
+    local rc=$?
+    if [[ "$rc" -eq 1 ]]; then
+      return 1
+    fi
   done
+}
+
+pause() {
+  if have_gum; then
+    gum input --prompt "Press Enter to continue > " --value "" >/dev/null 2>&1 || true
+  else
+    read -r -p "Press Enter to continue..." _ || true
+  fi
+}
+
+run_aos_sync() {
+  local bin
+  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
+  exec "$bin" "$@"
 }
 
 run_vault() {
@@ -485,13 +263,14 @@ run_domains() {
 
   local sub="${1:-}"
   if [[ -z "$sub" || "$sub" == "status-all" ]]; then
-    for domain in BODY BEING BALANCE BUSINESS; do
-      "$bin" "$domain" status
+    for d in BODY BEING BALANCE BUSINESS; do
+      "$bin" "$d" status
     done
     exit 0
   fi
 
-  local domain="$1"; shift || true
+  local domain="$1"
+  shift || true
   [[ -n "$domain" ]] || die "domains requires <DOMAIN>"
   exec "$bin" "$domain" "$@"
 }
@@ -508,6 +287,244 @@ run_fadaro() {
   exec "$bin" "$@"
 }
 
+menu_targets() {
+  local bin
+  bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
+
+  local -a targets=()
+  mapfile -t targets < <("$bin" list 2>/dev/null || true)
+  if [[ "${#targets[@]}" -eq 0 ]]; then
+    echo "I cannot find any configured targets right now." >&2
+    echo "If you expected targets, check your sync.d/*.env files." >&2
+    pause
+    return 0
+  fi
+
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local t
+    t="$(choose "Select a target. This lists configured target files; it does not run anything yet." "${targets[@]}")" || return 0
+
+    while true; do
+      echo ""
+      echo "Target: $t"
+      echo "Current mode: $(badge)"
+      local a
+      a="$(choose "Choose what you want to do. If you are unsure, start with Status or Doctor." \
+        "Status" \
+        "Doctor (explain configuration)" \
+        "Run (sync)" \
+        "Run (bisync — can delete on both sides)" \
+        "Enable timer" \
+        "Disable timer" \
+        "Logs" \
+        "Back")" || break
+
+      case "$a" in
+        "Status") "$bin" status "$t" ;;
+        "Doctor (explain configuration)") "$bin" doctor "$t" ;;
+        "Run (sync)")
+          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+            "$bin" run "$t" --dry --mode sync
+          else
+            "$bin" run "$t" --mode sync
+          fi
+          ;;
+        "Run (bisync — can delete on both sides)")
+          if [[ "${SYNCCTL_DRY_RUN}" == "1" ]]; then
+            "$bin" run "$t" --dry --mode bisync
+          else
+            "$bin" run "$t" --mode bisync
+          fi
+          ;;
+        "Enable timer")
+          echo ""
+          echo "This creates/enables a systemd user timer for the target."
+          echo "If you are unsure, do not enable timers until a dry-run looks correct."
+          local at=""
+          read -r -p "Enable at (HH:MM, empty=default): " at || true
+          if [[ -n "$at" ]]; then
+            "$bin" enable "$t" --at "$at"
+          else
+            "$bin" enable "$t"
+          fi
+          ;;
+        "Disable timer") "$bin" disable "$t" ;;
+        "Logs") "$bin" logs "$t" ;;
+        "Back") break ;;
+      esac
+      pause
+    done
+  done
+}
+
+menu_vault() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(choose "Vault copy uses rclone copy (no deletes). If you are unsure, use dry-run first." \
+      "Status" \
+      "Push now (copy)" \
+      "Pull now (copy)" \
+      "Push all (root + sections)" \
+      "Pull all (root + sections)" \
+      "Logs" \
+      "Timers" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Status") run_vault status ;;
+      "Push now (copy)") run_vault sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Pull now (copy)") run_vault pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Push all (root + sections)") run_vault sync-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Pull all (root + sections)") run_vault pull-all $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Logs") run_vault logs ;;
+      "Timers") run_vault timers ;;
+      "Back") return 0 ;;
+    esac
+    pause
+  done
+}
+
+menu_domains() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local domain
+    domain="$(choose "Select a domain. Domain copy is usually safe (copy push/pull). 'push-sync' is destructive." \
+      "BODY" "BEING" "BALANCE" "BUSINESS" "Status all" "Back")" || return 0
+
+    case "$domain" in
+      "Back") return 0 ;;
+      "Status all") run_domains status-all; pause; continue ;;
+    esac
+
+    while true; do
+      echo ""
+      echo "Domain: $domain"
+      echo "Current mode: $(badge)"
+      local a
+      a="$(choose "Choose an action. If you are unsure, start with Status and then a dry-run Push." \
+        "Status" \
+        "Push now (copy)" \
+        "Pull now (copy)" \
+        "Push-sync (delete remote files that are not present locally)" \
+        "Log" \
+        "Back")" || break
+
+      case "$a" in
+        "Status") run_domains "$domain" status ;;
+        "Push now (copy)") run_domains "$domain" push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+        "Pull now (copy)") run_domains "$domain" pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+        "Push-sync (delete remote files that are not present locally)") run_domains "$domain" push-sync $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+        "Log") run_domains "$domain" log ;;
+        "Back") break ;;
+      esac
+      pause
+    done
+  done
+}
+
+menu_vitaltrainer() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(choose "Vitaltrainer copy uses rclone copy. It does not delete on the destination." \
+      "Status" \
+      "Push now (copy)" \
+      "Pull now (copy)" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Status") run_vitaltrainer status ;;
+      "Push now (copy)") run_vitaltrainer push $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Pull now (copy)") run_vitaltrainer pull $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Back") return 0 ;;
+    esac
+    pause
+  done
+}
+
+menu_fadaro() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(choose "This runs the FADARO push script. If you are unsure, start with dry-run." \
+      "Push now" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Push now") run_fadaro $([[ "${SYNCCTL_DRY_RUN}" == "1" ]] && echo "--dry-run") ;;
+      "Back") return 0 ;;
+    esac
+    pause
+  done
+}
+
+menu_settings() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(choose "Settings change only this menu session. They do not modify any config files." \
+      "Toggle dry-run" \
+      "Toggle symlink copying" \
+      "Safety notes" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Toggle dry-run") toggle_dry_run ;;
+      "Toggle symlink copying") toggle_copy_links ;;
+      "Safety notes") print_safety_notes; pause ;;
+      "Back") return 0 ;;
+    esac
+  done
+}
+
+run_menu() {
+  if ! ensure_menu_tty; then
+    echo "syncctl: I cannot open an interactive menu because no usable TTY was detected." >&2
+    echo "syncctl: Please run it from a normal terminal (not from a launcher/pipe)." >&2
+    echo "" >&2
+    doctor_tty >&2
+    exit 2
+  fi
+
+  echo ""
+  echo "syncctl menu"
+  echo "This menu is just a shortcut. It will still ask the underlying tools to do the real work."
+
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(choose "What do you want to work on?" \
+      "Targets (timers + sync/bisync)" \
+      "Vault copy (push/pull)" \
+      "Domains copy" \
+      "Vitaltrainer copy" \
+      "FADARO push" \
+      "Settings" \
+      "Safety notes" \
+      "Quit")" || return 0
+
+    case "$a" in
+      "Targets (timers + sync/bisync)") menu_targets ;;
+      "Vault copy (push/pull)") menu_vault ;;
+      "Domains copy") menu_domains ;;
+      "Vitaltrainer copy") menu_vitaltrainer ;;
+      "FADARO push") menu_fadaro ;;
+      "Settings") menu_settings ;;
+      "Safety notes") print_safety_notes; pause ;;
+      "Quit") return 0 ;;
+    esac
+  done
+}
+
 main() {
   local cmd="${1:-}"
   shift || true
@@ -515,7 +532,30 @@ main() {
   case "$cmd" in
     ""|-h|--help|help) usage ;;
     menu|ui) run_menu ;;
-    list|run|enable|disable|status|logs|doctor) run_targets "$cmd" "$@" ;;
+    safety|notes) print_safety_notes ;;
+    doctor-tty) doctor_tty ;;
+    status)
+      if [[ $# -eq 0 ]]; then
+        local bin
+        bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
+        local -a targets=()
+        mapfile -t targets < <("$bin" list 2>/dev/null || true)
+        if [[ "${#targets[@]}" -eq 0 ]]; then
+          echo "syncctl: no targets found"
+          exit 0
+        fi
+        for t in "${targets[@]}"; do
+          [[ -z "$t" ]] && continue
+          "$bin" status "$t" || true
+          echo ""
+        done
+        exit 0
+      fi
+      run_aos_sync status "$@"
+      ;;
+    list|run|enable|disable|logs|doctor)
+      run_aos_sync "$cmd" "$@"
+      ;;
     vault) run_vault "$@" ;;
     domains|domain) run_domains "$@" ;;
     vitaltrainer|vital) run_vitaltrainer "$@" ;;

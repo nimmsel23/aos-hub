@@ -58,6 +58,13 @@ UNIT_SERVICE_TEMPLATE="aos-sync@.service"
 
 require() { command -v "$1" >/dev/null 2>&1; }
 
+is_remote_root() {
+  # Protect against `remote:` or `remote:/` which points to the Drive root ("Meine Ablage")
+  # and can mirror huge trees into a local folder.
+  local r="$1"
+  [[ "$r" =~ ^[^:]+:(/)?$ ]]
+}
+
 need_gum() {
   if ! require gum; then
     echo "gum fehlt. Install: pacman -S gum  (oder yay -S gum)" >&2
@@ -141,6 +148,11 @@ pick_rclone_path_under() {
 
     case "$choice" in
       "✅ Use this: "*)
+        if is_remote_root "$base" && [[ "${AOS_ALLOW_REMOTE_ROOT:-0}" != "1" ]]; then
+          gum style --foreground 196 "Refusing remote root: ${base}"
+          gum style --foreground 214 "Pick a folder under the remote (or set AOS_ALLOW_REMOTE_ROOT=1 to override)."
+          continue
+        fi
         echo "${base}"
         return 0
         ;;
@@ -164,6 +176,10 @@ pick_rclone_path_under() {
         clip="${clip//$'\r'/}"
         clip="${clip//$'\n'/}"
         if [[ "$clip" == *:* ]]; then
+          if is_remote_root "$clip" && [[ "${AOS_ALLOW_REMOTE_ROOT:-0}" != "1" ]]; then
+            gum style --foreground 196 "Refusing remote root from clipboard: ${clip}"
+            continue
+          fi
           # if clipboard includes remote prefix, accept whole
           echo "$clip"
           return 0
@@ -190,6 +206,15 @@ systemd_service_name() { echo "aos-sync@${1}.service"; }
 
 enable_target_timer() {
   local target="$1" at="$2"
+  local file; file="$(env_path_for "$target")"
+  if [[ -f "$file" ]]; then
+    load_env "$file"
+    if is_remote_root "${AOS_REMOTE:-}" && [[ "${AOS_ALLOW_REMOTE_ROOT:-0}" != "1" ]]; then
+      gum style --foreground 196 "Refusing to enable timer for remote root: ${AOS_REMOTE}"
+      gum style --foreground 214 "Edit AOS_REMOTE to a folder (or set AOS_ALLOW_REMOTE_ROOT=1 to override)."
+      return 1
+    fi
+  fi
   # This assumes template units already exist. If not, you have to install them (bootstrapper).
   # We only set an override for schedule if at is given.
   systemctl --user daemon-reload >/dev/null 2>&1 || true
@@ -265,11 +290,19 @@ edit_target() {
         local remote base
         remote="$(pick_rclone_remote)" || continue
         base="$(pick_rclone_path_under "$remote")" || continue
+        if is_remote_root "$base" && [[ "${AOS_ALLOW_REMOTE_ROOT:-0}" != "1" ]]; then
+          gum style --foreground 196 "Refusing remote root: $base"
+          continue
+        fi
         write_env_key "$file" "AOS_REMOTE" "$(quote_s "$base")"
         ;;
       "Set AOS_REMOTE (manual input)")
         local v
         v="$(gum input --header "AOS_REMOTE" --value "${AOS_REMOTE:-}" --placeholder "gdrive:AlphaOS/Centres/Alpha_Voice")"
+        if is_remote_root "$v" && [[ "${AOS_ALLOW_REMOTE_ROOT:-0}" != "1" ]]; then
+          gum style --foreground 196 "Refusing remote root: $v"
+          continue
+        fi
         [[ -n "$v" ]] && write_env_key "$file" "AOS_REMOTE" "$(quote_s "$v")"
         ;;
       "Set AOS_LOCAL")

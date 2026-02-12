@@ -1,1 +1,0 @@
-/home/alpha/aos-hub/router/router_bot.py
