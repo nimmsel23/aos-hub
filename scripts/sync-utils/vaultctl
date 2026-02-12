@@ -203,8 +203,8 @@ scaffold_safe_push() {
   local user_systemd_dir="$HOME/.config/systemd/user"
 
   local script_path="$scripts_dir/rclone-${name}-safe-push.sh"
-  local service_path="$systemd_dir/${name}-safe-push.service"
-  local timer_path="$systemd_dir/${name}-safe-push.timer"
+  local service_path="$systemd_dir/vault-${name}-safe-push.service"
+  local timer_path="$systemd_dir/vault-${name}-safe-push.timer"
   local service_link="$user_systemd_dir/$(basename "$service_path")"
   local timer_link="$user_systemd_dir/$(basename "$timer_path")"
 

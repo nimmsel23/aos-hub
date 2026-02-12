@@ -60,6 +60,17 @@ function answerCallbackQuery_(queryId, text) {
 // =====================================================
 
 function handleCoreCallback_(chatId, action) {
+  // Handle journal actions: core:journal:*
+  if (action.startsWith('journal:')) {
+    if (action === 'journal:pick') {
+      // Back to domain picker
+      core4_handleJournalCommand_(chatId);
+      return;
+    }
+    core4_handleJournalCallback_(chatId, action);
+    return;
+  }
+
   // Handle log actions: core:log:domain:task
   if (action.startsWith('log:')) {
     const parts = action.split(':');

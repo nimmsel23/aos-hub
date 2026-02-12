@@ -599,6 +599,39 @@ function core4_handleTelegramMessage_(message) {
   const text = (message.text || '').trim().toLowerCase();
   if (!text) return false;
 
+  // Journal: check if we're waiting for freeform text
+  if (!text.startsWith('/')) {
+    const pendingKey = 'JOURNAL_PENDING_' + chatId;
+    const pending = PropertiesService.getScriptProperties().getProperty(pendingKey);
+    if (pending) {
+      core4_handleJournalText_(chatId, message.text || '', message.from);
+      return true;
+    }
+  }
+
+  // Journal commands: /journal /j /jfit /jfue /jmed /jmem /jpar /jpos /jdis /jdec
+  const journalShortcuts = {
+    '/jfit': ['body', 'fitness'],
+    '/jfue': ['body', 'fuel'],
+    '/jmed': ['being', 'meditation'],
+    '/jmem': ['being', 'memoirs'],
+    '/jpar': ['balance', 'person1'],
+    '/jpos': ['balance', 'person2'],
+    '/jdis': ['business', 'discover'],
+    '/jdec': ['business', 'declare']
+  };
+
+  if (text === '/journal' || text === '/j') {
+    core4_handleJournalCommand_(chatId);
+    return true;
+  }
+
+  if (journalShortcuts[text]) {
+    const [domain, habit] = journalShortcuts[text];
+    core4_promptJournalText_(chatId, domain, habit);
+    return true;
+  }
+
   // Commands: /fit /fue /med /mem /par /pos /dis /dec
   const shortcuts = {
     '/fit': ['body', 'fitness'],
@@ -817,4 +850,212 @@ function core4_exportWeekSummaryForDate(dateKey) {
   const weekKey = core4_getWeekKey_(dt);
   const file = core4_exportWeekSummaryToDrive(weekKey);
   return { ok: true, file };
+}
+
+// =====================================================
+// JOURNAL (Telegram + WebApp)
+// =====================================================
+
+function core4_handleJournalCommand_(chatId) {
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '💪 BODY', callback_data: 'core:journal:body' },
+        { text: '🧘 BEING', callback_data: 'core:journal:being' }
+      ],
+      [
+        { text: '⚖️ BALANCE', callback_data: 'core:journal:balance' },
+        { text: '💼 BUSINESS', callback_data: 'core:journal:business' }
+      ]
+    ]
+  };
+  core4_sendMessage_(chatId, '📓 *Journal* – Wähle eine Domain:', keyboard);
+}
+
+function core4_handleJournalCallback_(chatId, action) {
+  // action = "journal:domain" or "journal:domain:habit"
+  const parts = action.split(':');
+  if (parts.length < 2) return;
+
+  const domain = parts[1];
+
+  // Step 2: habit picker for domain
+  if (parts.length === 2) {
+    const habits = CORE4_HABITS[domain];
+    if (!habits) {
+      core4_sendMessage_(chatId, '❌ Unknown domain: ' + domain);
+      return;
+    }
+    const keys = Object.keys(habits);
+    const buttons = keys.map(k => ({
+      text: habits[k],
+      callback_data: 'core:journal:' + domain + ':' + k
+    }));
+    const keyboard = {
+      inline_keyboard: [
+        buttons,
+        [{ text: '← Back', callback_data: 'core:journal:pick' }]
+      ]
+    };
+    core4_sendMessage_(chatId, '📓 *' + core4_capitalize_(domain) + '* – Wähle ein Habit:', keyboard);
+    return;
+  }
+
+  // Step 3: prompt for text
+  if (parts.length === 3) {
+    const habit = parts[2];
+    core4_promptJournalText_(chatId, domain, habit);
+  }
+}
+
+function core4_promptJournalText_(chatId, domain, habit) {
+  const label = core4_getHabitLabel_(domain, habit);
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('JOURNAL_PENDING_' + chatId, domain + ':' + habit);
+  core4_sendMessage_(chatId, '✏️ Write your *' + label + '* journal entry:');
+}
+
+function core4_handleJournalText_(chatId, text, from) {
+  const props = PropertiesService.getScriptProperties();
+  const pendingKey = 'JOURNAL_PENDING_' + chatId;
+  const pending = props.getProperty(pendingKey);
+  if (!pending) return;
+
+  props.deleteProperty(pendingKey);
+  const [domain, habit] = pending.split(':');
+  const user = {
+    id: from && from.id ? String(from.id) : String(chatId),
+    username: (from && from.username) || '',
+    first_name: (from && from.first_name) || 'User'
+  };
+
+  try {
+    const result = core4_saveJournal_(domain, habit, text, user);
+    const label = core4_getHabitLabel_(domain, habit);
+    core4_sendMessage_(chatId, '💾 Saved: *' + label + '* journal (' + result.date + ')');
+  } catch (e) {
+    core4_sendMessage_(chatId, '❌ Journal save failed: ' + e);
+  }
+}
+
+function core4_saveJournal_(domain, habit, text, user) {
+  const now = new Date();
+  const dateKey = core4_formatDate_(now);
+  const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+  // Drive: Alpha_Core4/journal/YYYY-MM-DD/domain_habit.md
+  const journalFolder = core4_getJournalFolder_();
+  const dayFolder = core4_getOrCreateFolder_(journalFolder, dateKey);
+  const fileName = domain + '_' + habit + '.md';
+
+  const entry = '## ' + timeStr + '\n\n' + text.trim() + '\n\n---\n';
+
+  const files = dayFolder.getFilesByName(fileName);
+  if (files.hasNext()) {
+    const file = files.next();
+    const existing = file.getBlob().getDataAsString();
+    file.setContent(existing + '\n' + entry);
+  } else {
+    dayFolder.createFile(fileName, entry, MimeType.PLAIN_TEXT);
+  }
+
+  // Sheet log
+  core4_appendJournalSheetRow_(dateKey, domain, habit, text, user);
+
+  return { ok: true, date: dateKey };
+}
+
+function core4_getJournalFolder_() {
+  const root = core4_getFolder_();
+  return core4_getOrCreateFolder_(root, 'journal');
+}
+
+function core4_appendJournalSheetRow_(dateKey, domain, habit, text, user) {
+  try {
+    const sheet = core4_getJournalSheet_();
+    sheet.appendRow([
+      dateKey,
+      new Date().toISOString(),
+      domain,
+      habit,
+      text.substring(0, 5000),
+      (user && user.id) || 'web',
+      (user && user.username) || '',
+      (user && user.first_name) || ''
+    ]);
+  } catch (e) {
+    Logger.log('core4 journal sheet append failed: ' + e.toString());
+  }
+}
+
+function core4_getJournalSheet_() {
+  const sp = PropertiesService.getScriptProperties();
+  const sheetId = sp.getProperty(CORE4_CONFIG.SHEET_PROP);
+  let ss;
+  if (sheetId) {
+    try { ss = SpreadsheetApp.openById(sheetId); } catch (_) {}
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Alpha_Core4_Logsheet');
+    sp.setProperty(CORE4_CONFIG.SHEET_PROP, ss.getId());
+  }
+  const name = 'Core4_Journal';
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(['Date', 'Timestamp', 'Domain', 'Habit', 'Text', 'User_ID', 'Username', 'First_Name']);
+    sheet.getRange(1, 1, 1, 8).setFontWeight('bold');
+  }
+  return sheet;
+}
+
+function core4_getJournalForDate(dateKey) {
+  const day = String(dateKey || '').trim();
+  if (!day) return { ok: false, error: 'date missing' };
+  const journalFolder = core4_getJournalFolder_();
+  const it = journalFolder.getFoldersByName(day);
+  if (!it.hasNext()) return { ok: true, date: day, entries: [] };
+  const folder = it.next();
+  const files = folder.getFiles();
+  const entries = [];
+  while (files.hasNext()) {
+    const f = files.next();
+    const name = f.getName().replace('.md', '');
+    const parts = name.split('_');
+    const domain = parts[0] || '';
+    const habit = parts[1] || '';
+    entries.push({
+      domain: domain,
+      habit: habit,
+      label: core4_getHabitLabel_(domain, habit),
+      text: f.getBlob().getDataAsString()
+    });
+  }
+  return { ok: true, date: day, entries: entries };
+}
+
+function core4_saveJournalWeb(domain, habit, text, dateKey) {
+  const day = String(dateKey || '').trim();
+  if (!day) return { ok: false, error: 'date missing' };
+  if (!text || !text.trim()) return { ok: false, error: 'text empty' };
+
+  const now = new Date();
+  const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const journalFolder = core4_getJournalFolder_();
+  const dayFolder = core4_getOrCreateFolder_(journalFolder, day);
+  const fileName = domain + '_' + habit + '.md';
+
+  const entry = '## ' + timeStr + '\n\n' + text.trim() + '\n\n---\n';
+
+  const files = dayFolder.getFilesByName(fileName);
+  if (files.hasNext()) {
+    const file = files.next();
+    const existing = file.getBlob().getDataAsString();
+    file.setContent(existing + '\n' + entry);
+  } else {
+    dayFolder.createFile(fileName, entry, MimeType.PLAIN_TEXT);
+  }
+
+  core4_appendJournalSheetRow_(day, domain, habit, text, { id: 'web', username: '', first_name: 'Web' });
+  return { ok: true, date: day };
 }

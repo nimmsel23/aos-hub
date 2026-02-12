@@ -16,8 +16,15 @@ codex_subcmd_maybe "main" "hubctl" "$@" && exit 0
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
-have() { command -v "$1" >/dev/null 2>&1; }
-die() { echo "[$APP] $*" >&2; exit 1; }
+# Shared UI helpers (gum/fzf fallback + consistent messages).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+
+export CTL_UI_OK_PREFIX="[$APP]"
+export CTL_UI_WARN_PREFIX="[$APP]"
+export CTL_UI_ERR_PREFIX="[$APP]"
+
+die() { ui_err "$*"; exit 1; }
 
 repo_exec() {
   local rel="$1"; shift || true
@@ -35,9 +42,10 @@ install_cli() {
     die "refusing to overwrite non-symlink: $dst"
   fi
   ln -sf "$ROOT_DIR/scripts/hubctl" "$dst"
-  echo "[$APP] installed: $dst"
+  ui_ok "installed: $dst"
   if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
-    echo "[$APP] NOTE: add to PATH: export PATH=\"$bin_dir:\$PATH\""
+    ui_warn "PATH does not include $bin_dir"
+    ui_info "Add it with: export PATH=\"$bin_dir:\$PATH\""
   fi
 }
 
@@ -46,15 +54,15 @@ uninstall_cli() {
   local dst="$bin_dir/hubctl"
   if [[ -L "$dst" ]]; then
     rm -f "$dst"
-    echo "[$APP] removed: $dst"
+    ui_ok "removed: $dst"
     return 0
   fi
-  echo "[$APP] nothing to remove at: $dst"
+  ui_info "nothing to remove at: $dst"
 }
 
 usage() {
   cat <<EOF
-$APP — unified CLI for aos-hub
+$APP — unified CLI for the hub repo
 
 Usage:
   $APP list
@@ -114,7 +122,8 @@ EOF
 }
 
 list_scripts() {
-  echo "[$APP] Available scripts:"
+  ui_title "$APP list"
+  ui_info "Available scripts:"
   local dir="$ROOT_DIR/scripts"
   if [[ -d "$dir" ]]; then
     while IFS= read -r -d '' p; do
@@ -123,11 +132,11 @@ list_scripts() {
       echo "  - $rel"
     done < <(find "$dir" -maxdepth 1 -type f -perm -u+x -print0 2>/dev/null | sort -z)
   else
-    echo "  (missing: $dir)"
+    ui_warn "missing: $dir"
   fi
 
   echo ""
-  echo "[$APP] Other tools:"
+  ui_info "Other tools:"
   for p in "$ROOT_DIR/router/routerctl" "$ROOT_DIR/bridge/bridgectl" "$ROOT_DIR/aosctl"; do
     if [[ -x "$p" ]]; then
       echo "  - ${p#$ROOT_DIR/}"
@@ -215,7 +224,7 @@ EOF
     ;;
 
   *)
-    echo "[$APP] unknown command: $cmd" >&2
+    ui_err "unknown command: $cmd"
     usage
     exit 1
     ;;
