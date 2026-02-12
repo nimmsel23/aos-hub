@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily 00:30 Dokumente safe rclone push
+Requires=alphaos-dokumente-safe-push.service
+
+[Timer]
+OnCalendar=*-*-* 00:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
