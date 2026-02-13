@@ -4,10 +4,14 @@
 - `index-node/` is the local HQ web UI + API server (Node.js, port `8799`).
 - `router/` is the Telegram router bot (aiogram) and extensions.
 - `bridge/` is the aiohttp service (Core4/Fruits/Tent/task routing, port `8080`, optional token auth).
-- `gas/` holds the Apps Script fallback HQ snapshot.
-- `door/python-warstack/` and `game/python-firemap/` are auxiliary bots (kept under their pillars).
+- `gas/` is a local symlink to a private GAS HQ workspace (typically `~/.gas/HQ`) and is treated as external/private.
+- Pillars live at the repo root:
+  - `core4/` (Core4 pillar; CLI lives in `core4/python-core4/`)
+  - `door/` (Door pillar; tools live in `door/python-hot/`, `door/python-warstack/`, standalone GAS dev in `door/gas-door-dev/`)
+  - `voice/` (Voice pillar; standalone GAS Fruits dev in `voice/gas-fruits-dev/`)
+  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; bots live in `game/python-firemap/`, `game/python-tent-bot/`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
-- `DOCS/` keeps project notes and cheatsheets.
+- `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
 
 ## Build, Test, and Development Commands
 - `cd index-node && npm install && npm start` starts the HQ server.
@@ -35,7 +39,7 @@
   - writers/readers and how they converge (pull/push triggers, throttling, idempotency)
   - safety rules (what must never be overwritten; what is rebuildable)
   - quick debug/runbook commands (curl/ctl helpers)
-- Prefer a single "mental model" doc per system in `DOCS/` (e.g. `DOCS/CORE4_SYSTEM.md`) and link to it from component READMEs.
+- Prefer a single "mental model" doc per system and link to it from component READMEs (see `DOCS/DOC_SYSTEM.md`).
 
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
