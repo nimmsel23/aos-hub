@@ -12,38 +12,22 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
 codex_subcmd_maybe "game" "firectl" "$@" && exit 0
 
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
-has_gum() { command -v gum >/dev/null 2>&1; }
-has_fzf() { command -v fzf >/dev/null 2>&1; }
-
 # Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
-ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "firectl" || echo "firectl"; }
-ui_info() { has_gum && gum style --faint "$*" || echo "$*"; }
-ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || echo "✔ $*"; }
-ui_err()  { has_gum && gum style --foreground 9  "✘ $*" || echo "✘ $*"; }
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
 
-die() { ui_err "$*"; exit 1; }
+CTL_UI_OK_PREFIX="✔"
+CTL_UI_ERR_PREFIX="✘"
+CTL_CHOOSE_PROMPT="firectl"
 
 systemd_ok() {
   has_cmd systemctl || return 1
   systemctl --user show-environment >/dev/null 2>&1
-}
-
-choose() {
-  if has_fzf; then
-    printf "%s\n" "$@" | fzf --prompt="firectl> " --height=18 --reverse --border
-    return 0
-  fi
-  if has_gum; then
-    gum choose "$@"
-    return 0
-  fi
-  ui_info "Choose one:"
-  select opt in "$@"; do echo "$opt"; break; done
 }
 
 abs_path() {
@@ -210,7 +194,7 @@ status() {
   has_cmd systemctl || die "missing: systemctl"
   systemd_ok || die "systemctl --user not available (run on the host user session)"
 
-  ui_title
+  ui_title "firectl"
   ui_info "Timers:"
   systemctl --user list-timers --all --no-pager | (grep -E "alphaos-fire-(daily|weekly)\\.timer" || true)
   echo
@@ -259,7 +243,7 @@ fire_git_root() {
 fire_git_status() {
   local root
   root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
-  ui_title
+  ui_title "firectl"
   ui_info "repo: $root"
   git -C "$root" status -sb
   echo ""
@@ -362,7 +346,7 @@ EOF
 }
 
 git_menu() {
-  ui_title
+  ui_title "firectl"
   local action
   action="$(choose \
     "git status" \
@@ -380,7 +364,7 @@ git_menu() {
 }
 
 menu() {
-  ui_title
+  ui_title "firectl"
   local action
   action="$(choose \
     "send daily" "send weekly" \

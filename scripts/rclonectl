@@ -1,0 +1,901 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RCLONECTL_VERSION="0.1.0"
+
+APP="rclonectl"
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Codex session helper: rclonectl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "rclonectl" "$@" && exit 0
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+# Shared UI helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+
+export CTL_UI_OK_PREFIX="[$APP]"
+export CTL_UI_WARN_PREFIX="[$APP]"
+export CTL_UI_ERR_PREFIX="[$APP]"
+
+RCLONE_BIN="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
+RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+
+RCLONECTL_DRY_RUN="${AOS_DRY_RUN:-0}"
+RCLONECTL_COPY_LINKS="${AOS_COPY_LINKS:-0}"
+RCLONECTL_ALLOW_REMOTE_ROOT="${RCLONECTL_ALLOW_REMOTE_ROOT:-0}"
+
+has_env_files() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 1
+  ls -1 "$dir"/*.env >/dev/null 2>&1
+}
+
+detect_conf_dir() {
+  if [[ -n "${RCLONECTL_CONF_DIR:-}" ]]; then
+    printf "%s\n" "$RCLONECTL_CONF_DIR"
+    return 0
+  fi
+
+  local repo_dir="$ROOT_DIR/.env/rclone.d"
+  local user_dir="$HOME/.config/rclonectl/jobs.d"
+
+  if has_env_files "$repo_dir"; then
+    printf "%s\n" "$repo_dir"
+    return 0
+  fi
+
+  printf "%s\n" "$user_dir"
+}
+
+CONF_DIR="$(detect_conf_dir)"
+LOCK_DIR="${RCLONECTL_LOCK_DIR:-${XDG_RUNTIME_DIR:-/tmp}/rclonectl-locks}"
+
+is_remote_root() {
+  # Examples:
+  #   eldanioo:
+  #   eldanioo:/
+  local p="${1:-}"
+  [[ "$p" =~ ^[^:]+:(/)?$ ]]
+}
+
+has_remote_prefix() {
+  # Heuristic: remote paths contain "<name>:"
+  local p="${1:-}"
+  [[ "$p" == *:* ]]
+}
+
+lock_run() {
+  mkdir -p "$LOCK_DIR"
+  local job="$1"
+  local lock="$LOCK_DIR/$job.lock"
+  if ! command -v flock >/dev/null 2>&1; then
+    ui_warn "flock not found; running without concurrency lock"
+    return 0
+  fi
+  exec 9>"$lock"
+  flock -n 9 || die "another rclone job is already running: $job"
+}
+
+require_rclone() {
+  [[ -n "$RCLONE_BIN" && -x "$RCLONE_BIN" ]] || die "rclone not found in PATH"
+  [[ -f "$RCLONE_CONFIG" ]] || die "rclone config missing: $RCLONE_CONFIG"
+}
+
+link_opts() {
+  if [[ "${RCLONECTL_COPY_LINKS}" == "1" ]]; then
+    printf "%s\n" "--copy-links"
+  else
+    printf "%s\n" "--skip-links"
+  fi
+}
+
+dry_opts() {
+  if [[ "${RCLONECTL_DRY_RUN}" == "1" ]]; then
+    printf "%s\n" "--dry-run"
+  else
+    printf "%s\n" ""
+  fi
+}
+
+mode_badge() {
+  local run links
+  [[ "${RCLONECTL_DRY_RUN}" == "1" ]] && run="DRY-RUN (no changes)" || run="RUN (makes changes)"
+  [[ "${RCLONECTL_COPY_LINKS}" == "1" ]] && links="Symlinks: COPY contents" || links="Symlinks: SKIP"
+  printf "%s | %s" "$run" "$links"
+}
+
+show_help() {
+  cat <<'EOF_HELP'
+rclonectl - rclone frontdoor (safe defaults, clear prompts)
+
+This tool intentionally does not try to hide rclone. It just adds:
+  - one place to set config + safety defaults
+  - clear warnings for destructive modes
+  - job configs (named jobs) + optional systemd timers
+  - an interactive menu that explains what will happen
+
+Usage:
+  rclonectl menu
+  rclonectl safety
+  rclonectl doctor
+  rclonectl jobs
+  rclonectl new-job
+  rclonectl show <job>
+  rclonectl run <job> [--run|--dry-run] [--copy-links|--skip-links] [--resync] [-- <rclone args...>]
+  rclonectl enable <job> [--at HH:MM]
+  rclonectl disable <job>
+  rclonectl status <job>
+  rclonectl logs <job> [--follow]
+  rclonectl install-systemd
+  rclonectl uninstall-systemd
+  rclonectl remotes
+  rclonectl lsd <path>
+  rclonectl lsf <path>
+  rclonectl copy   <from> <to> [--run] [--dry-run] [--copy-links|--skip-links] [-- <rclone args...>]
+  rclonectl sync   <from> <to> [--run] [--dry-run] [--copy-links|--skip-links] [-- <rclone args...>]
+  rclonectl bisync <from> <to> [--run] [--dry-run] [--copy-links|--skip-links] [--resync] [-- <rclone args...>]
+
+Safety:
+  - Remote root like "eldanioo:" is refused unless RCLONECTL_ALLOW_REMOTE_ROOT=1.
+  - In the menu, DRY-RUN is the default. Toggle it in Settings.
+
+Env:
+  AOS_RCLONE_CONFIG=~/.config/rclone/rclone.conf
+  AOS_DRY_RUN=1
+  AOS_COPY_LINKS=1
+  RCLONECTL_ALLOW_REMOTE_ROOT=1   (strongly discouraged)
+  RCLONECTL_CONF_DIR=...          (job configs dir; default: ~/.config/rclonectl/jobs.d)
+EOF_HELP
+}
+
+print_safety_notes() {
+  cat <<'EOF'
+Safety / mental model
+---------------------
+
+1) Remote paths:
+   - "eldanioo:" means: Drive root ("Meine Ablage"). That is almost never what you want.
+   - Use a folder path instead: "eldanioo:business" or "eldanioo:Dokumente".
+
+2) Modes:
+   - copy: uploads/downloads changed files, but does NOT delete on the destination (recommended).
+   - sync: mirrors source into destination and CAN delete files on the destination.
+   - bisync: two-way mirroring and CAN delete/overwrite on BOTH sides.
+
+3) Symlinks:
+   - Default is SKIP, because symlinks can point outside the folder.
+   - If enabled, rclone copies the link target contents (it does not preserve the symlink itself).
+
+4) Dry-run:
+   - Dry-run prints what would happen but does not transfer or delete anything.
+   - If you are unsure, dry-run first.
+EOF
+}
+
+job_file() {
+  local job="$1"
+  printf "%s/%s.env\n" "$CONF_DIR" "$job"
+}
+
+list_jobs() {
+  if [[ ! -d "$CONF_DIR" ]]; then
+    return 0
+  fi
+  find "$CONF_DIR" -maxdepth 1 -type f -name '*.env' -printf '%f\n' 2>/dev/null | sed 's/\.env$//' || true
+}
+
+reset_job_vars() {
+  unset -v RCLONE_JOB_NAME RCLONE_JOB_OP RCLONE_JOB_FROM RCLONE_JOB_TO RCLONE_JOB_EXTRA_ARGS RCLONE_JOB_LOG_FILE RCLONE_JOB_LOG_LEVEL || true
+}
+
+load_job() {
+  local job="$1"
+  local f
+  f="$(job_file "$job")"
+  [[ -f "$f" ]] || die "missing job config: $f"
+
+  reset_job_vars
+  # shellcheck disable=SC1090
+  source "$f"
+
+  [[ -n "${RCLONE_JOB_OP:-}" ]] || die "RCLONE_JOB_OP missing in $f (copy|sync|bisync)"
+  [[ -n "${RCLONE_JOB_FROM:-}" ]] || die "RCLONE_JOB_FROM missing in $f"
+  [[ -n "${RCLONE_JOB_TO:-}" ]] || die "RCLONE_JOB_TO missing in $f"
+
+  case "$RCLONE_JOB_OP" in
+    copy|sync|bisync) ;;
+    *) die "invalid RCLONE_JOB_OP in $f: $RCLONE_JOB_OP (expected copy|sync|bisync)" ;;
+  esac
+
+  if [[ -z "${RCLONE_JOB_LOG_FILE:-}" ]]; then
+    mkdir -p "$HOME/.local/share/rclonectl/logs"
+    RCLONE_JOB_LOG_FILE="$HOME/.local/share/rclonectl/logs/${job}.log"
+  else
+    mkdir -p "$(dirname "$RCLONE_JOB_LOG_FILE")"
+  fi
+  RCLONE_JOB_LOG_LEVEL="${RCLONE_JOB_LOG_LEVEL:-INFO}"
+
+  validate_paths "$RCLONE_JOB_FROM" "$RCLONE_JOB_TO"
+}
+
+parse_common_flags() {
+  # Mutates:
+  # - RCLONECTL_DRY_RUN
+  # - RCLONECTL_COPY_LINKS
+  # - extra_args (array, global)
+  extra_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --run) RCLONECTL_DRY_RUN=0 ;;
+      --dry-run|--dry) RCLONECTL_DRY_RUN=1 ;;
+      --copy-links) RCLONECTL_COPY_LINKS=1 ;;
+      --skip-links) RCLONECTL_COPY_LINKS=0 ;;
+      --) shift; extra_args+=("$@"); break ;;
+      *) extra_args+=("$1") ;;
+    esac
+    shift || true
+  done
+}
+
+confirm_destructive() {
+  local op="$1"
+  local from="$2"
+  local to="$3"
+
+  if [[ "${RCLONECTL_DRY_RUN}" == "1" ]]; then
+    ui_info "Dry-run is enabled. No data will be changed."
+    return 0
+  fi
+
+  case "$op" in
+    sync)
+      ui_warn "You are about to run 'rclone sync'. Sync can DELETE files on the destination that are not present on the source."
+      ui_info "Source:      $from"
+      ui_info "Destination: $to"
+      ui_confirm "Proceed with sync?" || return 1
+      ;;
+    bisync)
+      ui_warn "You are about to run 'rclone bisync'. Bisync can DELETE or overwrite files on BOTH sides."
+      ui_info "Side A: $from"
+      ui_info "Side B: $to"
+      ui_confirm "Proceed with bisync?" || return 1
+      ;;
+  esac
+}
+
+validate_paths() {
+  local from="$1"
+  local to="$2"
+
+  if has_remote_prefix "$from" && is_remote_root "$from" && [[ "$RCLONECTL_ALLOW_REMOTE_ROOT" != "1" ]]; then
+    die "refusing remote root source: '$from' (set RCLONECTL_ALLOW_REMOTE_ROOT=1 to override)"
+  fi
+  if has_remote_prefix "$to" && is_remote_root "$to" && [[ "$RCLONECTL_ALLOW_REMOTE_ROOT" != "1" ]]; then
+    die "refusing remote root destination: '$to' (set RCLONECTL_ALLOW_REMOTE_ROOT=1 to override)"
+  fi
+}
+
+validate_one_path() {
+  local p="$1"
+  if has_remote_prefix "$p" && is_remote_root "$p" && [[ "$RCLONECTL_ALLOW_REMOTE_ROOT" != "1" ]]; then
+    die "refusing remote root: '$p' (set RCLONECTL_ALLOW_REMOTE_ROOT=1 to override)"
+  fi
+}
+
+cmd_jobs() {
+  ui_title "$APP jobs"
+  ui_info "Config dir: $CONF_DIR"
+  echo ""
+  local jobs
+  jobs="$(list_jobs)"
+  if [[ -z "$jobs" ]]; then
+    ui_warn "no jobs found"
+    ui_info "Create one with: $APP new-job"
+    return 0
+  fi
+  printf "%s\n" "$jobs"
+}
+
+cmd_show() {
+  local job="${1:-}"
+  [[ -n "$job" ]] || die "Usage: $APP show <job>"
+  load_job "$job"
+
+  ui_title "$APP show: $job"
+  ui_info "Operation: $RCLONE_JOB_OP"
+  ui_info "From:      $RCLONE_JOB_FROM"
+  ui_info "To:        $RCLONE_JOB_TO"
+  ui_info "Log file:  $RCLONE_JOB_LOG_FILE"
+  if [[ -n "${RCLONE_JOB_EXTRA_ARGS:-}" ]]; then
+    ui_info "Extra args: $RCLONE_JOB_EXTRA_ARGS"
+  else
+    ui_info "Extra args: (none)"
+  fi
+  echo ""
+  ui_info "Safety tips:"
+  ui_info "  - Run a dry-run first: $APP run $job --dry-run"
+  if [[ "$RCLONE_JOB_OP" != "copy" ]]; then
+    ui_info "  - '$RCLONE_JOB_OP' is destructive. Keep it disabled until you're sure."
+  fi
+}
+
+cmd_run_job() {
+  local job="${1:-}"
+  shift || true
+  [[ -n "$job" ]] || die "Usage: $APP run <job> [flags...] [-- <rclone args...>]"
+
+  load_job "$job"
+  lock_run "$job"
+
+  local resync=0
+  local -a args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --resync) resync=1 ;;
+      *) args+=("$1") ;;
+    esac
+    shift || true
+  done
+
+  parse_common_flags "${args[@]}"
+
+  require_rclone
+
+  local dry
+  dry="$(dry_opts)"
+  local link
+  link="$(link_opts)"
+
+  local -a common=(
+    --config "$RCLONE_CONFIG"
+    --fast-list
+    --create-empty-src-dirs
+    --log-file "$RCLONE_JOB_LOG_FILE"
+    --log-level "$RCLONE_JOB_LOG_LEVEL"
+  )
+  [[ -n "$dry" ]] && common+=("$dry")
+  common+=("$link")
+
+  local -a job_extra=()
+  if [[ -n "${RCLONE_JOB_EXTRA_ARGS:-}" ]]; then
+    # Split on whitespace; keep this simple and explicit.
+    # If you need complex quoting, pass args at runtime via: -- <args...>
+    read -r -a job_extra <<<"${RCLONE_JOB_EXTRA_ARGS}"
+  fi
+
+  if [[ "$RCLONE_JOB_OP" == "sync" || "$RCLONE_JOB_OP" == "bisync" ]]; then
+    confirm_destructive "$RCLONE_JOB_OP" "$RCLONE_JOB_FROM" "$RCLONE_JOB_TO" || die "cancelled"
+  fi
+
+  ui_title "$APP run: $job"
+  ui_info "Mode: $(mode_badge)"
+  ui_info "Op:   $RCLONE_JOB_OP"
+  ui_info "From: $RCLONE_JOB_FROM"
+  ui_info "To:   $RCLONE_JOB_TO"
+  echo ""
+
+  case "$RCLONE_JOB_OP" in
+    copy)
+      "$RCLONE_BIN" copy "${common[@]}" "${job_extra[@]}" "${extra_args[@]}" "$RCLONE_JOB_FROM" "$RCLONE_JOB_TO"
+      ;;
+    sync)
+      "$RCLONE_BIN" sync "${common[@]}" "${job_extra[@]}" "${extra_args[@]}" "$RCLONE_JOB_FROM" "$RCLONE_JOB_TO"
+      ;;
+    bisync)
+      local -a bisync_args=()
+      [[ "$resync" == "1" ]] && bisync_args+=(--resync)
+      "$RCLONE_BIN" bisync "${common[@]}" "${bisync_args[@]}" "${job_extra[@]}" "${extra_args[@]}" "$RCLONE_JOB_FROM" "$RCLONE_JOB_TO"
+      ;;
+  esac
+}
+
+cmd_logs_job() {
+  local job="${1:-}"
+  shift || true
+  [[ -n "$job" ]] || die "Usage: $APP logs <job> [--follow]"
+  load_job "$job"
+  [[ -f "$RCLONE_JOB_LOG_FILE" ]] || die "log file not found: $RCLONE_JOB_LOG_FILE"
+  if [[ "${1:-}" == "--follow" ]]; then
+    tail -n 200 -f "$RCLONE_JOB_LOG_FILE"
+  else
+    tail -n 200 "$RCLONE_JOB_LOG_FILE"
+  fi
+}
+
+write_timer_override() {
+  local job="$1"
+  local hhmm="$2"
+
+  [[ "$hhmm" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]] || die "Invalid time format: $hhmm (expected HH:MM)"
+  local hh="${hhmm%%:*}"
+  local mm="${hhmm##*:}"
+
+  local override_dir="$HOME/.config/systemd/user/rclonectl@${job}.timer.d"
+  local override_file="$override_dir/override.conf"
+  mkdir -p "$override_dir"
+
+  cat >"$override_file" <<OVR
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* ${hh}:${mm}:00
+Persistent=true
+OVR
+  ui_ok "wrote override: $override_file"
+}
+
+cmd_install_systemd() {
+  local unit_dir="$ROOT_DIR/systemd"
+  local user_dir="$HOME/.config/systemd/user"
+  mkdir -p "$user_dir"
+
+  local svc_src="$unit_dir/rclonectl@.service"
+  local tim_src="$unit_dir/rclonectl@.timer"
+  [[ -f "$svc_src" && -f "$tim_src" ]] || die "missing unit templates in $unit_dir (expected rclonectl@.service/.timer)"
+
+  ln -sf "$svc_src" "$user_dir/rclonectl@.service"
+  ln -sf "$tim_src" "$user_dir/rclonectl@.timer"
+  ui_ok "installed unit templates into $user_dir"
+  ui_info "Next: systemctl --user daemon-reload"
+}
+
+cmd_uninstall_systemd() {
+  local user_dir="$HOME/.config/systemd/user"
+  rm -f "$user_dir/rclonectl@.service" "$user_dir/rclonectl@.timer" || true
+  ui_ok "removed unit templates from $user_dir"
+  ui_info "Next: systemctl --user daemon-reload"
+}
+
+cmd_enable_job() {
+  local job="${1:-}"
+  shift || true
+  [[ -n "$job" ]] || die "Usage: $APP enable <job> [--at HH:MM]"
+  load_job "$job"
+  need_cmd systemctl
+
+  local at=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --at) at="${2:-}"; shift 2 ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+
+  if [[ -n "$at" ]]; then
+    write_timer_override "$job" "$at"
+  fi
+
+  ui_warn "Enabling a timer means this job will run automatically."
+  ui_info "It will run in RUN mode (not dry-run)."
+  ui_info "Job: $job ($RCLONE_JOB_OP)"
+  ui_confirm "Enable and start rclonectl@${job}.timer?" || die "cancelled"
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now "rclonectl@${job}.timer"
+  ui_ok "enabled timer: rclonectl@${job}.timer"
+}
+
+cmd_disable_job() {
+  local job="${1:-}"
+  [[ -n "$job" ]] || die "Usage: $APP disable <job>"
+  need_cmd systemctl
+  systemctl --user disable --now "rclonectl@${job}.timer" || true
+  ui_ok "disabled timer: rclonectl@${job}.timer"
+}
+
+cmd_status_job() {
+  local job="${1:-}"
+  [[ -n "$job" ]] || die "Usage: $APP status <job>"
+  need_cmd systemctl
+  systemctl --user status "rclonectl@${job}.service" --no-pager || true
+  systemctl --user status "rclonectl@${job}.timer" --no-pager || true
+}
+
+cmd_new_job() {
+  # Non-interactive usage:
+  #   rclonectl new-job <name> <copy|sync|bisync> <from> <to>
+  local arg_name="${1:-}"
+  local arg_op="${2:-}"
+  local arg_from="${3:-}"
+  local arg_to="${4:-}"
+
+  mkdir -p "$CONF_DIR"
+
+  ui_title "$APP new-job"
+  ui_info "Jobs are stored in: $CONF_DIR"
+  echo ""
+  ui_info "Tip: start with a COPY job. Copy does not delete on the destination."
+  echo ""
+
+  local name op from to
+  if [[ -n "$arg_name" ]]; then
+    name="$arg_name"
+  else
+    if ! has_tty; then
+      die "no TTY: use non-interactive form: $APP new-job <name> <copy|sync|bisync> <from> <to>"
+    fi
+    name="$(ui_input "Job name (kebab-case)" "")"
+  fi
+  [[ -n "$name" ]] || die "job name required"
+  if [[ "$name" =~ [^a-z0-9-] ]]; then
+    die "invalid job name: $name (use kebab-case)"
+  fi
+
+  local f
+  f="$(job_file "$name")"
+  if [[ -e "$f" ]]; then
+    ui_warn "job already exists: $f"
+    if has_tty; then
+      ui_confirm "Overwrite it?" || die "cancelled"
+    else
+      die "job already exists (no TTY to confirm overwrite): $f"
+    fi
+  fi
+
+  if [[ -n "$arg_op" ]]; then
+    op="$arg_op"
+  else
+    op="$(ui_choose "Operation" "copy (recommended)" "sync (can delete)" "bisync (two-way; can delete both sides)")"
+    case "$op" in
+      "copy (recommended)") op="copy" ;;
+      "sync (can delete)") op="sync" ;;
+      "bisync (two-way; can delete both sides)") op="bisync" ;;
+      *) die "invalid operation" ;;
+    esac
+  fi
+  case "$op" in
+    copy|sync|bisync) ;;
+    *) die "invalid op: $op (use copy|sync|bisync)" ;;
+  esac
+
+  if [[ -n "$arg_from" ]]; then
+    from="$arg_from"
+  else
+    from="$(ui_input "From path (local or remote:folder)" "$HOME/Dokumente")"
+  fi
+  if [[ -n "$arg_to" ]]; then
+    to="$arg_to"
+  else
+    to="$(ui_input "To path (local or remote:folder)" "eldanioo:Dokumente")"
+  fi
+  [[ -n "$from" && -n "$to" ]] || die "from/to required"
+
+  validate_paths "$from" "$to"
+
+  local log_file="$HOME/.local/share/rclonectl/logs/${name}.log"
+
+  cat >"$f" <<EOF
+# rclonectl job: $name
+#
+# Safety tips:
+# - Avoid remote root like "eldanioo:" (this tool refuses it by default).
+# - Prefer op=copy unless you explicitly need deletions.
+# - Test with: rclonectl run $name --dry-run
+
+RCLONE_JOB_NAME='$name'
+RCLONE_JOB_OP='$op'        # copy|sync|bisync
+RCLONE_JOB_FROM='$from'
+RCLONE_JOB_TO='$to'
+
+# Extra args are split by whitespace. Keep it simple.
+# For complex quoting, pass args at runtime: rclonectl run $name -- <args...>
+RCLONE_JOB_EXTRA_ARGS=''
+
+RCLONE_JOB_LOG_FILE='$log_file'
+RCLONE_JOB_LOG_LEVEL='INFO'
+EOF
+
+  ui_ok "created: $f"
+  echo ""
+  ui_info "Next:"
+  ui_info "  1) dry-run: $APP run $name --dry-run"
+  ui_info "  2) run:     $APP run $name --run"
+  ui_info "  3) timer:   $APP install-systemd  (once) then $APP enable $name --at 00:30"
+}
+
+cmd_doctor() {
+  ui_title "$APP doctor"
+  if [[ -z "$RCLONE_BIN" ]]; then
+    ui_err "rclone: missing"
+    return 1
+  fi
+  ui_ok "rclone: $RCLONE_BIN"
+
+  if [[ -f "$RCLONE_CONFIG" ]]; then
+    ui_ok "config: $RCLONE_CONFIG"
+  else
+    ui_err "config missing: $RCLONE_CONFIG"
+    ui_info "Tip: run 'rclone config' or set AOS_RCLONE_CONFIG=..."
+    return 1
+  fi
+
+  echo ""
+  ui_info "Mode: $(mode_badge)"
+
+  echo ""
+  ui_info "Jobs:"
+  ui_info "  config dir: $CONF_DIR"
+  local jobs
+  jobs="$(list_jobs)"
+  if [[ -z "$jobs" ]]; then
+    ui_warn "  no jobs configured"
+  else
+    local count
+    count="$(printf "%s\n" "$jobs" | wc -l | tr -d ' ')"
+    ui_ok "  $count job(s) configured"
+  fi
+
+  echo ""
+  ui_info "Remotes:"
+  if "$RCLONE_BIN" --config "$RCLONE_CONFIG" listremotes 2>/dev/null | head -n 1 >/dev/null; then
+    "$RCLONE_BIN" --config "$RCLONE_CONFIG" listremotes
+  else
+    ui_warn "cannot list remotes (config OK but listremotes failed)"
+  fi
+}
+
+cmd_remotes() {
+  require_rclone
+  "$RCLONE_BIN" --config "$RCLONE_CONFIG" listremotes
+}
+
+cmd_lsd() {
+  require_rclone
+  local p="${1:-}"
+  [[ -n "$p" ]] || die "lsd requires <path> (example: eldanioo:Vitaltrainer)"
+  validate_one_path "$p"
+  "$RCLONE_BIN" --config "$RCLONE_CONFIG" lsd "$p"
+}
+
+cmd_lsf() {
+  require_rclone
+  local p="${1:-}"
+  [[ -n "$p" ]] || die "lsf requires <path> (example: eldanioo:Vitaltrainer)"
+  validate_one_path "$p"
+  "$RCLONE_BIN" --config "$RCLONE_CONFIG" lsf "$p" --max-depth 1
+}
+
+run_op() {
+  local op="$1"
+  shift
+
+  local from="${1:-}"
+  local to="${2:-}"
+  shift 2 || true
+
+  [[ -n "$from" && -n "$to" ]] || die "Usage: $APP $op <from> <to> [flags...] [-- <rclone args...>]"
+
+  local resync=0
+  local -a remaining=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --resync) resync=1 ;;
+      *) remaining+=("$1") ;;
+    esac
+    shift || true
+  done
+
+  parse_common_flags "${remaining[@]}"
+
+  require_rclone
+  validate_paths "$from" "$to"
+
+  local dry
+  dry="$(dry_opts)"
+  local link
+  link="$(link_opts)"
+
+  local -a common=(
+    --config "$RCLONE_CONFIG"
+    --fast-list
+    --create-empty-src-dirs
+  )
+
+  [[ -n "$dry" ]] && common+=("$dry")
+  common+=("$link")
+
+  if [[ "$op" == "sync" || "$op" == "bisync" ]]; then
+    confirm_destructive "$op" "$from" "$to" || die "cancelled"
+  fi
+
+  case "$op" in
+    copy)
+      ui_title "$APP copy"
+      ui_info "This uploads/downloads changed files but does not delete on the destination."
+      ui_info "From: $from"
+      ui_info "To:   $to"
+      echo ""
+      "$RCLONE_BIN" copy "${common[@]}" "${extra_args[@]}" "$from" "$to"
+      ;;
+    sync)
+      ui_title "$APP sync"
+      ui_info "Sync mirrors source into destination and can delete files on the destination."
+      ui_info "From: $from"
+      ui_info "To:   $to"
+      echo ""
+      "$RCLONE_BIN" sync "${common[@]}" "${extra_args[@]}" "$from" "$to"
+      ;;
+    bisync)
+      ui_title "$APP bisync"
+      ui_info "Bisync is bidirectional and can delete/overwrite on both sides."
+      ui_info "A: $from"
+      ui_info "B: $to"
+      echo ""
+      local -a bisync_args=()
+      [[ "$resync" == "1" ]] && bisync_args+=(--resync)
+      "$RCLONE_BIN" bisync "${common[@]}" "${bisync_args[@]}" "${extra_args[@]}" "$from" "$to"
+      ;;
+    *)
+      die "unknown op: $op"
+      ;;
+  esac
+}
+
+menu_settings() {
+  ui_title "$APP settings"
+  while true; do
+    ui_info "Current mode: $(mode_badge)"
+    echo ""
+    local action
+    action="$(ui_choose "Select" \
+      "Toggle dry-run (recommended ON for experimenting)" \
+      "Toggle symlink copying (default is SKIP)" \
+      "Back")" || return 0
+    case "$action" in
+      "Toggle dry-run (recommended ON for experimenting)")
+        if [[ "${RCLONECTL_DRY_RUN}" == "1" ]]; then RCLONECTL_DRY_RUN=0; else RCLONECTL_DRY_RUN=1; fi
+        ;;
+      "Toggle symlink copying (default is SKIP)")
+        if [[ "${RCLONECTL_COPY_LINKS}" == "1" ]]; then RCLONECTL_COPY_LINKS=0; else RCLONECTL_COPY_LINKS=1; fi
+        ;;
+      "Back") return 0 ;;
+    esac
+  done
+}
+
+prompt_path() {
+  local label="$1"
+  local example="$2"
+  local p
+  p="$(ui_input "$label" "$example")"
+  [[ -n "$p" ]] || die "missing path"
+  echo "$p"
+}
+
+cmd_menu() {
+  ui_title "$APP"
+  ui_info "This is a menu wrapper around rclone. It does not hide what will happen."
+  echo ""
+
+  # In the menu, default to DRY-RUN unless the user explicitly turned it off via env.
+  if [[ -z "${AOS_DRY_RUN:-}" && -z "${RCLONECTL_DRY_RUN_SET:-}" ]]; then
+    RCLONECTL_DRY_RUN=1
+    export RCLONECTL_DRY_RUN_SET=1
+  fi
+
+  while true; do
+    ui_info "Mode: $(mode_badge)"
+    echo ""
+    local action
+    action="$(ui_choose "Select" \
+      "Doctor — check config + list remotes" \
+      "Safety notes — how to not destroy data" \
+      "Jobs — list / show / run" \
+      "Jobs — create new job" \
+      "Remotes — list configured remotes" \
+      "Browse — lsd (list directories)" \
+      "Browse — lsf (list files, max depth 1)" \
+      "Copy — safe default (no deletes on destination)" \
+      "Sync — mirrors source to destination (CAN delete on destination)" \
+      "Bisync — two-way mirroring (CAN delete on both sides)" \
+      "Settings — dry-run + symlinks" \
+      "Quit")" || exit 0
+
+    case "$action" in
+      "Quit") exit 0 ;;
+      "Doctor — check config + list remotes") cmd_doctor ;;
+      "Safety notes — how to not destroy data") print_safety_notes ;;
+      "Jobs — list / show / run")
+        local jobs
+        jobs="$(list_jobs)"
+        if [[ -z "$jobs" ]]; then
+          ui_warn "no jobs configured yet"
+          ui_info "Create one with: $APP new-job"
+        else
+          local job
+          job="$(printf "%s\n" "$jobs" | ui_choose "Select job")" || true
+          if [[ -n "${job:-}" ]]; then
+            local act
+            act="$(ui_choose "Job: $job" "show" "run (dry-run)" "run (run)" "logs" "back")" || true
+            case "$act" in
+              show) cmd_show "$job" ;;
+              "run (dry-run)") cmd_run_job "$job" --dry-run ;;
+              "run (run)") cmd_run_job "$job" --run ;;
+              logs) cmd_logs_job "$job" ;;
+            esac
+          fi
+        fi
+        ;;
+      "Jobs — create new job") cmd_new_job ;;
+      "Remotes — list configured remotes") cmd_remotes ;;
+      "Browse — lsd (list directories)")
+        local p
+        p="$(prompt_path "Path to list (example: eldanioo:Vitaltrainer)" "eldanioo:")"
+        cmd_lsd "$p"
+        ;;
+      "Browse — lsf (list files, max depth 1)")
+        local p
+        p="$(prompt_path "Path to list (example: eldanioo:Vitaltrainer)" "eldanioo:")"
+        cmd_lsf "$p"
+        ;;
+      "Copy — safe default (no deletes on destination)")
+        local from to
+        from="$(prompt_path "Copy FROM (example: $HOME/Dokumente)" "$HOME/Dokumente")"
+        to="$(prompt_path "Copy TO (example: eldanioo:Dokumente)" "eldanioo:Dokumente")"
+        run_op copy "$from" "$to"
+        ;;
+      "Sync — mirrors source to destination (CAN delete on destination)")
+        local from to
+        from="$(prompt_path "Sync FROM" "$HOME/Dokumente")"
+        to="$(prompt_path "Sync TO" "eldanioo:Dokumente")"
+        run_op sync "$from" "$to"
+        ;;
+      "Bisync — two-way mirroring (CAN delete on both sides)")
+        local a b
+        a="$(prompt_path "Bisync SIDE A" "$HOME/Dokumente")"
+        b="$(prompt_path "Bisync SIDE B" "eldanioo:Dokumente")"
+        run_op bisync "$a" "$b"
+        ;;
+      "Settings — dry-run + symlinks") menu_settings ;;
+    esac
+
+    echo ""
+    ui_info "Done."
+    ui_confirm "Back to menu?" || exit 0
+    ui_title "$APP"
+  done
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    menu) cmd_menu ;;
+    safety|notes) print_safety_notes ;;
+    doctor) cmd_doctor ;;
+    jobs|list) cmd_jobs ;;
+    new-job|new|init) cmd_new_job "$@" ;;
+    show) cmd_show "${1:-}" ;;
+    run) cmd_run_job "$@" ;;
+    logs) cmd_logs_job "$@" ;;
+    enable) cmd_enable_job "$@" ;;
+    disable) cmd_disable_job "$@" ;;
+    status) cmd_status_job "$@" ;;
+    install-systemd) cmd_install_systemd ;;
+    uninstall-systemd) cmd_uninstall_systemd ;;
+    remotes) cmd_remotes ;;
+    lsd) cmd_lsd "${1:-}" ;;
+    lsf) cmd_lsf "${1:-}" ;;
+    copy) run_op copy "$@" ;;
+    sync) run_op sync "$@" ;;
+    bisync) run_op bisync "$@" ;;
+    version) echo "$APP version $RCLONECTL_VERSION" ;;
+    help|-h|--help) show_help ;;
+    *)
+      ui_err "Unknown command: $cmd"
+      show_help
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

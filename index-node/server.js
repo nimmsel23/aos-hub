@@ -3,6 +3,7 @@ import fs from "fs";
 import http from "http";
 import os from "os";
 import path from "path";
+import crypto from "crypto";
 import yaml from "js-yaml";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
@@ -20,7 +21,72 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8799);
 const TERMINAL_ENABLED = process.env.TERMINAL_ENABLED !== "0";
 const TERMINAL_ALLOW_REMOTE = process.env.TERMINAL_ALLOW_REMOTE === "1";
+const UI_BASIC_AUTH_ENABLED = process.env.AOS_UI_BASIC_AUTH === "1";
+const UI_BASIC_AUTH_USER = String(process.env.AOS_UI_BASIC_USER || "").trim();
+const UI_BASIC_AUTH_PASS = String(process.env.AOS_UI_BASIC_PASS || "");
+const UI_BASIC_AUTH_REALM =
+  String(process.env.AOS_UI_BASIC_REALM || "AlphaOS Hub")
+    .replace(/"/g, "")
+    .trim() || "AlphaOS Hub";
+const UI_BASIC_AUTH_PROTECT_API = process.env.AOS_UI_BASIC_AUTH_PROTECT_API === "1";
+const UI_BASIC_AUTH_READY =
+  UI_BASIC_AUTH_ENABLED && UI_BASIC_AUTH_USER.length > 0 && UI_BASIC_AUTH_PASS.length > 0;
 
+if (UI_BASIC_AUTH_ENABLED && !UI_BASIC_AUTH_READY) {
+  console.warn(
+    "[index-node] AOS_UI_BASIC_AUTH=1 but credentials are missing. Protected routes will return 503."
+  );
+}
+
+function needsUiBasicAuth(pathname) {
+  const p = String(pathname || "/");
+  if (p === "/health") return false;
+  if (!UI_BASIC_AUTH_PROTECT_API && p.startsWith("/api/")) return false;
+  return true;
+}
+
+function timingSafeEqualStr(left, right) {
+  const a = Buffer.from(String(left || ""), "utf8");
+  const b = Buffer.from(String(right || ""), "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function parseBasicAuth(header) {
+  const raw = String(header || "");
+  if (!raw.startsWith("Basic ")) return null;
+  try {
+    const decoded = Buffer.from(raw.slice(6), "base64").toString("utf8");
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return null;
+    return {
+      user: decoded.slice(0, idx),
+      pass: decoded.slice(idx + 1),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function sendBasicAuthChallenge(res) {
+  res.setHeader("WWW-Authenticate", `Basic realm="${UI_BASIC_AUTH_REALM}", charset="UTF-8"`);
+  return res.status(401).send("Authentication required");
+}
+
+function uiBasicAuthMiddleware(req, res, next) {
+  if (!UI_BASIC_AUTH_ENABLED || !needsUiBasicAuth(req.path)) return next();
+  if (!UI_BASIC_AUTH_READY) {
+    return res.status(503).send("Basic auth is enabled but not configured.");
+  }
+  const creds = parseBasicAuth(req.headers.authorization);
+  if (!creds) return sendBasicAuthChallenge(res);
+  const userOk = timingSafeEqualStr(creds.user, UI_BASIC_AUTH_USER);
+  const passOk = timingSafeEqualStr(creds.pass, UI_BASIC_AUTH_PASS);
+  if (!userOk || !passOk) return sendBasicAuthChallenge(res);
+  return next();
+}
+
+app.use(uiBasicAuthMiddleware);
 
 app.use(express.static("public", { extensions: ["html"] }));
 app.use("/vendor/xterm", express.static("node_modules/xterm"));
@@ -41,6 +107,11 @@ const CORE4_TW_SYNC = process.env.CORE4_TW_SYNC !== "0";
 const CORE4_JOURNAL_DIR =
   process.env.CORE4_JOURNAL_DIR ||
   path.join(getVaultDir(), "Alpha_Journal", "Entries");
+const CORE4_STORAGE_DIR_ENV = String(process.env.CORE4_STORAGE_DIR || "").trim();
+const CORE4_STORAGE_FALLBACK_DIR = String(
+  process.env.CORE4_STORAGE_FALLBACK_DIR ||
+  path.join(os.homedir(), ".local", "share", "alphaos", "core4")
+).trim();
 const BRIDGE_TOKEN = String(process.env.AOS_BRIDGE_TOKEN || "").trim();
 const BRIDGE_TOKEN_HEADER = String(process.env.AOS_BRIDGE_TOKEN_HEADER || "X-Bridge-Token").trim();
 const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
@@ -110,6 +181,7 @@ const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "sched
   .filter(Boolean);
 
 let TASK_CACHE = { ts: 0, tasks: [], error: null };
+let CORE4_STORAGE_DIR_CACHE = "";
 
 
 function safeSlug(s) {
@@ -2038,90 +2110,617 @@ function updateMarkdownWithUUIDs(markdown, wired) {
   return updated;
 }
 
-function getCore4TodayFile() {
-  return path.join(os.homedir(), ".local", "share", "alphaos", "drop", "core4_today.json");
-}
+const CORE4_HABITS = {
+  body: {
+    fitness: "Fitness",
+    fuel: "Fuel",
+  },
+  being: {
+    meditation: "Meditation",
+    memoirs: "Memoirs",
+  },
+  balance: {
+    person1: "Person 1",
+    person2: "Person 2",
+  },
+  business: {
+    discover: "Discover",
+    declare: "Declare",
+  },
+};
 
-function ensureCore4Today() {
-  const filePath = getCore4TodayFile();
-  const dir = path.dirname(filePath);
-  ensureDir(dir);
+const CORE4_SUBTASK_MAP = {
+  fitness: {
+    domain: "body",
+    task: "fitness",
+    label: "fitness",
+    title: "Did you sweat today?",
+  },
+  fuel: {
+    domain: "body",
+    task: "fuel",
+    label: "fuel",
+    title: "Did you fuel your body?",
+  },
+  meditation: {
+    domain: "being",
+    task: "meditation",
+    label: "meditation",
+    title: "Did you meditate?",
+  },
+  memoirs: {
+    domain: "being",
+    task: "memoirs",
+    label: "memoirs",
+    title: "Did you write memoirs?",
+  },
+  partner: {
+    domain: "balance",
+    task: "person1",
+    label: "partner",
+    title: "Did you invest in your partner?",
+  },
+  person1: {
+    domain: "balance",
+    task: "person1",
+    label: "partner",
+    title: "Did you invest in person 1?",
+  },
+  posterity: {
+    domain: "balance",
+    task: "person2",
+    label: "posterity",
+    title: "Did you invest in posterity?",
+  },
+  person2: {
+    domain: "balance",
+    task: "person2",
+    label: "posterity",
+    title: "Did you invest in person 2?",
+  },
+  discover: {
+    domain: "business",
+    task: "discover",
+    label: "discover",
+    title: "Did you discover?",
+  },
+  declare: {
+    domain: "business",
+    task: "declare",
+    label: "declare",
+    title: "Did you declare?",
+  },
+};
 
-  const today = new Date().toISOString().split("T")[0];
-  let data = null;
+const CORE4_LEGACY_SUBTASKS = [
+  "fitness",
+  "fuel",
+  "meditation",
+  "memoirs",
+  "partner",
+  "posterity",
+  "discover",
+  "declare",
+];
+
+function core4CanWriteDir(dirPath) {
   try {
-    if (fs.existsSync(filePath)) {
-      data = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    }
+    ensureDir(dirPath);
+    const probe = path.join(dirPath, `.core4-rw-probe-${process.pid}-${Date.now()}`);
+    fs.writeFileSync(probe, "ok", "utf8");
+    fs.unlinkSync(probe);
+    return true;
   } catch (_) {
-    data = null;
+    return false;
+  }
+}
+
+function getCore4StorageDir() {
+  if (CORE4_STORAGE_DIR_CACHE) return CORE4_STORAGE_DIR_CACHE;
+
+  const preferred = CORE4_STORAGE_DIR_ENV || path.join(getVaultDir(), "Core4");
+  if (core4CanWriteDir(preferred)) {
+    CORE4_STORAGE_DIR_CACHE = preferred;
+    return CORE4_STORAGE_DIR_CACHE;
   }
 
-  if (!data || data.date !== today) {
-    data = {
-      date: today,
-      fitness: 0,
-      fuel: 0,
-      meditation: 0,
-      memoirs: 0,
-      partner: 0,
-      posterity: 0,
-      discover: 0,
-      declare: 0,
-      csv_written: false,
+  if (core4CanWriteDir(CORE4_STORAGE_FALLBACK_DIR)) {
+    console.warn(
+      `[core4] preferred storage not writable (${preferred}). using fallback ${CORE4_STORAGE_FALLBACK_DIR}`
+    );
+    CORE4_STORAGE_DIR_CACHE = CORE4_STORAGE_FALLBACK_DIR;
+    return CORE4_STORAGE_DIR_CACHE;
+  }
+
+  console.error(
+    `[core4] no writable storage dir (preferred=${preferred}, fallback=${CORE4_STORAGE_FALLBACK_DIR})`
+  );
+  CORE4_STORAGE_DIR_CACHE = preferred;
+  return CORE4_STORAGE_DIR_CACHE;
+}
+
+function getCore4EventRootDir() {
+  return path.join(getCore4StorageDir(), ".core4", "events");
+}
+
+function getCore4JournalRootDir() {
+  return path.join(getCore4StorageDir(), "journal");
+}
+
+function core4DaySnapshotPath(dateKey) {
+  return path.join(getCore4StorageDir(), `core4_day_${dateKey}.json`);
+}
+
+function core4WeekSnapshotPath(weekKey) {
+  return path.join(getCore4StorageDir(), `core4_week_${weekKey}.json`);
+}
+
+function core4Pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function core4DateKeyLocal(date = new Date()) {
+  return `${date.getFullYear()}-${core4Pad2(date.getMonth() + 1)}-${core4Pad2(date.getDate())}`;
+}
+
+function parseCore4DateKey(day) {
+  const raw = String(day || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const date = new Date(`${raw}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveCore4DateKey(input, fallbackToday = true) {
+  const raw = String(input || "").trim();
+  if (!raw) return fallbackToday ? core4DateKeyLocal(new Date()) : "";
+  const date = parseCore4DateKey(raw);
+  return date ? raw : "";
+}
+
+function core4SafeToken(value) {
+  return String(value || "").replace(/[^0-9a-zA-Z._-]/g, "_");
+}
+
+function readJsonFile(filePath, fallbackValue = null) {
+  try {
+    if (!fs.existsSync(filePath)) return fallbackValue;
+    const raw = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch (_) {
+    return fallbackValue;
+  }
+}
+
+function writeJsonFile(filePath, value) {
+  ensureDir(path.dirname(filePath));
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), "utf8");
+  fs.renameSync(tempPath, filePath);
+}
+
+function core4WriteJsonSafe(filePath, value, label = "snapshot") {
+  try {
+    writeJsonFile(filePath, value);
+  } catch (err) {
+    const msg = err?.message || String(err);
+    console.warn(`[core4] ${label} write skipped: ${msg}`);
+  }
+}
+
+function core4GetHabitLabel(domain, task) {
+  const d = String(domain || "").toLowerCase();
+  const t = String(task || "").toLowerCase();
+  return CORE4_HABITS[d]?.[t] || t;
+}
+
+function core4WeekDatesFor(dateObj) {
+  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 12, 0, 0, 0);
+  const dayNum = d.getDay() || 7;
+  d.setDate(d.getDate() - (dayNum - 1));
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const next = new Date(d);
+    next.setDate(d.getDate() + i);
+    out.push(core4DateKeyLocal(next));
+  }
+  return out;
+}
+
+function core4WriteEvent(entry) {
+  const dateKey = String(entry?.date || "").trim();
+  if (!dateKey) return;
+  const dayDir = path.join(getCore4EventRootDir(), dateKey);
+  ensureDir(dayDir);
+  const safeTs = core4SafeToken(String(entry.ts || new Date().toISOString()).replace(/[:.]/g, "-"));
+  const safeDomain = core4SafeToken(entry.domain);
+  const safeTask = core4SafeToken(entry.task);
+  const safeSource = core4SafeToken(entry.source || "hq");
+  const filename = `${dateKey}__${safeDomain}__${safeTask}__${safeTs}__${safeSource}.json`;
+  fs.writeFileSync(path.join(dayDir, filename), JSON.stringify(entry, null, 2), "utf8");
+}
+
+function core4ListEventsForDate(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return [];
+  const dayDir = path.join(getCore4EventRootDir(), day);
+  if (!fs.existsSync(dayDir)) return [];
+  let names = [];
+  try {
+    names = fs.readdirSync(dayDir);
+  } catch (err) {
+    console.warn(`[core4] cannot read event dir ${dayDir}: ${err?.message || err}`);
+    return [];
+  }
+  const out = [];
+  for (const name of names) {
+    const full = path.join(dayDir, name);
+    let st = null;
+    try {
+      st = fs.statSync(full);
+    } catch (_) {
+      continue;
+    }
+    if (!st.isFile() || !name.toLowerCase().endsWith(".json")) continue;
+    const data = readJsonFile(full, null);
+    if (data && data.date === day) out.push(data);
+  }
+  return out;
+}
+
+function core4DedupEntries(entries) {
+  const keep = {};
+  for (const entry of entries || []) {
+    if (!entry || typeof entry !== "object") continue;
+    const key = String(entry.key || `${entry.date}:${entry.domain}:${entry.task}` || "").trim();
+    if (!key) continue;
+    const prev = keep[key];
+    if (!prev) {
+      keep[key] = entry;
+      continue;
+    }
+    const prevTs = String(prev.last_ts || prev.ts || "");
+    const nextTs = String(entry.last_ts || entry.ts || "");
+    const newest = nextTs >= prevTs ? entry : prev;
+    const older = newest === entry ? prev : entry;
+    const mergedSources = Array.from(
+      new Set(
+        []
+          .concat(prev.sources || [])
+          .concat(entry.sources || [])
+          .concat([prev.source, entry.source])
+          .filter(Boolean)
+      )
+    );
+    keep[key] = {
+      ...newest,
+      done: Boolean(prev.done || entry.done),
+      points: Math.max(Number(prev.points || 0), Number(entry.points || 0)),
+      source: newest.source || older.source || "hq",
+      sources: mergedSources,
     };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   }
-
-  return data;
+  return Object.keys(keep).map((key) => keep[key]);
 }
 
-function getCore4Total(data) {
-  if (!data) return 0;
-  const raw = Object.keys(data)
-    .filter((key) => !["date", "csv_written"].includes(key))
-    .reduce((sum, key) => sum + (Number(data[key]) || 0), 0);
-  return raw * 0.5;
+function core4ComputeTotals(entries) {
+  const totals = {
+    week_total: 0,
+    by_domain: {},
+    by_day: {},
+    by_habit: {},
+  };
+  for (const entry of entries || []) {
+    if (!entry || typeof entry !== "object") continue;
+    const points = Number(entry.points || 0) || 0;
+    totals.week_total += points;
+    if (entry.domain) {
+      totals.by_domain[entry.domain] = (totals.by_domain[entry.domain] || 0) + points;
+    }
+    if (entry.date) {
+      totals.by_day[entry.date] = (totals.by_day[entry.date] || 0) + points;
+    }
+    if (entry.domain && entry.task) {
+      const habitKey = `${entry.domain}:${entry.task}`;
+      totals.by_habit[habitKey] = (totals.by_habit[habitKey] || 0) + points;
+    }
+  }
+  return totals;
 }
 
-function updateCore4Subtask(subtask, nextValue) {
-  const data = ensureCore4Today();
-  if (!data || typeof data[subtask] === "undefined") return null;
-  if (typeof nextValue === "number") {
-    data[subtask] = nextValue >= 1 ? 1 : 0;
-  } else {
-    data[subtask] = data[subtask] >= 1 ? 0 : 1;
+function core4TotalForDate(entries, dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return 0;
+  let sum = 0;
+  for (const entry of entries || []) {
+    if (entry?.date === day) sum += Number(entry.points || 0) || 0;
   }
-  fs.writeFileSync(getCore4TodayFile(), JSON.stringify(data, null, 2));
-  return data;
+  return sum;
+}
+
+function core4BuildDay(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) {
+    return { date: "", updated_at: new Date().toISOString(), entries: [], totals: core4ComputeTotals([]) };
+  }
+  const entries = core4DedupEntries(core4ListEventsForDate(day));
+  const payload = {
+    date: day,
+    updated_at: new Date().toISOString(),
+    entries,
+    totals: core4ComputeTotals(entries),
+  };
+  core4WriteJsonSafe(core4DaySnapshotPath(day), payload, "day snapshot");
+  return payload;
+}
+
+function core4ListEventsForWeek(dateObj) {
+  const days = core4WeekDatesFor(dateObj);
+  let all = [];
+  for (const day of days) {
+    all = all.concat(core4ListEventsForDate(day));
+  }
+  return core4DedupEntries(all);
+}
+
+function core4BuildWeekForDate(dateObj) {
+  const ref = dateObj instanceof Date && !Number.isNaN(dateObj.getTime()) ? dateObj : new Date();
+  const weekKey = isoWeekString(ref);
+  const entries = core4ListEventsForWeek(ref);
+  const payload = {
+    week: weekKey,
+    updated_at: new Date().toISOString(),
+    entries,
+    totals: core4ComputeTotals(entries),
+  };
+  core4WriteJsonSafe(core4WeekSnapshotPath(weekKey), payload, "week snapshot");
+  return payload;
 }
 
 function mapCore4Subtask(subtask) {
-  const map = {
-    fitness: { domain: "body", task: "fitness" },
-    fuel: { domain: "body", task: "fuel" },
-    meditation: { domain: "being", task: "meditation" },
-    memoirs: { domain: "being", task: "memoirs" },
-    partner: { domain: "balance", task: "person1" },
-    posterity: { domain: "balance", task: "person2" },
-    discover: { domain: "business", task: "discover" },
-    declare: { domain: "business", task: "declare" },
-  };
-  return map[subtask] || null;
+  const key = String(subtask || "").trim().toLowerCase();
+  return CORE4_SUBTASK_MAP[key] || null;
 }
 
 function core4TaskMeta(subtask) {
-  const map = {
-    fitness: { domain: "body", label: "fitness", title: "Did you sweat today?" },
-    fuel: { domain: "body", label: "fuel", title: "Did you fuel your body?" },
-    meditation: { domain: "being", label: "meditation", title: "Did you meditate?" },
-    memoirs: { domain: "being", label: "memoirs", title: "Did you write memoirs?" },
-    partner: { domain: "balance", label: "partner", title: "Did you invest in your partner?" },
-    posterity: { domain: "balance", label: "posterity", title: "Did you invest in posterity?" },
-    discover: { domain: "business", label: "discover", title: "Did you discover?" },
-    declare: { domain: "business", label: "declare", title: "Did you declare?" },
+  const mapped = mapCore4Subtask(subtask);
+  if (!mapped) return null;
+  return {
+    domain: mapped.domain,
+    label: mapped.label,
+    title: mapped.title,
   };
-  return map[subtask] || null;
+}
+
+function core4LegacySubtaskFromEntry(entry) {
+  if (!entry) return "";
+  const domain = String(entry.domain || "").toLowerCase();
+  const task = String(entry.task || "").toLowerCase();
+  if (domain === "body" && task === "fitness") return "fitness";
+  if (domain === "body" && task === "fuel") return "fuel";
+  if (domain === "being" && task === "meditation") return "meditation";
+  if (domain === "being" && task === "memoirs") return "memoirs";
+  if (domain === "balance" && task === "person1") return "partner";
+  if (domain === "balance" && task === "person2") return "posterity";
+  if (domain === "business" && task === "discover") return "discover";
+  if (domain === "business" && task === "declare") return "declare";
+  return "";
+}
+
+function core4LegacyKeyFromSubtask(subtask) {
+  const key = String(subtask || "").trim().toLowerCase();
+  if (key === "person1") return "partner";
+  if (key === "person2") return "posterity";
+  return key;
+}
+
+function core4LegacyDayState(dateKey) {
+  const day = resolveCore4DateKey(dateKey, true);
+  const state = {
+    date: day,
+    fitness: 0,
+    fuel: 0,
+    meditation: 0,
+    memoirs: 0,
+    partner: 0,
+    posterity: 0,
+    discover: 0,
+    declare: 0,
+    csv_written: false,
+  };
+  const dayData = core4BuildDay(day);
+  for (const entry of dayData.entries || []) {
+    const subtask = core4LegacySubtaskFromEntry(entry);
+    if (subtask && Object.prototype.hasOwnProperty.call(state, subtask)) {
+      state[subtask] = 1;
+    }
+  }
+  return state;
+}
+
+function getCore4Total(data) {
+  if (!data || typeof data !== "object") return 0;
+  const raw = CORE4_LEGACY_SUBTASKS.reduce((sum, key) => sum + (Number(data[key]) || 0), 0);
+  return raw * 0.5;
+}
+
+function core4Log(domain, task, timestamp, source = "hq") {
+  const d = String(domain || "").trim().toLowerCase();
+  const t = String(task || "").trim().toLowerCase();
+  if (!CORE4_HABITS[d] || !CORE4_HABITS[d][t]) {
+    return { ok: false, error: "unknown domain/task" };
+  }
+  const ts = timestamp ? new Date(timestamp) : new Date();
+  if (Number.isNaN(ts.getTime())) {
+    return { ok: false, error: "invalid timestamp" };
+  }
+
+  const dateKey = core4DateKeyLocal(ts);
+  const weekKey = isoWeekString(ts);
+  const entryKey = `${dateKey}:${d}:${t}`;
+  const dayEntries = core4DedupEntries(core4ListEventsForDate(dateKey));
+  const alreadyLogged = dayEntries.some((entry) => String(entry.key || "") === entryKey && Boolean(entry.done));
+
+  if (!alreadyLogged) {
+    const payload = {
+      id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+      key: entryKey,
+      ts: ts.toISOString(),
+      last_ts: ts.toISOString(),
+      date: dateKey,
+      week: weekKey,
+      domain: d,
+      task: t,
+      done: true,
+      points: 0.5,
+      source,
+      sources: [source],
+    };
+    core4WriteEvent(payload);
+  }
+
+  core4BuildDay(dateKey);
+  const weekData = core4BuildWeekForDate(ts);
+  return {
+    ok: true,
+    duplicate: alreadyLogged,
+    week: weekKey,
+    total_today: core4TotalForDate(weekData.entries, dateKey),
+  };
+}
+
+function core4GetDayState(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return { ok: false, error: "invalid date" };
+  const dt = parseCore4DateKey(day);
+  const weekKey = isoWeekString(dt);
+  const weekData = core4BuildWeekForDate(dt);
+  const entries = (weekData.entries || []).filter((entry) => entry && entry.date === day);
+  return {
+    ok: true,
+    date: day,
+    week: weekKey,
+    total: core4TotalForDate(weekData.entries, day),
+    entries: entries.map((entry) => ({
+      ts: entry.ts,
+      domain: entry.domain,
+      task: entry.task,
+      points: Number(entry.points || 0) || 0,
+      source: entry.source || "hq",
+    })),
+  };
+}
+
+function core4GetWeekSummaryForDate(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return { ok: false, error: "invalid date" };
+  const dt = parseCore4DateKey(day);
+  const weekData = core4BuildWeekForDate(dt);
+  return {
+    ok: true,
+    week: weekData.week,
+    totals: weekData.totals || core4ComputeTotals([]),
+  };
+}
+
+function core4ExportWeekSummaryToDrive(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return { ok: false, error: "invalid date" };
+  const dt = parseCore4DateKey(day);
+  const weekData = core4BuildWeekForDate(dt);
+  const weekKey = weekData.week;
+  const entries = weekData.entries || [];
+  const totals = weekData.totals || core4ComputeTotals([]);
+  const weekTotal = Number(totals.week_total || 0) || 0;
+  const pct = Math.round((weekTotal / 28) * 100);
+
+  let md = `# Core4 Weekly Summary - ${weekKey}\n\n`;
+  md += `Total: ${weekTotal}/28 (${pct}%)\n\n`;
+  md += "## By Domain\n";
+  Object.keys(CORE4_HABITS).forEach((domain) => {
+    md += `- ${domain.charAt(0).toUpperCase() + domain.slice(1)}: ${totals.by_domain?.[domain] || 0}/7\n`;
+  });
+  md += "\n## Daily Totals\n";
+  const dayKeys = Object.keys(totals.by_day || {}).sort();
+  if (!dayKeys.length) {
+    md += "- No entries yet\n";
+  } else {
+    dayKeys.forEach((key) => {
+      md += `- ${key}: ${totals.by_day[key]}\n`;
+    });
+  }
+  md += "\n## Entries\n";
+  entries.forEach((entry) => {
+    md += `- ${entry.date} | ${entry.domain} | ${core4GetHabitLabel(entry.domain, entry.task)} | +${entry.points}\n`;
+  });
+  ensureDir(getCore4StorageDir());
+  const filePath = path.join(getCore4StorageDir(), `core4_week_summary_${weekKey}.md`);
+  fs.writeFileSync(filePath, `${md.trim()}\n`, "utf8");
+  return { ok: true, path: filePath, week: weekKey };
+}
+
+function core4GetJournalForDate(dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return { ok: false, error: "invalid date" };
+  const dayDir = path.join(getCore4JournalRootDir(), day);
+  if (!fs.existsSync(dayDir)) {
+    return { ok: true, date: day, entries: [] };
+  }
+  const files = fs.readdirSync(dayDir);
+  const entries = [];
+  for (const name of files) {
+    const full = path.join(dayDir, name);
+    let st = null;
+    try {
+      st = fs.statSync(full);
+    } catch (_) {
+      continue;
+    }
+    if (!st.isFile() || !name.toLowerCase().endsWith(".md")) continue;
+    const stem = name.slice(0, -3);
+    const parts = stem.split("_");
+    const domain = String(parts[0] || "").toLowerCase();
+    const habit = String(parts[1] || "").toLowerCase();
+    let text = "";
+    try {
+      text = fs.readFileSync(full, "utf8");
+    } catch (_) {
+      text = "";
+    }
+    entries.push({
+      domain,
+      habit,
+      label: core4GetHabitLabel(domain, habit),
+      text,
+    });
+  }
+  return { ok: true, date: day, entries };
+}
+
+function core4SaveJournal(domain, habit, text, dateKey) {
+  const day = resolveCore4DateKey(dateKey, false);
+  if (!day) return { ok: false, error: "invalid date" };
+  const d = String(domain || "").trim().toLowerCase();
+  const h = String(habit || "").trim().toLowerCase();
+  if (!CORE4_HABITS[d] || !CORE4_HABITS[d][h]) {
+    return { ok: false, error: "unknown domain/habit" };
+  }
+  const cleanedText = String(text || "").trim();
+  if (!cleanedText) return { ok: false, error: "missing text" };
+
+  const now = new Date();
+  const timeStr = `${core4Pad2(now.getHours())}:${core4Pad2(now.getMinutes())}`;
+  const dayDir = path.join(getCore4JournalRootDir(), day);
+  ensureDir(dayDir);
+  const filePath = path.join(dayDir, `${d}_${h}.md`);
+  const entry = `## ${timeStr}\n\n${cleanedText}\n\n---\n`;
+  if (fs.existsSync(filePath)) {
+    const existing = fs.readFileSync(filePath, "utf8");
+    const needsBreak = existing.trim().length > 0 ? "\n" : "";
+    fs.writeFileSync(filePath, `${existing}${needsBreak}${entry}`, "utf8");
+  } else {
+    fs.writeFileSync(filePath, entry, "utf8");
+  }
+  return { ok: true, date: day, path: filePath };
 }
 
 function normalizeTaskTag(tag) {
@@ -2970,6 +3569,9 @@ app.use("/game", gameRouter);
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
+app.get("/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
+app.get("/voice", (_req, res) => res.redirect(302, "/memoirs/"));
+app.get("/game/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
 app.get("/game/frame", (_req, res) => res.redirect(302, "/game/frame.html"));
 app.get("/game/freedom", (_req, res) => res.redirect(302, "/game/freedom.html"));
 app.get("/game/focus", (_req, res) => res.redirect(302, "/game/focus.html"));
@@ -4225,64 +4827,215 @@ app.post("/api/hotlist", (req, res) => {
   }
 });
 
-// Core4 update (local JSON)
-app.post("/api/core4", async (req, res) => {
+// Core4 week/day API (event-ledger backed)
+app.get("/api/core4/day-state", (req, res) => {
   try {
-    const subtask = String(req.body?.subtask || req.body?.task || "").trim().toLowerCase();
-    if (!subtask) {
-      return res.status(400).json({ ok: false, error: "missing subtask" });
+    const dateKey = resolveCore4DateKey(req.query?.date, true);
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    const payload = core4GetDayState(dateKey);
+    if (!payload.ok) {
+      return res.status(400).json(payload);
+    }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get("/api/core4/week-summary", (req, res) => {
+  try {
+    const dateKey = resolveCore4DateKey(req.query?.date, true);
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    const payload = core4GetWeekSummaryForDate(dateKey);
+    if (!payload.ok) {
+      return res.status(400).json(payload);
+    }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/core4/log", async (req, res) => {
+  try {
+    const domain = String(req.body?.domain || "").trim().toLowerCase();
+    const task = String(req.body?.task || "").trim().toLowerCase();
+    const dateKey = resolveCore4DateKey(req.body?.date, true);
+    const source = String(req.body?.source || "index-node").trim();
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    if (!domain || !task) {
+      return res.status(400).json({ ok: false, error: "missing domain/task" });
+    }
+    const dateObj = parseCore4DateKey(dateKey);
+    if (!dateObj) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
     }
 
-    const todayKey = new Date().toISOString().split("T")[0];
-    const current = ensureCore4Today();
-    if (!current || typeof current[subtask] === "undefined") {
+    const logRes = core4Log(domain, task, dateObj.toISOString(), source);
+    if (!logRes.ok) {
+      return res.status(400).json(logRes);
+    }
+
+    if (BRIDGE_URL && !logRes.duplicate) {
+      const payload = {
+        id: `core4-${dateKey}-${domain}-${task}`,
+        ts: dateObj.toISOString(),
+        domain,
+        task,
+        points: 0.5,
+        source: "hq",
+      };
+      await bridgeFetch("/bridge/core4/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    const dayState = core4GetDayState(dateKey);
+    const weekState = core4GetWeekSummaryForDate(dateKey);
+    return res.json({
+      ok: true,
+      duplicate: Boolean(logRes.duplicate),
+      day: dayState,
+      week: weekState,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get("/api/core4/journal", (req, res) => {
+  try {
+    const dateKey = resolveCore4DateKey(req.query?.date, true);
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    const payload = core4GetJournalForDate(dateKey);
+    if (!payload.ok) {
+      return res.status(400).json(payload);
+    }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/core4/journal", (req, res) => {
+  try {
+    const domain = String(req.body?.domain || "").trim().toLowerCase();
+    const habit = String(req.body?.habit || req.body?.task || "").trim().toLowerCase();
+    const text = String(req.body?.text || "").trim();
+    const dateKey = resolveCore4DateKey(req.body?.date, true);
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    const payload = core4SaveJournal(domain, habit, text, dateKey);
+    if (!payload.ok) {
+      return res.status(400).json(payload);
+    }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/core4/export-week", (req, res) => {
+  try {
+    const dateKey = resolveCore4DateKey(req.body?.date || req.query?.date, true);
+    if (!dateKey) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    const payload = core4ExportWeekSummaryToDrive(dateKey);
+    if (!payload.ok) {
+      return res.status(400).json(payload);
+    }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Core4 compatibility endpoint (legacy today payload)
+app.post("/api/core4", async (req, res) => {
+  try {
+    const rawSubtask = String(req.body?.subtask || req.body?.task || "").trim().toLowerCase();
+    if (!rawSubtask) {
+      return res.status(400).json({ ok: false, error: "missing subtask" });
+    }
+    const mapped = mapCore4Subtask(rawSubtask);
+    if (!mapped) {
       return res.status(400).json({ ok: false, error: "unknown subtask" });
     }
-    let requestedValue = null;
+
+    let requestedValue = 1;
     if (typeof req.body?.value !== "undefined") {
       const raw = req.body.value;
       if (raw === true || raw === "true" || raw === 1 || raw === "1") requestedValue = 1;
       if (raw === false || raw === "false" || raw === 0 || raw === "0") requestedValue = 0;
     }
-    const nextValue = requestedValue !== null ? requestedValue : (current[subtask] >= 1 ? 0 : 1);
-    const mapped = mapCore4Subtask(subtask);
+    if (requestedValue < 1) {
+      return res.status(400).json({ ok: false, error: "core4 ledger does not support unsetting" });
+    }
+
+    const todayKey = core4DateKeyLocal(new Date());
+    const legacyKey = core4LegacyKeyFromSubtask(rawSubtask);
+    const current = core4LegacyDayState(todayKey);
+    const alreadyDone = Number(current[legacyKey] || 0) >= 1;
     let bridgeTotal = null;
     let bridgeOk = false;
 
-    if (BRIDGE_URL && mapped && nextValue >= 1 && current[subtask] < 1) {
-      const payload = {
-        id: `core4-${todayKey}-${subtask}`,
-        ts: new Date().toISOString(),
-        domain: mapped.domain,
-        task: mapped.task,
-        points: 0.5,
-        source: "hq",
-      };
-      const logRes = await bridgeFetch("/bridge/core4/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (logRes && logRes.ok !== false) {
-        const todayRes = await bridgeFetch("/bridge/core4/today");
-        if (todayRes && todayRes.ok !== false) {
-          bridgeTotal = todayRes.total || 0;
-          bridgeOk = true;
+    if (!alreadyDone) {
+      const logRes = core4Log(mapped.domain, mapped.task, new Date().toISOString(), "hq");
+      if (!logRes.ok) {
+        return res.status(400).json(logRes);
+      }
+      if (BRIDGE_URL) {
+        const payload = {
+          id: `core4-${todayKey}-${legacyKey}`,
+          ts: new Date().toISOString(),
+          domain: mapped.domain,
+          task: mapped.task,
+          points: 0.5,
+          source: "hq",
+        };
+        const bridgeLog = await bridgeFetch("/bridge/core4/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (bridgeLog && bridgeLog.ok !== false) {
+          const todayRes = await bridgeFetch("/bridge/core4/today");
+          if (todayRes && todayRes.ok !== false) {
+            bridgeTotal = todayRes.total || 0;
+            bridgeOk = true;
+          }
         }
+      }
+    } else if (BRIDGE_URL) {
+      const todayRes = await bridgeFetch("/bridge/core4/today");
+      if (todayRes && todayRes.ok !== false) {
+        bridgeTotal = todayRes.total || 0;
+        bridgeOk = true;
       }
     }
 
-    const data = updateCore4Subtask(subtask, nextValue);
-    if (!data) {
-      return res.status(400).json({ ok: false, error: "unknown subtask" });
-    }
+    const data = core4LegacyDayState(todayKey);
     const total = getCore4Total(data);
-    const taskwarrior = await syncCore4Taskwarrior(subtask, nextValue);
+    const taskwarrior = alreadyDone
+      ? { ok: true, skipped: true, reason: "already-logged" }
+      : await syncCore4Taskwarrior(legacyKey, 1);
     return res.json({
       ok: true,
       data,
       total,
+      duplicate: alreadyDone,
       bridge_total: bridgeTotal,
       source: bridgeOk ? "bridge+local" : "local",
       taskwarrior,
@@ -4330,7 +5083,8 @@ app.post("/api/journal", (req, res) => {
 // Core4 today (local JSON)
 app.get("/api/core4/today", async (req, res) => {
   try {
-    const data = ensureCore4Today();
+    const todayKey = core4DateKeyLocal(new Date());
+    const data = core4LegacyDayState(todayKey);
     const localTotal = getCore4Total(data);
     let bridgeTotal = null;
     let bridgeInfo = null;

@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Shared ctl helpers (msg/warn/die/has_cmd/ui_*).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+
 # Codex session helper: indexctl codex [purpose...]
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
@@ -14,18 +18,13 @@ source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
 SERVICE_NAME="aos-index.service"
+USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-alphaos-index.service}"
 UNIT_SRC="$ROOT_DIR/systemd/$SERVICE_NAME"
 UNIT_DST="/etc/systemd/system/$SERVICE_NAME"
 # Keep this aligned with `systemd/aos-index.service` which reads from `/etc/alphaos-hub/alphaos-index.env`.
 ENV_FILE="${AOS_INDEX_ENV_FILE:-/etc/alphaos-hub/alphaos-index.env}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
-
-msg() { printf "%s\n" "$*"; }
-warn() { printf "WARN: %s\n" "$*" >&2; }
-die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
-
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 write_env_file() {
   if [[ -d "$ENV_FILE" ]]; then
@@ -79,6 +78,36 @@ enable_svc() { sudo_cmd systemctl enable "$SERVICE_NAME"; }
 disable_svc() { sudo_cmd systemctl disable "$SERVICE_NAME"; }
 logs_svc() { sudo_cmd journalctl -u "$SERVICE_NAME" -f; }
 
+user_bus_ok() {
+  systemctl --user --version >/dev/null 2>&1 && systemctl --user is-active default.target >/dev/null 2>&1 || {
+    systemctl --user list-unit-files >/dev/null 2>&1
+  }
+}
+
+start_user_svc() {
+  if user_bus_ok; then
+    systemctl --user start "$USER_SERVICE_NAME"
+  else
+    die "systemctl --user not available (no user bus)"
+  fi
+}
+
+stop_user_svc() {
+  if user_bus_ok; then
+    systemctl --user stop "$USER_SERVICE_NAME" || true
+  else
+    warn "systemctl --user not available (no user bus)"
+  fi
+}
+
+status_user_svc() {
+  if user_bus_ok; then
+    systemctl --user status "$USER_SERVICE_NAME" --no-pager
+  else
+    warn "systemctl --user not available (no user bus)"
+  fi
+}
+
 env_edit() {
   write_env_file
   # `/etc/...` needs sudo; `sudoedit` keeps editor UX consistent.
@@ -122,6 +151,42 @@ doctor() {
   health_check
 }
 
+mode_status() {
+  msg "Index mode status"
+  msg "System service: $SERVICE_NAME"
+  if sudo_cmd systemctl -q is-active "$SERVICE_NAME"; then
+    msg "  active: yes"
+  else
+    msg "  active: no"
+  fi
+  msg "User service: $USER_SERVICE_NAME"
+  if user_bus_ok && systemctl --user -q is-active "$USER_SERVICE_NAME"; then
+    msg "  active: yes"
+  elif user_bus_ok; then
+    msg "  active: no"
+  else
+    msg "  active: unknown (no user bus)"
+  fi
+}
+
+mode_dev() {
+  msg "Switching to DEV mode (user service: $USER_SERVICE_NAME)"
+  msg "Stopping system service: $SERVICE_NAME"
+  stop_svc || warn "could not stop system service"
+  msg "Starting user service: $USER_SERVICE_NAME"
+  start_user_svc
+  mode_status
+}
+
+mode_prod() {
+  msg "Switching to PROD mode (system service: $SERVICE_NAME)"
+  msg "Stopping user service: $USER_SERVICE_NAME"
+  stop_user_svc
+  msg "Starting system service: $SERVICE_NAME"
+  start_svc
+  mode_status
+}
+
 hub_doctor() {
   if [[ ! -e "$HUB_DOCTOR" ]]; then
     die "missing: $HUB_DOCTOR"
@@ -145,6 +210,8 @@ Usage:
   scripts/indexctl install
   scripts/indexctl start|stop|restart|status|logs
   scripts/indexctl enable|disable
+  scripts/indexctl user-start|user-stop|user-status
+  scripts/indexctl mode-dev|mode-prod|mode-status
   scripts/indexctl env|env-show
   scripts/indexctl doctor
   scripts/indexctl hub-doctor
@@ -152,6 +219,7 @@ Usage:
 Env:
   AOS_INDEX_ENV_FILE=/etc/alphaos-hub/alphaos-index.env
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
+  AOS_INDEX_USER_SERVICE=alphaos-index.service
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor
 EOF
 }
@@ -166,6 +234,12 @@ case "$cmd" in
   enable) enable_svc ;;
   disable) disable_svc ;;
   logs) logs_svc ;;
+  user-start) start_user_svc ;;
+  user-stop) stop_user_svc ;;
+  user-status) status_user_svc ;;
+  mode-dev|dev-mode|switch-dev) mode_dev ;;
+  mode-prod|prod-mode|switch-prod) mode_prod ;;
+  mode-status) mode_status ;;
   env) env_edit ;;
   env-show) env_show ;;
   doctor) doctor ;;

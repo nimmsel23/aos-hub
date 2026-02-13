@@ -1,10 +1,12 @@
 /**
- * Theme Switcher - All 14 themes
+ * Theme Switcher - All themes
  */
 (() => {
   const STORAGE_KEY = 'aos-theme';
+  const MIGRATION_KEY = 'aos-theme-default-migrated-v1';
   const THEMES = {
     // Main themes
+    'slate': { label: '🧭 Slate', rain: false },
     'matrix': { label: '⚡ Matrix', rain: true },
     'neutral': { label: '🌙 Neutral', rain: false },
     'cyan': { label: '💎 Cyan', rain: true },
@@ -23,7 +25,18 @@
     'blackred': { label: '⚫ Black/Red', rain: false }
   };
 
-  let currentTheme = localStorage.getItem(STORAGE_KEY) || 'matrix';
+  const savedTheme = localStorage.getItem(STORAGE_KEY) || "";
+  const migrationDone = localStorage.getItem(MIGRATION_KEY) === "1";
+  let currentTheme = "slate";
+  if (THEMES[savedTheme]) {
+    currentTheme = (!migrationDone && savedTheme === "matrix") ? "slate" : savedTheme;
+  }
+  if (currentTheme !== savedTheme) {
+    localStorage.setItem(STORAGE_KEY, currentTheme);
+  }
+  if (!migrationDone) {
+    localStorage.setItem(MIGRATION_KEY, "1");
+  }
 
   // Apply theme on load
   document.documentElement.setAttribute('data-theme', currentTheme);
@@ -38,7 +51,7 @@
     <div class="theme-dropdown" id="themeDropdown">
       <div class="theme-section">
         <div class="theme-section-title">Main</div>
-        ${['matrix', 'neutral', 'cyan'].map(key => `
+        ${['slate', 'matrix', 'neutral', 'cyan'].map(key => `
           <button class="theme-option ${key === currentTheme ? 'active' : ''}" data-theme="${key}">
             ${THEMES[key].label}
           </button>

@@ -28,14 +28,14 @@
     },
 
     {
-      "label": "Voice GPT",
+      "label": "Memoirs GPT",
       "cmd": "voice-gpt",
       "url": "https://chatgpt.com/g/g-p-67fec7da91c4819188e88874c4449caf-voice/project"
     },
     {
-      "label": "Voice",
-      "cmd": "voice",
-      "url": "/voice"
+      "label": "Memoirs",
+      "cmd": "memoirs",
+      "url": "/memoirs"
     },
 
     {
@@ -95,13 +95,9 @@
     {
       "label": "Creator King Assets",
       "cmd": "king",
-      "url": "/king"
+      "url": "https://script.google.com/macros/s/AKfycbyXhksbIhXzD_n7YgWSGJ5ChmEnxzm6YgVdepcrwRa0tTTuot6IhQ2QRKOHhcNeoZBQ/exec"
     },
 
-    {
-    "label": "Syncthing",
-     "cmd": "syncthing",
-     "url": "http://127.0.0.1:8384/"
-     }
+
   ]
 }

@@ -1,0 +1,32 @@
+[data-theme="aurora"] {
+  --bg: #050b1a;
+  --bg-primary: #050b1a;
+  --bg-secondary: #0b1533;
+  --bg-tertiary: #112044;
+  --bg-panel: rgba(11, 21, 51, 0.95);
+  --bg-modal: rgba(5, 11, 26, 0.98);
+
+  --card: #0b1533;
+  --border: rgba(45, 212, 191, 0.25);
+  --border-primary: rgba(45, 212, 191, 0.4);
+  --border-secondary: rgba(45, 212, 191, 0.2);
+
+  --text: rgba(120, 240, 230, 0.92);
+  --text-primary: rgba(120, 240, 230, 0.92);
+  --text-secondary: rgba(100, 220, 210, 0.8);
+  --text-muted: rgba(100, 220, 210, 0.70);
+  --text-accent: #60a5fa;
+
+  --muted: rgba(100, 220, 210, 0.70);
+  --accent: #2dd4bf;
+  --accent-2: #60a5fa;
+  --accent-primary: #2dd4bf;
+  --nav: rgba(2, 6, 23, 0.75);
+  --glow: rgba(45, 212, 191, 0.18);
+  --accent-light: #60a5fa;
+  --gold: #60a5fa;
+
+  --shadow-sm: 0 2px 8px rgba(45, 212, 191, 0.15);
+  --shadow-md: 0 4px 16px rgba(45, 212, 191, 0.2);
+  --shadow-lg: 0 6px 24px rgba(45, 212, 191, 0.25);
+}

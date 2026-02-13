@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-theme="matrix">
+<html data-theme="slate">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,6 +12,7 @@
   <script src="/theme-switch.js"></script>
   <script src="/layout-switch.js"></script>
   <script src="/sidebar-collapse.js"></script>
+  <script src="/core4-panel.js" defer></script>
   <script src="/menu.js" defer></script>
   <script src="/matrix.js" defer></script>
 </head>
@@ -26,10 +27,94 @@
     <main class="menu-panel">
       <section class="core4-panel">
         <div class="core4-head">
-          <div class="core4-title">Core4 Daily</div>
-          <div class="core4-total" id="core4Total">0.0/4.0</div>
+          <div class="core4-title">Core4 Week</div>
+          <div class="core4-head-meta">
+            <span id="core4WeekLabel">W--</span>
+            <span class="core4-total" id="core4Total">0.0/28</span>
+            <span id="core4WeekPct">(0%)</span>
+          </div>
         </div>
-        <div class="core4-grid" id="core4Grid"></div>
+        <div class="core4-progress-wrap">
+          <div class="core4-progress-bar" id="core4ProgressBar" style="width: 0%"></div>
+        </div>
+        <div class="core4-day-strip">
+          <button class="core4-arrow" id="core4WeekPrev" type="button">&larr;</button>
+          <div class="core4-days" id="core4DayStrip"></div>
+          <button class="core4-arrow" id="core4WeekNext" type="button">&rarr;</button>
+        </div>
+
+        <div class="core4-domains" id="core4DomainGrid">
+          <div class="core4-domain body">
+            <div class="core4-domain-head">
+              <span class="core4-domain-name">Body</span>
+              <span class="core4-domain-score" id="core4ScoreBody">0/1</span>
+            </div>
+            <div class="core4-habit-row">
+              <button class="core4-btn" type="button" data-domain="body" data-task="fitness">Fitness</button>
+              <button class="core4-btn" type="button" data-domain="body" data-task="fuel">Fuel</button>
+            </div>
+          </div>
+
+          <div class="core4-domain being">
+            <div class="core4-domain-head">
+              <span class="core4-domain-name">Being</span>
+              <span class="core4-domain-score" id="core4ScoreBeing">0/1</span>
+            </div>
+            <div class="core4-habit-row">
+              <button class="core4-btn" type="button" data-domain="being" data-task="meditation">Meditation</button>
+              <button class="core4-btn" type="button" data-domain="being" data-task="memoirs">Memoirs</button>
+            </div>
+          </div>
+
+          <div class="core4-domain balance">
+            <div class="core4-domain-head">
+              <span class="core4-domain-name">Balance</span>
+              <span class="core4-domain-score" id="core4ScoreBalance">0/1</span>
+            </div>
+            <div class="core4-habit-row">
+              <button class="core4-btn" type="button" data-domain="balance" data-task="person1">Person 1</button>
+              <button class="core4-btn" type="button" data-domain="balance" data-task="person2">Person 2</button>
+            </div>
+          </div>
+
+          <div class="core4-domain business">
+            <div class="core4-domain-head">
+              <span class="core4-domain-name">Business</span>
+              <span class="core4-domain-score" id="core4ScoreBusiness">0/1</span>
+            </div>
+            <div class="core4-habit-row">
+              <button class="core4-btn" type="button" data-domain="business" data-task="discover">Discover</button>
+              <button class="core4-btn" type="button" data-domain="business" data-task="declare">Declare</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="core4-heatmap" id="core4Heatmap"></div>
+
+        <div class="core4-journal">
+          <div class="core4-journal-head">Journal</div>
+          <div class="core4-journal-controls">
+            <select id="core4JournalHabit">
+              <option value="body:fitness">Fitness</option>
+              <option value="body:fuel">Fuel</option>
+              <option value="being:meditation">Meditation</option>
+              <option value="being:memoirs">Memoirs</option>
+              <option value="balance:person1">Person 1</option>
+              <option value="balance:person2">Person 2</option>
+              <option value="business:discover">Discover</option>
+              <option value="business:declare">Declare</option>
+            </select>
+            <button id="core4JournalDone" type="button">Save</button>
+          </div>
+          <textarea id="core4JournalInput" placeholder="Write your journal entry..."></textarea>
+          <div class="core4-journal-status" id="core4JournalStatus"></div>
+          <div class="core4-journal-list" id="core4JournalList"></div>
+        </div>
+
+        <div class="core4-actions">
+          <button class="core4-act-btn" id="core4WeekSummaryBtn" type="button">Week Summary</button>
+          <button class="core4-act-btn" id="core4WeekExportBtn" type="button">Export -> Vault</button>
+        </div>
       </section>
       <div class="grid" id="menuGrid">
         <div class="loading">Loading…</div>
@@ -42,20 +127,5 @@
       </div>
     </aside>
   </div>
-
-  <div class="core4-modal" id="core4Modal" aria-hidden="true">
-    <div class="core4-modal-card">
-      <div class="core4-modal-head">
-        <div class="core4-modal-title" id="core4ModalTitle">Core4 Journal</div>
-        <button class="core4-modal-close" id="core4ModalClose" type="button">x</button>
-      </div>
-      <textarea id="core4JournalInput" placeholder="Quick journal note..."></textarea>
-      <div class="core4-modal-actions">
-        <button id="core4JournalDone" type="button">Done</button>
-        <span class="core4-journal-status" id="core4JournalStatus"></span>
-      </div>
-    </div>
-  </div>
-
 </body>
 </html>

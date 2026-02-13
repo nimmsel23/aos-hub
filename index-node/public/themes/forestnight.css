@@ -1,0 +1,27 @@
+[data-theme="forestnight"] {
+  --bg: #050d0a;
+  --bg-primary: #050d0a;
+  --bg-secondary: #0a1612;
+  --bg-tertiary: #0f1f1a;
+
+  --card: #0a1612;
+  --border: rgba(52, 211, 153, 0.25);
+  --border-primary: rgba(52, 211, 153, 0.4);
+
+  --text: rgba(150, 255, 210, 0.92);
+  --text-primary: rgba(150, 255, 210, 0.92);
+  --text-muted: rgba(130, 240, 190, 0.70);
+
+  --muted: rgba(130, 240, 190, 0.70);
+  --accent: #34d399;
+  --accent-2: #93c5fd;
+  --accent-primary: #34d399;
+  --nav: rgba(0, 0, 0, 0.75);
+  --glow: rgba(52, 211, 153, 0.16);
+  --accent-light: #93c5fd;
+  --gold: #93c5fd;
+
+  --shadow-sm: 0 2px 8px rgba(52, 211, 153, 0.15);
+  --shadow-md: 0 4px 16px rgba(52, 211, 153, 0.2);
+  --shadow-lg: 0 6px 24px rgba(52, 211, 153, 0.25);
+}

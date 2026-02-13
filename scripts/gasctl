@@ -28,10 +28,6 @@ source "$SCRIPT_DIR/lib/aos-env.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/ctl-lib.sh"
 
-msg() { printf "[%s] %s\n" "$APP" "$*"; }
-warn() { printf "[%s] WARN: %s\n" "$APP" "$*" >&2; }
-die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
-
 HB_HOST_DEFAULT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
 
 env_override=""

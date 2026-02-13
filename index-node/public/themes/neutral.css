@@ -1,0 +1,53 @@
+[data-theme="neutral"] {
+  --bg-primary: #1a1d23;
+  --bg-secondary: #22272e;
+  --bg-tertiary: #2d333b;
+  --bg-panel: rgba(34, 39, 46, 0.95);
+  --bg-modal: rgba(26, 29, 35, 0.98);
+
+  --text-primary: #e6edf3;
+  --text-secondary: #adbac7;
+  --text-tertiary: #768390;
+  --text-accent: #6cb6ff;
+  --text-muted: #909dab;
+
+  --border-primary: #444c56;
+  --border-secondary: #373e47;
+  --border-tertiary: #2d333b;
+  --border-accent: #539bf5;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.5);
+  --shadow-accent: 0 0 0 1px var(--border-accent);
+
+  --glow-primary: none;
+  --glow-hover: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --glow-card: none;
+  --core4-progress-a: #7a8796;
+  --core4-progress-b: #5e6b78;
+  --core4-today-outline: rgba(108, 182, 255, 0.45);
+  --core4-domain-body-bg: rgba(255, 255, 255, 0.03);
+  --core4-domain-being-bg: rgba(255, 255, 255, 0.035);
+  --core4-domain-balance-bg: rgba(255, 255, 255, 0.04);
+  --core4-domain-business-bg: rgba(255, 255, 255, 0.045);
+  --doc-card-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.025), var(--bg-secondary));
+  --doc-card-bg-hover: linear-gradient(145deg, rgba(255, 255, 255, 0.045), var(--bg-secondary));
+  --gpt-card-border: var(--border-primary);
+  --gpt-card-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.02), var(--bg-secondary));
+  --gpt-card-bg-hover: linear-gradient(145deg, rgba(255, 255, 255, 0.05), var(--bg-secondary));
+
+  /* Legacy variable names (for Voice/Door/Game compatibility) */
+  --bg: #1a1d23;
+  --card: #22272e;
+  --border: #444c56;
+  --text: #e6edf3;
+  --muted: #adbac7;
+  --accent: #6cb6ff;
+  --accent-2: #539bf5;
+  --nav: #1a1d23;
+  --glow: rgba(100, 180, 255, 0.15);
+  --grain: none;
+  --accent-light: #6cb6ff;
+  --gold: #6cb6ff;
+}

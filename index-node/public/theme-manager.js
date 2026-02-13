@@ -1,17 +1,19 @@
 /**
- * ThemeManager - Centralized theme management with dynamic CSS loading
- * Each theme has its own CSS file in /themes/ directory
- * Supports 14 themes with individual fonts and styles
+ * ThemeManager - Centralized theme management
+ * Uses data-theme as primary mechanism.
+ * If /themes.css is not present, falls back to loading /themes/base.css + /themes/<theme>.css.
  */
 (() => {
+  const MIGRATION_KEY = 'aos-theme-default-migrated-v1';
   const THEMES = [
-    'matrix', 'neutral', 'cyan',
+    'slate', 'matrix', 'neutral', 'cyan',
     'obsidian', 'aurora', 'dawn', 'monk', 'copper',
     'forestnight', 'inkgold', 'bloodred',
     'github', 'ocean', 'blackred'
   ];
 
   const THEME_LABELS = {
+    'slate': '🧭 Slate',
     'matrix': '⚡ Matrix',
     'neutral': '🌙 Neutral',
     'cyan': '💎 Cyan',
@@ -28,9 +30,10 @@
     'blackred': '⚫ Black/Red'
   };
 
-  let currentTheme = 'matrix';
+  let currentTheme = 'slate';
   let storageKey = 'aos-theme';
-  let themeLink = null; // <link> element for theme CSS
+  let baseLink = null; // <link> element for base CSS
+  let themeLink = null; // <link> element for active theme CSS
 
   const ThemeManager = {
     /**
@@ -43,9 +46,19 @@
 
       // Load saved theme
       try {
-        currentTheme = localStorage.getItem(storageKey) || 'matrix';
+        const saved = localStorage.getItem(storageKey) || "";
+        const migrationDone = localStorage.getItem(MIGRATION_KEY) === "1";
+        if (THEMES.includes(saved)) {
+          currentTheme = (!migrationDone && saved === "matrix") ? "slate" : saved;
+        } else {
+          currentTheme = "slate";
+        }
+        if (!migrationDone) {
+          localStorage.setItem(MIGRATION_KEY, "1");
+          localStorage.setItem(storageKey, currentTheme);
+        }
       } catch (e) {
-        currentTheme = 'matrix';
+        currentTheme = 'slate';
       }
 
       // Apply theme immediately
@@ -67,7 +80,7 @@
      */
     applyTheme(themeKey) {
       if (!THEMES.includes(themeKey)) {
-        themeKey = 'matrix';
+        themeKey = 'slate';
       }
 
       currentTheme = themeKey;
@@ -75,7 +88,7 @@
       // Set data-theme attribute
       document.documentElement.setAttribute('data-theme', themeKey);
 
-      // Load theme CSS file
+      // Keep optional dynamic CSS fallback in sync
       this.loadThemeCSS(themeKey);
 
       // Save to localStorage
@@ -94,6 +107,19 @@
      * @param {string} themeKey - Theme identifier
      */
     loadThemeCSS(themeKey) {
+      // Normal path: pages include /themes.css manifest and rely on data-theme only.
+      const hasThemeManifest = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+        .some((link) => (link.getAttribute("href") || "").includes("/themes.css"));
+      if (hasThemeManifest) return;
+
+      if (!baseLink || !baseLink.parentNode) {
+        baseLink = document.createElement("link");
+        baseLink.rel = "stylesheet";
+        baseLink.href = "/themes/base.css";
+        baseLink.id = "dynamic-theme-base";
+        document.head.appendChild(baseLink);
+      }
+
       // Remove old theme link if exists
       if (themeLink && themeLink.parentNode) {
         themeLink.parentNode.removeChild(themeLink);
@@ -172,6 +198,7 @@
       select.innerHTML = ''; // Clear existing
 
       // Main themes
+      this.addOption(select, 'slate');
       this.addOption(select, 'matrix');
       this.addOption(select, 'neutral');
       this.addOption(select, 'cyan');

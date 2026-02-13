@@ -1,0 +1,27 @@
+[data-theme="inkgold"] {
+  --bg: #07070a;
+  --bg-primary: #07070a;
+  --bg-secondary: #0f0f15;
+  --bg-tertiary: #17171f;
+
+  --card: #0f0f15;
+  --border: rgba(212, 175, 55, 0.25);
+  --border-primary: rgba(212, 175, 55, 0.4);
+
+  --text: rgba(240, 220, 140, 0.92);
+  --text-primary: rgba(240, 220, 140, 0.92);
+  --text-muted: rgba(220, 200, 120, 0.70);
+
+  --muted: rgba(220, 200, 120, 0.70);
+  --accent: #d4af37;
+  --accent-2: #a78bfa;
+  --accent-primary: #d4af37;
+  --nav: rgba(0, 0, 0, 0.78);
+  --glow: rgba(212, 175, 55, 0.16);
+  --accent-light: #a78bfa;
+  --gold: #d4af37;
+
+  --shadow-sm: 0 2px 8px rgba(212, 175, 55, 0.15);
+  --shadow-md: 0 4px 16px rgba(212, 175, 55, 0.2);
+  --shadow-lg: 0 6px 24px rgba(212, 175, 55, 0.25);
+}

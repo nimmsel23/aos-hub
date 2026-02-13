@@ -4,6 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Shared ctl helpers (msg/warn/die/has_cmd/ui_*).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+
 # Codex session helper: nodectl codex [purpose...]
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
@@ -36,7 +40,6 @@ health_menu() {
   fi
 }
 
-has_gum() { command -v gum >/dev/null 2>&1; }
 section() {
   if has_gum; then
     gum style --bold --border normal --padding "0 1" "$1"
@@ -51,7 +54,7 @@ ts_url() {
 
 open_url() {
   local url="$1"
-  if command -v xdg-open >/dev/null 2>&1; then
+  if has_cmd xdg-open; then
     xdg-open "$url" >/dev/null 2>&1
   else
     echo "$url"
@@ -63,7 +66,7 @@ ensure_running() {
 }
 
 warmup() {
-  if command -v curl >/dev/null 2>&1; then
+  if has_cmd curl; then
     local base="http://${NODE_HOST}:${NODE_PORT}"
     for _ in {1..20}; do
       curl --max-time 1 -fsS "$base/" >/dev/null 2>&1 || true
@@ -88,6 +91,9 @@ Commands:
   routerctl      pass-through to routerctl (from aos-hub)
   bridgectl      pass-through to bridgectl (from aos-hub)
   indexctl       pass-through to indexctl (from aos-hub/scripts)
+  mode-dev       stop system index + start user dev service (via indexctl)
+  mode-prod      stop user dev service + start system index (via indexctl)
+  mode-status    show current system/user index mode (via indexctl)
   open           open index (tailscale preferred, fallback local)
   local          open local index
   ts             open tailscale URL
@@ -182,7 +188,7 @@ show_monitor() {
   health_menu
   echo
   section "Tailscale serve"
-  if command -v tailscale >/dev/null 2>&1; then
+  if has_cmd tailscale; then
     tailscale serve status 2>/dev/null || echo "tailscale: unavailable"
   else
     echo "tailscale: missing"
@@ -222,13 +228,13 @@ case "${1:-all}" in
     ;;
   fix)
     systemctl --user stop "$SERVICE_NAME" || true
-    if command -v lsof >/dev/null 2>&1; then
+    if has_cmd lsof; then
       pids="$(lsof -iTCP:${NODE_PORT} -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $2}' | sort -u)"
       if [[ -n "${pids:-}" ]]; then
         echo "killing: $pids"
         kill $pids || true
       fi
-    elif command -v fuser >/dev/null 2>&1; then
+    elif has_cmd fuser; then
       fuser -k -n tcp "$NODE_PORT" || true
     else
       echo "No lsof/fuser available to kill port ${NODE_PORT}" >&2
@@ -257,6 +263,30 @@ case "${1:-all}" in
     if [[ -x "$INDEXCTL_BIN" ]]; then
       shift
       "$INDEXCTL_BIN" "$@"
+    else
+      echo "indexctl not found or not executable: $INDEXCTL_BIN" >&2
+      exit 1
+    fi
+    ;;
+  mode-dev|dev-mode|switch-dev)
+    if [[ -x "$INDEXCTL_BIN" ]]; then
+      "$INDEXCTL_BIN" mode-dev
+    else
+      echo "indexctl not found or not executable: $INDEXCTL_BIN" >&2
+      exit 1
+    fi
+    ;;
+  mode-prod|prod-mode|switch-prod)
+    if [[ -x "$INDEXCTL_BIN" ]]; then
+      "$INDEXCTL_BIN" mode-prod
+    else
+      echo "indexctl not found or not executable: $INDEXCTL_BIN" >&2
+      exit 1
+    fi
+    ;;
+  mode-status)
+    if [[ -x "$INDEXCTL_BIN" ]]; then
+      "$INDEXCTL_BIN" mode-status
     else
       echo "indexctl not found or not executable: $INDEXCTL_BIN" >&2
       exit 1
@@ -356,14 +386,14 @@ case "${1:-all}" in
     ss -ltnp 2>/dev/null | grep ":${NODE_PORT}" || echo "no listener on :${NODE_PORT}"
     echo
     echo "[local curl]"
-    if command -v curl >/dev/null 2>&1; then
+    if has_cmd curl; then
       health_menu
     else
       echo "curl: missing"
     fi
     echo
     echo "[tailscale]"
-    command -v tailscale >/dev/null 2>&1 && tailscale serve status || echo "tailscale: missing"
+    has_cmd tailscale && tailscale serve status || echo "tailscale: missing"
     ;;
   help|--help|-h)
     usage

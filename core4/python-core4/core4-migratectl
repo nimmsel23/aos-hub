@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+DEFAULT_SOURCE_DIR="${AOS_CORE4_MOUNT_DIR:-$CORE4_MOUNT_DIR}"
+DEFAULT_TARGET_DIR="${AOS_HQ_CORE4_DIR:-${AOS_HQ_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_HQ}}"
+
+trim_trailing_slash() {
+  local p="${1:-}"
+  p="${p%/}"
+  printf '%s' "$p"
+}
+
+copy_file_if_missing() {
+  local src="$1"
+  local dst="$2"
+  local apply="$3"
+
+  if [[ -e "$dst" ]]; then
+    SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+    return 0
+  fi
+
+  COPIED_COUNT=$((COPIED_COUNT + 1))
+  if [[ "$apply" == "1" ]]; then
+    mkdir -p "$(dirname "$dst")"
+    cp -a "$src" "$dst"
+  fi
+}
+
+copy_tree_ignore_existing() {
+  local src_dir="$1"
+  local dst_dir="$2"
+  local apply="$3"
+
+  [[ -d "$src_dir" ]] || return 0
+
+  if command -v rsync >/dev/null 2>&1; then
+    local before after
+    before="$(find "$dst_dir" -type f 2>/dev/null | wc -l | awk '{print $1}')"
+    if [[ "$apply" == "1" ]]; then
+      mkdir -p "$dst_dir"
+      rsync -a --ignore-existing "$src_dir/" "$dst_dir/" >/dev/null
+    fi
+    after="$(find "$dst_dir" -type f 2>/dev/null | wc -l | awk '{print $1}')"
+    local delta=$((after - before))
+    if (( delta > 0 )); then
+      COPIED_COUNT=$((COPIED_COUNT + delta))
+    fi
+    return 0
+  fi
+
+  while IFS= read -r -d '' src_file; do
+    local rel dst
+    rel="${src_file#"$src_dir/"}"
+    dst="$dst_dir/$rel"
+    copy_file_if_missing "$src_file" "$dst" "$apply"
+  done < <(find "$src_dir" -type f -print0)
+}
+
+migrate_hq() {
+  local apply=0
+  local src_dir="$DEFAULT_SOURCE_DIR"
+  local dst_dir="$DEFAULT_TARGET_DIR"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --apply) apply=1 ;;
+      --source)
+        shift
+        [[ $# -gt 0 ]] || die "--source requires a value"
+        src_dir="$1"
+        ;;
+      --target)
+        shift
+        [[ $# -gt 0 ]] || die "--target requires a value"
+        dst_dir="$1"
+        ;;
+      -h|--help)
+        usage
+        return 0
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  src_dir="$(trim_trailing_slash "$src_dir")"
+  dst_dir="$(trim_trailing_slash "$dst_dir")"
+
+  [[ -d "$src_dir" ]] || die "source dir not found: $src_dir"
+
+  msg "Core4 HQ migration"
+  msg "- source: $src_dir"
+  msg "- target: $dst_dir"
+  msg "- mode:   $([[ "$apply" == "1" ]] && echo APPLY || echo DRY-RUN)"
+  msg ""
+
+  COPIED_COUNT=0
+  SKIPPED_COUNT=0
+
+  local top_patterns=(
+    "core4_day_*.json"
+    "core4_week_*.json"
+    "core4_week_summary_*.md"
+    "core4_week_summary_*.json"
+    "*.csv"
+  )
+
+  local pattern
+  for pattern in "${top_patterns[@]}"; do
+    while IFS= read -r -d '' src_file; do
+      local name dst_file
+      name="$(basename "$src_file")"
+      dst_file="$dst_dir/$name"
+      copy_file_if_missing "$src_file" "$dst_file" "$apply"
+    done < <(find "$src_dir" -maxdepth 1 -type f -name "$pattern" -print0)
+  done
+
+  copy_tree_ignore_existing "$src_dir/.core4" "$dst_dir/.core4" "$apply"
+  copy_tree_ignore_existing "$src_dir/journal" "$dst_dir/journal" "$apply"
+
+  msg "Done."
+  msg "- copied:  $COPIED_COUNT"
+  msg "- skipped: $SKIPPED_COUNT"
+
+  if [[ "$apply" != "1" ]]; then
+    msg ""
+    msg "Dry-run only. Run with --apply to execute copy."
+  fi
+}
+
+status() {
+  msg "Core4 migration status"
+  msg "- source(default): $DEFAULT_SOURCE_DIR"
+  msg "- target(default): $DEFAULT_TARGET_DIR"
+  msg "- source exists:   $([[ -d "$DEFAULT_SOURCE_DIR" ]] && echo yes || echo no)"
+  msg "- target exists:   $([[ -d "$DEFAULT_TARGET_DIR" ]] && echo yes || echo no)"
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-migratectl <command> [options]
+
+Commands:
+  status
+  migrate-hq [--apply] [--source DIR] [--target DIR]
+
+Examples:
+  core4-migratectl migrate-hq
+  core4-migratectl migrate-hq --apply
+  core4-migratectl migrate-hq --apply --source ~/AlphaOS-Vault/Alpha_Core4 --target ~/AlphaOS-Vault/Alpha_HQ
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  status) status ;;
+  migrate-hq|hq-migrate) migrate_hq "$@" ;;
+  *) usage; exit 1 ;;
+esac

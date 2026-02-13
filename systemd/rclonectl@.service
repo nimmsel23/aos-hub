@@ -1,0 +1,7 @@
+[Unit]
+Description=rclonectl job (%i)
+
+[Service]
+Type=oneshot
+ExecStart=%h/aos-hub/scripts/rclonectl run %i --run
+
