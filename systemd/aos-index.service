@@ -8,6 +8,7 @@ Type=simple
 User=alpha
 Group=alpha
 EnvironmentFile=-/etc/alphaos-hub/env
+EnvironmentFile=-/etc/alphaos-hub/aos.env
 EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env
 ExecStart=/usr/bin/bash -lc 'cd "$AOS_HUB_DIR/index-node" && exec /usr/bin/node server.js'
 Restart=on-failure

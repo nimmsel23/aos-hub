@@ -6,6 +6,8 @@ After=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/aos-hub/index-node
+EnvironmentFile=-%h/.env/aos.env
+EnvironmentFile=-%h/.env/alphaos-index.env
 Environment=NODE_ENV=development
 Environment=HOST=0.0.0.0
 Environment=PORT=8799

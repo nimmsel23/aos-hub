@@ -49,6 +49,13 @@ MENU_YAML=./menu.yaml
 
 # Optional: Telegram CLI path used by /api/tele/send
 # TELE_BIN=/home/alpha/bin/utils/tele
+
+# Optional: UI basic auth (recommended when exposed via Funnel)
+# AOS_UI_BASIC_AUTH=1
+# AOS_UI_BASIC_USER=alpha
+# AOS_UI_BASIC_PASS=change-me
+# AOS_UI_BASIC_REALM=AlphaOS Hub
+# AOS_UI_BASIC_AUTH_PROTECT_API=0
 EOF
   sudo_cmd chmod 600 "$ENV_FILE" || true
   msg "✅ Created env file: $ENV_FILE"

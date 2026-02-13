@@ -6,7 +6,7 @@
 set -euo pipefail
 
 APP="aosctl"
-AOSCTL_VERSION="1.1.2"
+AOSCTL_VERSION="1.1.3"
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 # If called via symlink from dotfiles, normalize to aos-hub
@@ -20,6 +20,9 @@ fi
 
 # shellcheck disable=SC1090
 source "$SCRIPT_DIR/scripts/ctl-lib.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$SCRIPT_DIR" || true
 : "${CTL_CHOOSE_PROMPT:=αOS — aosctl}"
 : "${CTL_CHOOSE_PREFER:=gum}"
 : "${CTL_UI_OK_PREFIX:=✔}"
@@ -71,6 +74,283 @@ GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 AOS_CENTRES="${AOS_CENTRES_CMD:-$HOME/αOS/bin/aos-centres}"
 RCLONE_RC_URL="${AOS_RCLONE_RC_URL:-http://127.0.0.1:5572/}"
 
+env_file_has_key() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 1
+  awk -F= -v k="$key" '
+    $0 !~ /^[[:space:]]*#/ {
+      kk=$1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", kk)
+      if (kk == k) { found=1; exit 0 }
+    }
+    END { exit found ? 0 : 1 }
+  ' "$file"
+}
+
+env_file_get_value() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 1
+  awk -F= -v k="$key" '
+    $0 !~ /^[[:space:]]*#/ {
+      kk=$1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", kk)
+      if (kk == k) {
+        vv=substr($0, index($0, "=")+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", vv)
+        print vv
+        exit 0
+      }
+    }
+  ' "$file"
+}
+
+env_example_has_key() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 1
+  awk -F= -v k="$key" '
+    {
+      line=$0
+      sub(/^[[:space:]]*#?[[:space:]]*/, "", line)
+      split(line, parts, "=")
+      kk=parts[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", kk)
+      if (kk == k) { found=1; exit 0 }
+    }
+    END { exit found ? 0 : 1 }
+  ' "$file"
+}
+
+env_var_nonempty() {
+  local key="$1"
+  [[ -n "${!key:-}" ]]
+}
+
+env_contract_rows() {
+  cat <<EOF
+index|$SCRIPT_DIR/scripts/indexctl||AOS_INDEX_USER_SERVICE AOS_INDEX_ENV_FILE AOS_INDEX_HEALTH_URL AOS_HUB_DOCTOR AOS_UI_BASIC_AUTH AOS_UI_BASIC_USER AOS_UI_BASIC_PASS AOS_UI_BASIC_REALM AOS_UI_BASIC_AUTH_PROTECT_API
+router|$SCRIPT_DIR/router/routerctl||AOS_ENV_FILE
+bridge|$SCRIPT_DIR/bridge/bridgectl||AOS_BRIDGE_ENV_FILE AOS_BRIDGE_URL AOS_BRIDGE_TOKEN AOS_BRIDGE_TOKEN_HEADER AOS_BRIDGE_HOST AOS_BRIDGE_PORT AOS_BRIDGE_TAILSCALE_PATH AOS_BRIDGE_TAILSCALE_TARGET
+sync|$SCRIPT_DIR/scripts/syncctl||AOS_DRY_RUN AOS_COPY_LINKS AOS_SYNC_CONF_DIR AOS_SYNC_LOCK_DIR AOS_RCLONE_CONFIG AOS_RCLONE_REMOTE_NAME AOS_LOG_DIR AOS_LOG_LIMIT
+git|$SCRIPT_DIR/scripts/gitctl||AOS_GIT_SILENT AOS_GIT_NOTIFY
+backup|$SCRIPT_DIR/scripts/backupctl||AOS_HUB_DIR
+mount|$SCRIPT_DIR/scripts/mountctl||AOS_CORE4_MOUNT_SERVICE AOS_VOICE_MOUNT_SERVICE AOS_DOOR_MOUNT_SERVICE AOS_GAME_MOUNT_SERVICE
+hook|$SCRIPT_DIR/scripts/hookctl||AOS_HOOK_DIR AOS_HOOK_ENV_DIR AOS_HOOK_ENV_FILE AOS_HOOK_TARGET AOS_HOOK_TELE_BIN AOS_HOOK_TELE_FORMAT AOS_HOOK_TELE_INCLUDE_UUID AOS_HOOK_TELE_SILENT AOS_HOOK_CORE4_TELE_DONE AOS_CORE4_LOG AOS_CORE4_POINTS AOS_TASK_EXPORT_FILTER AOS_TASK_EXPORT_PATH AOS_TASK_EXPORT_VAULT_PATH AOS_TASK_EXPORT_COPY_TO_VAULT AOS_TASK_EXPORT_MIN_INTERVAL_SEC AOS_BRIDGE_URL
+door|$SCRIPT_DIR/scripts/doorctl||AOS_VAULT_DIR AOS_DOOR_STALLED_DAYS
+game|$SCRIPT_DIR/scripts/gamectl||AOS_GAME_MOUNT_SERVICE
+voice|$SCRIPT_DIR/scripts/voicectl||AOS_VOICE_MOUNT_SERVICE
+firectl|$SCRIPT_DIR/scripts/firectl||AOS_TASK_BIN AOS_PYTHON_BIN AOS_TASKRC AOS_VAULT_DIR AOS_FIRE_DIR AOS_FIREBOT_SCRIPT AOS_FIRE_ENV_FILE AOS_FIRE_GIT_DIR
+gas|$SCRIPT_DIR/scripts/gasctl||AOS_GAS_WEBHOOK_URL AOS_GAS_TENT_DIR
+EOF
+}
+
+env_contract_list() {
+  local row component file required recommended
+  msg "aosctl env contracts"
+  while IFS='|' read -r component file required recommended; do
+    [[ -n "$component" ]] || continue
+    msg ""
+    msg "[$component]"
+    msg "  file: $file"
+    msg "  required: ${required:-<none>}"
+    msg "  recommended: ${recommended:-<none>}"
+  done < <(env_contract_rows)
+}
+
+env_check_contracts() {
+  local quiet="${1:-0}"
+  local example_file="$SCRIPT_DIR/scripts/aos.env.example"
+  local recommended_enabled="${AOS_ENV_CHECK_RECOMMENDED:-0}"
+
+  local row component file required recommended key
+  local required_missing=0
+  local recommended_missing=0
+  local contracts_checked=0
+
+  declare -A seen_required_missing=()
+  declare -A seen_recommended_missing=()
+  declare -A seen_example_missing=()
+
+  if [[ "$quiet" != "1" ]]; then
+    msg ""
+    msg "Env check: wrapped component contracts"
+    msg "  aos env : ${AOS_ENV_FILE_EFFECTIVE:-<none loaded>}"
+    msg "  example : $example_file"
+  fi
+
+  while IFS='|' read -r component file required recommended; do
+    [[ -n "$component" ]] || continue
+    if [[ ! -f "$file" ]]; then
+      env_check_issue "contract file not found for ${component}: ${file}"
+      continue
+    fi
+    contracts_checked=$((contracts_checked + 1))
+
+    for key in $required; do
+      [[ -n "$key" ]] || continue
+      if ! env_var_nonempty "$key"; then
+        if [[ -z "${seen_required_missing[$key]:-}" ]]; then
+          env_check_issue "missing ${key} in loaded env (required by ${component})"
+          seen_required_missing["$key"]=1
+          required_missing=$((required_missing + 1))
+        fi
+      fi
+      if ! env_example_has_key "$example_file" "$key"; then
+        if [[ -z "${seen_example_missing[$key]:-}" ]]; then
+          env_check_issue "missing ${key} in scripts/aos.env.example (declared by ${component})"
+          seen_example_missing["$key"]=1
+        fi
+      fi
+    done
+
+    if [[ "$recommended_enabled" == "1" ]]; then
+      for key in $recommended; do
+        [[ -n "$key" ]] || continue
+        if ! env_var_nonempty "$key"; then
+          if [[ -z "${seen_recommended_missing[$key]:-}" ]]; then
+            warn "not set ${key} (recommended by ${component})"
+            seen_recommended_missing["$key"]=1
+            recommended_missing=$((recommended_missing + 1))
+          fi
+        fi
+        if ! env_example_has_key "$example_file" "$key"; then
+          if [[ -z "${seen_example_missing[$key]:-}" ]]; then
+            env_check_issue "missing ${key} in scripts/aos.env.example (declared by ${component})"
+            seen_example_missing["$key"]=1
+          fi
+        fi
+      done
+    fi
+  done < <(env_contract_rows)
+
+  if [[ "$quiet" != "1" ]]; then
+    msg "Contracts checked: ${contracts_checked}"
+    msg "Required vars missing: ${required_missing}"
+    if [[ "$recommended_enabled" == "1" ]]; then
+      msg "Recommended vars missing: ${recommended_missing}"
+    else
+      msg "Recommended vars check: disabled (AOS_ENV_CHECK_RECOMMENDED=0)"
+    fi
+  fi
+}
+
+env_warn_missing_key() {
+  local file="$1"
+  local key="$2"
+  env_file_has_key "$file" "$key" || env_check_issue "missing ${key} in ${file}"
+}
+
+env_check_issue() {
+  local text="$1"
+  warn "$text"
+  ENV_CHECK_ISSUES=$((ENV_CHECK_ISSUES + 1))
+}
+
+env_run_check() {
+  local quiet="${1:-0}"
+  ENV_CHECK_ISSUES=0
+
+  local user_service="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+  local user_unit="$HOME/.config/systemd/user/$user_service"
+  local user_env="${AOS_INDEX_USER_ENV_FILE:-$HOME/.env/alphaos-index.env}"
+
+  local sys_unit="/etc/systemd/system/aos-index.service"
+  local sys_env="/etc/alphaos-hub/alphaos-index.env"
+  local sys_global="/etc/alphaos-hub/aos.env"
+
+  if [[ "$quiet" != "1" ]]; then
+    msg "Env check: index user/system configuration"
+    msg "  user unit : $user_unit"
+    msg "  user env  : $user_env"
+    msg "  sys unit  : $sys_unit"
+    msg "  sys env   : $sys_env"
+    msg "  sys aos   : $sys_global"
+    msg ""
+  fi
+
+  # User service + user env checks
+  if [[ -f "$user_unit" ]]; then
+    grep -Fq "EnvironmentFile=-%h/.env/aos.env" "$user_unit" || \
+      env_check_issue "missing EnvironmentFile=-%h/.env/aos.env in $user_unit"
+    grep -Fq "EnvironmentFile=-%h/.env/alphaos-index.env" "$user_unit" || \
+      env_check_issue "missing EnvironmentFile=-%h/.env/alphaos-index.env in $user_unit"
+  else
+    env_check_issue "user unit not found: $user_unit"
+  fi
+
+  if [[ -f "$user_env" ]]; then
+    env_warn_missing_key "$user_env" "HOST"
+    env_warn_missing_key "$user_env" "PORT"
+    local uauth
+    uauth="$(env_file_get_value "$user_env" "AOS_UI_BASIC_AUTH" 2>/dev/null || true)"
+    if [[ "$uauth" == "1" ]]; then
+      env_warn_missing_key "$user_env" "AOS_UI_BASIC_USER"
+      env_warn_missing_key "$user_env" "AOS_UI_BASIC_PASS"
+    fi
+  else
+    env_check_issue "user env not found: $user_env"
+  fi
+
+  # System service + system env checks (only when readable/installed)
+  if [[ -f "$sys_unit" ]]; then
+    if [[ -r "$sys_unit" ]]; then
+      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/env" "$sys_unit" || \
+        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/env in $sys_unit"
+      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/aos.env" "$sys_unit" || \
+        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/aos.env in $sys_unit"
+      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env" "$sys_unit" || \
+        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env in $sys_unit"
+    else
+      env_check_issue "system unit exists but is not readable: $sys_unit"
+    fi
+  else
+    env_check_issue "system unit not found: $sys_unit"
+  fi
+
+  if [[ -f "$sys_global" ]]; then
+    if [[ -r "$sys_global" ]]; then
+      env_warn_missing_key "$sys_global" "AOS_INDEX_SERVICE"
+    else
+      env_check_issue "system global env exists but is not readable: $sys_global"
+    fi
+  else
+    env_check_issue "system global env not found: $sys_global"
+  fi
+
+  if [[ -f "$sys_env" ]]; then
+    if [[ -r "$sys_env" ]]; then
+      env_warn_missing_key "$sys_env" "HOST"
+      env_warn_missing_key "$sys_env" "PORT"
+      local sauth
+      sauth="$(env_file_get_value "$sys_env" "AOS_UI_BASIC_AUTH" 2>/dev/null || true)"
+      if [[ "$sauth" == "1" ]]; then
+        env_warn_missing_key "$sys_env" "AOS_UI_BASIC_USER"
+        env_warn_missing_key "$sys_env" "AOS_UI_BASIC_PASS"
+      fi
+    else
+      env_check_issue "system index env exists but is not readable: $sys_env"
+    fi
+  else
+    env_check_issue "system index env not found: $sys_env"
+  fi
+
+  env_check_contracts "$quiet"
+
+  if (( ENV_CHECK_ISSUES == 0 )); then
+    if [[ "$quiet" != "1" ]]; then
+      msg "Env check passed."
+    fi
+    return 0
+  fi
+
+  if [[ "$quiet" != "1" ]]; then
+    warn "Env check found ${ENV_CHECK_ISSUES} issue(s)."
+  fi
+  return 1
+}
+
 show_help() {
   cat <<'__HELP__'
 aosctl - AOS Unified Control Interface
@@ -78,6 +358,7 @@ aosctl - AOS Unified Control Interface
 
 USAGE:
   aosctl <component> <action> [args...]
+  aosctl                     # Env check + interactive menu
   aosctl menu                # Interactive menu (gum/fzf if available)
   aosctl status              # Unified status (no logs) + heartbeat ping
   aosctl ping                # Heartbeat ping (routerctl)
@@ -138,6 +419,10 @@ EXAMPLES:
   aosctl game status
   aosctl voice status
   aosctl centre list
+  aosctl env check
+  aosctl env check --recommended
+  aosctl env example
+  aosctl env contracts
   aosctl env list
   aosctl alias ui
 
@@ -169,6 +454,9 @@ show_menu() {
   [[ -n "$DOORCTL" ]] && choices+=("Door: status")
   [[ -n "$GAMECTL" ]] && choices+=("Game: status")
   [[ -n "$VOICECTL" ]] && choices+=("Voice: status")
+  choices+=("Env: check")
+  choices+=("Env: contracts")
+  choices+=("Env: example")
   [[ -n "$ENVCTL" ]] && choices+=("Env: list")
   [[ -n "$ALIASCTL" ]] && choices+=("Aliases: ui")
   choices+=("Status" "Ping" "Doctor" "Help" "Quit")
@@ -190,6 +478,9 @@ show_menu() {
     "Door: status") "$DOORCTL" status ;;
     "Game: status") "$GAMECTL" status ;;
     "Voice: status") "$VOICECTL" status ;;
+    "Env: check") env_cmd check ;;
+    "Env: contracts") env_cmd contracts ;;
+    "Env: example") env_cmd example ;;
     "Env: list") env_cmd list ;;
     "Aliases: ui") alias_cmd ui ;;
     "Status") run_status ;;
@@ -653,8 +944,74 @@ __FIRE__
 }
 
 env_cmd() {
-  [[ -n "$ENVCTL" ]] || die "envctl not found"
-  "$ENVCTL" "$@"
+  local sub="${1:-check}"
+  shift || true
+  case "$sub" in
+    check|doctor|validate)
+      local recommended="${AOS_ENV_CHECK_RECOMMENDED:-0}"
+      local arg=""
+      for arg in "$@"; do
+        case "$arg" in
+          --recommended|--all)
+            recommended=1
+            ;;
+          --no-recommended)
+            recommended=0
+            ;;
+          *)
+            die "Usage: aosctl env check [--recommended|--all|--no-recommended]"
+            ;;
+        esac
+      done
+      AOS_ENV_CHECK_RECOMMENDED="$recommended" env_run_check 0
+      ;;
+    contracts|spec|vars)
+      env_contract_list
+      ;;
+    example|init-example)
+      local template="$SCRIPT_DIR/scripts/aos.env.example"
+      [[ -f "$template" ]] || die "missing template: $template"
+
+      local dst="${AOS_ENV_EXAMPLE_FILE:-}"
+      local force=0
+      local arg=""
+      for arg in "$@"; do
+        case "$arg" in
+          -f|--force)
+            force=1
+            ;;
+          *)
+            if [[ -z "$dst" ]]; then
+              dst="$arg"
+            else
+              die "Usage: aosctl env example [dest-file] [--force]"
+            fi
+            ;;
+        esac
+      done
+
+      if [[ -z "$dst" ]]; then
+        if [[ -d "$SCRIPT_DIR/.env" || -L "$SCRIPT_DIR/.env" ]]; then
+          dst="$SCRIPT_DIR/.env/aos.env.example"
+        else
+          dst="$HOME/.env/aos.env.example"
+        fi
+      fi
+
+      mkdir -p "$(dirname "$dst")"
+      if [[ -e "$dst" && "$force" != "1" ]]; then
+        warn "env example exists: $dst (use --force to overwrite)"
+        return 0
+      fi
+
+      cp "$template" "$dst"
+      msg "env example written: $dst"
+      ;;
+    *)
+      [[ -n "$ENVCTL" ]] || die "envctl not found (only 'aosctl env check' is available without envctl)"
+      "$ENVCTL" "$sub" "$@"
+      ;;
+  esac
 }
 
 alias_cmd() {
@@ -767,6 +1124,7 @@ PY
 
 main() {
   if [[ $# -eq 0 ]]; then
+    env_run_check 0 || true
     show_menu
     exit 0
   fi
@@ -775,7 +1133,7 @@ main() {
   shift || true
 
   case "$cmd" in
-    menu) show_menu ;;
+    menu) env_run_check 0 || true; show_menu ;;
     status) run_status ;;
     ping) run_ping ;;
     help|-h|--help) show_help ;;
