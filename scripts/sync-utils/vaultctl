@@ -32,6 +32,14 @@ COPY_LINKS_MODE="${AOS_VAULT_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
 BACKUP_DIR_REMOTE="${AOS_VAULT_BACKUP_DIR_REMOTE:-${AOS_VAULT_BACKUP_DIR:-}}"
 BACKUP_DIR_LOCAL="${AOS_VAULT_BACKUP_DIR_LOCAL:-}"
 BACKUP_SUFFIX="${AOS_VAULT_BACKUP_SUFFIX:-}"
+VAULT_SYNC_PULL_UNIT="${AOS_VAULT_SYNC_PULL_UNIT:-alphaos-vault-sync-pull.service}"
+VAULT_SYNC_PUSH_UNIT="${AOS_VAULT_SYNC_PUSH_UNIT:-alphaos-vault-sync-push.service}"
+VAULT_SYNC_UNIT_DIR="${AOS_VAULT_SYNC_UNIT_DIR:-/etc/systemd/system}"
+VAULT_SYNC_PULL_TEMPLATE="${AOS_VAULT_SYNC_PULL_TEMPLATE:-$ROOT_DIR/systemd/$VAULT_SYNC_PULL_UNIT}"
+VAULT_SYNC_PUSH_TEMPLATE="${AOS_VAULT_SYNC_PUSH_TEMPLATE:-$ROOT_DIR/systemd/$VAULT_SYNC_PUSH_UNIT}"
+VAULT_SYNC_PULL_INSTALLED="$VAULT_SYNC_UNIT_DIR/$VAULT_SYNC_PULL_UNIT"
+VAULT_SYNC_PUSH_INSTALLED="$VAULT_SYNC_UNIT_DIR/$VAULT_SYNC_PUSH_UNIT"
+VAULT_SYNC_ENV_FILE="${AOS_VAULT_SYNC_ENV_FILE:-/etc/aos/alphaos-vault-sync.env}"
 
 RCLONE_COMMON_OPTS=(--create-empty-src-dirs)
 if [ "${COPY_LINKS_MODE}" = "1" ]; then
@@ -405,6 +413,226 @@ warn() {
   fi
 }
 
+has_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+sudo_cmd() {
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    if ! has_cmd sudo; then
+      warn "sudo not found; cannot run privileged command"
+      return 1
+    fi
+    sudo "$@"
+    return $?
+  fi
+  "$@"
+}
+
+need_systemctl() {
+  if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
+    warn "systemctl not found"
+    return 1
+  fi
+}
+
+vault_sync_unit_path_for_edit() {
+  local unit="$1"
+  local installed="$VAULT_SYNC_UNIT_DIR/$unit"
+  local template="$ROOT_DIR/systemd/$unit"
+  if [[ -f "$installed" ]]; then
+    printf "%s\n" "$installed"
+    return 0
+  fi
+  printf "%s\n" "$template"
+}
+
+edit_path() {
+  local path="$1"
+  if [[ "$path" == /etc/* ]]; then
+    if has_cmd sudoedit; then
+      sudoedit "$path"
+    else
+      sudo_cmd "${EDITOR:-nano}" "$path"
+    fi
+    return $?
+  fi
+  "${EDITOR:-nano}" "$path"
+}
+
+ensure_vault_sync_env_file() {
+  if [[ -f "$VAULT_SYNC_ENV_FILE" ]]; then
+    return 0
+  fi
+  if [[ "$VAULT_SYNC_ENV_FILE" == /etc/* ]]; then
+    sudo_cmd mkdir -p "$(dirname -- "$VAULT_SYNC_ENV_FILE")"
+    sudo_cmd tee "$VAULT_SYNC_ENV_FILE" >/dev/null <<'EOF'
+# Optional overrides for vault-sync system services.
+# This file is loaded by:
+# - alphaos-vault-sync-pull.service
+# - alphaos-vault-sync-push.service
+#
+# VAULT_REMOTE=fabian:AlphaOS-Vault
+# VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups
+# VAULT_LOCAL=/home/alpha/AlphaOS-Vault
+# VAULT_LOCAL_BACKUP=/home/alpha/.local/share/alphaos/vault-backups
+# VAULT_RCLONE_FLAGS=--skip-links
+EOF
+    return $?
+  fi
+  mkdir -p "$(dirname -- "$VAULT_SYNC_ENV_FILE")"
+  cat >"$VAULT_SYNC_ENV_FILE" <<'EOF'
+# Optional overrides for vault-sync system services.
+# This file is loaded by:
+# - alphaos-vault-sync-pull.service
+# - alphaos-vault-sync-push.service
+#
+# VAULT_REMOTE=fabian:AlphaOS-Vault
+# VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups
+# VAULT_LOCAL=/home/alpha/AlphaOS-Vault
+# VAULT_LOCAL_BACKUP=/home/alpha/.local/share/alphaos/vault-backups
+# VAULT_RCLONE_FLAGS=--skip-links
+EOF
+}
+
+vault_sync_system_status() {
+  info "vaultctl systemd status"
+  echo ""
+  info "pull unit template:    $VAULT_SYNC_PULL_TEMPLATE"
+  info "push unit template:    $VAULT_SYNC_PUSH_TEMPLATE"
+  info "pull unit installed:   $VAULT_SYNC_PULL_INSTALLED"
+  info "push unit installed:   $VAULT_SYNC_PUSH_INSTALLED"
+  info "vault sync env file:   $VAULT_SYNC_ENV_FILE"
+  echo ""
+
+  [[ -f "$VAULT_SYNC_PULL_TEMPLATE" ]] || warn "missing template: $VAULT_SYNC_PULL_TEMPLATE"
+  [[ -f "$VAULT_SYNC_PUSH_TEMPLATE" ]] || warn "missing template: $VAULT_SYNC_PUSH_TEMPLATE"
+  [[ -f "$VAULT_SYNC_PULL_INSTALLED" ]] || warn "not installed: $VAULT_SYNC_PULL_INSTALLED"
+  [[ -f "$VAULT_SYNC_PUSH_INSTALLED" ]] || warn "not installed: $VAULT_SYNC_PUSH_INSTALLED"
+  [[ -f "$VAULT_SYNC_ENV_FILE" ]] || warn "missing env: $VAULT_SYNC_ENV_FILE"
+
+  need_systemctl || return 1
+  echo ""
+  "$SYSTEMCTL_BIN" status "$VAULT_SYNC_PULL_UNIT" --no-pager || true
+  echo ""
+  "$SYSTEMCTL_BIN" status "$VAULT_SYNC_PUSH_UNIT" --no-pager || true
+}
+
+vault_sync_system_install() {
+  need_systemctl || return 1
+  [[ -f "$VAULT_SYNC_PULL_TEMPLATE" ]] || { warn "missing template: $VAULT_SYNC_PULL_TEMPLATE"; return 1; }
+  [[ -f "$VAULT_SYNC_PUSH_TEMPLATE" ]] || { warn "missing template: $VAULT_SYNC_PUSH_TEMPLATE"; return 1; }
+
+  sudo_cmd mkdir -p "$VAULT_SYNC_UNIT_DIR"
+  sudo_cmd cp "$VAULT_SYNC_PULL_TEMPLATE" "$VAULT_SYNC_PULL_INSTALLED"
+  sudo_cmd cp "$VAULT_SYNC_PUSH_TEMPLATE" "$VAULT_SYNC_PUSH_INSTALLED"
+  sudo_cmd "$SYSTEMCTL_BIN" daemon-reload
+  info "installed: $VAULT_SYNC_PULL_INSTALLED"
+  info "installed: $VAULT_SYNC_PUSH_INSTALLED"
+}
+
+vault_sync_system_enable() {
+  need_systemctl || return 1
+  sudo_cmd "$SYSTEMCTL_BIN" enable "$VAULT_SYNC_PULL_UNIT" "$VAULT_SYNC_PUSH_UNIT"
+}
+
+vault_sync_system_disable() {
+  need_systemctl || return 1
+  sudo_cmd "$SYSTEMCTL_BIN" disable "$VAULT_SYNC_PULL_UNIT" "$VAULT_SYNC_PUSH_UNIT"
+}
+
+vault_sync_system_run_pull() {
+  need_systemctl || return 1
+  sudo_cmd "$SYSTEMCTL_BIN" start "$VAULT_SYNC_PULL_UNIT"
+}
+
+vault_sync_system_run_push() {
+  need_systemctl || return 1
+  # Push happens on stop via ExecStop in the service definition.
+  sudo_cmd "$SYSTEMCTL_BIN" start "$VAULT_SYNC_PUSH_UNIT"
+  sudo_cmd "$SYSTEMCTL_BIN" stop "$VAULT_SYNC_PUSH_UNIT"
+}
+
+vault_sync_system_logs() {
+  local lines="${1:-100}"
+  local follow="${2:-0}"
+  if [[ "$follow" == "1" ]]; then
+    sudo_cmd journalctl -u "$VAULT_SYNC_PULL_UNIT" -u "$VAULT_SYNC_PUSH_UNIT" -n "$lines" -f
+  else
+    sudo_cmd journalctl -u "$VAULT_SYNC_PULL_UNIT" -u "$VAULT_SYNC_PUSH_UNIT" -n "$lines" --no-pager
+  fi
+}
+
+vault_sync_system_edit() {
+  local target="${1:-pull}"
+  case "$target" in
+    pull|push)
+      local unit=""
+      if [[ "$target" == "pull" ]]; then
+        unit="$VAULT_SYNC_PULL_UNIT"
+      else
+        unit="$VAULT_SYNC_PUSH_UNIT"
+      fi
+      local path=""
+      path="$(vault_sync_unit_path_for_edit "$unit")"
+      if [[ ! -f "$path" ]]; then
+        warn "unit file not found: $path"
+        return 1
+      fi
+      info "editing: $path"
+      edit_path "$path"
+      ;;
+    env|vars)
+      ensure_vault_sync_env_file
+      info "editing: $VAULT_SYNC_ENV_FILE"
+      edit_path "$VAULT_SYNC_ENV_FILE"
+      ;;
+    *)
+      warn "Usage: vaultctl systemd edit <pull|push|env>"
+      return 2
+      ;;
+  esac
+}
+
+vault_sync_system_cmd() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    status) vault_sync_system_status ;;
+    install) vault_sync_system_install ;;
+    enable) vault_sync_system_enable ;;
+    disable) vault_sync_system_disable ;;
+    run-pull|pull) vault_sync_system_run_pull ;;
+    run-push|push) vault_sync_system_run_push ;;
+    logs)
+      local lines="100"
+      local follow=0
+      local arg=""
+      for arg in "$@"; do
+        case "$arg" in
+          --follow|-f) follow=1 ;;
+          '' ) ;;
+          *)
+            if [[ "$arg" =~ ^[0-9]+$ ]]; then
+              lines="$arg"
+            else
+              warn "unknown logs arg: $arg"
+              return 2
+            fi
+            ;;
+        esac
+      done
+      vault_sync_system_logs "$lines" "$follow"
+      ;;
+    edit) vault_sync_system_edit "${1:-pull}" ;;
+    env) vault_sync_system_edit env ;;
+    *)
+      warn "Usage: vaultctl systemd <status|install|enable|disable|run-pull|run-push|logs [n] [--follow]|edit <pull|push|env>|env>"
+      return 2
+      ;;
+  esac
+}
+
 run_cmd() {
   local title="$1"
   shift
@@ -600,6 +828,15 @@ menu() {
       "Push dry-run (copy)" \
       "Pull now (copy)" \
       "Pull dry-run (copy)" \
+      "Systemd: status" \
+      "Systemd: install units" \
+      "Systemd: enable pull+push" \
+      "Systemd: disable pull+push" \
+      "Systemd: run pull now" \
+      "Systemd: run push now" \
+      "Systemd: edit pull unit" \
+      "Systemd: edit push unit" \
+      "Systemd: edit env" \
       "Timers" \
       "Logs" \
       "Watch" \
@@ -612,6 +849,15 @@ menu() {
       "Push dry-run (copy)") sync true ;;
       "Pull now (copy)") pull ;;
       "Pull dry-run (copy)") pull true ;;
+      "Systemd: status") vault_sync_system_cmd status ;;
+      "Systemd: install units") vault_sync_system_cmd install ;;
+      "Systemd: enable pull+push") vault_sync_system_cmd enable ;;
+      "Systemd: disable pull+push") vault_sync_system_cmd disable ;;
+      "Systemd: run pull now") vault_sync_system_cmd run-pull ;;
+      "Systemd: run push now") vault_sync_system_cmd run-push ;;
+      "Systemd: edit pull unit") vault_sync_system_cmd edit pull ;;
+      "Systemd: edit push unit") vault_sync_system_cmd edit push ;;
+      "Systemd: edit env") vault_sync_system_cmd edit env ;;
       "Timers") timers ;;
       "Logs") logs ;;
       "Watch") watch ;;
@@ -696,6 +942,9 @@ case "${1:-sync}" in
   logs)
     logs "${2:-50}"
     ;;
+  systemd|units|unit)
+    vault_sync_system_cmd "${2:-status}" "${@:3}"
+    ;;
   _render)
     render
     ;;
@@ -715,6 +964,11 @@ case "${1:-sync}" in
     echo "  menu    Gum menu (interactive)"
     echo "  timers  Show alphaos-vault-sync timer status"
     echo "  logs    Show recent log lines (default: 50)"
+    echo "  systemd status                      Show pull/push unit status"
+    echo "  systemd install                     Install pull/push unit files to /etc/systemd/system"
+    echo "  systemd enable|disable              Enable or disable pull/push services"
+    echo "  systemd run-pull|run-push           Trigger pull now / push now"
+    echo "  systemd edit pull|push|env          Edit installed unit/env (fallback: repo template)"
     echo "  scaffold-push  Create a new safe 'rclone-*-safe-push.sh' + systemd timer"
     echo "  help    Show this help"
     ;;
