@@ -20,7 +20,9 @@ aos_env_load "" "$ROOT_DIR" || true
 
 BASE_ROOT="${AOS_ROOT:-$HOME/aos-hub}"
 INDEX_ROOT="${AOS_INDEX_ROOT:-$BASE_ROOT/index-node}"
-SERVICE_NAME="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-alphaos-index.service}}"
+SERVICE_NAME="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-aos-index-dev.service}}"
+INDEX_MENU_PATH_UNIT="${AOS_INDEX_MENU_PATH_UNIT:-${ALPHAOS_INDEX_MENU_PATH_UNIT:-aos-index-dev-menu.path}}"
+INDEX_PUBLIC_PATH_UNIT="${AOS_INDEX_PUBLIC_PATH_UNIT:-${ALPHAOS_INDEX_PUBLIC_PATH_UNIT:-aos-index-dev-public.path}}"
 NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
 NODE_PORT="${AOS_INDEX_PORT:-${ALPHAOS_INDEX_PORT:-8799}}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$BASE_ROOT/routerctl}"
@@ -100,7 +102,7 @@ Commands:
   url            print best URL
   serve          tailscale serve on|off|status
   warm           warm-up / and /menu
-  start          systemctl --user start alphaos-index.service
+  start          systemctl --user start aos-index-dev.service
   stop           stop service
   restart        restart service
   logs           tail recent journal entries
@@ -204,7 +206,7 @@ case "${1:-all}" in
     fi
     ;;
   dev)
-    systemctl --user disable --now alphaos-index-menu.path alphaos-index-public.path || true
+    systemctl --user disable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" || true
     systemctl --user stop "$SERVICE_NAME" || true
     (cd "$INDEX_ROOT" && npm run dev)
     ;;
@@ -212,13 +214,13 @@ case "${1:-all}" in
     sub="${2:-status}"
     case "$sub" in
       on)
-        systemctl --user enable --now alphaos-index-menu.path alphaos-index-public.path
+        systemctl --user enable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT"
         ;;
       off)
-        systemctl --user disable --now alphaos-index-menu.path alphaos-index-public.path
+        systemctl --user disable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT"
         ;;
       status)
-        systemctl --user status alphaos-index-menu.path alphaos-index-public.path --no-pager
+        systemctl --user status "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" --no-pager
         ;;
       *)
         echo "Usage: nodectl autoreload on|off|status" >&2

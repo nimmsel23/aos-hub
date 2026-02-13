@@ -1,0 +1,16 @@
+[Unit]
+Description=Watch AlphaOS public assets for changes (dev)
+
+[Path]
+PathChanged=%h/aos-hub/index-node/public/index.html
+PathChanged=%h/aos-hub/index-node/public/style.css
+PathChanged=%h/aos-hub/index-node/public/menu.js
+PathChanged=%h/aos-hub/index-node/public/matrix.js
+PathModified=%h/aos-hub/index-node/public/index.html
+PathModified=%h/aos-hub/index-node/public/style.css
+PathModified=%h/aos-hub/index-node/public/menu.js
+PathModified=%h/aos-hub/index-node/public/matrix.js
+Unit=aos-index-dev-restart.service
+
+[Install]
+WantedBy=default.target

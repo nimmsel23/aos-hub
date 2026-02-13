@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch AlphaOS menu.yaml for changes (dev)
+
+[Path]
+PathChanged=%h/aos-hub/index-node/menu.yaml
+PathModified=%h/aos-hub/index-node/menu.yaml
+Unit=aos-index-dev-restart.service
+
+[Install]
+WantedBy=default.target

@@ -86,23 +86,23 @@ If `~/aos-hub` is already in `PATH`, aliases are optional but provide consistent
 
 ## Services & Units
 
-- Index Node: `alphaos-index.service`
+- Index Node: `aos-index-dev.service`
 - Index auto‑reload watchers:
-  - `alphaos-index-menu.path` (watches `menu.yaml`)
-  - `alphaos-index-public.path` (watches `public/` assets)
-- Restart helper: `alphaos-index-restart.service`
+  - `aos-index-dev-menu.path` (watches `menu.yaml`)
+  - `aos-index-dev-public.path` (watches `public/` assets)
+- Restart helper: `aos-index-dev-restart.service`
 
 Status examples:
 
 ```bash
-systemctl --user status alphaos-index.service
-systemctl --user status alphaos-index-menu.path alphaos-index-public.path
+systemctl --user status aos-index-dev.service
+systemctl --user status aos-index-dev-menu.path aos-index-dev-public.path
 ```
 
 ## Index Node (Port 8799)
 
 - Working dir: `~/aos-hub/index-node`
-- Service file: `~/.config/systemd/user/alphaos-index.service`
+- Service file: `~/.config/systemd/user/aos-index-dev.service`
 - Health: `http://127.0.0.1:8799/health`
 - Menu: `http://127.0.0.1:8799/menu`
 - Service runs `npm run dev` (nodemon) for live reload
