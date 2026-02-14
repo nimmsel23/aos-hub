@@ -158,13 +158,20 @@ ensure_menu_tty() {
 
 SYNCCTL_DRY_RUN="${AOS_DRY_RUN:-0}"
 SYNCCTL_COPY_LINKS="${AOS_COPY_LINKS:-0}"
+SYNCCTL_BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
+SYNCCTL_BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
+SYNCCTL_BACKUP_BASE_LOCAL="${AOS_SYNC_BACKUP_BASE_LOCAL:-$HOME/.local/share/alphaos/overwrite-backups}"
 export AOS_COPY_LINKS="${SYNCCTL_COPY_LINKS}"
+export AOS_SYNC_BACKUP_OVERWRITES="${SYNCCTL_BACKUP_OVERWRITES}"
+export AOS_SYNC_BACKUP_BASE_REMOTE="${SYNCCTL_BACKUP_BASE_REMOTE}"
+export AOS_SYNC_BACKUP_BASE_LOCAL="${SYNCCTL_BACKUP_BASE_LOCAL}"
 
 badge() {
-  local run links
+  local run links backups
   [[ "${SYNCCTL_DRY_RUN}" == "1" ]] && run="DRY-RUN (no changes)" || run="RUN (makes changes)"
   [[ "${SYNCCTL_COPY_LINKS}" == "1" ]] && links="Symlinks: COPY contents" || links="Symlinks: SKIP"
-  printf "%s | %s" "$run" "$links"
+  [[ "${SYNCCTL_BACKUP_OVERWRITES}" == "1" ]] && backups="Overwrite backup: ON" || backups="Overwrite backup: OFF"
+  printf "%s | %s | %s" "$run" "$links" "$backups"
 }
 
 toggle_dry_run() {
@@ -182,6 +189,15 @@ toggle_copy_links() {
     SYNCCTL_COPY_LINKS=1
   fi
   export AOS_COPY_LINKS="${SYNCCTL_COPY_LINKS}"
+}
+
+toggle_backup_overwrites() {
+  if [[ "${SYNCCTL_BACKUP_OVERWRITES}" == "1" ]]; then
+    SYNCCTL_BACKUP_OVERWRITES=0
+  else
+    SYNCCTL_BACKUP_OVERWRITES=1
+  fi
+  export AOS_SYNC_BACKUP_OVERWRITES="${SYNCCTL_BACKUP_OVERWRITES}"
 }
 
 print_safety_notes() {
@@ -212,6 +228,11 @@ Symlinks:
 Dry-run:
   - Dry-run prints what would happen, but does not upload/download/delete anything.
   - If you are unsure, dry-run first.
+
+Overwrite backups:
+  - syncctl defaults to backup overwritten/deleted destination files via rclone --backup-dir.
+  - Remote backups go under AOS_SYNC_BACKUP_BASE_REMOTE (default: _aos-overwrite-backups).
+  - Local pull backups go under AOS_SYNC_BACKUP_BASE_LOCAL.
 EOF
 }
 
@@ -226,6 +247,8 @@ This tool is intentionally small. Most of the real work happens in:
   - rclone-vitaltrainer-copy.sh (Vitaltrainer)
 
 Common:
+  syncctl overview [--long]
+  syncctl summary [--long]
   syncctl menu
   syncctl safety
   syncctl doctor
@@ -236,7 +259,7 @@ Common:
 
 Targets (aos-sync):
   syncctl list
-  syncctl status [<target>]   (no target = show all targets)
+  syncctl status [--brief|--long|<target>]
   syncctl run <target> [--dry] [--mode sync|bisync] [--resync]
   syncctl enable <target> [--at HH:MM]
   syncctl disable <target>
@@ -258,7 +281,229 @@ FADARO push:
 
 aos-hub live backup:
   syncctl hub <status|push> [--dry-run]
+
+Overwrite-backup env:
+  AOS_SYNC_BACKUP_OVERWRITES=1
+  AOS_SYNC_BACKUP_BASE_REMOTE=_aos-overwrite-backups
+  AOS_SYNC_BACKUP_BASE_LOCAL=$HOME/.local/share/alphaos/overwrite-backups
 EOF
+}
+
+section_title() {
+  local title="$1"
+  echo ""
+  echo "$title"
+  echo "----------------------------------------"
+}
+
+syncctl_color_enabled() {
+  [[ -t 1 && -z "${NO_COLOR:-}" ]]
+}
+
+syncctl_color() {
+  local code="$1"
+  local text="$2"
+  if syncctl_color_enabled; then
+    printf "\033[%sm%s\033[0m" "$code" "$text"
+  else
+    printf "%s" "$text"
+  fi
+}
+
+syncctl_chip() {
+  local state="$1"
+  case "$state" in
+    ok) syncctl_color "1;32" "OK" ;;
+    warn) syncctl_color "1;33" "WARN" ;;
+    err) syncctl_color "1;31" "ERR" ;;
+    info|*) syncctl_color "1;36" "INFO" ;;
+  esac
+}
+
+print_flow_row() {
+  local flow="$1"
+  local direction="$2"
+  local local_path="$3"
+  local remote_path="$4"
+  local local_state="MISSING"
+  if [[ -d "$local_path" ]]; then
+    local_state="OK"
+  fi
+
+  printf "  %-18s %-4s %-8s %s\n" "$flow" "$direction" "$local_state" "$local_path"
+  printf "  %-18s %-4s %-8s %s\n" "" "" "REMOTE" "$remote_path"
+}
+
+print_flow_row_compact() {
+  local flow="$1"
+  local direction="$2"
+  local local_path="$3"
+  local remote_path="$4"
+  local local_state="warn"
+  if [[ -d "$local_path" ]]; then
+    local_state="ok"
+  fi
+  printf "  %-16s %-3s [%s] %s -> %s\n" \
+    "$flow" "$direction" "$(syncctl_chip "$local_state")" "$local_path" "$remote_path"
+}
+
+print_timer_row() {
+  local unit="$1"
+  local enabled active
+  enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$enabled" ]] && enabled="-"
+  [[ -z "$active" ]] && active="-"
+  printf "  %-32s enabled=%-12s active=%s\n" "$unit" "$enabled" "$active"
+}
+
+print_timer_row_compact() {
+  local unit="$1"
+  local enabled active
+  enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$enabled" ]] && enabled="-"
+  [[ -z "$active" ]] && active="-"
+  local state="warn"
+  if [[ "$active" == "active" ]]; then
+    state="ok"
+  elif [[ "$enabled" == "not-found" ]]; then
+    state="err"
+  fi
+  printf "  %-30s [%s] enabled=%s active=%s\n" "$unit" "$(syncctl_chip "$state")" "$enabled" "$active"
+}
+
+show_overview() {
+  local long_mode=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --long|-l) long_mode=1 ;;
+      *)
+        die "Usage: syncctl overview [--long]"
+        ;;
+    esac
+    shift || true
+  done
+
+  ui_title "syncctl overview"
+  ui_info "$(badge)"
+  section_title "Runtime"
+  if has_cmd rclone; then
+    printf "  [%s] rclone %s\n" "$(syncctl_chip ok)" "$(command -v rclone)"
+  else
+    printf "  [%s] rclone not found\n" "$(syncctl_chip err)"
+  fi
+  if [[ -f "${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}" ]]; then
+    printf "  [%s] config %s\n" "$(syncctl_chip ok)" "${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+  else
+    printf "  [%s] config missing %s\n" "$(syncctl_chip warn)" "${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+  fi
+
+  if [[ "$long_mode" == "1" ]]; then
+    section_title "Backup Policy"
+    printf "  overwrite backups: %s\n" "$([[ "${SYNCCTL_BACKUP_OVERWRITES}" == "1" ]] && echo "ON" || echo "OFF")"
+    printf "  remote backup base: %s\n" "${SYNCCTL_BACKUP_BASE_REMOTE}"
+    printf "  local backup base:  %s\n" "${SYNCCTL_BACKUP_BASE_LOCAL}"
+
+    section_title "Vault"
+    local vault_root
+    vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+    print_flow_row "Vault:Game"  "<->" "$vault_root/Game"  "${AOS_VAULT_REMOTE_GAME:-eldanioo:Alpha_Game}"
+    print_flow_row "Vault:Door"  "<->" "$vault_root/Door"  "${AOS_VAULT_REMOTE_DOOR:-eldanioo:Alpha_Door}"
+    print_flow_row "Vault:Voice" "<->" "$vault_root/Voice" "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
+    print_flow_row "Vault:Core4" "<->" "$vault_root/Core4" "${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
+
+    section_title "Domains"
+    local domain_local_base domain_remote_base domain_remote_name
+    domain_local_base="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
+    domain_remote_base="${AOS_DOMAIN_REMOTE_BASE:-}"
+    domain_remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
+    print_flow_row "Domain:BODY"     "<->" "$domain_local_base/BODY"     "${domain_remote_name}:${domain_remote_base}BODY"
+    print_flow_row "Domain:BEING"    "<->" "$domain_local_base/BEING"    "${domain_remote_name}:${domain_remote_base}BEING"
+    print_flow_row "Domain:BALANCE"  "<->" "$domain_local_base/BALANCE"  "${domain_remote_name}:${domain_remote_base}BALANCE"
+    print_flow_row "Domain:BUSINESS" "<->" "$domain_local_base/BUSINESS" "${domain_remote_name}:${domain_remote_base}BUSINESS"
+
+    section_title "Other Flows"
+    local remote_name
+    remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
+    print_flow_row "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
+    print_flow_row "FADARO"       "->"  "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}"             "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
+    print_flow_row "Dokumente"    "->"  "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}"                           "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
+    print_flow_row "aos-hub live" "->"  "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"                                "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
+
+    section_title "Timers"
+    if has_cmd systemctl; then
+      local -a timers=(
+        "${AOS_HUB_LIVE_TIMER_UNIT:-aos-hub-live-push.timer}"
+        "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
+        "${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
+        "${AOS_SAFE_RCLONE_PUSH_TIMER_UNIT:-alphaos-safe-rclone-push.timer}"
+      )
+      local t
+      for t in "${timers[@]}"; do
+        [[ -z "$t" ]] && continue
+        print_timer_row "$t"
+      done
+
+      local -a aos_sync_timers=()
+      mapfile -t aos_sync_timers < <(systemctl --user list-unit-files "aos-sync-*.timer" --no-legend --no-pager 2>/dev/null | awk '{print $1}')
+      if [[ "${#aos_sync_timers[@]}" -gt 0 ]]; then
+        echo ""
+        ui_info "aos-sync target timers"
+        for t in "${aos_sync_timers[@]}"; do
+          [[ -z "$t" ]] && continue
+          print_timer_row "$t"
+        done
+      fi
+    else
+      printf "  [%s] systemctl missing\n" "$(syncctl_chip warn)"
+    fi
+
+    section_title "Quick Commands"
+    echo "  syncctl vault sync --dry-run"
+    echo "  syncctl domains status-all"
+    echo "  syncctl hub status"
+    return 0
+  fi
+
+  section_title "Flows"
+  local vault_root
+  vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+  local domain_local_base domain_remote_base domain_remote_name
+  domain_local_base="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
+  domain_remote_base="${AOS_DOMAIN_REMOTE_BASE:-}"
+  domain_remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
+  local remote_name
+  remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
+  print_flow_row_compact "Vault:Game" "<->" "$vault_root/Game" "${AOS_VAULT_REMOTE_GAME:-eldanioo:Alpha_Game}"
+  print_flow_row_compact "Vault:Door" "<->" "$vault_root/Door" "${AOS_VAULT_REMOTE_DOOR:-eldanioo:Alpha_Door}"
+  print_flow_row_compact "Vault:Voice" "<->" "$vault_root/Voice" "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
+  print_flow_row_compact "Vault:Core4" "<->" "$vault_root/Core4" "${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
+  print_flow_row_compact "Domain:BODY" "<->" "$domain_local_base/BODY" "${domain_remote_name}:${domain_remote_base}BODY"
+  print_flow_row_compact "Domain:BEING" "<->" "$domain_local_base/BEING" "${domain_remote_name}:${domain_remote_base}BEING"
+  print_flow_row_compact "Domain:BALANCE" "<->" "$domain_local_base/BALANCE" "${domain_remote_name}:${domain_remote_base}BALANCE"
+  print_flow_row_compact "Domain:BUSINESS" "<->" "$domain_local_base/BUSINESS" "${domain_remote_name}:${domain_remote_base}BUSINESS"
+  print_flow_row_compact "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
+  print_flow_row_compact "FADARO" "->" "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}" "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
+  print_flow_row_compact "Dokumente" "->" "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}" "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
+  print_flow_row_compact "aos-hub live" "->" "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}" "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
+
+  section_title "Timers"
+  if has_cmd systemctl; then
+    local -a timers=(
+      "${AOS_HUB_LIVE_TIMER_UNIT:-aos-hub-live-push.timer}"
+      "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
+      "${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
+      "${AOS_SAFE_RCLONE_PUSH_TIMER_UNIT:-alphaos-safe-rclone-push.timer}"
+    )
+    local t
+    for t in "${timers[@]}"; do
+      [[ -z "$t" ]] && continue
+      print_timer_row_compact "$t"
+    done
+  else
+    printf "  [%s] systemctl missing\n" "$(syncctl_chip warn)"
+  fi
 }
 
 install_cli_user() {
@@ -706,12 +951,14 @@ menu_settings() {
     a="$(sync_choose "Settings change only this menu session. They do not modify any config files." \
       "Toggle dry-run" \
       "Toggle symlink copying" \
+      "Toggle overwrite backups" \
       "Safety notes" \
       "Back")" || return 0
 
     case "$a" in
       "Toggle dry-run") toggle_dry_run ;;
       "Toggle symlink copying") toggle_copy_links ;;
+      "Toggle overwrite backups") toggle_backup_overwrites ;;
       "Safety notes") print_safety_notes; pause ;;
       "Back") return 0 ;;
     esac
@@ -766,6 +1013,8 @@ main() {
 
   case "$cmd" in
     ""|-h|--help|help) usage ;;
+    overview|show) show_overview "$@" ;;
+    summary) show_overview "$@" ;;
     menu|ui) run_menu ;;
     safety|notes) print_safety_notes ;;
     doctor-tty) doctor_tty ;;
@@ -777,20 +1026,12 @@ main() {
       fi
       ;;
     status)
-      if [[ $# -eq 0 ]]; then
-        local bin
-        bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
-        local -a targets=()
-        mapfile -t targets < <("$bin" list 2>/dev/null || true)
-        if [[ "${#targets[@]}" -eq 0 ]]; then
-          echo "syncctl: no targets found"
-          exit 0
-        fi
-        for t in "${targets[@]}"; do
-          [[ -z "$t" ]] && continue
-          "$bin" status "$t" || true
-          echo ""
-        done
+      if [[ $# -eq 0 || "${1:-}" == "--brief" || "${1:-}" == "--compact" ]]; then
+        show_overview
+        exit 0
+      fi
+      if [[ "${1:-}" == "--long" || "${1:-}" == "--full" ]]; then
+        show_overview --long
         exit 0
       fi
       run_aos_sync status "$@"

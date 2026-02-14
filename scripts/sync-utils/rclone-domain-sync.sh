@@ -14,6 +14,9 @@ REMOTE_NAME="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
 
 COPY_LINKS_MODE="${AOS_DOMAIN_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
 DRY_RUN="${AOS_DRY_RUN:-0}"
+BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
+BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
+BACKUP_BASE_LOCAL="${AOS_SYNC_BACKUP_BASE_LOCAL:-$HOME/.local/share/alphaos/overwrite-backups}"
 
 DOMAIN="${1^^}"
 if [[ ! "$DOMAIN" =~ ^(BODY|BEING|BALANCE|BUSINESS)$ ]]; then
@@ -138,11 +141,17 @@ run_copy() {
       log "Starting copy push: $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
       rclone mkdir --config "$RCLONE_CONFIG" "${REMOTE_NAME}:${REMOTE_PATH}" 2>/dev/null || true
       local -a dry_opts=()
+      local -a backup_opts=()
+      if [ "$BACKUP_OVERWRITES" = "1" ]; then
+        local backup_dir="${REMOTE_NAME}:${BACKUP_BASE_REMOTE%/}/domains/${DOMAIN,,}/push/$(date +%Y%m%d-%H%M%S)"
+        backup_opts+=(--backup-dir "$backup_dir")
+        log "Overwrite backups enabled: $backup_dir"
+      fi
       if [ "$DRY_RUN" = "1" ]; then
         dry_opts+=(--dry-run)
       fi
       if rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" \
-        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
         success "${DOMAIN} push completed"
         return 0
       fi
@@ -151,11 +160,18 @@ run_copy() {
       log "Starting copy pull: ${REMOTE_NAME}:${REMOTE_PATH} -> $LOCAL_PATH"
       mkdir -p "$LOCAL_PATH"
       local -a dry_opts=()
+      local -a backup_opts=()
+      if [ "$BACKUP_OVERWRITES" = "1" ]; then
+        local backup_dir="${BACKUP_BASE_LOCAL%/}/domains/${DOMAIN,,}/pull/$(date +%Y%m%d-%H%M%S)"
+        mkdir -p "$backup_dir"
+        backup_opts+=(--backup-dir "$backup_dir")
+        log "Overwrite backups enabled: $backup_dir"
+      fi
       if [ "$DRY_RUN" = "1" ]; then
         dry_opts+=(--dry-run)
       fi
       if rclone copy "${REMOTE_NAME}:${REMOTE_PATH}" "$LOCAL_PATH" \
-        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+        --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
         success "${DOMAIN} pull completed"
         return 0
       fi
@@ -197,11 +213,17 @@ run_push_sync() {
   log "Starting sync push (delete remote): $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
   rclone mkdir --config "$RCLONE_CONFIG" "${REMOTE_NAME}:${REMOTE_PATH}" 2>/dev/null || true
   local -a dry_opts=()
+  local -a backup_opts=()
+  if [ "$BACKUP_OVERWRITES" = "1" ]; then
+    local backup_dir="${REMOTE_NAME}:${BACKUP_BASE_REMOTE%/}/domains/${DOMAIN,,}/push-sync/$(date +%Y%m%d-%H%M%S)"
+    backup_opts+=(--backup-dir "$backup_dir")
+    log "Overwrite backups enabled: $backup_dir"
+  fi
   if [ "$DRY_RUN" = "1" ]; then
     dry_opts+=(--dry-run)
   fi
   if rclone sync "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" \
-    --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     success "${DOMAIN} push-sync completed"
     return 0
   fi

@@ -35,6 +35,7 @@ SYNCCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncctl"
 SYNCVAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncvaultctl"
 VAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/sync-utils/vaultctl"
 RCLONECTL_FALLBACK="${AOS_HUB_DIR}/scripts/rclonectl"
+GITCTL_FALLBACK="${AOS_HUB_DIR}/scripts/gitctl"
 
 VAULT_ROOT="${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}}"
 RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
@@ -48,6 +49,11 @@ AOS_HUB_LIVE_SERVICE_TEMPLATE="${AOS_HUB_LIVE_SERVICE_TEMPLATE:-$ROOT_DIR/system
 AOS_HUB_LIVE_TIMER_TEMPLATE="${AOS_HUB_LIVE_TIMER_TEMPLATE:-$ROOT_DIR/systemd/$AOS_HUB_LIVE_TIMER_UNIT}"
 AOS_HUB_LIVE_USER_UNIT_DIR="${AOS_HUB_LIVE_USER_UNIT_DIR:-$HOME/.config/systemd/user}"
 AOS_HUB_LIVE_TIMER_DEFAULT_AT="${AOS_HUB_LIVE_TIMER_DEFAULT_AT:-00:00}"
+
+AOS_HUB_ROUTINE_SERVICE_UNIT="${AOS_HUB_ROUTINE_SERVICE_UNIT:-aos-hub-daily-routine.service}"
+AOS_HUB_ROUTINE_TIMER_UNIT="${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-daily-routine.timer}"
+AOS_HUB_ROUTINE_USER_UNIT_DIR="${AOS_HUB_ROUTINE_USER_UNIT_DIR:-$AOS_HUB_LIVE_USER_UNIT_DIR}"
+AOS_HUB_ROUTINE_TIMER_DEFAULT_AT="${AOS_HUB_ROUTINE_TIMER_DEFAULT_AT:-00:15}"
 
 LEGACY_HUB_LIVE_SERVICE_UNIT_1="alphaos-aos-hub-live-backup.service"
 LEGACY_HUB_LIVE_TIMER_UNIT_1="alphaos-aos-hub-live-backup.timer"
@@ -131,6 +137,18 @@ rclonectl_bin() {
   fi
   if [[ -x "$RCLONECTL_FALLBACK" ]]; then
     printf "%s\n" "$RCLONECTL_FALLBACK"
+    return 0
+  fi
+  return 1
+}
+
+gitctl_bin() {
+  if has_cmd gitctl; then
+    command -v gitctl
+    return 0
+  fi
+  if [[ -x "$GITCTL_FALLBACK" ]]; then
+    printf "%s\n" "$GITCTL_FALLBACK"
     return 0
   fi
   return 1
@@ -268,6 +286,22 @@ live_timer_override_path() {
   printf "%s/override.conf\n" "$(live_timer_override_dir)"
 }
 
+routine_service_user_path() {
+  printf "%s/%s\n" "$AOS_HUB_ROUTINE_USER_UNIT_DIR" "$AOS_HUB_ROUTINE_SERVICE_UNIT"
+}
+
+routine_timer_user_path() {
+  printf "%s/%s\n" "$AOS_HUB_ROUTINE_USER_UNIT_DIR" "$AOS_HUB_ROUTINE_TIMER_UNIT"
+}
+
+routine_timer_override_dir() {
+  printf "%s/%s.d\n" "$AOS_HUB_ROUTINE_USER_UNIT_DIR" "$AOS_HUB_ROUTINE_TIMER_UNIT"
+}
+
+routine_timer_override_path() {
+  printf "%s/override.conf\n" "$(routine_timer_override_dir)"
+}
+
 ensure_live_templates() {
   [[ -x "$AOS_HUB_LIVE_SCRIPT" ]] || die "missing executable script: $AOS_HUB_LIVE_SCRIPT"
   [[ -f "$AOS_HUB_LIVE_SERVICE_TEMPLATE" ]] || die "missing service template: $AOS_HUB_LIVE_SERVICE_TEMPLATE"
@@ -304,6 +338,55 @@ show_live_paths() {
   ui_info "live user unit dir: $AOS_HUB_LIVE_USER_UNIT_DIR"
 }
 
+install_routine_user_units() {
+  mkdir -p "$AOS_HUB_ROUTINE_USER_UNIT_DIR"
+  cat >"$(routine_service_user_path)" <<EOF
+[Unit]
+Description=Daily aos-hub routine (split push + live backup push)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$ROOT_DIR/scripts/backupctl routine run
+WorkingDirectory=%h
+Environment=HOME=%h
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin
+ExecCondition=/bin/test -f %h/.config/rclone/rclone.conf
+StandardOutput=append:%h/.local/share/alphaos/logs/aos-hub-daily-routine.log
+StandardError=append:%h/.local/share/alphaos/logs/aos-hub-daily-routine.log
+TimeoutStartSec=12h
+EOF
+  cat >"$(routine_timer_user_path)" <<EOF
+[Unit]
+Description=Daily aos-hub routine timer (split push + live backup push)
+Requires=$AOS_HUB_ROUTINE_SERVICE_UNIT
+
+[Timer]
+OnCalendar=*-*-* ${AOS_HUB_ROUTINE_TIMER_DEFAULT_AT}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl_user daemon-reload
+}
+
+set_routine_timer_schedule() {
+  local at="${1:-}"
+  is_valid_hhmm "$at" || die "invalid time '$at' (expected HH:MM)"
+  local override_dir
+  override_dir="$(routine_timer_override_dir)"
+  mkdir -p "$override_dir"
+  cat >"$(routine_timer_override_path)" <<EOF
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* ${at}:00
+Persistent=true
+EOF
+  systemctl_user daemon-reload
+}
+
 has_legacy_live_units() {
   systemctl_user is-enabled "$LEGACY_HUB_LIVE_TIMER_UNIT_1" >/dev/null 2>&1 && return 0
   systemctl_user is-enabled "$LEGACY_HUB_LIVE_SERVICE_UNIT_1" >/dev/null 2>&1 && return 0
@@ -321,9 +404,11 @@ Usage:
   backupctl [menu]
   backupctl explain
   backupctl doctor
-  backupctl status
+  backupctl status [--brief|--full]
+  backupctl summary
   backupctl push [--dry-run]
   backupctl live <status|setup|enable|disable|disable-legacy|run|logs|at HH:MM>
+  backupctl routine <status|setup|enable|disable|run|logs|at HH:MM>
   backupctl no-pull [status|on|off]
   backupctl logs
   backupctl enable
@@ -495,6 +580,7 @@ backupctl mental model
    - run `backupctl doctor`
    - run `backupctl live run --dry-run`
    - run `backupctl live setup`
+   - optionally schedule combined split+live runs with `backupctl routine setup`
 
 4) Git separation:
    - keep `aos-hub` live backups in rclone (copy push-only)
@@ -502,7 +588,29 @@ backupctl mental model
 EOF
 }
 
-cmd_status() {
+print_user_unit_brief() {
+  local unit="$1"
+  local enabled active
+  enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$enabled" ]] && enabled="-"
+  [[ -z "$active" ]] && active="-"
+  printf "  %-30s enabled=%-12s active=%s\n" "$unit" "$enabled" "$active"
+}
+
+print_system_unit_brief() {
+  local unit="$1"
+  local enabled active
+  enabled="$(get_system_unit_enabled_state "$unit")"
+  active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  if [[ -z "$active" ]] && has_cmd sudo && sudo -n true >/dev/null 2>&1; then
+    active="$(sudo systemctl is-active "$unit" 2>/dev/null || true)"
+  fi
+  [[ -z "$active" ]] && active="-"
+  printf "  %-30s enabled=%-12s active=%s\n" "$unit" "$enabled" "$active"
+}
+
+cmd_status_full() {
   need_systemctl
   ui_title "backupctl status"
   systemctl_user status "$SERVICE_NAME" --no-pager || true
@@ -511,9 +619,47 @@ cmd_status() {
   echo ""
   systemctl_user status "$AOS_HUB_LIVE_TIMER_UNIT" --no-pager || true
   echo ""
+  systemctl_user status "$AOS_HUB_ROUTINE_TIMER_UNIT" --no-pager || true
+  echo ""
   systemctl_system_status "$VAULT_PULL_UNIT"
   echo ""
   systemctl_system_status "$VAULT_PUSH_UNIT"
+}
+
+cmd_status_brief() {
+  need_systemctl
+  ui_title "backupctl summary"
+  print_user_unit_brief "$SERVICE_NAME"
+  print_user_unit_brief "$TIMER_NAME"
+  print_user_unit_brief "$AOS_HUB_LIVE_TIMER_UNIT"
+  print_user_unit_brief "$AOS_HUB_ROUTINE_TIMER_UNIT"
+  print_system_unit_brief "$VAULT_PULL_UNIT"
+  print_system_unit_brief "$VAULT_PUSH_UNIT"
+
+  echo ""
+  cmd_no_pull status
+
+  echo ""
+  if [[ -f "$RCLONE_CONFIG" ]]; then
+    ui_ok "rclone config present: $RCLONE_CONFIG"
+  else
+    ui_warn "rclone config missing: $RCLONE_CONFIG"
+  fi
+}
+
+cmd_status() {
+  local mode="${1:---brief}"
+  case "$mode" in
+    --brief|-b|summary)
+      cmd_status_brief
+      ;;
+    --full|--verbose)
+      cmd_status_full
+      ;;
+    *)
+      die "Usage: backupctl status [--brief|--full]"
+      ;;
+  esac
 }
 
 cmd_enable() {
@@ -696,6 +842,122 @@ EOF
   esac
 }
 
+cmd_routine_status() {
+  need_systemctl
+  local gitbin=""
+  if gitbin="$(gitctl_bin)"; then
+    ui_ok "gitctl found: $gitbin"
+  else
+    ui_warn "gitctl not found"
+  fi
+  ui_info "routine user unit dir: $AOS_HUB_ROUTINE_USER_UNIT_DIR"
+  echo ""
+  systemctl_user status "$AOS_HUB_ROUTINE_SERVICE_UNIT" --no-pager || true
+  echo ""
+  systemctl_user status "$AOS_HUB_ROUTINE_TIMER_UNIT" --no-pager || true
+  local override
+  override="$(routine_timer_override_path)"
+  if [[ -f "$override" ]]; then
+    echo ""
+    ui_info "routine timer override: $override"
+    sed -n '1,80p' "$override"
+  fi
+  if systemctl_user is-enabled "$AOS_HUB_LIVE_TIMER_UNIT" >/dev/null 2>&1; then
+    ui_warn "live timer still enabled ($AOS_HUB_LIVE_TIMER_UNIT); this may duplicate daily live pushes"
+  fi
+}
+
+cmd_routine_setup() {
+  need_systemctl
+  local at="${1:-$AOS_HUB_ROUTINE_TIMER_DEFAULT_AT}"
+  install_routine_user_units
+  set_routine_timer_schedule "$at"
+  systemctl_user enable --now "$AOS_HUB_ROUTINE_TIMER_UNIT"
+  ui_ok "enabled $AOS_HUB_ROUTINE_TIMER_UNIT (daily $at)"
+  if systemctl_user is-enabled "$AOS_HUB_LIVE_TIMER_UNIT" >/dev/null 2>&1; then
+    ui_warn "consider disabling $AOS_HUB_LIVE_TIMER_UNIT to avoid duplicate runs"
+  fi
+}
+
+cmd_routine_enable() {
+  need_systemctl
+  install_routine_user_units
+  systemctl_user enable --now "$AOS_HUB_ROUTINE_TIMER_UNIT"
+  ui_ok "enabled $AOS_HUB_ROUTINE_TIMER_UNIT"
+}
+
+cmd_routine_disable() {
+  need_systemctl
+  systemctl_user disable --now "$AOS_HUB_ROUTINE_TIMER_UNIT" || true
+  ui_ok "disabled $AOS_HUB_ROUTINE_TIMER_UNIT"
+}
+
+cmd_routine_run() {
+  local dry="${1:-}"
+  local gitbin
+  gitbin="$(gitctl_bin)" || die "gitctl not found"
+  if [[ "$dry" == "--dry-run" ]]; then
+    ui_info "dry-run: gitctl split doctor + backupctl live run --dry-run"
+    "$gitbin" split doctor
+    cmd_live_run --dry-run
+    return 0
+  fi
+  ui_info "routine step 1/2: gitctl split push all"
+  "$gitbin" split push all
+  ui_info "routine step 2/2: backupctl live run"
+  cmd_live_run
+}
+
+cmd_routine_logs() {
+  need_systemctl
+  local follow="${1:-}"
+  if [[ "$follow" == "--follow" || "$follow" == "-f" ]]; then
+    journalctl --user -u "$AOS_HUB_ROUTINE_SERVICE_UNIT" -n 200 -f
+  else
+    journalctl --user -u "$AOS_HUB_ROUTINE_SERVICE_UNIT" -n 200 --no-pager
+  fi
+}
+
+cmd_routine_at() {
+  need_systemctl
+  local at="${1:-}"
+  [[ -n "$at" ]] || die "Usage: backupctl routine at <HH:MM>"
+  install_routine_user_units
+  set_routine_timer_schedule "$at"
+  ui_ok "set $AOS_HUB_ROUTINE_TIMER_UNIT to daily $at"
+}
+
+cmd_routine() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    help|-h|--help)
+      cat <<'EOF'
+backupctl routine
+
+Usage:
+  backupctl routine status
+  backupctl routine setup [HH:MM]
+  backupctl routine enable
+  backupctl routine disable
+  backupctl routine run [--dry-run]
+  backupctl routine logs [--follow]
+  backupctl routine at <HH:MM>
+EOF
+      ;;
+    status) cmd_routine_status ;;
+    setup) cmd_routine_setup "${1:-$AOS_HUB_ROUTINE_TIMER_DEFAULT_AT}" ;;
+    enable) cmd_routine_enable ;;
+    disable) cmd_routine_disable ;;
+    run) cmd_routine_run "${1:-}" ;;
+    logs) cmd_routine_logs "${1:-}" ;;
+    at|schedule) cmd_routine_at "${1:-}" ;;
+    *)
+      die "Usage: backupctl routine <status|setup [HH:MM]|enable|disable|run [--dry-run]|logs [--follow]|at HH:MM>"
+      ;;
+  esac
+}
+
 cmd_no_pull() {
   local action="${1:-status}"
   case "$action" in
@@ -846,6 +1108,12 @@ cmd_doctor() {
     ui_warn "rclonectl missing"
   fi
 
+  if gitctl_bin >/dev/null 2>&1; then
+    ui_ok "gitctl found"
+  else
+    ui_warn "gitctl missing"
+  fi
+
   if vaultctl_bin >/dev/null 2>&1; then
     ui_ok "vaultctl found"
   else
@@ -889,6 +1157,7 @@ cmd_doctor() {
   cmd_no_pull status
   echo ""
   systemctl_user is-enabled "$AOS_HUB_LIVE_TIMER_UNIT" >/dev/null 2>&1 && ui_ok "live timer enabled: $AOS_HUB_LIVE_TIMER_UNIT" || ui_warn "live timer disabled: $AOS_HUB_LIVE_TIMER_UNIT"
+  systemctl_user is-enabled "$AOS_HUB_ROUTINE_TIMER_UNIT" >/dev/null 2>&1 && ui_ok "routine timer enabled: $AOS_HUB_ROUTINE_TIMER_UNIT" || ui_warn "routine timer disabled: $AOS_HUB_ROUTINE_TIMER_UNIT"
   has_legacy_live_units && ui_warn "legacy live-backup units still present (run: backupctl live disable-legacy)" || true
 }
 
@@ -901,6 +1170,9 @@ cmd_menu() {
     "Live backup setup (daily)"
     "Live backup run now"
     "Live backup dry-run"
+    "Routine status"
+    "Routine setup (daily)"
+    "Routine run now"
     "Push now"
     "Push dry-run"
     "No-pull status"
@@ -923,6 +1195,9 @@ cmd_menu() {
       "Live backup setup (daily)") cmd_live setup "$AOS_HUB_LIVE_TIMER_DEFAULT_AT" ;;
       "Live backup run now") cmd_live run ;;
       "Live backup dry-run") cmd_live run --dry-run ;;
+      "Routine status") cmd_routine status ;;
+      "Routine setup (daily)") cmd_routine setup "$AOS_HUB_ROUTINE_TIMER_DEFAULT_AT" ;;
+      "Routine run now") cmd_routine run ;;
       "Push now") cmd_push ;;
       "Push dry-run") cmd_push --dry-run ;;
       "No-pull status") cmd_no_pull status ;;
@@ -950,8 +1225,10 @@ main() {
     -h|--help|help) usage ;;
     explain) cmd_explain ;;
     doctor) cmd_doctor ;;
-    status) cmd_status ;;
+    status) cmd_status "$@" ;;
+    summary) cmd_status --brief ;;
     live) cmd_live "$@" ;;
+    routine) cmd_routine "$@" ;;
     push|sync) cmd_push "$@" ;;
     pull) cmd_pull "$@" ;;
     no-pull) cmd_no_pull "$@" ;;

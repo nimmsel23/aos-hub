@@ -32,6 +32,9 @@ COPY_LINKS_MODE="${AOS_VAULT_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
 BACKUP_DIR_REMOTE="${AOS_VAULT_BACKUP_DIR_REMOTE:-${AOS_VAULT_BACKUP_DIR:-}}"
 BACKUP_DIR_LOCAL="${AOS_VAULT_BACKUP_DIR_LOCAL:-}"
 BACKUP_SUFFIX="${AOS_VAULT_BACKUP_SUFFIX:-}"
+SYNC_BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-0}"
+SYNC_BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
+SYNC_BACKUP_BASE_LOCAL="${AOS_SYNC_BACKUP_BASE_LOCAL:-$HOME/.local/share/alphaos/overwrite-backups}"
 VAULT_SYNC_PULL_UNIT="${AOS_VAULT_SYNC_PULL_UNIT:-alphaos-vault-sync-pull.service}"
 VAULT_SYNC_PUSH_UNIT="${AOS_VAULT_SYNC_PUSH_UNIT:-alphaos-vault-sync-push.service}"
 VAULT_SYNC_UNIT_DIR="${AOS_VAULT_SYNC_UNIT_DIR:-/etc/systemd/system}"
@@ -739,24 +742,87 @@ status() {
   echo ""
 
   if [ -f "$RCLONE_CONFIG" ]; then
-    info "rclone config: present"
+    info "rclone config: present ($RCLONE_CONFIG)"
   else
-    warn "rclone config: missing"
+    warn "rclone config: missing ($RCLONE_CONFIG)"
   fi
 
   echo ""
   for i in "${!LOCAL_PATHS[@]}"; do
+    local local_state="MISSING"
     if [ -d "${LOCAL_PATHS[$i]}" ]; then
-      info "${LABELS[$i]}: ${LOCAL_PATHS[$i]} -> ${REMOTE_PATHS[$i]}"
-    else
-      warn "${LABELS[$i]}: missing (${LOCAL_PATHS[$i]})"
+      local_state="OK"
     fi
+    printf "  %-8s %-8s %s\n" "${LABELS[$i]}" "$local_state" "${LOCAL_PATHS[$i]}"
+    printf "  %-8s %-8s %s\n" "" "REMOTE" "${REMOTE_PATHS[$i]}"
   done
 
+  echo ""
+  info "log file: $LOG_FILE"
   if [ -f "$LOG_FILE" ]; then
-    echo ""
-    info "last log lines ($LOG_FILE)"
-    tail -n 10 "$LOG_FILE"
+    local last_line
+    last_line="$(tail -n 1 "$LOG_FILE" 2>/dev/null || true)"
+    if [ -n "$last_line" ]; then
+      info "last log: $last_line"
+    else
+      info "last log: (empty)"
+    fi
+  else
+    warn "log file missing"
+  fi
+}
+
+short_line() {
+  local line="${1:-}"
+  local max_len="${2:-120}"
+  if [ "${#line}" -le "$max_len" ]; then
+    printf "%s\n" "$line"
+    return 0
+  fi
+  printf "%s...\n" "${line:0:max_len-3}"
+}
+
+status_brief() {
+  echo "vaultctl summary"
+
+  local rclone_state="missing"
+  [ -n "$RCLONE_BIN" ] && [ -x "$RCLONE_BIN" ] && rclone_state="present"
+  echo "  rclone: $rclone_state"
+
+  local config_state="missing"
+  [ -f "$RCLONE_CONFIG" ] && config_state="present"
+  echo "  config: $config_state ($RCLONE_CONFIG)"
+
+  local links_mode="skip-links"
+  [ "$COPY_LINKS_MODE" = "1" ] && links_mode="copy-links"
+  echo "  links:  $links_mode"
+  echo "  backup-overwrites: $SYNC_BACKUP_OVERWRITES"
+
+  for i in "${!LOCAL_PATHS[@]}"; do
+    local local_state="MISS"
+    [ -d "${LOCAL_PATHS[$i]}" ] && local_state="OK"
+    printf "  %-8s %-4s %s -> %s\n" "${LABELS[$i]}" "$local_state" "${LOCAL_PATHS[$i]}" "${REMOTE_PATHS[$i]}"
+  done
+
+  local timer_unit="${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
+  local timer_enabled="-"
+  local timer_active="-"
+  if [ -n "$SYSTEMCTL_BIN" ] && [ -x "$SYSTEMCTL_BIN" ]; then
+    timer_enabled="$("$SYSTEMCTL_BIN" --user is-enabled "$timer_unit" 2>/dev/null || true)"
+    timer_active="$("$SYSTEMCTL_BIN" --user is-active "$timer_unit" 2>/dev/null || true)"
+    [ -z "$timer_enabled" ] && timer_enabled="-"
+    [ -z "$timer_active" ] && timer_active="-"
+  fi
+  echo "  timer:  $timer_unit enabled=$timer_enabled active=$timer_active"
+
+  if [ -f "$LOG_FILE" ]; then
+    local last_line
+    last_line="$(tail -n 1 "$LOG_FILE" 2>/dev/null || true)"
+    [ -z "$last_line" ] && last_line="(empty)"
+    echo "  log:    $LOG_FILE"
+    echo "  last:   $(short_line "$last_line" 110)"
+  else
+    echo "  log:    missing ($LOG_FILE)"
   fi
 }
 
@@ -799,12 +865,25 @@ copy_direction() {
     fi
     backup_dir=""
     backup_opts=()
+    label_slug="$(printf "%s" "$label" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
+    label_slug="${label_slug%-}"
+    label_slug="${label_slug#-}"
     if [ "$direction" = "push" ]; then
       backup_dir="$BACKUP_DIR_REMOTE"
+      if [ -z "$backup_dir" ] && [ "$SYNC_BACKUP_OVERWRITES" = "1" ]; then
+        backup_dir="${remote_path%%:*}:${SYNC_BACKUP_BASE_REMOTE%/}/vault/${label_slug}/push/$(date +%Y%m%d-%H%M%S)"
+      fi
     else
       backup_dir="$BACKUP_DIR_LOCAL"
+      if [ -z "$backup_dir" ] && [ "$SYNC_BACKUP_OVERWRITES" = "1" ]; then
+        backup_dir="${SYNC_BACKUP_BASE_LOCAL%/}/vault/${label_slug}/pull/$(date +%Y%m%d-%H%M%S)"
+      fi
+      if [ -n "$backup_dir" ]; then
+        mkdir -p "$backup_dir"
+      fi
     fi
     if [ -n "$backup_dir" ]; then
+      info "backup-dir for $label: $backup_dir"
       backup_opts+=(--backup-dir "$backup_dir")
       if [ -n "$BACKUP_SUFFIX" ]; then
         backup_opts+=(--suffix "$BACKUP_SUFFIX")
@@ -865,6 +944,32 @@ timers() {
   "$SYSTEMCTL_BIN" --user status alphaos-vault-sync.timer || true
   echo ""
   "$SYSTEMCTL_BIN" --user list-timers --all | rg -i "alphaos-vault-sync|vaultctl" || true
+}
+
+timers_brief() {
+  local timer_unit="${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
+  echo "vaultctl timers"
+  if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
+    echo "  systemctl: missing"
+    return 0
+  fi
+
+  local enabled active
+  enabled="$("$SYSTEMCTL_BIN" --user is-enabled "$timer_unit" 2>/dev/null || true)"
+  active="$("$SYSTEMCTL_BIN" --user is-active "$timer_unit" 2>/dev/null || true)"
+  [ -z "$enabled" ] && enabled="-"
+  [ -z "$active" ] && active="-"
+  echo "  $timer_unit enabled=$enabled active=$active"
+
+  local next_line=""
+  if command -v rg >/dev/null 2>&1; then
+    next_line="$("$SYSTEMCTL_BIN" --user list-timers --all 2>/dev/null | rg -i "$timer_unit" | head -n 1 || true)"
+  else
+    next_line="$("$SYSTEMCTL_BIN" --user list-timers --all 2>/dev/null | grep -Ei "$timer_unit" | head -n 1 || true)"
+  fi
+  if [ -n "$next_line" ]; then
+    echo "  next: $(short_line "$next_line" 120)"
+  fi
 }
 
 logs() {
@@ -1004,7 +1109,14 @@ case "${1:-sync}" in
     fi
     ;;
   status)
-    status
+    if [ "${2:-}" = "--brief" ] || [ "${2:-}" = "-b" ]; then
+      status_brief
+    else
+      status
+    fi
+    ;;
+  summary|brief)
+    status_brief
     ;;
   watch)
     watch
@@ -1013,7 +1125,11 @@ case "${1:-sync}" in
     menu
     ;;
   timers)
-    timers
+    if [ "${2:-}" = "--brief" ] || [ "${2:-}" = "-b" ]; then
+      timers_brief
+    else
+      timers
+    fi
     ;;
   logs)
     logs "${2:-50}"
@@ -1041,10 +1157,11 @@ case "${1:-sync}" in
     echo "  sync --dry-run  Dry-run push"
     echo "  pull    Pull remote -> local with rclone copy"
     echo "  pull --dry-run  Dry-run pull"
-    echo "  status  Show paths and recent log lines"
+    echo "  status [--brief]  Show paths and recent log lines"
+    echo "  summary           Compact status output"
     echo "  watch   Live status view"
     echo "  menu    Gum menu (interactive)"
-    echo "  timers  Show alphaos-vault-sync timer status"
+    echo "  timers [--brief]  Show alphaos-vault-sync timer status"
     echo "  logs    Show recent log lines (default: 50)"
     echo "  install-cli [--user|--system]    Install vaultctl symlink into PATH"
     echo "  uninstall-cli [--user|--system]  Remove installed vaultctl symlink"

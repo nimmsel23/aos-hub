@@ -28,6 +28,8 @@ LOCK_FILE="${AOS_DOKUMENTE_LOCK_FILE:-/tmp/rclone-dokumente-safe-push.lock}"
 
 COPY_LINKS_MODE="${AOS_DOKUMENTE_COPY_LINKS:-${AOS_COPY_LINKS:-0}}"
 DRY_RUN="${AOS_DRY_RUN:-0}"
+BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
+BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
 
 parse_args() {
   while [ "$#" -gt 0 ]; do
@@ -103,23 +105,28 @@ main() {
     --exclude "**/Thumbs.db"
     --exclude "**/*.tmp"
   )
+  local -a backup_opts=()
 
   if [ "$COPY_LINKS_MODE" = "1" ]; then
     rclone_opts+=(--copy-links)
   else
     rclone_opts+=(--skip-links)
   fi
+  if [ "$BACKUP_OVERWRITES" = "1" ]; then
+    local backup_dir="${REMOTE%%:*}:${BACKUP_BASE_REMOTE%/}/dokumente/push/$(date +%Y%m%d-%H%M%S)"
+    backup_opts+=(--backup-dir "$backup_dir")
+    log "Overwrite backups enabled: $backup_dir"
+  fi
 
   if [ "$DRY_RUN" = "1" ]; then
     log "Dry-run: pushing Dokumente to $REMOTE (copy)"
-    rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}" --dry-run
+    rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}" "${backup_opts[@]}" --dry-run
   else
     log "Pushing Dokumente to $REMOTE (copy)"
-    rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}"
+    rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}" "${backup_opts[@]}"
   fi
 
   success "Dokumente push completed"
 }
 
 main "$@"
-

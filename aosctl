@@ -31,6 +31,34 @@ aos_env_load "" "$SCRIPT_DIR" || true
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+aosctl_color_enabled() {
+  [[ "${AOS_COLOR:-1}" != "0" ]] && [[ -t 1 ]] && [[ "${TERM:-dumb}" != "dumb" ]]
+}
+
+aosctl_color() {
+  local code="$1"
+  local text="$2"
+  if aosctl_color_enabled; then
+    printf "\033[%sm%s\033[0m" "$code" "$text"
+  else
+    printf "%s" "$text"
+  fi
+}
+
+aosctl_chip() {
+  local state="${1:-info}"
+  case "$state" in
+    ok) aosctl_color "1;32" "UP" ;;
+    warn) aosctl_color "1;33" "DEGRADED" ;;
+    err) aosctl_color "1;31" "DOWN" ;;
+    *) aosctl_color "1;36" "INFO" ;;
+  esac
+}
+
+ENV_CHECK_ISSUES=0
+ENV_CHECK_QUIET=0
+declare -a ENV_CHECK_MESSAGES=()
+
 resolve_bin() {
   local primary="$1"; shift
   if [[ -n "$primary" && -x "$primary" ]]; then
@@ -86,6 +114,22 @@ env_file_has_key() {
     }
     END { exit found ? 0 : 1 }
   ' "$file"
+}
+
+pick_user_unit_file() {
+  local cand=""
+  local first_nonempty=""
+  for cand in "$@"; do
+    [[ -n "$cand" ]] || continue
+    if [[ -z "$first_nonempty" ]]; then
+      first_nonempty="$cand"
+    fi
+    if [[ -f "$HOME/.config/systemd/user/$cand" ]]; then
+      printf "%s\n" "$cand"
+      return 0
+    fi
+  done
+  printf "%s\n" "$first_nonempty"
 }
 
 env_file_get_value() {
@@ -242,33 +286,36 @@ env_warn_missing_key() {
   env_file_has_key "$file" "$key" || env_check_issue "missing ${key} in ${file}"
 }
 
+env_summary_row() {
+  local label="$1"
+  local status="$2"
+  local detail="$3"
+  printf "  %-10s [%s] %s\n" "$label" "$(aosctl_chip "$status")" "$detail"
+}
+
 env_check_issue() {
   local text="$1"
-  warn "$text"
+  ENV_CHECK_MESSAGES+=("$text")
+  if [[ "${ENV_CHECK_QUIET:-0}" != "1" && "${AOS_ENV_CHECK_STREAM:-0}" == "1" ]]; then
+    warn "$text"
+  fi
   ENV_CHECK_ISSUES=$((ENV_CHECK_ISSUES + 1))
 }
 
 env_run_check() {
   local quiet="${1:-0}"
+  ENV_CHECK_QUIET="$quiet"
   ENV_CHECK_ISSUES=0
+  ENV_CHECK_MESSAGES=()
 
-  local user_service="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+  local user_service=""
+  user_service="$(pick_user_unit_file "${AOS_INDEX_USER_SERVICE:-}" "alphaos-index.service" "aos-index-dev.service")"
   local user_unit="$HOME/.config/systemd/user/$user_service"
   local user_env="${AOS_INDEX_USER_ENV_FILE:-$HOME/.env/aos.env}"
 
   local sys_unit="/etc/systemd/system/aos-index.service"
   local sys_env="/etc/aos/aos.env"
   local sys_global="/etc/aos/aos.env"
-
-  if [[ "$quiet" != "1" ]]; then
-    msg "Env check: index user/system configuration"
-    msg "  user unit : $user_unit"
-    msg "  user env  : $user_env"
-    msg "  sys unit  : $sys_unit"
-    msg "  sys env   : $sys_env"
-    msg "  sys aos   : $sys_global"
-    msg ""
-  fi
 
   # User service + user env checks
   if [[ -f "$user_unit" ]]; then
@@ -297,7 +344,9 @@ env_run_check() {
       grep -Fq "EnvironmentFile=-/etc/aos/aos.env" "$sys_unit" || \
         env_check_issue "missing EnvironmentFile=-/etc/aos/aos.env in $sys_unit"
     else
-      env_check_issue "system unit exists but is not readable: $sys_unit"
+      if [[ "$EUID" -eq 0 ]]; then
+        env_check_issue "system unit exists but is not readable: $sys_unit"
+      fi
     fi
   else
     env_check_issue "system unit not found: $sys_unit"
@@ -307,7 +356,9 @@ env_run_check() {
     if [[ -r "$sys_global" ]]; then
       env_warn_missing_key "$sys_global" "AOS_INDEX_SERVICE"
     else
-      env_check_issue "system global env exists but is not readable: $sys_global"
+      if [[ "$EUID" -eq 0 ]]; then
+        env_check_issue "system global env exists but is not readable: $sys_global"
+      fi
     fi
   else
     env_check_issue "system global env not found: $sys_global"
@@ -324,23 +375,47 @@ env_run_check() {
         env_warn_missing_key "$sys_env" "AOS_UI_BASIC_PASS"
       fi
     else
-      env_check_issue "system index env exists but is not readable: $sys_env"
+      if [[ "$EUID" -eq 0 ]]; then
+        env_check_issue "system index env exists but is not readable: $sys_env"
+      fi
     fi
   else
     env_check_issue "system index env not found: $sys_env"
   fi
 
-  env_check_contracts "$quiet"
+  env_check_contracts 1
+
+  if [[ "$quiet" != "1" ]]; then
+    ui_title "Env Check"
+    env_summary_row "user-unit" "$([[ -f "$user_unit" ]] && echo ok || echo warn)" "$user_unit"
+    env_summary_row "user-env" "$([[ -f "$user_env" ]] && echo ok || echo warn)" "$user_env"
+    env_summary_row "sys-unit" "$([[ -f "$sys_unit" ]] && echo ok || echo warn)" "$sys_unit"
+    env_summary_row "sys-env" "$([[ -f "$sys_env" ]] && echo ok || echo warn)" "$sys_env"
+    env_summary_row "sys-aos" "$([[ -f "$sys_global" ]] && echo ok || echo warn)" "$sys_global"
+    echo ""
+  fi
 
   if (( ENV_CHECK_ISSUES == 0 )); then
     if [[ "$quiet" != "1" ]]; then
-      msg "Env check passed."
+      msg "[$(aosctl_chip ok)] Env check passed (0 issues)."
     fi
     return 0
   fi
 
   if [[ "$quiet" != "1" ]]; then
-    warn "Env check found ${ENV_CHECK_ISSUES} issue(s)."
+    msg "[$(aosctl_chip warn)] Env check found ${ENV_CHECK_ISSUES} issue(s)."
+    local i=0
+    local max=6
+    for issue in "${ENV_CHECK_MESSAGES[@]}"; do
+      i=$((i + 1))
+      if (( i > max )); then
+        break
+      fi
+      msg "  - $issue"
+    done
+    if (( ENV_CHECK_ISSUES > max )); then
+      msg "  ... +$((ENV_CHECK_ISSUES - max)) more"
+    fi
   fi
   return 1
 }
@@ -352,8 +427,9 @@ aosctl - AOS Unified Control Interface
 
 USAGE:
   aosctl <component> <action> [args...]
-  aosctl                     # Env check + interactive menu
-  aosctl menu                # Interactive menu (gum/fzf if available)
+  aosctl                     # Live dashboard (default entrypoint)
+  aosctl menu                # Interactive menu (gum/fzf)
+  aosctl dashboard [sec]     # Live dashboard (default refresh: 10s)
   aosctl status              # Unified status (no logs) + heartbeat ping
   aosctl ping                # Heartbeat ping (routerctl)
   aosctl doctor              # Unified health check
@@ -397,6 +473,8 @@ COMMON ACTIONS (per component):
 
 EXAMPLES:
   aosctl menu
+  aosctl dashboard
+  aosctl dashboard 5
   aosctl status
   aosctl hub status
   aosctl core4 status
@@ -453,7 +531,7 @@ show_menu() {
   choices+=("Env: example")
   [[ -n "$ENVCTL" ]] && choices+=("Env: list")
   [[ -n "$ALIASCTL" ]] && choices+=("Aliases: ui")
-  choices+=("Status" "Ping" "Doctor" "Help" "Quit")
+  choices+=("Dashboard" "Status" "Ping" "Doctor" "Help" "Quit")
 
   local choice
   choice="$(choose "${choices[@]}")" || return 0
@@ -477,6 +555,7 @@ show_menu() {
     "Env: example") env_cmd example ;;
     "Env: list") env_cmd list ;;
     "Aliases: ui") alias_cmd ui ;;
+    "Dashboard") run_dashboard ;;
     "Status") run_status ;;
     "Ping") run_ping ;;
     "Doctor") run_doctor ;;
@@ -540,6 +619,177 @@ show_version() {
   fi
 
   msg ""
+}
+
+dashboard_http_row() {
+  local name="$1"
+  local url="$2"
+  if have curl && curl --max-time 2 -fsS "$url" >/dev/null 2>&1; then
+    case "$name" in
+      Index) DASH_HEALTH_INDEX=ok ;;
+      Bridge) DASH_HEALTH_BRIDGE=ok ;;
+    esac
+    msg "  ${name}: $(aosctl_chip ok)"
+  else
+    case "$name" in
+      Index) DASH_HEALTH_INDEX=err ;;
+      Bridge) DASH_HEALTH_BRIDGE=err ;;
+    esac
+    msg "  ${name}: $(aosctl_chip err)"
+  fi
+}
+
+dashboard_unit_row() {
+  local label="$1"
+  local unit="$2"
+  if ! have systemctl; then
+    msg "  ${label}: systemctl missing"
+    return 0
+  fi
+  local enabled active
+  enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$enabled" ]] && enabled="-"
+  [[ -z "$active" ]] && active="-"
+  local state="warn"
+  if [[ "$unit" == *.timer ]]; then
+    if [[ "$enabled" == "not-found" ]]; then
+      state="err"
+    elif [[ "$active" == "active" ]]; then
+      state="ok"
+    elif [[ "$enabled" == "enabled" && "$active" == "inactive" ]]; then
+      state="warn"
+    fi
+  else
+    if [[ "$active" == "active" ]]; then
+      state="ok"
+    elif [[ "$enabled" == "not-found" || "$active" == "failed" ]]; then
+      state="err"
+    fi
+  fi
+  if [[ "$state" == "err" ]]; then
+    if [[ "$label" == "Index" && "${DASH_HEALTH_INDEX:-err}" == "ok" ]]; then
+      state="warn"
+      msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled}, HTTP reachable)"
+      return 0
+    fi
+    if [[ "$label" == "Bridge" && "${DASH_HEALTH_BRIDGE:-err}" == "ok" ]]; then
+      state="warn"
+      msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled}, HTTP reachable)"
+      return 0
+    fi
+  fi
+  msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled})"
+}
+
+dashboard_dir_chip() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    printf "%s" "$(aosctl_chip ok)"
+  else
+    printf "%s" "$(aosctl_chip warn)"
+  fi
+}
+
+render_dashboard_once() {
+  if [[ "${AOS_NO_CLEAR:-0}" != "1" && -t 1 ]]; then
+    clear
+  fi
+  ui_title "αOS Dashboard"
+  msg "Updated: $(date '+%Y-%m-%d %H:%M:%S')"
+  msg ""
+
+  msg "=== Health ==="
+  DASH_HEALTH_INDEX=err
+  DASH_HEALTH_BRIDGE=err
+  dashboard_http_row "Index" "${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+  dashboard_http_row "Bridge" "${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
+  if [[ -n "$ROUTERCTL" ]]; then
+    if "$ROUTERCTL" status >/dev/null 2>&1; then
+      msg "  Router: $(aosctl_chip ok)"
+    else
+      msg "  Router: $(aosctl_chip err)"
+    fi
+  else
+    msg "  Router: $(aosctl_chip warn)"
+  fi
+  msg ""
+
+  msg "=== User Units ==="
+  local idx_unit br_unit rt_unit live_timer routine_timer vault_timer
+  idx_unit="$(pick_user_unit_file "${AOS_INDEX_USER_SERVICE:-}" "alphaos-index.service" "aos-index-dev.service")"
+  br_unit="$(pick_user_unit_file "${AOS_BRIDGE_USER_SERVICE:-}" "aos-bridge.service" "alphaos-bridge.service")"
+  rt_unit="$(pick_user_unit_file "${AOS_ROUTER_USER_SERVICE:-}" "aos-router.service" "alphaos-router.service")"
+  live_timer="$(pick_user_unit_file "${AOS_HUB_LIVE_TIMER_UNIT:-}" "aos-hub-live-push.timer" "alphaos-safe-rclone-push.timer")"
+  routine_timer="$(pick_user_unit_file "${AOS_HUB_ROUTINE_TIMER_UNIT:-}" "aos-hub-backup-daily.timer" "aos-hub-daily-routine.timer")"
+  vault_timer="$(pick_user_unit_file "${AOS_VAULT_SYNC_TIMER_UNIT:-}" "alphaos-vault-sync.timer")"
+  dashboard_unit_row "Index" "$idx_unit"
+  dashboard_unit_row "Bridge" "$br_unit"
+  dashboard_unit_row "Router" "$rt_unit"
+  dashboard_unit_row "Hub live timer" "$live_timer"
+  dashboard_unit_row "Hub routine" "$routine_timer"
+  dashboard_unit_row "Vault timer" "$vault_timer"
+  msg ""
+
+  msg "=== Sync Summary ==="
+  local rclone_cfg="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+  if have rclone; then
+    msg "  rclone: $(aosctl_chip ok) ($(command -v rclone))"
+  else
+    msg "  rclone: $(aosctl_chip err) (missing)"
+  fi
+  if [[ -f "$rclone_cfg" ]]; then
+    msg "  config: $(aosctl_chip ok) ($rclone_cfg)"
+  else
+    msg "  config: $(aosctl_chip err) ($rclone_cfg)"
+  fi
+  if [[ "${AOS_SYNC_BACKUP_OVERWRITES:-1}" == "1" ]]; then
+    msg "  overwrite-backups: $(aosctl_chip ok) (enabled)"
+  else
+    msg "  overwrite-backups: $(aosctl_chip warn) (disabled)"
+  fi
+
+  local vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+  local domain_root="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
+  local biz_root="$HOME/Dokumente/BUSINESS"
+  local hub_root="${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"
+  msg "  roots: vault=$(dashboard_dir_chip "$vault_root"), domains=$(dashboard_dir_chip "$domain_root"), business=$(dashboard_dir_chip "$biz_root"), hub=$(dashboard_dir_chip "$hub_root")"
+}
+
+run_dashboard() {
+  local mode="${1:-once}"
+  local interval="${2:-10}"
+  case "$mode" in
+    once|"")
+      render_dashboard_once
+      ;;
+    watch|--watch|-w)
+      [[ "$interval" =~ ^[0-9]+$ ]] || die "Usage: aosctl dashboard [watch [seconds]]"
+      (( interval > 0 )) || interval=10
+      while true; do
+        render_dashboard_once
+        if [[ ! -t 0 || ! -t 1 ]]; then
+          break
+        fi
+        msg ""
+        msg "Refresh every ${interval}s (press q to quit)"
+        local key=""
+        if read -r -t "$interval" -n 1 key; then
+          echo ""
+          if [[ "$key" == "q" || "$key" == "Q" ]]; then
+            break
+          fi
+        fi
+      done
+      ;;
+    *)
+      if [[ "$mode" =~ ^[0-9]+$ ]]; then
+        run_dashboard watch "$mode"
+      else
+        die "Usage: aosctl dashboard [watch [seconds]]"
+      fi
+      ;;
+  esac
 }
 
 run_status() {
@@ -1118,8 +1368,7 @@ PY
 
 main() {
   if [[ $# -eq 0 ]]; then
-    env_run_check 0 || true
-    show_menu
+    run_dashboard "${AOSCTL_DASHBOARD_INTERVAL:-10}"
     exit 0
   fi
 
@@ -1127,7 +1376,8 @@ main() {
   shift || true
 
   case "$cmd" in
-    menu) env_run_check 0 || true; show_menu ;;
+    menu) show_menu ;;
+    dashboard|dash) run_dashboard "$@" ;;
     status) run_status ;;
     ping) run_ping ;;
     help|-h|--help) show_help ;;
