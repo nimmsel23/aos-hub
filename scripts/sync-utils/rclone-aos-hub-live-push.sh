@@ -98,6 +98,7 @@ push() {
     --fast-list
     --log-file "$LOG_FILE"
     --log-level INFO
+    --exclude ".git/**"
     --exclude "**/node_modules/**"
     --exclude "**/.venv/**"
     --exclude "**/__pycache__/**"

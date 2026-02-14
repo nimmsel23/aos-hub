@@ -48,6 +48,12 @@ Regel:
 - `aos-sync`
 - `aos-doctor`
 
+## Sync-Utils Konsolidierung
+
+- Kanonische Implementierungen liegen in `scripts/sync-utils/`.
+- `scripts/utils/git-auto-sync.sh`, `scripts/utils/rclone-domain-sync.sh` und
+  `scripts/utils/rclone-vitaltrainer-copy.sh` sind nur noch Kompatibilitaets-Wrapper.
+
 ## Validierung
 
 ```bash

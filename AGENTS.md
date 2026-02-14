@@ -35,6 +35,7 @@
 - Keep handlers small and stateless in router/bridge code; return JSON errors on invalid payloads.
 - `index-node/menu.yaml` is the single source of truth for centre routes; do not hardcode URLs.
 - For script hygiene, treat `scripts/CATALOG.md` as the quick map for `strict ctl` / `legacy ctl` / `wrapper ctl`.
+- Sync helper scripts are canonical in `scripts/sync-utils/`; `scripts/utils/` is compatibility/fallback wrapper space and should not be the feature target.
 - When touching multi-writer pipelines (Core4, Door, Fruits, Fire), add/maintain documentation and code comments that explain:
   - source of truth vs derived/cache artifacts
   - writers/readers and how they converge (pull/push triggers, throttling, idempotency)

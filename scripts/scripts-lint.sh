@@ -146,7 +146,9 @@ check_duplicate_legacy_utils() {
     right="$SCRIPT_DIR/$right"
 
     if [[ -f "$left" && -f "$right" ]]; then
-      if cmp -s "$left" "$right"; then
+      if file_contains "$right" "../sync-utils/" && file_contains "$right" "exec \"\$TARGET\""; then
+        say "OK: compatibility wrapper -> ${right#$SCRIPT_DIR/} delegates to ${left#$SCRIPT_DIR/}"
+      elif cmp -s "$left" "$right"; then
         warn "duplicate scripts (identical): ${left#$SCRIPT_DIR/} and ${right#$SCRIPT_DIR/}"
       else
         warn "duplicate scripts (different): ${left#$SCRIPT_DIR/} and ${right#$SCRIPT_DIR/}"

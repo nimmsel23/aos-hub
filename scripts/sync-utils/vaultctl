@@ -429,6 +429,82 @@ sudo_cmd() {
   "$@"
 }
 
+install_cli_user() {
+  local src="$ROOT_DIR/scripts/sync-utils/vaultctl"
+  local bin_dir="${VAULTCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/vaultctl"
+
+  if [[ ! -x "$src" ]]; then
+    warn "source script missing or not executable: $src"
+    return 1
+  fi
+
+  mkdir -p "$bin_dir" 2>/dev/null || {
+    warn "cannot create: $bin_dir"
+    return 1
+  }
+
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    warn "refusing to overwrite non-symlink: $dst"
+    return 1
+  fi
+
+  ln -sfn "$src" "$dst"
+  info "installed: $dst -> $src"
+}
+
+install_cli_system() {
+  local src="$ROOT_DIR/scripts/sync-utils/vaultctl"
+  local bin_dir="/usr/local/bin"
+  local dst="$bin_dir/vaultctl"
+
+  if [[ ! -x "$src" ]]; then
+    warn "source script missing or not executable: $src"
+    return 1
+  fi
+
+  sudo_cmd install -d -m 755 "$bin_dir" || return 1
+  sudo_cmd ln -sfn "$src" "$dst" || return 1
+  info "installed: $dst -> $src"
+}
+
+cmd_install_cli() {
+  local mode="${1:---user}"
+  case "$mode" in
+    --user) install_cli_user ;;
+    --system) install_cli_system ;;
+    *)
+      warn "Usage: vaultctl install-cli [--user|--system]"
+      return 2
+      ;;
+  esac
+}
+
+cmd_uninstall_cli() {
+  local mode="${1:---user}"
+  local dst=""
+  case "$mode" in
+    --user)
+      dst="${VAULTCTL_BIN_DIR:-$HOME/.local/bin}/vaultctl"
+      if [[ -L "$dst" ]]; then
+        rm -f "$dst"
+        info "removed: $dst"
+      else
+        info "nothing to remove at: $dst"
+      fi
+      ;;
+    --system)
+      dst="/usr/local/bin/vaultctl"
+      sudo_cmd rm -f "$dst" || return 1
+      info "removed: $dst"
+      ;;
+    *)
+      warn "Usage: vaultctl uninstall-cli [--user|--system]"
+      return 2
+      ;;
+  esac
+}
+
 need_systemctl() {
   if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
     warn "systemctl not found"
@@ -942,6 +1018,12 @@ case "${1:-sync}" in
   logs)
     logs "${2:-50}"
     ;;
+  install-cli)
+    cmd_install_cli "${2:---user}"
+    ;;
+  uninstall-cli)
+    cmd_uninstall_cli "${2:---user}"
+    ;;
   systemd|units|unit)
     vault_sync_system_cmd "${2:-status}" "${@:3}"
     ;;
@@ -964,6 +1046,8 @@ case "${1:-sync}" in
     echo "  menu    Gum menu (interactive)"
     echo "  timers  Show alphaos-vault-sync timer status"
     echo "  logs    Show recent log lines (default: 50)"
+    echo "  install-cli [--user|--system]    Install vaultctl symlink into PATH"
+    echo "  uninstall-cli [--user|--system]  Remove installed vaultctl symlink"
     echo "  systemd status                      Show pull/push unit status"
     echo "  systemd install                     Install pull/push unit files to /etc/systemd/system"
     echo "  systemd enable|disable              Enable or disable pull/push services"

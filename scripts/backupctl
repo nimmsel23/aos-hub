@@ -136,6 +136,29 @@ rclonectl_bin() {
   return 1
 }
 
+doctor_path_collisions() {
+  local name="$1"
+  if ! has_cmd "$name"; then
+    return 0
+  fi
+  local -a hits=()
+  mapfile -t hits < <(type -a "$name" 2>/dev/null | sed -n "s/^${name} is //p")
+  local count="${#hits[@]}"
+  if (( count <= 1 )); then
+    return 0
+  fi
+  ui_warn "PATH collision for '$name' (${count} entries)"
+  local i=0
+  for p in "${hits[@]}"; do
+    if (( i == 0 )); then
+      ui_info "  active: $p"
+    else
+      ui_info "  shadow: $p"
+    fi
+    i=$((i + 1))
+  done
+}
+
 pull_policy_enabled() {
   [[ "$BACKUPCTL_NO_PULL_DEFAULT" == "1" ]]
 }
@@ -155,6 +178,37 @@ Run manually in your terminal:
   sudo systemctl disable --now $VAULT_PULL_UNIT
   sudo systemctl mask $VAULT_PULL_UNIT
 EOF
+}
+
+get_system_unit_enabled_state() {
+  local unit="$1"
+  local state=""
+  state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  if [[ -z "$state" ]] && has_cmd sudo && sudo -n true >/dev/null 2>&1; then
+    state="$(sudo systemctl is-enabled "$unit" 2>/dev/null || true)"
+  fi
+  if [[ -z "$state" ]]; then
+    local etc_unit="/etc/systemd/system/$unit"
+    if [[ -L "$etc_unit" ]]; then
+      local target
+      target="$(readlink -f "$etc_unit" 2>/dev/null || true)"
+      if [[ "$target" == "/dev/null" ]]; then
+        printf "%s\n" "masked"
+        return 0
+      fi
+    fi
+    if [[ -L "/etc/systemd/system/multi-user.target.wants/$unit" || -L "/etc/systemd/system/default.target.wants/$unit" || -L "/etc/systemd/system/timers.target.wants/$unit" ]]; then
+      printf "%s\n" "enabled"
+      return 0
+    fi
+    if [[ -e "$etc_unit" || -e "/usr/lib/systemd/system/$unit" || -e "/lib/systemd/system/$unit" ]]; then
+      printf "%s\n" "disabled"
+      return 0
+    fi
+    printf "%s\n" "not-found"
+    return 0
+  fi
+  printf "%s\n" "$state"
 }
 
 is_pull_request() {
@@ -283,8 +337,142 @@ Usage:
   backupctl sync
   backupctl pull
   backupctl sync-menu
+  backupctl install-cli [--user|--system]
+  backupctl uninstall-cli [--user|--system]
+  backupctl fix-path [--dry-run]
   backupctl version
 EOF_HELP
+}
+
+fix_path_for_command() {
+  local name="$1"
+  local canonical="$2"
+  local dry_run="$3"
+  local -a managed=("$HOME/bin/$name" "$HOME/.local/bin/$name")
+  local p=""
+
+  for p in "${managed[@]}"; do
+    [[ -e "$p" || -L "$p" ]] || continue
+    local rp=""
+    rp="$(readlink -f "$p" 2>/dev/null || true)"
+    if [[ "$rp" == "$canonical" ]]; then
+      ui_ok "$name path already canonical: $p -> $canonical"
+      continue
+    fi
+    if [[ -L "$p" ]]; then
+      if [[ "$dry_run" == "1" ]]; then
+        ui_info "dry-run: would remove shadow symlink: $p"
+      else
+        rm -f "$p"
+        ui_ok "removed shadow symlink: $p"
+      fi
+    else
+      ui_warn "not a symlink, skipped: $p"
+    fi
+  done
+
+  local dst="$HOME/.local/bin/$name"
+  if [[ "$dry_run" == "1" ]]; then
+    ui_info "dry-run: would ensure canonical link: $dst -> $canonical"
+  else
+    mkdir -p "$HOME/.local/bin" 2>/dev/null || true
+    if [[ -e "$dst" && ! -L "$dst" ]]; then
+      ui_warn "cannot overwrite non-symlink: $dst"
+    else
+      ln -sfn "$canonical" "$dst"
+      ui_ok "installed canonical link: $dst -> $canonical"
+    fi
+  fi
+}
+
+cmd_fix_path() {
+  local dry_run=0
+  if [[ "${1:-}" == "--dry-run" ]]; then
+    dry_run=1
+  elif [[ -n "${1:-}" ]]; then
+    die "Usage: backupctl fix-path [--dry-run]"
+  fi
+
+  ui_title "backupctl fix-path"
+  fix_path_for_command "backupctl" "$ROOT_DIR/scripts/backupctl" "$dry_run"
+  fix_path_for_command "syncctl" "$ROOT_DIR/scripts/syncctl" "$dry_run"
+  fix_path_for_command "vaultctl" "$ROOT_DIR/scripts/sync-utils/vaultctl" "$dry_run"
+  ui_info "run 'hash -r' and then 'type -a backupctl syncctl vaultctl'"
+}
+
+install_cli_user() {
+  local src="$ROOT_DIR/scripts/backupctl"
+  local bin_dir="${BACKUPCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/backupctl"
+  [[ -x "$src" ]] || die "source script missing or not executable: $src"
+  mkdir -p "$bin_dir" 2>/dev/null || die "cannot create: $bin_dir"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    die "refusing to overwrite non-symlink: $dst"
+  fi
+  ln -sfn "$src" "$dst"
+  ui_ok "installed: $dst -> $src"
+  if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+    ui_warn "PATH does not include $bin_dir"
+    ui_info "add with: export PATH=\"$bin_dir:\$PATH\""
+  fi
+}
+
+install_cli_system() {
+  local src="$ROOT_DIR/scripts/backupctl"
+  local bin_dir="/usr/local/bin"
+  local dst="$bin_dir/backupctl"
+  [[ -x "$src" ]] || die "source script missing or not executable: $src"
+  if [[ "$EUID" -eq 0 ]]; then
+    install -d -m 755 "$bin_dir"
+    ln -sfn "$src" "$dst"
+  elif has_cmd sudo; then
+    sudo install -d -m 755 "$bin_dir"
+    sudo ln -sfn "$src" "$dst"
+  else
+    die "sudo is required for --system install"
+  fi
+  ui_ok "installed: $dst -> $src"
+}
+
+cmd_install_cli() {
+  local mode="${1:---user}"
+  case "$mode" in
+    --user) install_cli_user ;;
+    --system) install_cli_system ;;
+    *)
+      die "Usage: backupctl install-cli [--user|--system]"
+      ;;
+  esac
+}
+
+cmd_uninstall_cli() {
+  local mode="${1:---user}"
+  local dst=""
+  case "$mode" in
+    --user)
+      dst="${BACKUPCTL_BIN_DIR:-$HOME/.local/bin}/backupctl"
+      if [[ -L "$dst" ]]; then
+        rm -f "$dst"
+        ui_ok "removed: $dst"
+      else
+        ui_info "nothing to remove at: $dst"
+      fi
+      ;;
+    --system)
+      dst="/usr/local/bin/backupctl"
+      if [[ "$EUID" -eq 0 ]]; then
+        [[ -e "$dst" || -L "$dst" ]] && rm -f "$dst" || true
+      elif has_cmd sudo; then
+        sudo rm -f "$dst"
+      else
+        die "sudo is required for --system uninstall"
+      fi
+      ui_ok "removed: $dst"
+      ;;
+    *)
+      die "Usage: backupctl uninstall-cli [--user|--system]"
+      ;;
+  esac
 }
 
 cmd_explain() {
@@ -512,11 +700,28 @@ cmd_no_pull() {
   local action="${1:-status}"
   case "$action" in
     status)
-      if systemctl is-enabled "$VAULT_PULL_UNIT" >/dev/null 2>&1; then
-        ui_warn "system pull unit is enabled: $VAULT_PULL_UNIT"
-      else
-        ui_ok "system pull unit is disabled: $VAULT_PULL_UNIT"
-      fi
+      local pull_state
+      pull_state="$(get_system_unit_enabled_state "$VAULT_PULL_UNIT")"
+      case "$pull_state" in
+        masked)
+          ui_ok "system pull unit is masked (pull blocked): $VAULT_PULL_UNIT"
+          ;;
+        enabled)
+          ui_warn "system pull unit is enabled: $VAULT_PULL_UNIT"
+          ;;
+        disabled)
+          ui_ok "system pull unit is disabled: $VAULT_PULL_UNIT"
+          ;;
+        not-found)
+          ui_ok "system pull unit not found: $VAULT_PULL_UNIT"
+          ;;
+        static|indirect|generated|linked|linked-runtime|transient|alias)
+          ui_info "system pull unit state is $pull_state: $VAULT_PULL_UNIT"
+          ;;
+        *)
+          ui_warn "cannot determine system pull unit state: $VAULT_PULL_UNIT"
+          ;;
+      esac
       if pull_policy_enabled; then
         ui_ok "backupctl no-pull policy is ON (BACKUPCTL_NO_PULL_DEFAULT=1)"
       else
@@ -624,6 +829,10 @@ cmd_doctor() {
   else
     ui_warn "rclone config missing: $RCLONE_CONFIG"
   fi
+
+  doctor_path_collisions backupctl
+  doctor_path_collisions syncctl
+  doctor_path_collisions vaultctl
 
   if syncctl_bin >/dev/null 2>&1; then
     ui_ok "syncctl found"
@@ -754,6 +963,9 @@ main() {
     check) cmd_check ;;
     config) cmd_config ;;
     sync-menu) cmd_sync_menu ;;
+    install-cli) cmd_install_cli "$@" ;;
+    uninstall-cli) cmd_uninstall_cli "$@" ;;
+    fix-path) cmd_fix_path "$@" ;;
     syncctl) cmd_syncctl "$@" ;;
     vaultctl) cmd_vaultctl "$@" ;;
     version) cmd_version ;;

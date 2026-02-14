@@ -86,6 +86,66 @@ doctor_tty() {
   fi
 }
 
+doctor_path_collisions() {
+  local name="$1"
+  if ! has_cmd "$name"; then
+    return 0
+  fi
+  local -a hits=()
+  mapfile -t hits < <(type -a "$name" 2>/dev/null | sed -n "s/^${name} is //p")
+  local count="${#hits[@]}"
+  if (( count <= 1 )); then
+    return 0
+  fi
+  ui_warn "PATH collision for '$name' (${count} entries)"
+  local i=0
+  for p in "${hits[@]}"; do
+    if (( i == 0 )); then
+      ui_info "  active: $p"
+    else
+      ui_info "  shadow: $p"
+    fi
+    i=$((i + 1))
+  done
+}
+
+doctor() {
+  ui_title "syncctl doctor"
+
+  if has_cmd rclone; then
+    ui_ok "rclone binary found"
+  else
+    ui_warn "rclone binary missing in PATH"
+  fi
+
+  if [[ -f "${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}" ]]; then
+    ui_ok "rclone config present"
+  else
+    ui_warn "rclone config missing"
+  fi
+
+  doctor_path_collisions syncctl
+  doctor_path_collisions vaultctl
+  doctor_path_collisions backupctl
+
+  local bin=""
+  if bin="$(pick_bin "$VAULTCTL_PRIMARY" "$VAULTCTL_FALLBACK" "vaultctl")"; then
+    ui_ok "vaultctl resolved: $bin"
+  else
+    ui_warn "vaultctl not found"
+  fi
+  if bin="$(pick_bin "$DOMAIN_PRIMARY" "$DOMAIN_FALLBACK" "")"; then
+    ui_ok "domain script resolved: $bin"
+  else
+    ui_warn "rclone-domain-sync.sh not found"
+  fi
+  if bin="$(pick_bin "$VITAL_PRIMARY" "$VITAL_FALLBACK" "")"; then
+    ui_ok "vitaltrainer script resolved: $bin"
+  else
+    ui_warn "rclone-vitaltrainer-copy.sh not found"
+  fi
+}
+
 ensure_menu_tty() {
   if have_tty; then
     return 0
@@ -168,7 +228,11 @@ This tool is intentionally small. Most of the real work happens in:
 Common:
   syncctl menu
   syncctl safety
+  syncctl doctor
   syncctl doctor-tty
+  syncctl install-cli [--user|--system]
+  syncctl uninstall-cli [--user|--system]
+  syncctl fix-path [--dry-run]
 
 Targets (aos-sync):
   syncctl list
@@ -195,6 +259,137 @@ FADARO push:
 aos-hub live backup:
   syncctl hub <status|push> [--dry-run]
 EOF
+}
+
+install_cli_user() {
+  local src="$ROOT_DIR/scripts/syncctl"
+  local bin_dir="${SYNCCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/syncctl"
+  [[ -x "$src" ]] || die "source script missing or not executable: $src"
+  mkdir -p "$bin_dir" 2>/dev/null || die "cannot create: $bin_dir"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    die "refusing to overwrite non-symlink: $dst"
+  fi
+  ln -sfn "$src" "$dst"
+  ui_ok "installed: $dst -> $src"
+  if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+    ui_warn "PATH does not include $bin_dir"
+    ui_info "add with: export PATH=\"$bin_dir:\$PATH\""
+  fi
+}
+
+install_cli_system() {
+  local src="$ROOT_DIR/scripts/syncctl"
+  local bin_dir="/usr/local/bin"
+  local dst="$bin_dir/syncctl"
+  [[ -x "$src" ]] || die "source script missing or not executable: $src"
+  if [[ "$EUID" -eq 0 ]]; then
+    install -d -m 755 "$bin_dir"
+    ln -sfn "$src" "$dst"
+  elif has_cmd sudo; then
+    sudo install -d -m 755 "$bin_dir"
+    sudo ln -sfn "$src" "$dst"
+  else
+    die "sudo is required for --system install"
+  fi
+  ui_ok "installed: $dst -> $src"
+}
+
+cmd_install_cli() {
+  local mode="${1:---user}"
+  case "$mode" in
+    --user) install_cli_user ;;
+    --system) install_cli_system ;;
+    *)
+      die "Usage: syncctl install-cli [--user|--system]"
+      ;;
+  esac
+}
+
+cmd_uninstall_cli() {
+  local mode="${1:---user}"
+  local dst=""
+  case "$mode" in
+    --user)
+      dst="${SYNCCTL_BIN_DIR:-$HOME/.local/bin}/syncctl"
+      if [[ -L "$dst" ]]; then
+        rm -f "$dst"
+        ui_ok "removed: $dst"
+      else
+        ui_info "nothing to remove at: $dst"
+      fi
+      ;;
+    --system)
+      dst="/usr/local/bin/syncctl"
+      if [[ "$EUID" -eq 0 ]]; then
+        [[ -e "$dst" || -L "$dst" ]] && rm -f "$dst" || true
+      elif has_cmd sudo; then
+        sudo rm -f "$dst"
+      else
+        die "sudo is required for --system uninstall"
+      fi
+      ui_ok "removed: $dst"
+      ;;
+    *)
+      die "Usage: syncctl uninstall-cli [--user|--system]"
+      ;;
+  esac
+}
+
+fix_path_for_command() {
+  local name="$1"
+  local canonical="$2"
+  local dry_run="$3"
+  local -a managed=("$HOME/bin/$name" "$HOME/.local/bin/$name")
+  local p=""
+
+  for p in "${managed[@]}"; do
+    [[ -e "$p" || -L "$p" ]] || continue
+    local rp=""
+    rp="$(readlink -f "$p" 2>/dev/null || true)"
+    if [[ "$rp" == "$canonical" ]]; then
+      ui_ok "$name path already canonical: $p -> $canonical"
+      continue
+    fi
+    if [[ -L "$p" ]]; then
+      if [[ "$dry_run" == "1" ]]; then
+        ui_info "dry-run: would remove shadow symlink: $p"
+      else
+        rm -f "$p"
+        ui_ok "removed shadow symlink: $p"
+      fi
+    else
+      ui_warn "not a symlink, skipped: $p"
+    fi
+  done
+
+  local dst="$HOME/.local/bin/$name"
+  if [[ "$dry_run" == "1" ]]; then
+    ui_info "dry-run: would ensure canonical link: $dst -> $canonical"
+  else
+    mkdir -p "$HOME/.local/bin" 2>/dev/null || true
+    if [[ -e "$dst" && ! -L "$dst" ]]; then
+      ui_warn "cannot overwrite non-symlink: $dst"
+    else
+      ln -sfn "$canonical" "$dst"
+      ui_ok "installed canonical link: $dst -> $canonical"
+    fi
+  fi
+}
+
+cmd_fix_path() {
+  local dry_run=0
+  if [[ "${1:-}" == "--dry-run" ]]; then
+    dry_run=1
+  elif [[ -n "${1:-}" ]]; then
+    die "Usage: syncctl fix-path [--dry-run]"
+  fi
+
+  ui_title "syncctl fix-path"
+  fix_path_for_command "syncctl" "$ROOT_DIR/scripts/syncctl" "$dry_run"
+  fix_path_for_command "backupctl" "$ROOT_DIR/scripts/backupctl" "$dry_run"
+  fix_path_for_command "vaultctl" "$ROOT_DIR/scripts/sync-utils/vaultctl" "$dry_run"
+  ui_info "run 'hash -r' and then 'type -a syncctl backupctl vaultctl'"
 }
 
 choose_plain() {
@@ -574,6 +769,13 @@ main() {
     menu|ui) run_menu ;;
     safety|notes) print_safety_notes ;;
     doctor-tty) doctor_tty ;;
+    doctor)
+      if [[ $# -eq 0 ]]; then
+        doctor
+      else
+        run_aos_sync doctor "$@"
+      fi
+      ;;
     status)
       if [[ $# -eq 0 ]]; then
         local bin
@@ -593,9 +795,12 @@ main() {
       fi
       run_aos_sync status "$@"
       ;;
-    list|run|enable|disable|logs|doctor)
+    list|run|enable|disable|logs)
       run_aos_sync "$cmd" "$@"
       ;;
+    install-cli) cmd_install_cli "$@" ;;
+    uninstall-cli) cmd_uninstall_cli "$@" ;;
+    fix-path) cmd_fix_path "$@" ;;
     vault) run_vault "$@" ;;
     domains|domain) run_domains "$@" ;;
     vitaltrainer|vital) run_vitaltrainer "$@" ;;
