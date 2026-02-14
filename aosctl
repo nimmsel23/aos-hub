@@ -132,7 +132,7 @@ env_contract_rows() {
   cat <<EOF
 index|$SCRIPT_DIR/scripts/indexctl||AOS_INDEX_USER_SERVICE AOS_INDEX_ENV_FILE AOS_INDEX_HEALTH_URL AOS_HUB_DOCTOR AOS_UI_BASIC_AUTH AOS_UI_BASIC_USER AOS_UI_BASIC_PASS AOS_UI_BASIC_REALM AOS_UI_BASIC_AUTH_PROTECT_API
 router|$SCRIPT_DIR/router/routerctl||AOS_ENV_FILE
-bridge|$SCRIPT_DIR/bridge/bridgectl||AOS_BRIDGE_ENV_FILE AOS_BRIDGE_URL AOS_BRIDGE_TOKEN AOS_BRIDGE_TOKEN_HEADER AOS_BRIDGE_HOST AOS_BRIDGE_PORT AOS_BRIDGE_TAILSCALE_PATH AOS_BRIDGE_TAILSCALE_TARGET
+bridge|$SCRIPT_DIR/bridge/bridgectl||AOS_ENV_FILE AOS_BRIDGE_URL AOS_BRIDGE_TOKEN AOS_BRIDGE_TOKEN_HEADER AOS_BRIDGE_HOST AOS_BRIDGE_PORT AOS_BRIDGE_TAILSCALE_PATH AOS_BRIDGE_TAILSCALE_TARGET
 sync|$SCRIPT_DIR/scripts/syncctl||AOS_DRY_RUN AOS_COPY_LINKS AOS_SYNC_CONF_DIR AOS_SYNC_LOCK_DIR AOS_RCLONE_CONFIG AOS_RCLONE_REMOTE_NAME AOS_LOG_DIR AOS_LOG_LIMIT
 git|$SCRIPT_DIR/scripts/gitctl||AOS_GIT_SILENT AOS_GIT_NOTIFY
 backup|$SCRIPT_DIR/scripts/backupctl||AOS_HUB_DIR
@@ -254,11 +254,11 @@ env_run_check() {
 
   local user_service="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
   local user_unit="$HOME/.config/systemd/user/$user_service"
-  local user_env="${AOS_INDEX_USER_ENV_FILE:-$HOME/.env/alphaos-index.env}"
+  local user_env="${AOS_INDEX_USER_ENV_FILE:-$HOME/.env/aos.env}"
 
   local sys_unit="/etc/systemd/system/aos-index.service"
-  local sys_env="/etc/alphaos-hub/alphaos-index.env"
-  local sys_global="/etc/alphaos-hub/aos.env"
+  local sys_env="/etc/aos/aos.env"
+  local sys_global="/etc/aos/aos.env"
 
   if [[ "$quiet" != "1" ]]; then
     msg "Env check: index user/system configuration"
@@ -274,8 +274,6 @@ env_run_check() {
   if [[ -f "$user_unit" ]]; then
     grep -Fq "EnvironmentFile=-%h/.env/aos.env" "$user_unit" || \
       env_check_issue "missing EnvironmentFile=-%h/.env/aos.env in $user_unit"
-    grep -Fq "EnvironmentFile=-%h/.env/alphaos-index.env" "$user_unit" || \
-      env_check_issue "missing EnvironmentFile=-%h/.env/alphaos-index.env in $user_unit"
   else
     env_check_issue "user unit not found: $user_unit"
   fi
@@ -296,12 +294,8 @@ env_run_check() {
   # System service + system env checks (only when readable/installed)
   if [[ -f "$sys_unit" ]]; then
     if [[ -r "$sys_unit" ]]; then
-      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/env" "$sys_unit" || \
-        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/env in $sys_unit"
-      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/aos.env" "$sys_unit" || \
-        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/aos.env in $sys_unit"
-      grep -Fq "EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env" "$sys_unit" || \
-        env_check_issue "missing EnvironmentFile=-/etc/alphaos-hub/alphaos-index.env in $sys_unit"
+      grep -Fq "EnvironmentFile=-/etc/aos/aos.env" "$sys_unit" || \
+        env_check_issue "missing EnvironmentFile=-/etc/aos/aos.env in $sys_unit"
     else
       env_check_issue "system unit exists but is not readable: $sys_unit"
     fi

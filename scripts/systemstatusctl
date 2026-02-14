@@ -11,7 +11,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-${AOS_ENV_FILE:-}}"
+ENV_FILE="${AOS_ENV_FILE:-}"
 
 usage() {
   cat <<EOF
@@ -32,7 +32,6 @@ Env:
   AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
   AOS_BRIDGE_HOST, AOS_BRIDGE_PORT, AOS_BRIDGE_URL
   AOS_BRIDGE_TOKEN, AOS_BRIDGE_TOKEN_HEADER
-  AOS_BRIDGE_ENV_FILE, AOS_ENV_FILE
 EOF
 }
 

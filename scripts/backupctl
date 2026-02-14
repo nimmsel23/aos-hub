@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKUPCTL_VERSION="1.1.0"
+BACKUPCTL_VERSION="2.1.1"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -19,61 +19,313 @@ aos_env_load "" "$ROOT_DIR" || true
 # Shared UI helpers.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/ctl-lib.sh"
+CTL_APP_PREFIX="backupctl"
 
 SERVICE_NAME="aos-hub-backup-daily.service"
 TIMER_NAME="aos-hub-backup-daily.timer"
-BACKUP_SCRIPT="/usr/local/bin/aos-hub-backup-daily.sh"
 CONFIG_FILE="/etc/aos-backup.conf"
 USB_MOUNT="/mnt/eos-usb"
 SRC_DIR="/home/alpha/aos-hub"
 DST_DIR="${USB_MOUNT}/@aos-hub"
 AOS_HUB_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
+BACKUP_SCRIPT="${BACKUP_SCRIPT:-${AOS_HUB_DIR}/scripts/utils/aos-hub-backup-daily.sh}"
+AOS_HUB_LIVE_SCRIPT="${AOS_HUB_LIVE_SCRIPT:-${AOS_HUB_DIR}/scripts/sync-utils/rclone-aos-hub-live-push.sh}"
+
+SYNCCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncctl"
 SYNCVAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncvaultctl"
 VAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/sync-utils/vaultctl"
+RCLONECTL_FALLBACK="${AOS_HUB_DIR}/scripts/rclonectl"
+
+VAULT_ROOT="${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}}"
+RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+VAULT_PULL_UNIT="${AOS_VAULT_SYNC_PULL_UNIT:-alphaos-vault-sync-pull.service}"
+VAULT_PUSH_UNIT="${AOS_VAULT_SYNC_PUSH_UNIT:-alphaos-vault-sync-push.service}"
+BACKUPCTL_NO_PULL_DEFAULT="${BACKUPCTL_NO_PULL_DEFAULT:-1}"
+
+AOS_HUB_LIVE_SERVICE_UNIT="${AOS_HUB_LIVE_SERVICE_UNIT:-aos-hub-live-push.service}"
+AOS_HUB_LIVE_TIMER_UNIT="${AOS_HUB_LIVE_TIMER_UNIT:-aos-hub-live-push.timer}"
+AOS_HUB_LIVE_SERVICE_TEMPLATE="${AOS_HUB_LIVE_SERVICE_TEMPLATE:-$ROOT_DIR/systemd/$AOS_HUB_LIVE_SERVICE_UNIT}"
+AOS_HUB_LIVE_TIMER_TEMPLATE="${AOS_HUB_LIVE_TIMER_TEMPLATE:-$ROOT_DIR/systemd/$AOS_HUB_LIVE_TIMER_UNIT}"
+AOS_HUB_LIVE_USER_UNIT_DIR="${AOS_HUB_LIVE_USER_UNIT_DIR:-$HOME/.config/systemd/user}"
+AOS_HUB_LIVE_TIMER_DEFAULT_AT="${AOS_HUB_LIVE_TIMER_DEFAULT_AT:-00:00}"
+
+LEGACY_HUB_LIVE_SERVICE_UNIT_1="alphaos-aos-hub-live-backup.service"
+LEGACY_HUB_LIVE_TIMER_UNIT_1="alphaos-aos-hub-live-backup.timer"
 
 need_systemctl() {
   need_cmd systemctl
 }
 
-systemctl_user() { systemctl --user "$@"; }
+systemctl_user() {
+  systemctl --user "$@"
+}
 
-choose() {
-  local prompt="$1"
-  shift
-  ui_choose "$prompt" "$@"
+canon_path() {
+  local p="${1:-}"
+  readlink -f "$p" 2>/dev/null || printf "%s\n" "$p"
+}
+
+systemctl_system() {
+  if systemctl "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  if has_cmd sudo; then
+    sudo systemctl "$@"
+    return $?
+  fi
+  return 1
+}
+
+systemctl_system_status() {
+  local unit="$1"
+  if systemctl status "$unit" --no-pager; then
+    return 0
+  fi
+  if has_cmd sudo && sudo -n true >/dev/null 2>&1; then
+    sudo systemctl status "$unit" --no-pager || true
+    return 0
+  fi
+  ui_warn "cannot read system service status for $unit without sudo"
+}
+
+syncctl_bin() {
+  if has_cmd syncctl; then
+    command -v syncctl
+    return 0
+  fi
+  if [[ -x "$SYNCCTL_FALLBACK" ]]; then
+    printf "%s\n" "$SYNCCTL_FALLBACK"
+    return 0
+  fi
+  return 1
+}
+
+syncvaultctl_bin() {
+  if has_cmd syncvaultctl; then
+    command -v syncvaultctl
+    return 0
+  fi
+  if [[ -x "$SYNCVAULTCTL_FALLBACK" ]]; then
+    printf "%s\n" "$SYNCVAULTCTL_FALLBACK"
+    return 0
+  fi
+  return 1
+}
+
+vaultctl_bin() {
+  if has_cmd vaultctl; then
+    command -v vaultctl
+    return 0
+  fi
+  if [[ -x "$VAULTCTL_FALLBACK" ]]; then
+    printf "%s\n" "$VAULTCTL_FALLBACK"
+    return 0
+  fi
+  return 1
+}
+
+rclonectl_bin() {
+  if has_cmd rclonectl; then
+    command -v rclonectl
+    return 0
+  fi
+  if [[ -x "$RCLONECTL_FALLBACK" ]]; then
+    printf "%s\n" "$RCLONECTL_FALLBACK"
+    return 0
+  fi
+  return 1
+}
+
+pull_policy_enabled() {
+  [[ "$BACKUPCTL_NO_PULL_DEFAULT" == "1" ]]
+}
+
+show_no_pull_blocked() {
+  cat <<'EOF'
+Remote-to-local pull is blocked by default in backupctl.
+This avoids accidental local overwrite from a wrong remote path.
+If you intentionally need pull once, run:
+  BACKUPCTL_NO_PULL_DEFAULT=0 backupctl vaultctl pull --dry-run
+EOF
+}
+
+show_no_pull_manual() {
+  cat <<EOF
+Run manually in your terminal:
+  sudo systemctl disable --now $VAULT_PULL_UNIT
+  sudo systemctl mask $VAULT_PULL_UNIT
+EOF
+}
+
+is_pull_request() {
+  local sub="${1:-}"
+  local arg2="${2:-}"
+  case "$sub" in
+    pull) return 0 ;;
+    systemd)
+      case "$arg2" in
+        pull|run-pull) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+find_ro_mounts_under_vault() {
+  local base
+  base="$(canon_path "$VAULT_ROOT")"
+
+  local -a rows=()
+  local src mnt fstype opts _
+  while read -r src mnt fstype opts _; do
+    mnt="${mnt//\\040/ }"
+    [[ "$mnt" == "$base" || "$mnt" == "$base/"* ]] || continue
+    [[ ",$opts," == *,ro,* ]] || continue
+    rows+=("$mnt ($fstype)")
+  done </proc/mounts
+
+  if [[ "${#rows[@]}" -eq 0 ]]; then
+    return 1
+  fi
+  printf "%s\n" "${rows[@]}"
+}
+
+is_valid_hhmm() {
+  local t="${1:-}"
+  [[ "$t" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]]
+}
+
+live_service_user_path() {
+  printf "%s/%s\n" "$AOS_HUB_LIVE_USER_UNIT_DIR" "$AOS_HUB_LIVE_SERVICE_UNIT"
+}
+
+live_timer_user_path() {
+  printf "%s/%s\n" "$AOS_HUB_LIVE_USER_UNIT_DIR" "$AOS_HUB_LIVE_TIMER_UNIT"
+}
+
+live_timer_override_dir() {
+  printf "%s/%s.d\n" "$AOS_HUB_LIVE_USER_UNIT_DIR" "$AOS_HUB_LIVE_TIMER_UNIT"
+}
+
+live_timer_override_path() {
+  printf "%s/override.conf\n" "$(live_timer_override_dir)"
+}
+
+ensure_live_templates() {
+  [[ -x "$AOS_HUB_LIVE_SCRIPT" ]] || die "missing executable script: $AOS_HUB_LIVE_SCRIPT"
+  [[ -f "$AOS_HUB_LIVE_SERVICE_TEMPLATE" ]] || die "missing service template: $AOS_HUB_LIVE_SERVICE_TEMPLATE"
+  [[ -f "$AOS_HUB_LIVE_TIMER_TEMPLATE" ]] || die "missing timer template: $AOS_HUB_LIVE_TIMER_TEMPLATE"
+}
+
+install_live_user_units() {
+  ensure_live_templates
+  mkdir -p "$AOS_HUB_LIVE_USER_UNIT_DIR"
+  ln -sf "$AOS_HUB_LIVE_SERVICE_TEMPLATE" "$(live_service_user_path)"
+  ln -sf "$AOS_HUB_LIVE_TIMER_TEMPLATE" "$(live_timer_user_path)"
+  systemctl_user daemon-reload
+}
+
+set_live_timer_schedule() {
+  local at="${1:-}"
+  is_valid_hhmm "$at" || die "invalid time '$at' (expected HH:MM)"
+  local override_dir
+  override_dir="$(live_timer_override_dir)"
+  mkdir -p "$override_dir"
+  cat >"$(live_timer_override_path)" <<EOF
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* ${at}:00
+Persistent=true
+EOF
+  systemctl_user daemon-reload
+}
+
+show_live_paths() {
+  ui_info "live script: $AOS_HUB_LIVE_SCRIPT"
+  ui_info "live service template: $AOS_HUB_LIVE_SERVICE_TEMPLATE"
+  ui_info "live timer template: $AOS_HUB_LIVE_TIMER_TEMPLATE"
+  ui_info "live user unit dir: $AOS_HUB_LIVE_USER_UNIT_DIR"
+}
+
+has_legacy_live_units() {
+  systemctl_user is-enabled "$LEGACY_HUB_LIVE_TIMER_UNIT_1" >/dev/null 2>&1 && return 0
+  systemctl_user is-enabled "$LEGACY_HUB_LIVE_SERVICE_UNIT_1" >/dev/null 2>&1 && return 0
+  [[ -f "$AOS_HUB_LIVE_USER_UNIT_DIR/$LEGACY_HUB_LIVE_TIMER_UNIT_1" ]] && return 0
+  [[ -f "$AOS_HUB_LIVE_USER_UNIT_DIR/$LEGACY_HUB_LIVE_SERVICE_UNIT_1" ]] && return 0
+  [[ -L "$AOS_HUB_LIVE_USER_UNIT_DIR/timers.target.wants/$LEGACY_HUB_LIVE_TIMER_UNIT_1" ]] && return 0
+  return 1
 }
 
 usage() {
   cat <<'EOF_HELP'
-backupctl - manage/monitor daily aos-hub backup
+backupctl - central backup frontdoor (push-first, no-pull by default)
 
 Usage:
   backupctl [menu]
+  backupctl explain
+  backupctl doctor
   backupctl status
+  backupctl push [--dry-run]
+  backupctl live <status|setup|enable|disable|disable-legacy|run|logs|at HH:MM>
+  backupctl no-pull [status|on|off]
+  backupctl logs
   backupctl enable
   backupctl disable
   backupctl start
   backupctl run
-  backupctl logs
   backupctl check
-  backupctl doctor
   backupctl config
+  backupctl syncctl <args...>
+  backupctl vaultctl <args...>
   backupctl sync
   backupctl pull
   backupctl sync-menu
   backupctl version
-
-Notes:
-  - enable/disable operates on the timer
-  - start runs the service once
 EOF_HELP
+}
+
+cmd_explain() {
+  cat <<'EOF'
+backupctl mental model
+----------------------
+
+`backupctl` is the frontdoor. It wraps sync tools and adds policy guardrails.
+
+1) Push-first policy:
+   This command set is optimized for local -> remote pushes.
+   Pull is blocked by default because that is where accidental local overwrites usually happen.
+
+2) Tool boundaries:
+   - `backupctl`: orchestration, explanations, guardrails.
+   - `vaultctl`: vault copy jobs.
+   - `syncctl`: target/domain sync jobs and menus.
+
+3) Operational flow:
+   - run `backupctl doctor`
+   - run `backupctl live run --dry-run`
+   - run `backupctl live setup`
+
+4) Git separation:
+   - keep `aos-hub` live backups in rclone (copy push-only)
+   - keep `index-node`, `bridge`, `router`, `game`, `door`, `voice`, `core4` synced as own repos via `gitctl split push`
+EOF
 }
 
 cmd_status() {
   need_systemctl
+  ui_title "backupctl status"
   systemctl_user status "$SERVICE_NAME" --no-pager || true
   echo ""
   systemctl_user status "$TIMER_NAME" --no-pager || true
+  echo ""
+  systemctl_user status "$AOS_HUB_LIVE_TIMER_UNIT" --no-pager || true
+  echo ""
+  systemctl_system_status "$VAULT_PULL_UNIT"
+  echo ""
+  systemctl_system_status "$VAULT_PUSH_UNIT"
 }
 
 cmd_enable() {
@@ -93,8 +345,7 @@ cmd_start() {
 
 cmd_run() {
   if [[ ! -x "$BACKUP_SCRIPT" ]]; then
-    ui_err "script missing: $BACKUP_SCRIPT"
-    exit 1
+    die "script missing: $BACKUP_SCRIPT"
   fi
   "$BACKUP_SCRIPT"
 }
@@ -121,10 +372,6 @@ cmd_check() {
   fi
 }
 
-cmd_doctor() {
-  cmd_check
-}
-
 cmd_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
     ui_warn "config not found: $CONFIG_FILE"
@@ -134,99 +381,348 @@ cmd_config() {
     cat "$CONFIG_FILE"
     return 0
   fi
-  if has_cmd sudo; then
-    if sudo -n true 2>/dev/null; then
-      sudo cat "$CONFIG_FILE"
-      return 0
-    fi
+  if has_cmd sudo && sudo -n true 2>/dev/null; then
+    sudo cat "$CONFIG_FILE"
+    return 0
   fi
   ui_warn "config requires sudo: $CONFIG_FILE"
 }
 
-syncvaultctl_bin() {
-  if has_cmd syncvaultctl; then
-    echo "syncvaultctl"
-    return 0
+cmd_live_status() {
+  need_systemctl
+  show_live_paths
+  if [[ -x "$AOS_HUB_LIVE_SCRIPT" ]]; then
+    "$AOS_HUB_LIVE_SCRIPT" status || true
   fi
-  if [[ -x "$SYNCVAULTCTL_FALLBACK" ]]; then
-    echo "$SYNCVAULTCTL_FALLBACK"
-    return 0
+  echo ""
+  systemctl_user status "$AOS_HUB_LIVE_SERVICE_UNIT" --no-pager || true
+  echo ""
+  systemctl_user status "$AOS_HUB_LIVE_TIMER_UNIT" --no-pager || true
+  echo ""
+  if has_legacy_live_units; then
+    ui_warn "legacy live-backup units detected; run: backupctl live disable-legacy"
+    systemctl_user status "$LEGACY_HUB_LIVE_SERVICE_UNIT_1" --no-pager || true
+    systemctl_user status "$LEGACY_HUB_LIVE_TIMER_UNIT_1" --no-pager || true
   fi
-  return 1
+  local override
+  override="$(live_timer_override_path)"
+  if [[ -f "$override" ]]; then
+    echo ""
+    ui_info "timer override: $override"
+    sed -n '1,80p' "$override"
+  fi
 }
 
-vaultctl_bin() {
-  if has_cmd vaultctl; then
-    echo "vaultctl"
+cmd_live_setup() {
+  need_systemctl
+  local at="${1:-$AOS_HUB_LIVE_TIMER_DEFAULT_AT}"
+  install_live_user_units
+  set_live_timer_schedule "$at"
+  systemctl_user enable --now "$AOS_HUB_LIVE_TIMER_UNIT"
+  ui_ok "enabled $AOS_HUB_LIVE_TIMER_UNIT (daily $at)"
+}
+
+cmd_live_enable() {
+  need_systemctl
+  install_live_user_units
+  systemctl_user enable --now "$AOS_HUB_LIVE_TIMER_UNIT"
+  ui_ok "enabled $AOS_HUB_LIVE_TIMER_UNIT"
+}
+
+cmd_live_disable() {
+  need_systemctl
+  systemctl_user disable --now "$AOS_HUB_LIVE_TIMER_UNIT" || true
+  ui_ok "disabled $AOS_HUB_LIVE_TIMER_UNIT"
+}
+
+cmd_live_disable_legacy() {
+  need_systemctl
+  systemctl_user disable --now "$LEGACY_HUB_LIVE_TIMER_UNIT_1" || true
+  systemctl_user disable --now "$LEGACY_HUB_LIVE_SERVICE_UNIT_1" || true
+  rm -f "$AOS_HUB_LIVE_USER_UNIT_DIR/$LEGACY_HUB_LIVE_TIMER_UNIT_1"
+  rm -f "$AOS_HUB_LIVE_USER_UNIT_DIR/$LEGACY_HUB_LIVE_SERVICE_UNIT_1"
+  rm -f "$AOS_HUB_LIVE_USER_UNIT_DIR/timers.target.wants/$LEGACY_HUB_LIVE_TIMER_UNIT_1"
+  systemctl_user daemon-reload || true
+  ui_ok "legacy live-backup units cleaned"
+}
+
+cmd_live_run() {
+  [[ -x "$AOS_HUB_LIVE_SCRIPT" ]] || die "missing executable script: $AOS_HUB_LIVE_SCRIPT"
+  local dry="${1:-}"
+  if [[ "$dry" == "--dry-run" ]]; then
+    "$AOS_HUB_LIVE_SCRIPT" push --dry-run
+  else
+    "$AOS_HUB_LIVE_SCRIPT" push
+  fi
+}
+
+cmd_live_logs() {
+  need_systemctl
+  local follow="${1:-}"
+  if [[ "$follow" == "--follow" || "$follow" == "-f" ]]; then
+    journalctl --user -u "$AOS_HUB_LIVE_SERVICE_UNIT" -n 200 -f
+  else
+    journalctl --user -u "$AOS_HUB_LIVE_SERVICE_UNIT" -n 200 --no-pager
+  fi
+}
+
+cmd_live_at() {
+  need_systemctl
+  local at="${1:-}"
+  [[ -n "$at" ]] || die "Usage: backupctl live at <HH:MM>"
+  install_live_user_units
+  set_live_timer_schedule "$at"
+  ui_ok "set $AOS_HUB_LIVE_TIMER_UNIT to daily $at"
+}
+
+cmd_live() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    help|-h|--help)
+      cat <<'EOF'
+backupctl live
+
+Usage:
+  backupctl live status
+  backupctl live setup [HH:MM]
+  backupctl live enable
+  backupctl live disable
+  backupctl live disable-legacy
+  backupctl live run [--dry-run]
+  backupctl live logs [--follow]
+  backupctl live at <HH:MM>
+EOF
+      ;;
+    status) cmd_live_status ;;
+    setup) cmd_live_setup "${1:-$AOS_HUB_LIVE_TIMER_DEFAULT_AT}" ;;
+    enable) cmd_live_enable ;;
+    disable) cmd_live_disable ;;
+    disable-legacy) cmd_live_disable_legacy ;;
+    run|push) cmd_live_run "${1:-}" ;;
+    logs) cmd_live_logs "${1:-}" ;;
+    at|schedule) cmd_live_at "${1:-}" ;;
+    *)
+      die "Usage: backupctl live <status|setup [HH:MM]|enable|disable|disable-legacy|run [--dry-run]|logs [--follow]|at HH:MM>"
+      ;;
+  esac
+}
+
+cmd_no_pull() {
+  local action="${1:-status}"
+  case "$action" in
+    status)
+      if systemctl is-enabled "$VAULT_PULL_UNIT" >/dev/null 2>&1; then
+        ui_warn "system pull unit is enabled: $VAULT_PULL_UNIT"
+      else
+        ui_ok "system pull unit is disabled: $VAULT_PULL_UNIT"
+      fi
+      if pull_policy_enabled; then
+        ui_ok "backupctl no-pull policy is ON (BACKUPCTL_NO_PULL_DEFAULT=1)"
+      else
+        ui_warn "backupctl no-pull policy is OFF (BACKUPCTL_NO_PULL_DEFAULT=0)"
+      fi
+      ;;
+    on|enable)
+      if systemctl_system disable --now "$VAULT_PULL_UNIT"; then
+        ui_ok "disabled system pull unit: $VAULT_PULL_UNIT"
+      else
+        ui_err "failed to disable system pull unit: $VAULT_PULL_UNIT"
+        show_no_pull_manual
+        return 1
+      fi
+      if systemctl_system mask "$VAULT_PULL_UNIT"; then
+        ui_ok "masked system pull unit: $VAULT_PULL_UNIT"
+      else
+        ui_err "failed to mask system pull unit: $VAULT_PULL_UNIT"
+        show_no_pull_manual
+        return 1
+      fi
+      ;;
+    off|disable)
+      if systemctl_system unmask "$VAULT_PULL_UNIT"; then
+        ui_ok "unmasked system pull unit: $VAULT_PULL_UNIT"
+      else
+        die "failed to unmask system pull unit: $VAULT_PULL_UNIT"
+      fi
+      ;;
+    *)
+      die "Usage: backupctl no-pull [status|on|off]"
+      ;;
+  esac
+}
+
+run_vaultctl() {
+  local bin
+  if bin="$(vaultctl_bin)"; then
+    "$bin" "$@"
     return 0
   fi
-  if [[ -x "$VAULTCTL_FALLBACK" ]]; then
-    echo "$VAULTCTL_FALLBACK"
+  if bin="$(syncvaultctl_bin)"; then
+    "$bin" vault "$@"
     return 0
   fi
-  return 1
+  die "vaultctl/syncvaultctl not found"
+}
+
+cmd_push() {
+  local dry="${1:-}"
+  if [[ "$dry" == "--dry-run" ]]; then
+    run_vaultctl sync --dry-run
+  else
+    run_vaultctl sync
+  fi
 }
 
 cmd_sync() {
-  local bin
-  if bin="$(syncvaultctl_bin)"; then
-    "$bin" sync
-    return 0
-  fi
-  if bin="$(vaultctl_bin)"; then
-    "$bin" sync
-    return 0
-  fi
-  ui_err "syncvaultctl/vaultctl not found"
-  exit 1
+  cmd_push "$@"
 }
 
 cmd_pull() {
-  local bin
-  if bin="$(syncvaultctl_bin)"; then
-    "$bin" pull
-    return 0
+  if pull_policy_enabled; then
+    show_no_pull_blocked
+    exit 2
   fi
-  if bin="$(vaultctl_bin)"; then
-    "$bin" pull
-    return 0
-  fi
-  ui_err "syncvaultctl/vaultctl not found"
-  exit 1
+  run_vaultctl pull "$@"
 }
 
 cmd_sync_menu() {
   local bin
-  if bin="$(syncvaultctl_bin)"; then
-    "$bin" menu
-    return 0
+  bin="$(syncctl_bin)" || die "syncctl not found"
+  "$bin" menu
+}
+
+cmd_syncctl() {
+  local bin
+  bin="$(syncctl_bin)" || die "syncctl not found"
+  exec "$bin" "$@"
+}
+
+cmd_vaultctl() {
+  local sub="${1:-}"
+  local arg2="${2:-}"
+  if pull_policy_enabled && is_pull_request "$sub" "$arg2"; then
+    show_no_pull_blocked
+    exit 2
   fi
-  if bin="$(vaultctl_bin)"; then
-    "$bin" menu
-    return 0
+  local bin
+  bin="$(vaultctl_bin)" || die "vaultctl not found"
+  exec "$bin" "$@"
+}
+
+cmd_doctor() {
+  ui_title "backupctl doctor"
+
+  if has_cmd rclone; then
+    ui_ok "rclone binary found"
+  else
+    ui_warn "rclone binary missing in PATH"
   fi
-  ui_err "syncvaultctl/vaultctl not found"
-  exit 1
+
+  if [[ -f "$RCLONE_CONFIG" ]]; then
+    ui_ok "rclone config present: $RCLONE_CONFIG"
+  else
+    ui_warn "rclone config missing: $RCLONE_CONFIG"
+  fi
+
+  if syncctl_bin >/dev/null 2>&1; then
+    ui_ok "syncctl found"
+  else
+    ui_warn "syncctl missing"
+  fi
+
+  if rclonectl_bin >/dev/null 2>&1; then
+    ui_ok "rclonectl found"
+  else
+    ui_warn "rclonectl missing"
+  fi
+
+  if vaultctl_bin >/dev/null 2>&1; then
+    ui_ok "vaultctl found"
+  else
+    ui_warn "vaultctl missing"
+  fi
+
+  if [[ -x "$AOS_HUB_LIVE_SCRIPT" ]]; then
+    ui_ok "aos-hub live script present: $AOS_HUB_LIVE_SCRIPT"
+  else
+    ui_warn "aos-hub live script missing: $AOS_HUB_LIVE_SCRIPT"
+  fi
+
+  if [[ -f "$AOS_HUB_LIVE_SERVICE_TEMPLATE" ]]; then
+    ui_ok "aos-hub live service template present"
+  else
+    ui_warn "aos-hub live service template missing: $AOS_HUB_LIVE_SERVICE_TEMPLATE"
+  fi
+  if [[ -f "$AOS_HUB_LIVE_TIMER_TEMPLATE" ]]; then
+    ui_ok "aos-hub live timer template present"
+  else
+    ui_warn "aos-hub live timer template missing: $AOS_HUB_LIVE_TIMER_TEMPLATE"
+  fi
+
+  ui_info "vault root: $VAULT_ROOT"
+  if [[ -d "$VAULT_ROOT" ]]; then
+    ui_ok "vault root exists"
+  else
+    ui_warn "vault root missing"
+  fi
+
+  local -a ro_mounts=()
+  mapfile -t ro_mounts < <(find_ro_mounts_under_vault || true)
+  if [[ "${#ro_mounts[@]}" -gt 0 ]]; then
+    ui_warn "read-only mounts under vault root detected"
+    printf "  - %s\n" "${ro_mounts[@]}"
+  else
+    ui_ok "no read-only mounts detected under vault root"
+  fi
+
+  echo ""
+  cmd_no_pull status
+  echo ""
+  systemctl_user is-enabled "$AOS_HUB_LIVE_TIMER_UNIT" >/dev/null 2>&1 && ui_ok "live timer enabled: $AOS_HUB_LIVE_TIMER_UNIT" || ui_warn "live timer disabled: $AOS_HUB_LIVE_TIMER_UNIT"
+  has_legacy_live_units && ui_warn "legacy live-backup units still present (run: backupctl live disable-legacy)" || true
 }
 
 cmd_menu() {
-  local actions=("status" "enable" "disable" "start" "run" "logs" "check" "config" "sync" "pull" "sync-menu" "quit")
+  local actions=(
+    "Explain (mental model)"
+    "Doctor"
+    "Status"
+    "Live backup status"
+    "Live backup setup (daily)"
+    "Live backup run now"
+    "Live backup dry-run"
+    "Push now"
+    "Push dry-run"
+    "No-pull status"
+    "No-pull ON (disable+mask pull unit)"
+    "Open syncctl menu"
+    "Logs"
+    "Enable daily timer"
+    "Disable daily timer"
+    "Quit"
+  )
+
   while true; do
     local action
-    action="$(choose "backupctl" "${actions[@]}")" || { usage; return 1; }
+    action="$(choose "backupctl menu" "${actions[@]}")" || { usage; return 1; }
     case "$action" in
-      quit) return 0 ;;
-      status) cmd_status ;;
-      enable) cmd_enable ;;
-      disable) cmd_disable ;;
-      start) cmd_start ;;
-      run) cmd_run ;;
-      logs) cmd_logs ;;
-      check) cmd_check ;;
-      config) cmd_config ;;
-      sync) cmd_sync ;;
-      pull) cmd_pull ;;
-      sync-menu) cmd_sync_menu ;;
+      "Explain (mental model)") cmd_explain ;;
+      "Doctor") cmd_doctor ;;
+      "Status") cmd_status ;;
+      "Live backup status") cmd_live status ;;
+      "Live backup setup (daily)") cmd_live setup "$AOS_HUB_LIVE_TIMER_DEFAULT_AT" ;;
+      "Live backup run now") cmd_live run ;;
+      "Live backup dry-run") cmd_live run --dry-run ;;
+      "Push now") cmd_push ;;
+      "Push dry-run") cmd_push --dry-run ;;
+      "No-pull status") cmd_no_pull status ;;
+      "No-pull ON (disable+mask pull unit)") cmd_no_pull on ;;
+      "Open syncctl menu") cmd_sync_menu ;;
+      "Logs") cmd_logs ;;
+      "Enable daily timer") cmd_enable ;;
+      "Disable daily timer") cmd_disable ;;
+      "Quit") return 0 ;;
     esac
     echo ""
   done
@@ -236,25 +732,37 @@ cmd_version() {
   echo "backupctl version $BACKUPCTL_VERSION"
 }
 
-case "${1:-}" in
-  ""|menu) cmd_menu ;;
-  -h|--help|help) usage ;;
-  status) cmd_status ;;
-  enable) cmd_enable ;;
-  disable) cmd_disable ;;
-  start) cmd_start ;;
-  run) cmd_run ;;
-  logs) cmd_logs ;;
-  check) cmd_check ;;
-  doctor) cmd_doctor ;;
-  config) cmd_config ;;
-  sync) cmd_sync ;;
-  pull) cmd_pull ;;
-  sync-menu) cmd_sync_menu ;;
-  version) cmd_version ;;
-  *)
-    ui_err "unknown command: $1"
-    usage
-    exit 2
-    ;;
-esac
+main() {
+  local cmd="${1:-menu}"
+  shift || true
+
+  case "$cmd" in
+    menu) cmd_menu ;;
+    -h|--help|help) usage ;;
+    explain) cmd_explain ;;
+    doctor) cmd_doctor ;;
+    status) cmd_status ;;
+    live) cmd_live "$@" ;;
+    push|sync) cmd_push "$@" ;;
+    pull) cmd_pull "$@" ;;
+    no-pull) cmd_no_pull "$@" ;;
+    logs) cmd_logs ;;
+    enable) cmd_enable ;;
+    disable) cmd_disable ;;
+    start) cmd_start ;;
+    run) cmd_run ;;
+    check) cmd_check ;;
+    config) cmd_config ;;
+    sync-menu) cmd_sync_menu ;;
+    syncctl) cmd_syncctl "$@" ;;
+    vaultctl) cmd_vaultctl "$@" ;;
+    version) cmd_version ;;
+    *)
+      ui_err "unknown command: $cmd"
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

@@ -84,8 +84,8 @@ syncvaultctl:
 - `scripts/syncvaultctl fadaro-sync` (git auto-sync)
 
 Env files (envctl):
-- `~/.env/bridge.env`
-- `~/.env/alphaos-index.env`
+- `~/.env/aos.env`
+- `~/.env/aos.env`
 
 ## Bridge Service (aiohttp :8080)
 

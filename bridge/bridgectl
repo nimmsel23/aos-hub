@@ -22,7 +22,7 @@ SYNCVAULTCTL_BIN="${SYNCVAULTCTL_BIN:-$ROOT_DIR/scripts/syncvaultctl}"
 HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
 SYSTEMSTATUSCTL_BIN="${SYSTEMSTATUSCTL_BIN:-$ROOT_DIR/scripts/systemstatusctl}"
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
 
 servicectl() { exec "$APP_DIR/bridge-servicectl" "$@"; }
 apictl() { exec "$APP_DIR/bridge-apictl" "$@"; }
@@ -107,6 +107,47 @@ doctor() {
   local rc=0
   if ! "$APP_DIR/bridge-servicectl" status; then
     rc=1
+  fi
+  msg ""
+
+  local sys_active="unknown"
+  local user_active="unknown"
+  if has_cmd systemctl; then
+    if systemctl -q is-active "aos-bridge.service" 2>/dev/null; then
+      sys_active="active"
+    else
+      sys_active="inactive"
+    fi
+  fi
+  if systemctl --user show-environment >/dev/null 2>&1; then
+    user_active="$(systemctl --user is-active "aos-bridge.service" 2>/dev/null || true)"
+  fi
+
+  msg "Systemd mode:"
+  if [[ "$sys_active" == "active" ]]; then
+    ui_ok "system service active: aos-bridge.service"
+  elif [[ "$sys_active" == "inactive" ]]; then
+    ui_info "system service inactive"
+  else
+    ui_warn "system service status unknown"
+  fi
+
+  if [[ "$user_active" == "active" ]]; then
+    ui_ok "user service active: aos-bridge.service"
+  elif [[ "$user_active" == "inactive" || "$user_active" == "failed" ]]; then
+    ui_info "user service inactive"
+  else
+    ui_warn "user service status unknown (no user bus)"
+  fi
+
+  if [[ "$sys_active" == "active" && "$user_active" == "active" ]]; then
+    ui_warn "both system and user services are active (double-run risk)"
+  elif [[ "$sys_active" == "active" ]]; then
+    ui_ok "mode: system"
+  elif [[ "$user_active" == "active" ]]; then
+    ui_ok "mode: user"
+  else
+    ui_warn "mode: none (bridge not active)"
   fi
   msg ""
 
@@ -203,7 +244,7 @@ Other:
   bridgectl systemstatus
 
 Env:
-  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
+  AOS_ENV_FILE (default: ~/.env/aos.env)
 EOF
 }
 

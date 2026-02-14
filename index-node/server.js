@@ -88,12 +88,28 @@ function uiBasicAuthMiddleware(req, res, next) {
 
 app.use(uiBasicAuthMiddleware);
 
-app.use(express.static("public", { extensions: ["html"] }));
+app.use(
+  express.static("public", {
+    extensions: ["html"],
+    setHeaders: (res, filePath) => {
+      const p = String(filePath || "").toLowerCase();
+      if (p.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-store");
+        return;
+      }
+      if (p.endsWith(".js") || p.endsWith(".css")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  })
+);
 app.use("/vendor/xterm", express.static("node_modules/xterm"));
 app.use("/vendor/marked", express.static("node_modules/marked"));
 
 
 const MENU_PATH = process.env.MENU_YAML || "./menu.yaml";
+const AOS_REGISTRY_PATH =
+  process.env.AOS_REGISTRY_PATH || path.join(os.homedir(), ".aos", "registry.tsv");
 const TICK_ENV_PATH =
   process.env.TICK_ENV || path.join(os.homedir(), ".alpha_os", "tick.env");
 const TASK_EXPORT_PATH =
@@ -192,6 +208,32 @@ function safeSlug(s) {
   .replace(/['"]/g, "")
   .replace(/\s+/g, "-")
   .replace(/[^a-z0-9_-]/g, "");
+}
+
+function parseRegistryLine(line) {
+  const parts = String(line || "").split("\t");
+  return {
+    id: String(parts[0] || "").trim(),
+    label: String(parts[1] || "").trim(),
+    cmd: String(parts[2] || "").trim(),
+    kind: String(parts[3] || "").trim().toLowerCase(),
+    source: String(parts[4] || "").trim(),
+    desc: String(parts.slice(5).join("\t") || "").trim(),
+  };
+}
+
+function loadAosRegistry() {
+  if (!fs.existsSync(AOS_REGISTRY_PATH)) {
+    return [];
+  }
+
+  const raw = fs.readFileSync(AOS_REGISTRY_PATH, "utf8");
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .map(parseRegistryLine)
+    .filter((entry) => entry.id && entry.cmd);
 }
 
 
@@ -3559,6 +3601,52 @@ app.get("/menu", (_req, res) => {
     res.json({ links });
   } catch (err) {
     res.status(500).json({ links: [], error: String(err) });
+  }
+});
+
+app.get("/api/aos/registry", (req, res) => {
+  try {
+    const kind = String(req.query.kind || "")
+      .trim()
+      .toLowerCase();
+    const query = String(req.query.q || "")
+      .trim()
+      .toLowerCase();
+
+    const allItems = loadAosRegistry();
+    let items = allItems;
+
+    if (kind) {
+      items = items.filter((entry) => entry.kind === kind);
+    }
+    if (query) {
+      items = items.filter((entry) => {
+        const haystack = `${entry.id} ${entry.label} ${entry.cmd} ${entry.kind} ${entry.source} ${entry.desc}`
+          .toLowerCase();
+        return haystack.includes(query);
+      });
+    }
+
+    const kinds = [...new Set(allItems.map((entry) => entry.kind).filter(Boolean))].sort();
+    const exists = fs.existsSync(AOS_REGISTRY_PATH);
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({
+      ok: true,
+      exists,
+      path: AOS_REGISTRY_PATH,
+      total: allItems.length,
+      count: items.length,
+      kinds,
+      items,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: String(err),
+      items: [],
+      kinds: [],
+    });
   }
 });
 

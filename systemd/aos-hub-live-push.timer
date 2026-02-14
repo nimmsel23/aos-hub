@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily 00:00 aos-hub live backup push
+Requires=aos-hub-live-push.service
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -59,7 +59,7 @@ The core bot is a simple URL router that fetches centre links from the local αO
 - Default `ROUTER_DIR` is the directory that contains `routerctl` (so it works from any CWD).
 - `.env` must be a *file* (not a directory), otherwise the systemd unit will fail to load `EnvironmentFile`.
 - If you already keep a shared env like `~/.env/aos.env`, `routerctl unit` will include it as an optional `EnvironmentFile` (recommended).
-- If you use `tele` CLI with `~/.env/tele.env`, `routerctl unit` will also include it as an optional `EnvironmentFile`.
+- `routerctl` reads all config from `~/.env/aos.env` (single source).
 
 Common commands:
 ```bash

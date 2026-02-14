@@ -17,7 +17,7 @@ Purpose: make the `index-node` folder navigable without opening random files.
 | `TENT_ARCHITECTURE.md` | Historical/extended Tent notes | reference |
 | `CHANGELOG_FOCUS_CENTRE.md` | Historical focus-centre notes | reference |
 | `node_modules/` | dependencies | generated |
-| `alphaos-index.env` | symlink to shared env file | infra |
+| `aos.env` | symlink to shared env file | infra |
 | `bridge`, `router` | symlinks to sibling services | infra |
 
 ## Public UI Map
@@ -57,4 +57,4 @@ Purpose: make the `index-node` folder navigable without opening random files.
 ## Cleanup Notes
 
 - Empty tracked artifacts `alphaos-index-node@1.0.0` and `nodemon` were removed on 2026-02-12.
-- Keep symlink usage (`alphaos-index.env`, `bridge`, `router`) explicit in ops docs to avoid confusion.
+- Keep symlink usage (`aos.env`, `bridge`, `router`) explicit in ops docs to avoid confusion.

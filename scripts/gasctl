@@ -27,6 +27,7 @@ source "$SCRIPT_DIR/lib/aos-env.sh"
 # Shared UI helpers.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/ctl-lib.sh"
+CTL_APP_PREFIX="$APP"
 
 HB_HOST_DEFAULT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
 

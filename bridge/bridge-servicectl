@@ -18,7 +18,6 @@ fi
 USER_SERVICE_DIR="$HOME/.config/systemd/user"
 
 AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
 
 systemctl_user() { systemctl --user "$@"; }
 
@@ -54,7 +53,6 @@ diagnose_systemd() {
   ui_info "Repo unit: $SERVICE_PATH"
 
   load_env_file_if_present "$AOS_ENV_FILE" || true
-  load_env_file_if_present "$ENV_FILE" || true
 
   if [[ -n "${AOS_HUB_DIR:-}" ]]; then
     ui_info "AOS_HUB_DIR: $AOS_HUB_DIR"
@@ -179,14 +177,8 @@ PY
   else
     ui_warn "AOS env missing: $AOS_ENV_FILE"
   fi
-  if [[ -f "$ENV_FILE" ]]; then
-    ui_ok "Bridge env present: $ENV_FILE"
-  else
-    ui_warn "Bridge env missing: $ENV_FILE"
-  fi
 
   load_env_file_if_present "$AOS_ENV_FILE" || true
-  load_env_file_if_present "$ENV_FILE" || true
 
   if [[ -n "${AOS_HUB_DIR:-}" ]]; then
     ui_ok "AOS_HUB_DIR: $AOS_HUB_DIR"
@@ -216,7 +208,7 @@ PY
 
 logs() { journalctl --user -u "$SERVICE_NAME" -n 200 -f; }
 
-env_edit() { "${EDITOR:-nano}" "$ENV_FILE"; }
+env_edit() { "${EDITOR:-nano}" "$AOS_ENV_FILE"; }
 
 usage() {
   cat <<'__HELP__'
@@ -236,7 +228,7 @@ Commands:
   env
 
 Env:
-  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
+  AOS_ENV_FILE (default: ~/.env/aos.env)
 __HELP__
 }
 

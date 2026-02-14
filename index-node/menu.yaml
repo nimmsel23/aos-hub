@@ -93,6 +93,11 @@
       "url": "/facts"
     },
     {
+      "label": "AOS Registry",
+      "cmd": "registry",
+      "url": "/registry"
+    },
+    {
       "label": "Creator King Assets",
       "cmd": "king",
       "url": "https://script.google.com/macros/s/AKfycbyXhksbIhXzD_n7YgWSGJ5ChmEnxzm6YgVdepcrwRa0tTTuot6IhQ2QRKOHhcNeoZBQ/exec"

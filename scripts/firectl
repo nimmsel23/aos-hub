@@ -24,6 +24,9 @@ source "$SCRIPT_DIR/ctl-lib.sh"
 CTL_UI_OK_PREFIX="✔"
 CTL_UI_ERR_PREFIX="✘"
 CTL_CHOOSE_PROMPT="firectl"
+CTL_FZF_HEIGHT="18"
+CTL_FZF_REVERSE="1"
+CTL_FZF_PROMPT_SUFFIX="> "
 
 systemd_ok() {
   has_cmd systemctl || return 1

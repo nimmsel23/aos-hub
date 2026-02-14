@@ -21,8 +21,8 @@ SERVICE_NAME="aos-index.service"
 USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
 UNIT_SRC="$ROOT_DIR/systemd/$SERVICE_NAME"
 UNIT_DST="/etc/systemd/system/$SERVICE_NAME"
-# Keep this aligned with `systemd/aos-index.service` which reads from `/etc/alphaos-hub/alphaos-index.env`.
-ENV_FILE="${AOS_INDEX_ENV_FILE:-/etc/alphaos-hub/alphaos-index.env}"
+# Keep this aligned with `systemd/aos-index.service` which reads from `/etc/aos/aos.env`.
+ENV_FILE="${AOS_INDEX_ENV_FILE:-/etc/aos/aos.env}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
 
@@ -35,7 +35,7 @@ write_env_file() {
   fi
   sudo_cmd mkdir -p "$(dirname -- "$ENV_FILE")"
   sudo_cmd tee "$ENV_FILE" >/dev/null <<'EOF'
-# αOS Index Node env (systemd reads: /etc/alphaos-hub/alphaos-index.env)
+# αOS Index Node env (systemd reads: /etc/aos/aos.env)
 
 # Bind / listen
 HOST=0.0.0.0
@@ -224,7 +224,7 @@ Usage:
   scripts/indexctl hub-doctor
 
 Env:
-  AOS_INDEX_ENV_FILE=/etc/alphaos-hub/alphaos-index.env
+  AOS_INDEX_ENV_FILE=/etc/aos/aos.env
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
   AOS_INDEX_USER_SERVICE=aos-index-dev.service
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor

@@ -120,21 +120,19 @@ Dev vs service:
 
 ## Env Management (`envctl`)
 
-`envctl` manages service‑specific env files under `~/.env/`.
+`envctl` manages the global env file under `~/.env/`.
 
-Common files:
+Common file:
 
 - `~/.env/aos.env`
-- `~/.env/tele.env`
-- `~/.env/alphaos-index.env`
 
 Examples:
 
 ```bash
 envctl list
-envctl get tele
-envctl set tele TELEGRAM_BOT_TOKEN <token>
-envctl edit tele
+envctl get aos
+envctl set aos TELEGRAM_BOT_TOKEN <token>
+envctl edit aos
 ```
 
 ## Alias Management (`aos-aliasctl`)

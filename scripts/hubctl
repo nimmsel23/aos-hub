@@ -20,11 +20,10 @@ aos_env_load "" "$ROOT_DIR" || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/ctl-lib.sh"
 
+export CTL_APP_PREFIX="$APP"
 export CTL_UI_OK_PREFIX="[$APP]"
 export CTL_UI_WARN_PREFIX="[$APP]"
 export CTL_UI_ERR_PREFIX="[$APP]"
-
-die() { ui_err "$*"; exit 1; }
 
 repo_exec() {
   local rel="$1"; shift || true
@@ -101,7 +100,10 @@ Examples:
   $APP index doctor
   $APP sync status
   $APP git status
+  $APP git split status
+  $APP git split push all
   $APP backup status
+  $APP backup live setup 00:00
   $APP mount status
   $APP hook status
   $APP core4 status

@@ -7,9 +7,7 @@ Wants=network-online.target
 Type=simple
 User=alpha
 Group=alpha
-EnvironmentFile=-/etc/alphaos-hub/env
-EnvironmentFile=-/etc/alphaos-hub/bridge.env
-EnvironmentFile=-/etc/alphaos-hub/telegram.env
+EnvironmentFile=-/etc/aos/aos.env
 ExecStart=/usr/bin/bash -lc 'hub_dir="${AOS_HUB_DIR:-$HOME/aos-hub}"; if [[ ! -d "$hub_dir/bridge" ]]; then hub_dir="$HOME/aos-hub"; fi; cd "$hub_dir/bridge" && exec /usr/bin/python app.py --host 0.0.0.0 --port 8080'
 Restart=on-failure
 RestartSec=2

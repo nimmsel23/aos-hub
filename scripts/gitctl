@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GITCTL_VERSION="0.1.0"
+GITCTL_VERSION="0.2.0"
+APP="gitctl"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
@@ -22,6 +23,11 @@ fi
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+CTL_APP_PREFIX="$APP"
+
 # shellcheck disable=SC1090
 source "${LIB_DIR}/common.sh"
 # shellcheck disable=SC1090
@@ -31,12 +37,14 @@ source "${LIB_DIR}/git.sh"
 
 usage() {
   cat <<'EOF'
-gitctl — Git sync control for αOS
+gitctl — Git sync control
 
 Usage:
   gitctl status
   gitctl sync
   gitctl autosync
+  gitctl split <status|doctor|push|setup-remote|setup-github|migrate-remote-names> [args...]
+  gitctl components <doctor|status|push ...>   (compat alias for split)
   gitctl vault <sync|status|log|diff|remote|check|setup>
   gitctl vault-sync
   gitctl vitaltrainer-sync
@@ -47,6 +55,8 @@ Usage:
 
 Notes:
   - Uses git-sync-enforcer if available (fallback to git-auto-sync.sh).
+  - split mode treats index-node/bridge/router/game/door/voice/core4 as standalone repos via subtree split.
+  - default github setup target: nimmsel23/aos-*
 EOF
 }
 
@@ -60,6 +70,237 @@ cmd_sync() {
 
 cmd_vault() {
   vault_git_dispatch "$@"
+}
+
+split_components_all() {
+  printf "%s\n" "index-node" "bridge" "router" "game" "door" "voice" "core4"
+}
+
+split_component_path() {
+  case "${1:-}" in
+    index|index-node) printf "%s\n" "index-node" ;;
+    bridge) printf "%s\n" "bridge" ;;
+    router) printf "%s\n" "router" ;;
+    game) printf "%s\n" "game" ;;
+    door) printf "%s\n" "door" ;;
+    voice) printf "%s\n" "voice" ;;
+    core4) printf "%s\n" "core4" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+split_component_remote() {
+  case "${1:-}" in
+    index-node) printf "%s\n" "${AOS_HUB_SPLIT_INDEX_REMOTE:-aos-index-node}" ;;
+    bridge) printf "%s\n" "${AOS_HUB_SPLIT_BRIDGE_REMOTE:-aos-bridge}" ;;
+    router) printf "%s\n" "${AOS_HUB_SPLIT_ROUTER_REMOTE:-aos-router}" ;;
+    game) printf "%s\n" "${AOS_HUB_SPLIT_GAME_REMOTE:-aos-game}" ;;
+    door) printf "%s\n" "${AOS_HUB_SPLIT_DOOR_REMOTE:-aos-door}" ;;
+    voice) printf "%s\n" "${AOS_HUB_SPLIT_VOICE_REMOTE:-aos-voice}" ;;
+    core4) printf "%s\n" "${AOS_HUB_SPLIT_CORE4_REMOTE:-aos-core4}" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+split_component_branch() {
+  case "${1:-}" in
+    index-node) printf "%s\n" "${AOS_HUB_SPLIT_INDEX_BRANCH:-main}" ;;
+    bridge) printf "%s\n" "${AOS_HUB_SPLIT_BRIDGE_BRANCH:-main}" ;;
+    router) printf "%s\n" "${AOS_HUB_SPLIT_ROUTER_BRANCH:-main}" ;;
+    game) printf "%s\n" "${AOS_HUB_SPLIT_GAME_BRANCH:-main}" ;;
+    door) printf "%s\n" "${AOS_HUB_SPLIT_DOOR_BRANCH:-main}" ;;
+    voice) printf "%s\n" "${AOS_HUB_SPLIT_VOICE_BRANCH:-main}" ;;
+    core4) printf "%s\n" "${AOS_HUB_SPLIT_CORE4_BRANCH:-main}" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+split_each_component() {
+  local target="${1:-all}"
+  if [[ "$target" == "all" || -z "$target" ]]; then
+    split_components_all
+    return 0
+  fi
+  split_component_path "$target"
+}
+
+split_remote_exists() {
+  local remote="$1"
+  git -C "$ROOT_DIR" remote get-url "$remote" >/dev/null 2>&1
+}
+
+split_status_one() {
+  local component="$1"
+  local path remote branch
+  path="$(split_component_path "$component")" || { ui_warn "unknown component: $component"; return 1; }
+  remote="$(split_component_remote "$path")"
+  branch="$(split_component_branch "$path")"
+
+  echo "$path"
+  echo "  path:    $ROOT_DIR/$path"
+  echo "  remote:  $remote"
+  echo "  branch:  $branch"
+  if split_remote_exists "$remote"; then
+    echo "  url:     $(git -C "$ROOT_DIR" remote get-url "$remote")"
+    ui_ok "$path remote configured"
+  else
+    ui_warn "$path remote missing: $remote"
+  fi
+}
+
+split_status() {
+  local target="${1:-all}"
+  while read -r component; do
+    [[ -n "$component" ]] || continue
+    split_status_one "$component"
+    echo ""
+  done < <(split_each_component "$target")
+}
+
+split_setup_remote() {
+  local component="${1:-}"
+  local url="${2:-}"
+  local remote_override="${3:-}"
+
+  [[ -n "$component" ]] || die "Usage: gitctl split setup-remote <index-node|bridge|router|game|door|voice|core4> <remote-url> [remote-name]"
+  [[ -n "$url" ]] || die "Usage: gitctl split setup-remote <index-node|bridge|router|game|door|voice|core4> <remote-url> [remote-name]"
+
+  local path remote
+  path="$(split_component_path "$component")" || die "Unknown component: $component"
+  remote="${remote_override:-$(split_component_remote "$path")}"
+
+  if split_remote_exists "$remote"; then
+    git -C "$ROOT_DIR" remote set-url "$remote" "$url"
+    ui_ok "updated remote $remote -> $url"
+  else
+    git -C "$ROOT_DIR" remote add "$remote" "$url"
+    ui_ok "added remote $remote -> $url"
+  fi
+}
+
+legacy_split_remote_name() {
+  case "${1:-}" in
+    index-node) printf "%s\n" "alphaos-index-node" ;;
+    bridge) printf "%s\n" "alphaos-bridge" ;;
+    router) printf "%s\n" "alphaos-router" ;;
+    game) printf "%s\n" "alphaos-game" ;;
+    door) printf "%s\n" "alphaos-door" ;;
+    voice) printf "%s\n" "alphaos-voice" ;;
+    core4) printf "%s\n" "alphaos-core4" ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+split_setup_github() {
+  local github_user="${1:-${AOS_GITHUB_USER:-nimmsel23}}"
+  local repo_prefix="${2:-${AOS_HUB_SPLIT_REPO_PREFIX:-aos}}"
+  [[ -n "$github_user" ]] || die "github user must not be empty"
+  [[ -n "$repo_prefix" ]] || die "repo prefix must not be empty"
+
+  local component path remote repo url
+  while read -r component; do
+    [[ -n "$component" ]] || continue
+    path="$(split_component_path "$component")" || continue
+    remote="$(split_component_remote "$path")"
+    repo="${repo_prefix}-${path}"
+    url="git@github.com:${github_user}/${repo}.git"
+    split_setup_remote "$path" "$url" "$remote"
+  done < <(split_components_all)
+}
+
+split_migrate_remote_names() {
+  local component path new_remote old_remote url
+  while read -r component; do
+    [[ -n "$component" ]] || continue
+    path="$(split_component_path "$component")" || continue
+    new_remote="$(split_component_remote "$path")"
+    old_remote="$(legacy_split_remote_name "$path")"
+
+    if git -C "$ROOT_DIR" remote get-url "$new_remote" >/dev/null 2>&1; then
+      continue
+    fi
+    if ! git -C "$ROOT_DIR" remote get-url "$old_remote" >/dev/null 2>&1; then
+      continue
+    fi
+
+    url="$(git -C "$ROOT_DIR" remote get-url "$old_remote")"
+    git -C "$ROOT_DIR" remote rename "$old_remote" "$new_remote"
+    ui_ok "renamed remote: $old_remote -> $new_remote ($url)"
+  done < <(split_components_all)
+}
+
+split_push_one() {
+  local component="$1"
+  local path remote branch split_ref
+
+  path="$(split_component_path "$component")" || die "Unknown component: $component"
+  remote="$(split_component_remote "$path")"
+  branch="$(split_component_branch "$path")"
+
+  [[ -d "$ROOT_DIR/$path" ]] || die "missing path: $ROOT_DIR/$path"
+  split_remote_exists "$remote" || die "remote not configured for $path: $remote (use: gitctl split setup-remote $path <url>)"
+
+  ui_info "subtree split: $path"
+  split_ref="$(git -C "$ROOT_DIR" subtree split --prefix="$path")"
+  [[ -n "$split_ref" ]] || die "subtree split failed: $path"
+
+  ui_info "push: $remote $split_ref:$branch"
+  git -C "$ROOT_DIR" push "$remote" "$split_ref:$branch"
+  ui_ok "pushed $path -> $remote/$branch"
+}
+
+split_push() {
+  local target="${1:-all}"
+  while read -r component; do
+    [[ -n "$component" ]] || continue
+    split_push_one "$component"
+  done < <(split_each_component "$target")
+}
+
+split_doctor() {
+  print_header "SPLIT DOCTOR"
+  need_cmd git
+  if ! git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    die "not a git repository: $ROOT_DIR"
+  fi
+  split_status all
+}
+
+cmd_split() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    status) split_status "${1:-all}" ;;
+    doctor) split_doctor ;;
+    push|sync) split_push "${1:-all}" ;;
+    setup-remote) split_setup_remote "${1:-}" "${2:-}" "${3:-}" ;;
+    setup-github) split_setup_github "${1:-${AOS_GITHUB_USER:-nimmsel23}}" "${2:-${AOS_HUB_SPLIT_REPO_PREFIX:-aos}}" ;;
+    migrate-remote-names|migrate-remotes) split_migrate_remote_names ;;
+    *)
+      die "Usage: gitctl split <status [component|all]|doctor|push [component|all]|setup-remote <component> <url> [remote-name]|setup-github [github-user] [repo-prefix]|migrate-remote-names> (components: index-node|bridge|router|game|door|voice|core4)"
+      ;;
+  esac
+}
+
+cmd_components_compat() {
+  local sub="${1:-doctor}"
+  shift || true
+  case "$sub" in
+    doctor|status|push|sync)
+      cmd_split "$sub" "$@"
+      ;;
+    *)
+      die "Usage: gitctl components <doctor|status|push [component|all]>"
+      ;;
+  esac
 }
 
 cmd_doctor() {
@@ -81,6 +322,8 @@ cmd_doctor() {
   echo "vault repo:        ${vault:-<missing>}"
   echo "vitaltrainer repo: ${vital:-<missing>}"
   echo "fadaro repo:       ${fadaro}"
+  echo ""
+  split_status all || true
 }
 
 cmd_menu() {
@@ -103,6 +346,10 @@ cmd_menu() {
       "Vault: setup repo (gh)" \
       "Vitaltrainer: sync" \
       "FADARO: sync" \
+      "Split: status" \
+      "Split: setup GitHub remotes (nimmsel23/aos-*)" \
+      "Split: migrate alphaos-* remote names" \
+      "Split: push (all)" \
       "Doctor" \
       "Back" \
       | gum choose --header "gitctl")"
@@ -119,6 +366,10 @@ cmd_menu() {
       "Vault: setup repo (gh)") run_allow_fail vault_git_setup ;;
       "Vitaltrainer: sync") run_allow_fail vitaltrainer_git_sync ;;
       "FADARO: sync") run_allow_fail fadaro_git_sync ;;
+      "Split: status") run_allow_fail cmd_split status all ;;
+      "Split: setup GitHub remotes (nimmsel23/aos-*)") run_allow_fail cmd_split setup-github nimmsel23 aos ;;
+      "Split: migrate alphaos-* remote names") run_allow_fail cmd_split migrate-remote-names ;;
+      "Split: push (all)") run_allow_fail cmd_split push all ;;
       "Doctor") run_allow_fail cmd_doctor ;;
       "Back") break ;;
     esac
@@ -135,6 +386,8 @@ main() {
     ""|-h|--help|help) usage ;;
     status) cmd_status ;;
     sync|autosync) cmd_sync ;;
+    split) shift; cmd_split "$@" ;;
+    components) shift; cmd_components_compat "$@" ;;
     vault-sync) vault_git_sync ;;
     vitaltrainer-sync) vitaltrainer_git_sync ;;
     fadaro-sync) fadaro_git_sync ;;

@@ -9,13 +9,25 @@ set -euo pipefail
 # - safe defaults (dry-run and skip symlinks unless you turn it on)
 # - minimal interactive UI logic (gum if available, otherwise simple numbered prompts)
 
+APP="syncctl"
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+# Codex session helper: syncctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "syncctl" "$@" && exit 0
 
 # Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
+
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+CTL_APP_PREFIX="$APP"
 
 AOS_SYNC="${SCRIPT_DIR}/aos-sync"
 VAULTCTL_PRIMARY="${SCRIPT_DIR}/sync-utils/vaultctl"
@@ -25,15 +37,11 @@ DOMAIN_FALLBACK="${SCRIPT_DIR}/utils/rclone-domain-sync.sh"
 VITAL_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-vitaltrainer-copy.sh"
 VITAL_FALLBACK="${SCRIPT_DIR}/utils/rclone-vitaltrainer-copy.sh"
 FADARO_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-fadaro-push.sh"
+HUB_LIVE_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-aos-hub-live-push.sh"
+HUB_LIVE_FALLBACK="${SCRIPT_DIR}/utils/rclone-aos-hub-live-push.sh"
 
-have() { command -v "$1" >/dev/null 2>&1; }
 have_tty() { [[ -t 0 && -t 1 ]]; }
-have_gum() { have gum && [[ -t 1 ]]; }
-
-die() {
-  echo "syncctl: $*" >&2
-  exit 1
-}
+gum_tty_available() { has_gum && [[ -t 1 ]]; }
 
 pick_bin() {
   local primary="$1"
@@ -48,7 +56,7 @@ pick_bin() {
     printf "%s\n" "$fallback"
     return 0
   fi
-  if [[ -n "$name" ]] && have "$name"; then
+  if [[ -n "$name" ]] && has_cmd "$name"; then
     command -v "$name"
     return 0
   fi
@@ -183,6 +191,9 @@ Vitaltrainer copy:
 
 FADARO push:
   syncctl fadaro [--dry-run]
+
+aos-hub live backup:
+  syncctl hub <status|push> [--dry-run]
 EOF
 }
 
@@ -214,12 +225,12 @@ choose_plain() {
   return 2
 }
 
-choose() {
+sync_choose() {
   local prompt="$1"
   shift
   local -a options=("$@")
 
-  if have_gum; then
+  if gum_tty_available; then
     gum choose --header "$prompt" "${options[@]}"
     return $?
   fi
@@ -238,7 +249,7 @@ choose() {
 }
 
 pause() {
-  if have_gum; then
+  if gum_tty_available; then
     gum input --prompt "Press Enter to continue > " --value "" >/dev/null 2>&1 || true
   else
     read -r -p "Press Enter to continue..." _ || true
@@ -287,6 +298,12 @@ run_fadaro() {
   exec "$bin" "$@"
 }
 
+run_hub_live() {
+  local bin
+  bin="$(pick_bin "$HUB_LIVE_PRIMARY" "$HUB_LIVE_FALLBACK" "")" || die "rclone-aos-hub-live-push.sh not found"
+  exec "$bin" "$@"
+}
+
 menu_targets() {
   local bin
   bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
@@ -304,14 +321,14 @@ menu_targets() {
     echo ""
     echo "Current mode: $(badge)"
     local t
-    t="$(choose "Select a target. This lists configured target files; it does not run anything yet." "${targets[@]}")" || return 0
+    t="$(sync_choose "Select a target. This lists configured target files; it does not run anything yet." "${targets[@]}")" || return 0
 
     while true; do
       echo ""
       echo "Target: $t"
       echo "Current mode: $(badge)"
       local a
-      a="$(choose "Choose what you want to do. If you are unsure, start with Status or Doctor." \
+      a="$(sync_choose "Choose what you want to do. If you are unsure, start with Status or Doctor." \
         "Status" \
         "Doctor (explain configuration)" \
         "Run (sync)" \
@@ -364,7 +381,7 @@ menu_vault() {
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(choose "Vault copy uses rclone copy (no deletes). If you are unsure, use dry-run first." \
+    a="$(sync_choose "Vault copy uses rclone copy (no deletes). If you are unsure, use dry-run first." \
       "Status" \
       "Push now (copy)" \
       "Pull now (copy)" \
@@ -393,7 +410,7 @@ menu_domains() {
     echo ""
     echo "Current mode: $(badge)"
     local domain
-    domain="$(choose "Select a domain. Domain copy is usually safe (copy push/pull). 'push-sync' is destructive." \
+    domain="$(sync_choose "Select a domain. Domain copy is usually safe (copy push/pull). 'push-sync' is destructive." \
       "BODY" "BEING" "BALANCE" "BUSINESS" "Status all" "Back")" || return 0
 
     case "$domain" in
@@ -406,7 +423,7 @@ menu_domains() {
       echo "Domain: $domain"
       echo "Current mode: $(badge)"
       local a
-      a="$(choose "Choose an action. If you are unsure, start with Status and then a dry-run Push." \
+      a="$(sync_choose "Choose an action. If you are unsure, start with Status and then a dry-run Push." \
         "Status" \
         "Push now (copy)" \
         "Pull now (copy)" \
@@ -432,7 +449,7 @@ menu_vitaltrainer() {
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(choose "Vitaltrainer copy uses rclone copy. It does not delete on the destination." \
+    a="$(sync_choose "Vitaltrainer copy uses rclone copy. It does not delete on the destination." \
       "Status" \
       "Push now (copy)" \
       "Pull now (copy)" \
@@ -453,7 +470,7 @@ menu_fadaro() {
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(choose "This runs the FADARO push script. If you are unsure, start with dry-run." \
+    a="$(sync_choose "This runs the FADARO push script. If you are unsure, start with dry-run." \
       "Push now" \
       "Back")" || return 0
 
@@ -465,12 +482,33 @@ menu_fadaro() {
   done
 }
 
+menu_hub_live() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(sync_choose "aos-hub live backup uses rclone copy (push-only, no deletes)." \
+      "Status" \
+      "Push now (copy)" \
+      "Push now (dry-run)" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Status") run_hub_live status ;;
+      "Push now (copy)") run_hub_live push ;;
+      "Push now (dry-run)") run_hub_live push --dry-run ;;
+      "Back") return 0 ;;
+    esac
+    pause
+  done
+}
+
 menu_settings() {
   while true; do
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(choose "Settings change only this menu session. They do not modify any config files." \
+    a="$(sync_choose "Settings change only this menu session. They do not modify any config files." \
       "Toggle dry-run" \
       "Toggle symlink copying" \
       "Safety notes" \
@@ -502,12 +540,13 @@ run_menu() {
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(choose "What do you want to work on?" \
+    a="$(sync_choose "What do you want to work on?" \
       "Targets (timers + sync/bisync)" \
       "Vault copy (push/pull)" \
       "Domains copy" \
       "Vitaltrainer copy" \
       "FADARO push" \
+      "aos-hub live backup" \
       "Settings" \
       "Safety notes" \
       "Quit")" || return 0
@@ -518,6 +557,7 @@ run_menu() {
       "Domains copy") menu_domains ;;
       "Vitaltrainer copy") menu_vitaltrainer ;;
       "FADARO push") menu_fadaro ;;
+      "aos-hub live backup") menu_hub_live ;;
       "Settings") menu_settings ;;
       "Safety notes") print_safety_notes; pause ;;
       "Quit") return 0 ;;
@@ -560,6 +600,7 @@ main() {
     domains|domain) run_domains "$@" ;;
     vitaltrainer|vital) run_vitaltrainer "$@" ;;
     fadaro) run_fadaro "$@" ;;
+    hub|aos-hub) run_hub_live "$@" ;;
     *)
       usage
       die "unknown command: $cmd"

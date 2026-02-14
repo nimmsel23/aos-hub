@@ -7,9 +7,9 @@ After=network-online.target
 Type=oneshot
 Environment="VAULT_REMOTE=fabian:AlphaOS-Vault"
 Environment="VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups"
-EnvironmentFile=-/etc/aos/env
+EnvironmentFile=-/etc/aos/aos.env
 EnvironmentFile=-/etc/aos/alphaos-vault-sync.env
-ExecStart=/usr/bin/bash -lc 'hub_dir="${AOS_HUB_DIR:-$HOME/aos-hub}"; if [[ ! -d "$hub_dir/index-node" ]]; then hub_dir="$HOME/aos-hub"; fi; cd "$hub_dir/index-node" && exec ./scripts/vault-sync.sh pull'
+ExecStart=/usr/bin/bash -lc 'hub_dir="${AOS_HUB_DIR:-$HOME/aos-hub}"; if [[ ! -d "$hub_dir/index-node" ]]; then hub_dir="$HOME/aos-hub"; fi; export VAULT_LOCAL="${VAULT_LOCAL:-${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}}}"; cd "$hub_dir/index-node" && exec ./scripts/vault-sync.sh pull'
 User=alpha
 
 [Install]

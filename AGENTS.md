@@ -34,6 +34,7 @@
 - Node.js code uses 2-space indentation and double quotes; keep pages lowercase with hyphenated names.
 - Keep handlers small and stateless in router/bridge code; return JSON errors on invalid payloads.
 - `index-node/menu.yaml` is the single source of truth for centre routes; do not hardcode URLs.
+- For script hygiene, treat `scripts/CATALOG.md` as the quick map for `strict ctl` / `legacy ctl` / `wrapper ctl`.
 - When touching multi-writer pipelines (Core4, Door, Fruits, Fire), add/maintain documentation and code comments that explain:
   - source of truth vs derived/cache artifacts
   - writers/readers and how they converge (pull/push triggers, throttling, idempotency)
@@ -44,6 +45,7 @@
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
 - Example checks: `curl http://127.0.0.1:8799/health` and `curl http://127.0.0.1:8080/bridge/core4/today`.
+- For `scripts/*ctl` changes, run `scripts/scripts-lint.sh` and at least `bash -n` on changed scripts.
 - For public access, use Tailscale funnel on `/bridge` and set GAS `LAPTOP_URL` to `https://<host>.ts.net/bridge`.
 - Telegram Mini App URL: `https://ideapad.tail7a15d6.ts.net/tele.html` (BotFather domain: `https://ideapad.tail7a15d6.ts.net`).
 - Prefer `bridge/selftest.py` when port binding is unavailable.
@@ -62,7 +64,7 @@
 - Keep this shortcut registry maintained as part of normal session creation.
 
 ## Configuration & Secrets
-- Use `.env` files for the router and `systemd/alphaos-hub.env.example` for service env layout.
+- Use `.env` files for the router and `systemd/aos.env.example` for service env layout.
 - Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.
 - Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
 - Keep secrets out of git; document required vars in component READMEs or AGENTS.

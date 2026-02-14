@@ -58,7 +58,7 @@ journalctl --user -u alphaos-index -f           # Follow logs
 ./scripts/indexctl restart
 ./scripts/indexctl logs           # Follow logs
 ./scripts/indexctl doctor         # Health check
-./scripts/indexctl env            # Edit env file (~/.env/alphaos-index.env)
+./scripts/indexctl env            # Edit env file (~/.env/aos.env)
 
 # System-wide service (if installed):
 sudo systemctl status aos-index.service
@@ -67,7 +67,7 @@ sudo systemctl status aos-index.service
 
 **Service Configuration:**
 - Service file: `~/.config/systemd/user/alphaos-index.service`
-- Env file: `~/.env/alphaos-index.env` (auto-created by indexctl)
+- Env file: `~/.env/aos.env` (auto-created by indexctl)
 - Working dir: `~/aos-hub/index-node`
 - Command: `npm run dev` (nodemon with auto-reload)
 - Port: 8799 (configurable via `PORT` env var)
@@ -290,7 +290,7 @@ systemctl --user status alphaos-vault-sync-push.timer    # Daily push
 systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 ```
 
-**Config Location:** `/etc/alphaos-hub/env` (system) or `~/.env/*.env` (user)
+**Config Location:** `/etc/aos/aos.env` (system) or `~/.env/aos.env` (user)
 
 ## API Endpoints Reference
 
