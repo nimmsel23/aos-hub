@@ -27,9 +27,17 @@ core4_recompute_config() {
   UNIT_SRC_DIR="${HUB_DIR}/systemd"
   UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
-  CORE4_LOCAL_DIR="${AOS_CORE4_LOCAL_DIR:-$HOME/AlphaOS-Vault/Core4}"
+  CORE4_LOCAL_DIR="${AOS_CORE4_LOCAL_DIR:-$HOME/.core4}"
+
+  # Primary source: Alpha_HQ (private HQ)
+  CORE4_REMOTE_HQ="${AOS_CORE4_REMOTE_HQ:-eldanioo:Alpha_HQ}"
+
+  # Secondary source: Alpha_Core4 (standalone multi-user tracker)
+  CORE4_REMOTE_STANDALONE="${AOS_CORE4_REMOTE_STANDALONE:-eldanioo:Alpha_Core4}"
+
+  # Legacy compat
   CORE4_MOUNT_DIR="${AOS_CORE4_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_Core4}"
-  CORE4_REMOTE="${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
+  CORE4_REMOTE="${CORE4_REMOTE_HQ}"  # Default to HQ
   CORE4_MOUNT_SERVICE="${AOS_CORE4_MOUNT_SERVICE:-rclone-alpha-core4.service}"
 }
 
