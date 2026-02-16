@@ -4,10 +4,14 @@
 - `index-node/` is the local HQ web UI + API server (Node.js, port `8799`).
 - `router/` is the Telegram router bot (aiogram) and extensions.
 - `bridge/` is the aiohttp service (Core4/Fruits/Tent/task routing, port `8080`, optional token auth).
-- `gas/` holds the Apps Script fallback HQ snapshot.
-- `python-warstack/` and `python-firemap/` are auxiliary bots.
+- `gas/` is a local symlink to a private GAS HQ workspace (typically `~/.gas/HQ`) and is treated as external/private.
+- Pillars live at the repo root:
+  - `core4/` (Core4 pillar; CLI lives in `core4/python-core4/`)
+  - `door/` (Door pillar; tools live in `door/python-hot/`, `door/python-warstack/`, standalone GAS dev in `door/gas-door-dev/`)
+  - `voice/` (Voice pillar; standalone GAS Fruits dev in `voice/gas-fruits-dev/`)
+  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; bots live in `game/python-firemap/`, `game/python-tent-bot/`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
-- `DOCS/` keeps project notes and cheatsheets.
+- `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
 
 ## Build, Test, and Development Commands
 - `cd index-node && npm install && npm start` starts the HQ server.
@@ -30,16 +34,19 @@
 - Node.js code uses 2-space indentation and double quotes; keep pages lowercase with hyphenated names.
 - Keep handlers small and stateless in router/bridge code; return JSON errors on invalid payloads.
 - `index-node/menu.yaml` is the single source of truth for centre routes; do not hardcode URLs.
+- For script hygiene, treat `scripts/CATALOG.md` as the quick map for `strict ctl` / `legacy ctl` / `wrapper ctl`.
+- Sync helper scripts are canonical in `scripts/sync-utils/`; `scripts/utils/` is compatibility/fallback wrapper space and should not be the feature target.
 - When touching multi-writer pipelines (Core4, Door, Fruits, Fire), add/maintain documentation and code comments that explain:
   - source of truth vs derived/cache artifacts
   - writers/readers and how they converge (pull/push triggers, throttling, idempotency)
   - safety rules (what must never be overwritten; what is rebuildable)
   - quick debug/runbook commands (curl/ctl helpers)
-- Prefer a single "mental model" doc per system in `DOCS/` (e.g. `DOCS/CORE4_SYSTEM.md`) and link to it from component READMEs.
+- Prefer a single "mental model" doc per system and link to it from component READMEs (see `DOCS/DOC_SYSTEM.md`).
 
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
 - Example checks: `curl http://127.0.0.1:8799/health` and `curl http://127.0.0.1:8080/bridge/core4/today`.
+- For `scripts/*ctl` changes, run `scripts/scripts-lint.sh` and at least `bash -n` on changed scripts.
 - For public access, use Tailscale funnel on `/bridge` and set GAS `LAPTOP_URL` to `https://<host>.ts.net/bridge`.
 - Telegram Mini App URL: `https://ideapad.tail7a15d6.ts.net/tele.html` (BotFather domain: `https://ideapad.tail7a15d6.ts.net`).
 - Prefer `bridge/selftest.py` when port binding is unavailable.
@@ -58,7 +65,7 @@
 - Keep this shortcut registry maintained as part of normal session creation.
 
 ## Configuration & Secrets
-- Use `.env` files for the router and `systemd/alphaos-hub.env.example` for service env layout.
+- Use `.env` files for the router and `systemd/aos.env.example` for service env layout.
 - Bridge auth: set `AOS_BRIDGE_TOKEN` (and optionally `AOS_BRIDGE_TOKEN_HEADER`) on both Bridge and GAS.
 - Watchdog flow: HQ load triggers a session ping via `WATCHDOG_BOT_TOKEN` and `WATCHDOG_CHAT_ID`; offline/online alerts come from `watchdogCheck`.
 - Keep secrets out of git; document required vars in component READMEs or AGENTS.

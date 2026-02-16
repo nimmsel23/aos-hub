@@ -425,7 +425,7 @@ class MyExtension(Extension):
 **Important:** There are THREE ways to create a War Stack, all independent:
 
 ### 1. War Stack Bot (Telegram - Standalone)
-- **Location:** `python-warstack/warstack_bot.py`
+- **Location:** `door/python-warstack/warstack_bot.py`
 - **Type:** Separate Python/Telegram bot (NOT part of Router Bot)
 - **Trigger:** Router Bot `/war` command (just sends a link)
 - **Interface:** Interactive conversation (22 states, full Q&A)

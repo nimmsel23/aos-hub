@@ -559,7 +559,7 @@ ls ~/AlphaOS-Vault/Door/1-Potential/
 
 - [taskwarrior.md](taskwarrior.md) - Taskwarrior integration
 - [bridge/README.md](../bridge/README.md) - Bridge API
-- [python-warstack/README.md](../python-warstack/README.md) - War Stack Bot
+- [door/python-warstack/README.md](../door/python-warstack/README.md) - War Stack Bot
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [index-node/README.md](../index-node/README.md) - Node.js server docs
 

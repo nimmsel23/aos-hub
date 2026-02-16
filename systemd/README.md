@@ -10,12 +10,16 @@ Services that run under your user account, don't require root.
 **Location:** `~/.config/systemd/user/`
 
 **Active Services:**
-- `alphaos-index.service` - Index Node (port 8799)
+- `aos-index-dev.service` - Index Node (port 8799)
 - `alphaos-router.service` - Router Bot (Telegram)
 - `aos-bridge.service` - Bridge (port 8080)
 
 **Active Timers:**
 - `alphaos-heartbeat.timer` - Router Bot heartbeat (every 5min)
+
+**Behavior:**
+- User services only use user-owned env files (e.g. `~/.env/*.env`). They must not depend on `/etc/*`.
+- User services require a user session (login) to be started.
 
 ### System Services (Optional)
 Services that run as system services, require root installation.
@@ -29,16 +33,37 @@ Services that run as system services, require root installation.
 - `aos-vault-push-eldanioo.service` + `.timer` - Vault sync
 - `dokumente-push-fabian.service` + `.timer` - Dokumente sync
 
+**Behavior:**
+- System services use `/etc/aos/*` for EnvironmentFile entries.
+- System services can run without any user logged in (ideal for always-on services).
+
+## Dev vs Prod Modes (Index Node)
+
+The Index Node has two modes:
+
+- **DEV (user service)**: runs as a user unit and starts when the user logs in.
+- **PROD (system service)**: runs as a system unit and can stay active without a user session.
+
+Mode switching is handled by `scripts/indexctl` (and via `nodectl`):
+
+- `scripts/indexctl mode-dev` stops the system service and starts the user service.
+- `scripts/indexctl mode-prod` stops the user service and starts the system service.
+- `scripts/indexctl mode-status` shows which one is active.
+
+Note: If your user service name differs (for example `alphaos-index.service`), set:
+
+`AOS_INDEX_USER_SERVICE=alphaos-index.service`
+
 ## Installation
 
 ### User Services (No Root Required)
 
 ```bash
 # Index Node
-cp systemd/user/alphaos-index.service ~/.config/systemd/user/
+cp systemd/user/aos-index-dev.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable alphaos-index.service
-systemctl --user start alphaos-index.service
+systemctl --user enable aos-index-dev.service
+systemctl --user start aos-index-dev.service
 
 # Router Bot (via routerctl)
 cd router
@@ -55,9 +80,9 @@ cd bridge
 
 ```bash
 # Create env file
-sudo mkdir -p /etc/alphaos-hub
-sudo cp systemd/alphaos-hub.env.example /etc/alphaos-hub/env
-sudo nano /etc/alphaos-hub/env  # Edit paths
+sudo mkdir -p /etc/aos
+sudo cp systemd/aos.env.example /etc/aos/aos.env
+sudo nano /etc/aos/aos.env  # Edit paths
 
 # Install services
 sudo cp systemd/aos-*.service /etc/systemd/system/
@@ -70,7 +95,7 @@ sudo systemctl start aos-index.service
 
 ### Index Node User Service
 
-**File:** `~/.config/systemd/user/alphaos-index.service`
+**File:** `~/.config/systemd/user/aos-index-dev.service`
 
 **Critical Settings:**
 
@@ -116,7 +141,7 @@ ReadWritePaths=%h/AlphaOS-Vault            # Door/Game/Voice exports
 
 Can be set via:
 1. Service file `Environment=` directives
-2. Env file: `~/.env/alphaos-index.env` (via `EnvironmentFile=`)
+2. Env file: `~/.env/aos.env` (via `EnvironmentFile=`)
 
 See `index-node/README.md` for full list.
 
@@ -127,7 +152,7 @@ Managed via `router/routerctl` - see `router/README.md`.
 **Key Features:**
 - Auto-installs to `~/.config/systemd/user/alphaos-router.service`
 - Includes heartbeat timer (optional)
-- Multi-env support (router.env, aos.env, tele.env)
+- Single-env support (`~/.env/aos.env`)
 
 ### Bridge User Service
 
@@ -136,7 +161,7 @@ Managed via `bridge/bridgectl` - see `bridge/README.md`.
 **Key Features:**
 - Auto-installs to `~/.config/systemd/user/aos-bridge.service`
 - Port 8080
-- Requires env: `bridge.env` or inline environment
+- Requires env: `~/.env/aos.env`
 
 ## Common Operations
 
@@ -144,7 +169,7 @@ Managed via `bridge/bridgectl` - see `bridge/README.md`.
 
 ```bash
 # User services
-systemctl --user status alphaos-index.service
+systemctl --user status aos-index-dev.service
 systemctl --user status alphaos-router.service
 systemctl --user status aos-bridge.service
 
@@ -159,14 +184,14 @@ sudo systemctl status aos-index.service
 
 ```bash
 # User services
-journalctl --user -u alphaos-index.service -f
+journalctl --user -u aos-index-dev.service -f
 journalctl --user -u alphaos-router.service -f
 
 # System services
 sudo journalctl -u aos-index.service -f
 
 # Recent errors
-journalctl --user -u alphaos-index.service --since "1 hour ago" | grep -i error
+journalctl --user -u aos-index-dev.service --since "1 hour ago" | grep -i error
 ```
 
 ### Restart After Config Changes
@@ -174,7 +199,7 @@ journalctl --user -u alphaos-index.service --since "1 hour ago" | grep -i error
 ```bash
 # User services
 systemctl --user daemon-reload
-systemctl --user restart alphaos-index.service
+systemctl --user restart aos-index-dev.service
 
 # System services
 sudo systemctl daemon-reload
@@ -185,8 +210,8 @@ sudo systemctl restart aos-index.service
 
 ```bash
 # User services
-systemctl --user enable alphaos-index.service   # Start on boot (with linger)
-systemctl --user disable alphaos-index.service
+systemctl --user enable aos-index-dev.service   # Start on boot (with linger)
+systemctl --user disable aos-index-dev.service
 
 # For always-on (even when not logged in)
 sudo loginctl enable-linger alpha
@@ -198,7 +223,7 @@ sudo loginctl enable-linger alpha
 
 **Check logs:**
 ```bash
-journalctl --user -u alphaos-index.service --since "5 minutes ago"
+journalctl --user -u aos-index-dev.service --since "5 minutes ago"
 ```
 
 **Common Issues:**
@@ -284,7 +309,7 @@ ProtectSystem=full  # Instead of 'strict'
 ```
 systemd/
 ├── README.md                           # This file
-├── alphaos-hub.env.example             # Example system env
+├── aos.env.example             # Example system env
 ├── aos-index.service                   # System service
 ├── aos-router.service                  # System service
 ├── aos-bridge.service                  # System service
@@ -295,12 +320,12 @@ systemd/
 ├── dokumente-push-fabian.service       # Dokumente sync
 ├── dokumente-push-fabian.timer         # Daily 23:00
 └── user/
-    ├── alphaos-hub.env.example         # Example user env
+    ├── aos.env.example         # Example user env
     └── aos-bridge.service              # Example user service
 ```
 
 **Note:** Active user service with critical fixes lives at:
-- `~/.config/systemd/user/alphaos-index.service` (includes ReadWritePaths)
+- `~/.config/systemd/user/aos-index-dev.service` (includes ReadWritePaths)
 - `~/.config/systemd/user/alphaos-router.service` (managed by routerctl)
 - `~/.config/systemd/user/aos-bridge.service` (managed by bridgectl)
 

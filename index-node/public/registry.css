@@ -1,0 +1,172 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body.registry-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.registry-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 16px 48px;
+}
+
+.registry-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.registry-header h1 {
+  margin: 0;
+  font-size: 1.18rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.registry-header p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.registry-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.registry-link-btn,
+.registry-header-actions button {
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.registry-link-btn:hover,
+.registry-header-actions button:hover {
+  border-color: var(--border-accent);
+}
+
+.registry-toolbar {
+  border: 1px solid var(--border-secondary);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  padding: 12px;
+}
+
+#registrySearch {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-secondary);
+  border-radius: 9px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+#registrySearch:focus {
+  outline: none;
+  border-color: var(--border-accent);
+}
+
+.registry-kinds {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registry-kind-btn {
+  border: 1px solid var(--border-secondary);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 5px 11px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.registry-kind-btn.active {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+}
+
+.registry-status {
+  margin: 12px 2px;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.registry-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.registry-card {
+  border: 1px solid var(--border-secondary);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  padding: 10px;
+}
+
+.registry-card h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+
+.registry-card-meta {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registry-card code {
+  display: block;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 7px 8px;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.registry-card p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 720px) {
+  .registry-header {
+    flex-direction: column;
+  }
+
+  .registry-shell {
+    padding-top: 84px;
+  }
+}

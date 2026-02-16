@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+APP="blueprintctl"
 
 # Codex session helper: blueprintctl codex [purpose...]
 # shellcheck disable=SC1091
@@ -16,6 +17,11 @@ codex_subcmd_maybe "main" "blueprintctl" "$@" && exit 0
 # Load global env (optional).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
+
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+CTL_APP_PREFIX="$APP"
 
 AOS_VAULT_DIR_DEFAULT="/home/alpha/AlphaOS-Vault"
 VAULT_DIR="${AOS_VAULT_DIR:-$AOS_VAULT_DIR_DEFAULT}"
@@ -56,9 +62,6 @@ Env:
   AOS_TELE_BIN=tele
 EOF
 }
-
-die() { printf "ERR: %s\n" "$*" >&2; exit 1; }
-warn() { printf "WARN: %s\n" "$*" >&2; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1; }
 

@@ -1,0 +1,54 @@
+[data-theme="blackred"] {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --bg-panel: rgba(17, 17, 17, 0.96);
+  --bg-modal: rgba(10, 10, 10, 0.98);
+
+  --text-primary: #f0f0f0;
+  --text-secondary: #d1d1d1;
+  --text-tertiary: #aaaaaa;
+  --text-accent: #ff4d4d;
+  --text-muted: #aaaaaa;
+
+  --border-primary: #2a2a2a;
+  --border-secondary: #222222;
+  --border-tertiary: #1a1a1a;
+  --border-accent: #ff4d4d;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --shadow-accent: 0 0 0 1px rgba(255, 77, 77, 0.45);
+
+  --glow-primary: none;
+  --glow-hover: 0 6px 24px rgba(0, 0, 0, 0.55);
+  --glow-card: none;
+
+  --core4-progress-a: #ff4d4d;
+  --core4-progress-b: #ff9999;
+  --core4-today-outline: rgba(255, 77, 77, 0.5);
+  --core4-domain-body-bg: rgba(255, 77, 77, 0.08);
+  --core4-domain-being-bg: rgba(255, 120, 120, 0.09);
+  --core4-domain-balance-bg: rgba(255, 90, 140, 0.1);
+  --core4-domain-business-bg: rgba(255, 120, 170, 0.1);
+
+  --doc-card-bg: linear-gradient(145deg, rgba(255, 77, 77, 0.08), var(--bg-secondary));
+  --doc-card-bg-hover: linear-gradient(145deg, rgba(255, 77, 77, 0.15), var(--bg-secondary));
+  --gpt-card-border: rgba(255, 77, 77, 0.45);
+  --gpt-card-bg: linear-gradient(145deg, rgba(255, 77, 77, 0.12), var(--bg-secondary));
+  --gpt-card-bg-hover: linear-gradient(145deg, rgba(255, 77, 77, 0.2), var(--bg-secondary));
+
+  --bg: #0a0a0a;
+  --card: #111111;
+  --border: #222222;
+  --text: #f0f0f0;
+  --muted: #aaaaaa;
+  --accent: #ff4d4d;
+  --accent-2: #ff9999;
+  --nav: #000000;
+  --glow: rgba(255, 77, 77, 0.22);
+  --grain: none;
+  --accent-light: #ff9999;
+  --gold: #ff4d4d;
+}

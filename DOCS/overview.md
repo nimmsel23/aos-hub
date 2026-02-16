@@ -49,16 +49,16 @@ Quick, human-readable map of what each subsystem does, what actually runs in pro
   - Config: `aos-hub/config/aos-centres.env`.
   - Source of truth: `DOCS/aos-centres.md`.
 
-- **War Stack Bot** (`python-warstack/`)
+- **War Stack Bot** (`door/python-warstack/`)
   - On-demand Telegram bot for War Stack creation.
   - `/resume` uses JSON in `WARSTACK_DATA_DIR`.
-  - Source of truth: `python-warstack/README.md`, `python-warstack/AGENTS.md`.
+  - Source of truth: `door/python-warstack/README.md`, `door/python-warstack/AGENTS.md`.
 
-- **Fire Map Bot** (`python-firemap/`)
+- **Fire Map Bot** (`game/python-firemap/`)
   - Standalone module inside `aos-hub` (own setup + docs).
   - On-demand Taskwarrior snapshot sender.
   - Triggered via router `/fire` or run directly.
-  - Source of truth: `python-firemap/README.md`, `python-firemap/AGENTS.md`.
+  - Source of truth: `game/python-firemap/README.md`, `game/python-firemap/AGENTS.md`.
 
 ## Data Flow (Current)
 

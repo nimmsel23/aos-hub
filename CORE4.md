@@ -50,7 +50,7 @@ See also: `DOCS/CORE4_SYSTEM.md` (end-to-end mental model, all components + data
 
 ### seed_week.py (Standalone Script)
 
-**Location:** `python-core4/seed_week.py`
+**Location:** `core4/python-core4/seed_week.py`
 **Purpose:** Creates 56 Taskwarrior tasks (8 habits × 7 days) for the current ISO week
 
 **Task Properties:**
@@ -65,8 +65,8 @@ task add "Fitness — 2026-02-06" \
 ```
 
 **Configuration:**
-- Central config: `python-core4/core4_task_config.yaml`
-- Per-habit configs: `python-core4/habits/{habit}.yaml` (8 files)
+- Central config: `core4/python-core4/core4_task_config.yaml`
+- Per-habit configs: `core4/python-core4/habits/{habit}.yaml` (8 files)
 
 **Features:**
 - **Idempotent:** Checks for existing tasks before creating (any task with `+{habit} due:{date}`)
@@ -247,9 +247,9 @@ c4help                     # Show all commands
 
 ### 1. **tracker.py** (CLI + JSON builder)
 
-**Location:** `python-core4/tracker.py`
+**Location:** `core4/python-core4/tracker.py`
 **Binary:** `~/bin/core4` (symlink)
-**Wrapper:** `python-core4/core4ctl` (bash)
+**Wrapper:** `core4/python-core4/core4ctl` (bash)
 
 **Key Functions:**
 - `run_habit_flow(habit, date)` — Logs a single habit: `task_add` + `task_done` + Bridge notify
@@ -537,10 +537,10 @@ Bridge: write event + create_task(complete_tw_task)
 ## File Locations
 
 ### Code
-- `python-core4/tracker.py` — CLI + JSON logic
-- `python-core4/core4ctl` — Thin dispatcher (modular core4ctl)
-- `python-core4/core4-trackctl` — Tracker wrappers + Taskwarrior helpers
-- `python-core4/core4-syncctl` — Pull/push (ledger only: `.core4/**`)
+- `core4/python-core4/tracker.py` — CLI + JSON logic
+- `core4/python-core4/core4ctl` — Thin dispatcher (modular core4ctl)
+- `core4/python-core4/core4-trackctl` — Tracker wrappers + Taskwarrior helpers
+- `core4/python-core4/core4-syncctl` — Pull/push (ledger only: `.core4/**`)
 - `bridge/app.py` — Lines ~474–1400 (Core4 handlers)
 - `scripts/taskwarrior/on-modify.alphaos.py` — Lines ~419–460 (Core4 detection + push)
 - `gas/core4.gs` — GAS Core4 centre (single GAS project)
@@ -556,8 +556,8 @@ Bridge: write event + create_task(complete_tw_task)
 - `.alphaos/task_export.json` — TW export (used by other systems, NOT by Core4 pipeline)
 
 ### Binaries
-- `~/bin/core4` → `~/aos-hub/python-core4/tracker.py`
-- `~/aos-hub/python-core4/core4ctl` (bash wrapper)
+- `~/bin/core4` → `~/aos-hub/core4/python-core4/tracker.py`
+- `~/aos-hub/core4/python-core4/core4ctl` (bash wrapper)
 - `~/aos-hub/bridge/bridgectl` (bridge control)
 
 ---

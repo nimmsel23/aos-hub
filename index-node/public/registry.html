@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html data-theme="slate">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AOS Registry</title>
+  <link rel="stylesheet" href="/themes.css" />
+  <link rel="stylesheet" href="/registry.css" />
+  <script src="/theme-switch.js"></script>
+  <script src="/registry.js" defer></script>
+</head>
+<body class="registry-page">
+  <main class="registry-shell">
+    <header class="registry-header">
+      <div>
+        <h1>AOS Registry</h1>
+        <p id="registryMeta">Loading fish registry...</p>
+      </div>
+      <div class="registry-header-actions">
+        <a class="registry-link-btn" href="/">Index</a>
+        <button id="registryReload" type="button">Reload</button>
+      </div>
+    </header>
+
+    <section class="registry-toolbar">
+      <input id="registrySearch" type="search" placeholder="Search id, label, command..." autocomplete="off" />
+      <div class="registry-kinds" id="registryKinds"></div>
+    </section>
+
+    <section id="registryStatus" class="registry-status">Loading...</section>
+    <section id="registryList" class="registry-list" aria-live="polite"></section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart AlphaOS Index Dev service on menu/public change
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl --user restart aos-index-dev.service

@@ -4,6 +4,11 @@
 
 Single place to answer: “What is this centre?”, “Where is it implemented?”, “Where does it store data?”, and “What config does it need?”.
 
+Hybrid runtime model:
+- Primary implementation docs: `DOCS/node/INDEX.md`
+- GAS active-fallback/offload docs: `DOCS/gas/INDEX.md`
+- Alignment runbook: `DOCS/ALIGNMENT_INDEXNODE_GAS.md`
+
 ## URLs
 
 - **GAS WebApp**: `https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec`
@@ -51,4 +56,3 @@ Single place to answer: “What is this centre?”, “Where is it implemented?�
 **Node env (most used):**
 - Server: `AOS_BRIDGE_URL`, `BRIDGE_TIMEOUT_MS`.
 - Centres: see `DOCS/node/README.md` per-centre env blocks.
-

@@ -1,0 +1,54 @@
+[data-theme="ocean"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #172033;
+  --bg-panel: rgba(17, 24, 39, 0.95);
+  --bg-modal: rgba(15, 23, 42, 0.98);
+
+  --text-primary: #e5e7eb;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #9ca3af;
+  --text-accent: #22d3ee;
+  --text-muted: #9ca3af;
+
+  --border-primary: #1f2937;
+  --border-secondary: #172033;
+  --border-tertiary: #111827;
+  --border-accent: #22d3ee;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.52);
+  --shadow-accent: 0 0 0 1px rgba(34, 211, 238, 0.42);
+
+  --glow-primary: none;
+  --glow-hover: 0 6px 24px rgba(0, 0, 0, 0.48);
+  --glow-card: none;
+
+  --core4-progress-a: #22d3ee;
+  --core4-progress-b: #38bdf8;
+  --core4-today-outline: rgba(34, 211, 238, 0.5);
+  --core4-domain-body-bg: rgba(34, 211, 238, 0.08);
+  --core4-domain-being-bg: rgba(56, 189, 248, 0.08);
+  --core4-domain-balance-bg: rgba(96, 165, 250, 0.09);
+  --core4-domain-business-bg: rgba(110, 231, 255, 0.1);
+
+  --doc-card-bg: linear-gradient(145deg, rgba(34, 211, 238, 0.08), var(--bg-secondary));
+  --doc-card-bg-hover: linear-gradient(145deg, rgba(34, 211, 238, 0.14), var(--bg-secondary));
+  --gpt-card-border: rgba(34, 211, 238, 0.45);
+  --gpt-card-bg: linear-gradient(145deg, rgba(34, 211, 238, 0.12), var(--bg-secondary));
+  --gpt-card-bg-hover: linear-gradient(145deg, rgba(34, 211, 238, 0.18), var(--bg-secondary));
+
+  --bg: #0f172a;
+  --card: #111827;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #22d3ee;
+  --accent-2: #a855f7;
+  --nav: #0b1222;
+  --glow: rgba(34, 211, 238, 0.2);
+  --grain: none;
+  --accent-light: #22d3ee;
+  --gold: #22d3ee;
+}

@@ -1,0 +1,31 @@
+[data-theme="monk"] {
+  --bg: #f7f2e8;
+  --bg-primary: #f7f2e8;
+  --bg-secondary: #fffaf1;
+  --bg-tertiary: #fefcf5;
+  --bg-panel: rgba(255, 250, 241, 0.95);
+
+  --card: #fffaf1;
+  --border: rgba(20, 15, 10, 0.18);
+  --border-primary: rgba(20, 15, 10, 0.25);
+  --border-secondary: rgba(20, 15, 10, 0.15);
+
+  --text: rgba(20, 15, 10, 0.92);
+  --text-primary: rgba(20, 15, 10, 0.92);
+  --text-secondary: rgba(20, 15, 10, 0.75);
+  --text-muted: rgba(20, 15, 10, 0.62);
+  --text-accent: #0ea5e9;
+
+  --muted: rgba(20, 15, 10, 0.62);
+  --accent: #0ea5e9;
+  --accent-2: #16a34a;
+  --accent-primary: #0ea5e9;
+  --nav: rgba(255, 250, 241, 0.85);
+  --glow: rgba(14, 165, 233, 0.18);
+  --accent-light: #16a34a;
+  --gold: #16a34a;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.15);
+}

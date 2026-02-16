@@ -370,12 +370,12 @@ FRUITS_EXPORT_DIR=~/AlphaOS-Vault/Game/Fruits
 
 ---
 
-## GAS Standalone Dev (`gas-fruits-dev/`)
+## GAS Standalone Dev (`voice/gas-fruits-dev/`)
 
 Separate Apps Script project (own clasp `scriptId`) for independent Fruits WebApp/Bot updates.
 
-**Entry:** `gas-fruits-dev/Code.js` (`doGet`/`doPost`) + `gas-fruits-dev/utils.js` (Drive JSON store)
-**Shared helpers:** `gas-fruits-dev/alphaos_centre_utils.js` (Telegram chunking, trigger helpers, safe filenames)
+**Entry:** `voice/gas-fruits-dev/Code.js` (`doGet`/`doPost`) + `voice/gas-fruits-dev/utils.js` (Drive JSON store)
+**Shared helpers:** `voice/gas-fruits-dev/alphaos_centre_utils.js` (Telegram chunking, trigger helpers, safe filenames)
 
 **Multi-user:** per-user key `...?k=<user_key>` (webapp auto-creates on first visit; stored in `localStorage`)
 - Answers: `fruits_store.json` → `answers_by_key[<user_key>]`

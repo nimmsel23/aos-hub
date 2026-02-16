@@ -360,7 +360,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due     # Date fields to check
 #### Fire Map Bot
 
 **Location:**
-- `python-firemap/firemap_bot.py`
+- `game/python-firemap/firemap_bot.py`
 
 **Purpose:**
 - Sends daily/weekly Fire Map snapshots from Taskwarrior to Telegram
@@ -384,7 +384,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due     # Date fields to check
 
 #### Fire Output (Terminal)
 
-Fire tasks come from Taskwarrior (`+fire`). Terminal output uses the same engine as Telegram (`python-firemap/firemap.py`).
+Fire tasks come from Taskwarrior (`+fire`). Terminal output uses the same engine as Telegram (`game/python-firemap/firemap.py`).
 
 ```bash
 firemap print daily
@@ -629,7 +629,7 @@ ls ~/.task/hooks/on-exit.alphaos.py
 - [game.md](game.md) - Complete GAME system (Frame/Freedom/Focus/Fire)
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [index-node/README.md](../index-node/README.md) - Node.js server docs
-- [python-firemap/README.md](../python-firemap/README.md) - Fire Map Bot
+- [game/python-firemap/README.md](../game/python-firemap/README.md) - Fire Map Bot
 - [AlphaOS-THE-GAME.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Game philosophy
 
 ---

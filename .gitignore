@@ -37,12 +37,12 @@ env.bak/
 venv.bak/
 
 # Fire runtime files
-fire/fire.env
-python-firemap/.offset
+game/fire/fire.env
+game/python-firemap/.offset
 
 # Local env convenience files (untracked)
-python-firemap/firemap.env
-python-warstack/warstack.env
+game/python-firemap/firemap.env
+door/python-warstack/warstack.env
 router/router.env
 
 # Local scratch
@@ -51,6 +51,12 @@ router/router.env
 # Local convenience symlinks (avoid committing absolute links)
 tele
 aliasctl
+/gas-creatorking-dev
+/gas-door-dev
+/gas-fruits-dev
+/gas-game-dev
+/gas-tent-dev
+/gas-voice-dev
 
 # Local vault/blueprints convenience symlinks
 Vault
@@ -67,32 +73,6 @@ AlphaOS-blueprints
 AlphaOS - THE *.md
 AlphaOS-THE-*.md
 AphaOS-THE-*.md
-
-# Blueprint chapter symlinks inside component folders (do not commit)
-core4/[0-9][0-9] - *.md
-door/[0-9][0-9] - *.md
-fire/[0-9][0-9] - *.md
-focus/[0-9][0-9] - *.md
-frame/[0-9][0-9] - *.md
-freedom/[0-9][0-9] - *.md
-game/[0-9][0-9] - *.md
-voice/[0-9][0-9] - *.md
-
-# Component symlink shortcuts (do not commit)
-core4/python-core4
-door/gas-door-dev
-door/python-hot
-door/python-warstack
-fire/python-firemap
-game/fire
-game/focus
-game/frame
-game/freedom
-game/gas-game-dev
-game/python-firemap
-game/python-tent-bot
-index-node/bridge
-index-node/router
 
 # IDE
 .vscode/

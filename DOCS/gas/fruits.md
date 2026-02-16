@@ -34,10 +34,10 @@ Quick recovery if the bot repeats the same message:
 
 ## Entry Points
 - HQ UI: inline in HQ (Fruits section)
-- Standalone UI: `gas-fruits-dev/fruitscentre.html` + `gas-fruits-dev/client.html`
+- Standalone UI: `voice/gas-fruits-dev/fruitscentre.html` + `voice/gas-fruits-dev/client.html`
 - Backend (HQ): `gas/fruits.gs`
-- Backend (Standalone): `gas-fruits-dev/Code.js` + `gas-fruits-dev/utils.js`
-- Questions: `gas/fruits_questions.html` (HQ) and `gas-fruits-dev/fruits_questions.html`
+- Backend (Standalone): `voice/gas-fruits-dev/Code.js` + `voice/gas-fruits-dev/utils.js`
+- Questions: `gas/fruits_questions.html` (HQ) and `voice/gas-fruits-dev/fruits_questions.html`
 
 ## Storage
 - Drive folder: `Alpha_Game/Fruits` (legacy fallback: `Alpha_Fruits`)

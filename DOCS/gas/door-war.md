@@ -8,7 +8,7 @@
 
 ## Entry Points (current)
 - Door Centre UI (HQ map): lists Potential ideas (`getPotentialHotIdeas`) and can move them to Plan (`doorMovePotentialToPlan`).
-- Door Centre UI (standalone dev): `gas-door-dev/` (copy of Door modules for a separate deployment).
+- Door Centre UI (standalone dev): `door/gas-door-dev/` (copy of Door modules for a separate deployment).
 - Backend pieces still reside in `door_war` (to be hooked): scoring/selection not yet fully implemented in GAS (legacy logic lived in Node/Python).
 
 ## Storage / Move

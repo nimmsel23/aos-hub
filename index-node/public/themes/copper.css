@@ -1,0 +1,27 @@
+[data-theme="copper"] {
+  --bg: #0a0c0f;
+  --bg-primary: #0a0c0f;
+  --bg-secondary: #10151c;
+  --bg-tertiary: #161d26;
+
+  --card: #10151c;
+  --border: rgba(192, 132, 87, 0.25);
+  --border-primary: rgba(192, 132, 87, 0.4);
+
+  --text: rgba(220, 180, 140, 0.92);
+  --text-primary: rgba(220, 180, 140, 0.92);
+  --text-muted: rgba(200, 160, 120, 0.70);
+
+  --muted: rgba(200, 160, 120, 0.70);
+  --accent: #c08457;
+  --accent-2: #a3a3a3;
+  --accent-primary: #c08457;
+  --nav: rgba(0, 0, 0, 0.75);
+  --glow: rgba(192, 132, 87, 0.16);
+  --accent-light: #a3a3a3;
+  --gold: #a3a3a3;
+
+  --shadow-sm: 0 2px 8px rgba(192, 132, 87, 0.15);
+  --shadow-md: 0 4px 16px rgba(192, 132, 87, 0.2);
+  --shadow-lg: 0 6px 24px rgba(192, 132, 87, 0.25);
+}

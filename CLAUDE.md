@@ -16,8 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Router Bot** | `router/AGENTS.md` | routerctl usage, extension patterns |
 | **Bridge** | `bridge/AGENTS.md` | bridgectl, selftest.py, handler patterns |
 | **GAS HQ** | `gas/AGENTS.md` | **Scope isolation** - work only in gas/ |
-| **War Stack Bot** | `python-warstack/AGENTS.md` | Idle timeout, resume flow |
-| **Fire Map Bot** | `python-firemap/AGENTS.md` | On-demand usage, tele fallback |
+| **War Stack Bot** | `door/python-warstack/AGENTS.md` | Idle timeout, resume flow |
+| **Fire Map Bot** | `game/python-firemap/AGENTS.md` | On-demand usage, tele fallback |
 
 **Pattern:** Each component has focused guidelines. This CLAUDE.md provides the high-level architecture, component AGENTS.md files provide detailed implementation notes.
 
@@ -58,7 +58,7 @@ journalctl --user -u alphaos-index -f           # Follow logs
 ./scripts/indexctl restart
 ./scripts/indexctl logs           # Follow logs
 ./scripts/indexctl doctor         # Health check
-./scripts/indexctl env            # Edit env file (~/.env/alphaos-index.env)
+./scripts/indexctl env            # Edit env file (~/.env/aos.env)
 
 # System-wide service (if installed):
 sudo systemctl status aos-index.service
@@ -67,7 +67,7 @@ sudo systemctl status aos-index.service
 
 **Service Configuration:**
 - Service file: `~/.config/systemd/user/alphaos-index.service`
-- Env file: `~/.env/alphaos-index.env` (auto-created by indexctl)
+- Env file: `~/.env/aos.env` (auto-created by indexctl)
 - Working dir: `~/aos-hub/index-node`
 - Command: `npm run dev` (nodemon with auto-reload)
 - Port: 8799 (configurable via `PORT` env var)
@@ -290,7 +290,7 @@ systemctl --user status alphaos-vault-sync-push.timer    # Daily push
 systemctl --user status alphaos-heartbeat.timer          # Router heartbeat
 ```
 
-**Config Location:** `/etc/alphaos-hub/env` (system) or `~/.env/*.env` (user)
+**Config Location:** `/etc/aos/aos.env` (system) or `~/.env/aos.env` (user)
 
 ## API Endpoints Reference
 
@@ -485,8 +485,8 @@ journalctl -u aos-index -f             # If system service
 - `router/AGENTS.md` - Router bot patterns, extension system
 - `bridge/AGENTS.md` - Bridge patterns, non-throwing handlers
 - `gas/AGENTS.md` - **CRITICAL:** Scope isolation - do NOT edit other components in GAS session
-- `python-warstack/AGENTS.md` - War Stack bot specific patterns
-- `python-firemap/AGENTS.md` - Fire Map bot specific patterns
+- `door/python-warstack/AGENTS.md` - War Stack bot specific patterns
+- `game/python-firemap/AGENTS.md` - Fire Map bot specific patterns
 
 ## Future Directions
 

@@ -42,7 +42,7 @@ firemap_commands:
   #
   # Fallback subprocess mode (if systemd units are missing/unavailable):
   python_bin: python3
-  script: python-firemap/firemap_bot.py
+  script: game/python-firemap/firemap_bot.py
   daily_mode: daily
   weekly_mode: weekly
 

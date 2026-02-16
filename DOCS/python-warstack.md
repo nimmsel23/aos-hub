@@ -3,8 +3,8 @@
 Standalone Telegram bot for guided War Stack creation. It writes a full War Stack markdown file into the local vault and can post the markdown to GAS (optional).
 
 ## Location
-- Code: `python-warstack/warstack_bot.py`
-- Support files: `python-warstack/gemini/`, `python-warstack/requirements.txt`, `python-warstack/.env.example`
+- Code: `door/python-warstack/warstack_bot.py`
+- Support files: `door/python-warstack/gemini/`, `door/python-warstack/requirements.txt`, `door/python-warstack/.env.example`
 
 ## What It Does
 - Interactive Q&A flow for a War Stack (Domain, Door, 4 Hits, Insights, Lessons).
@@ -27,7 +27,7 @@ Standalone Telegram bot for guided War Stack creation. It writes a full War Stac
 ## Run
 Use your preferred dependency method (see `requirements.txt`), then:
 ```
-python python-warstack/warstack_bot.py
+python door/python-warstack/warstack_bot.py
 ```
 
 ## Notes

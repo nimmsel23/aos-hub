@@ -800,8 +800,8 @@ Terminal:
 
 ## systemd env file
 
-If you run the index node via systemd (`aos-index.service`), it reads an env file at `~/.env/alphaos-index.env`.
-An example file is provided at `index-node/alphaos-index.env.example`.
+If you run the index node via systemd (`aos-index.service`), it reads an env file at `~/.env/aos.env`.
+An example file is provided at `scripts/aos.env.example`.
 
 ---
 

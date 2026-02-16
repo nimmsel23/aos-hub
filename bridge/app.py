@@ -60,7 +60,7 @@ CORE4_NOTIFY_MODE = os.getenv("AOS_CORE4_NOTIFY_MODE", "tele").strip().lower()
 CORE4_AUTO_PUSH = os.getenv("AOS_CORE4_AUTO_PUSH", "0").strip() == "1"
 CORE4_AUTO_PUSH_MIN_INTERVAL = int(os.getenv("AOS_CORE4_AUTO_PUSH_MIN_INTERVAL", "60") or "60")
 CORE4CTL_BIN = os.getenv(
-    "AOS_CORE4CTL_BIN", str((Path(__file__).resolve().parents[1] / "python-core4" / "core4ctl"))
+    "AOS_CORE4CTL_BIN", str((Path(__file__).resolve().parents[1] / "core4" / "python-core4" / "core4ctl"))
 ).strip()
 BRIDGE_TOKEN = os.getenv("AOS_BRIDGE_TOKEN", "").strip()
 BRIDGE_TOKEN_HEADER = os.getenv("AOS_BRIDGE_TOKEN_HEADER", "X-Bridge-Token").strip()

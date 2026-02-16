@@ -1,0 +1,31 @@
+[data-theme="dawn"] {
+  --bg: #0b0a08;
+  --bg-primary: #0b0a08;
+  --bg-secondary: #14110d;
+  --bg-tertiary: #1d1812;
+  --bg-panel: rgba(20, 17, 13, 0.95);
+
+  --card: #14110d;
+  --border: rgba(245, 158, 11, 0.25);
+  --border-primary: rgba(245, 158, 11, 0.4);
+  --border-secondary: rgba(245, 158, 11, 0.2);
+
+  --text: rgba(255, 200, 120, 0.92);
+  --text-primary: rgba(255, 200, 120, 0.92);
+  --text-secondary: rgba(240, 180, 100, 0.8);
+  --text-muted: rgba(240, 180, 100, 0.70);
+  --text-accent: #fb7185;
+
+  --muted: rgba(240, 180, 100, 0.70);
+  --accent: #f59e0b;
+  --accent-2: #fb7185;
+  --accent-primary: #f59e0b;
+  --nav: rgba(0, 0, 0, 0.72);
+  --glow: rgba(245, 158, 11, 0.18);
+  --accent-light: #fb7185;
+  --gold: #fb7185;
+
+  --shadow-sm: 0 2px 8px rgba(245, 158, 11, 0.15);
+  --shadow-md: 0 4px 16px rgba(245, 158, 11, 0.2);
+  --shadow-lg: 0 6px 24px rgba(245, 158, 11, 0.25);
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily aos-hub live backup push (rclone copy, no deletes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/aos-hub/scripts/sync-utils/rclone-aos-hub-live-push.sh push
+WorkingDirectory=%h
+Environment=HOME=%h
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin
+StandardOutput=append:%h/.local/share/alphaos/logs/aos-hub-live-push.log
+StandardError=append:%h/.local/share/alphaos/logs/aos-hub-live-push.log
+ExecCondition=/bin/test -f %h/.config/rclone/rclone.conf
+TimeoutStartSec=6h

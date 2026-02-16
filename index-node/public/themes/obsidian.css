@@ -1,0 +1,34 @@
+[data-theme="obsidian"] {
+  --bg: #07080c;
+  --bg-primary: #07080c;
+  --bg-secondary: #0e1020;
+  --bg-tertiary: #151525;
+  --bg-panel: rgba(14, 16, 32, 0.95);
+  --bg-modal: rgba(7, 8, 12, 0.98);
+
+  --card: #0e1020;
+  --border: rgba(139, 92, 246, 0.25);
+  --border-primary: rgba(139, 92, 246, 0.4);
+  --border-secondary: rgba(139, 92, 246, 0.2);
+  --border-tertiary: rgba(139, 92, 246, 0.15);
+
+  --text: rgba(200, 180, 255, 0.92);
+  --text-primary: rgba(200, 180, 255, 0.92);
+  --text-secondary: rgba(180, 160, 240, 0.8);
+  --text-muted: rgba(180, 160, 240, 0.70);
+  --text-accent: #22d3ee;
+
+  --muted: rgba(180, 160, 240, 0.70);
+  --accent: #8b5cf6;
+  --accent-2: #22d3ee;
+  --accent-primary: #8b5cf6;
+  --nav: rgba(0, 0, 0, 0.78);
+  --glow: rgba(139, 92, 246, 0.24);
+  --accent-light: #22d3ee;
+  --gold: #22d3ee;
+  --phaseFocusGlow: rgba(139, 92, 246, 0.24);
+
+  --shadow-sm: 0 2px 8px rgba(139, 92, 246, 0.15);
+  --shadow-md: 0 4px 16px rgba(139, 92, 246, 0.2);
+  --shadow-lg: 0 6px 24px rgba(139, 92, 246, 0.25);
+}

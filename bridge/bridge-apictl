@@ -6,7 +6,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1090
 source "$APP_DIR/bridge-lib.sh"
 
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
 load_env_file_if_present "$ENV_FILE"
 bridge_recompute_config
 
@@ -114,7 +114,7 @@ Commands:
   sync-abort
 
 Env:
-  AOS_BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
+  AOS_ENV_FILE (default: ~/.env/aos.env)
   AOS_BRIDGE_URL (optional override)
   AOS_BRIDGE_TOKEN / AOS_BRIDGE_TOKEN_HEADER (optional auth)
 EOF
@@ -136,4 +136,3 @@ case "$cmd" in
   sync-abort) sync_abort ;;
   *) usage; exit 1 ;;
 esac
-

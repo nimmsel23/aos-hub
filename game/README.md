@@ -2,6 +2,12 @@
 
 Life structure with focus and adaptability - Frame to Fire.
 
+## Docs
+
+- Architecture: `game/ARCHITECTURE.md`
+- Cheatsheet: `game/CHEATSHEET.md`
+- Changelog: `game/CHANGELOG.md`
+
 ## Quick Start
 
 ```bash

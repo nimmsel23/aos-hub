@@ -1,6 +1,9 @@
 
 # AOS Hub - Documentation
 
+Current frontdoor:
+- Start at `DOCS/INDEX.md` (Primary `index-node`, selective offload + active fallback via `gas`).
+
 **Version:** 2.1 (2026-01-10)
 **Purpose:** Central documentation for αOS Hub ecosystem
 
@@ -703,9 +706,9 @@ See `bridge/README.md` (Core4, Fruits, Tent, task operation, queue + sync).
 ### systemd system units env (optional)
 
 If you install the repo-shipped system units from `systemd/` into `/etc/systemd/system/`,
-create `/etc/alphaos-hub/env` (see `systemd/alphaos-hub.env.example`) and set:
+create `/etc/aos/aos.env` (see `systemd/aos.env.example`) and set:
 - `AOS_HUB_DIR` (absolute path to this repo checkout)
-- `AOS_ENV_DIR` (directory containing `bridge.env`, `router.env`, `telegram.env`, `alphaos-index.env`, `alphaos-vault-sync.env`)
+- `AOS_ENV_DIR` (directory containing `aos.env` and optional `alphaos-vault-sync.env`)
 
 ---
 
@@ -789,4 +792,3 @@ Optional but recommended for remote access to the local HQ and bridge. Typical s
 - `ROADMAP.md`
 - `router/ARCHITECTURE.md`
 - `bridge/README.md`
-

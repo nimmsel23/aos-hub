@@ -42,9 +42,8 @@ PY_ENTRY="${PY_ENTRY:-router_bot.py}"
 USE_VENV="${USE_VENV:-0}"           # 0 = system python, 1 = venv (optional)
 VENV_DIR="${VENV_DIR:-$ROUTER_DIR/.venv}"
 
-ENV_FILE="${ENV_FILE:-$ROUTER_DIR/.env}"
 AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
-TELE_ENV_FILE="${TELE_ENV_FILE:-$HOME/.env/tele.env}"
+ENV_FILE="${ENV_FILE:-$AOS_ENV_FILE}"
 SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 UNIT_FILE="$SYSTEMD_DIR/$ROUTER_NAME.service"
 
@@ -129,17 +128,10 @@ system_python() {
 # Normalize defaults so `routerctl` works from any CWD.
 ROUTER_DIR="$(abs_path "$ROUTER_DIR")"
 VENV_DIR="$(abs_path "${VENV_DIR:-$ROUTER_DIR/.venv}")"
-ENV_FILE="$(abs_path "${ENV_FILE:-$ROUTER_DIR/.env}")"
+ENV_FILE="$(abs_path "${ENV_FILE:-$AOS_ENV_FILE}")"
 [[ -n "${AOS_ENV_FILE:-}" ]] && AOS_ENV_FILE="$(abs_path "${AOS_ENV_FILE:-$HOME/.env/aos.env}")"
-TELE_ENV_FILE="$(abs_path "${TELE_ENV_FILE:-$HOME/.env/tele.env}")"
 if [[ -d "$ENV_FILE" ]]; then
-  if [[ -f "$ENV_FILE/aos.env" ]]; then
-    ENV_FILE="$ENV_FILE/aos.env"
-  elif [[ -f "$ENV_FILE/router.env" ]]; then
-    ENV_FILE="$ENV_FILE/router.env"
-  else
-    ENV_FILE="$ENV_FILE/router.env"
-  fi
+  ENV_FILE="$ENV_FILE/aos.env"
 fi
 if [[ -z "${ROUTER_CONFIG:-}" && -f "$ROUTER_DIR/config.yaml" ]]; then
   ROUTER_CONFIG="$ROUTER_DIR/config.yaml"
@@ -320,7 +312,7 @@ write_env_file() {
   mkdir -p "$(dirname -- "$ENV_FILE")"
   cat >"$ENV_FILE" <<'EOF'
 # Telegram Bot Configuration
-# TELEGRAM_BOT_TOKEN=   # optional if TELE_ENV_FILE already provides it (e.g. ~/.env/tele.env)
+# TELEGRAM_BOT_TOKEN=   # set in this file (aos.env)
 ALLOWED_USER_ID=
 
 # Fruits daily overrides (optional)
@@ -368,14 +360,6 @@ write_unit() {
   ensure_venv
 
   local py; py="$(python_for_unit)"
-  local tele_env_line=""
-  local aos_env_line=""
-  if [[ -n "${AOS_ENV_FILE:-}" && "$AOS_ENV_FILE" != "$ENV_FILE" ]]; then
-    aos_env_line="EnvironmentFile=-$AOS_ENV_FILE"
-  fi
-  if [[ -n "${TELE_ENV_FILE:-}" && "$TELE_ENV_FILE" != "$ENV_FILE" ]]; then
-    tele_env_line="EnvironmentFile=-$TELE_ENV_FILE"
-  fi
 
   local tmp
   tmp="$(mktemp "${TMPDIR:-/tmp}/routerctl.unit.XXXXXX")"
@@ -390,8 +374,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$ROUTER_DIR
-$aos_env_line
-$tele_env_line
 EnvironmentFile=$ENV_FILE
 ${ROUTER_CONFIG:+Environment=ROUTER_CONFIG=$ROUTER_CONFIG}
 ExecStart=$py $PY_ENTRY
@@ -560,7 +542,6 @@ doctor() {
   ui_info "USE_VENV   : $USE_VENV"
   ui_info "ENV_FILE   : $ENV_FILE"
   ui_info "AOS_ENV    : ${AOS_ENV_FILE:-}"
-  ui_info "TELE_ENV   : $TELE_ENV_FILE"
   ui_info "UNIT_FILE  : $UNIT_FILE"
 
   ui_info "HB_NAME    : $HB_NAME"
@@ -604,13 +585,11 @@ doctor() {
     token_source="$ENV_FILE"
   elif [[ -n "${AOS_ENV_FILE:-}" ]] && env_has_var "$AOS_ENV_FILE" "TELEGRAM_BOT_TOKEN"; then
     token_source="$AOS_ENV_FILE"
-  elif env_has_var "$TELE_ENV_FILE" "TELEGRAM_BOT_TOKEN"; then
-    token_source="$TELE_ENV_FILE"
   fi
   if [[ -n "$token_source" ]]; then
     ui_ok "TELEGRAM_BOT_TOKEN set (from: $token_source)"
   else
-    ui_info "TELEGRAM_BOT_TOKEN missing/empty (set in: $ENV_FILE or $TELE_ENV_FILE)"
+    ui_info "TELEGRAM_BOT_TOKEN missing/empty (set in: $ENV_FILE)"
   fi
 
   local cfg_path=""

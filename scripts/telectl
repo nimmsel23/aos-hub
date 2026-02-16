@@ -13,35 +13,27 @@ APP="telectl"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
-has_gum() { command -v gum >/dev/null 2>&1; }
-has_fzf() { command -v fzf >/dev/null 2>&1; }
+# Codex session helper: telectl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "telectl" "$@" && exit 0
 
 # Load global env (optional): pulls AOS_TELE_BIN and friends from aos.env
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" >/dev/null 2>&1 || true
 
-msg() { printf "[%s] %s\n" "$APP" "$*"; }
-die() { printf "[%s] ERROR: %s\n" "$APP" "$*" >&2; exit 1; }
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
 
-ui_title(){ has_gum && gum style --bold --border normal --padding "1 2" "$APP" || msg "$APP"; }
-ui_info() { has_gum && gum style --faint "$*" || msg "$*"; }
-ui_ok()   { has_gum && gum style --foreground 10 "✔ $*" || msg "✔ $*"; }
-ui_err()  { has_gum && gum style --foreground 9  "✘ $*" || msg "✘ $*"; }
-
-choose() {
-  if has_fzf; then
-    printf "%s\n" "$@" | fzf --prompt="$APP> " --height=18 --reverse --border
-    return 0
-  fi
-  if has_gum; then
-    gum choose "$@"
-    return 0
-  fi
-  ui_info "Choose one:"
-  select opt in "$@"; do echo "$opt"; break; done
-}
+CTL_APP_PREFIX="$APP"
+CTL_UI_OK_PREFIX="✔"
+CTL_UI_ERR_PREFIX="✘"
+CTL_CHOOSE_PROMPT="$APP"
+CTL_FZF_HEIGHT="18"
+CTL_FZF_REVERSE="1"
+CTL_FZF_PROMPT_SUFFIX="> "
 
 TELE_BIN="${AOS_TELE_BIN:-${TELE_BIN:-tele}}"
 SILENT_DEFAULT="${AOS_TELE_SILENT:-1}"
@@ -162,7 +154,7 @@ gas() {
 }
 
 menu() {
-  ui_title
+  ui_title "$APP"
   local action
   action="$(choose \
     "send (silent)" \
@@ -269,4 +261,3 @@ case "$cmd" in
     exit 1
     ;;
 esac
-

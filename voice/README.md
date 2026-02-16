@@ -2,6 +2,12 @@
 
 4-Step pattern interruption for mind control: STOP → SUBMIT → STRUGGLE → STRIKE
 
+## Docs
+
+- Architecture: `voice/ARCHITECTURE.md`
+- Cheatsheet: `voice/CHEATSHEET.md`
+- Changelog: `voice/CHANGELOG.md`
+
 ## Quick Start
 
 ```bash

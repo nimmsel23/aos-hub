@@ -31,6 +31,10 @@ fi
 LOCAL_PATH="${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}"
 REMOTE_NAME="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
 REMOTE_PATH="${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
+DRY_RUN=0
+BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
+BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
+BACKUP_BASE_LOCAL="${AOS_SYNC_BACKUP_BASE_LOCAL:-$HOME/.local/share/alphaos/overwrite-backups}"
 
 RCLONE_OPTIONS=(--verbose --checksum --copy-links --create-empty-src-dirs \
   --exclude '*.tmp' \
@@ -64,6 +68,9 @@ run_copy() {
   local direction="$1"
   local src="" dst=""
   local filter_from=()
+  local backup_dir=""
+  local -a backup_opts=()
+  local -a dry_opts=()
   local ignore_file="$LOCAL_PATH/.rcloneignore"
 
   if [ -f "$LOCK_FILE" ]; then
@@ -89,12 +96,21 @@ run_copy() {
     push)
       src="$LOCAL_PATH"
       dst="${REMOTE_NAME}:${REMOTE_PATH}"
+      if [ "$BACKUP_OVERWRITES" = "1" ]; then
+        backup_dir="${REMOTE_NAME}:${BACKUP_BASE_REMOTE%/}/vitaltrainer/push/$(date +%Y%m%d-%H%M%S)"
+        backup_opts=(--backup-dir "$backup_dir")
+      fi
       rclone mkdir --config "$RCLONE_CONFIG" "$dst" 2>/dev/null || true
       log "Pushing Vitaltrainer to ${dst}"
       ;;
     pull)
       src="${REMOTE_NAME}:${REMOTE_PATH}"
       dst="$LOCAL_PATH"
+      if [ "$BACKUP_OVERWRITES" = "1" ]; then
+        backup_dir="${BACKUP_BASE_LOCAL%/}/vitaltrainer/pull/$(date +%Y%m%d-%H%M%S)"
+        mkdir -p "$backup_dir"
+        backup_opts=(--backup-dir "$backup_dir")
+      fi
       mkdir -p "$LOCAL_PATH"
       log "Pulling Vitaltrainer from ${src}"
       ;;
@@ -104,12 +120,19 @@ run_copy() {
       ;;
   esac
 
+  if [ "$BACKUP_OVERWRITES" = "1" ] && [ -n "$backup_dir" ]; then
+    log "Overwrite backups enabled: $backup_dir"
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    dry_opts=(--dry-run)
+  fi
+
   local log_file="$PUSH_LOG_FILE"
   if [ "$direction" = "pull" ]; then
     log_file="$PULL_LOG_FILE"
   fi
 
-  if rclone copy "$src" "$dst" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" 2>&1 | tee -a "$log_file"; then
+  if rclone copy "$src" "$dst" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$log_file"; then
     success "Vitaltrainer ${direction} completed"
     return 0
   fi
@@ -117,6 +140,29 @@ run_copy() {
   local exit_code=$?
   error "Vitaltrainer ${direction} failed (exit code: $exit_code)"
   return $exit_code
+}
+
+main() {
+  local cmd="${1:-push}"
+  shift || true
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run|--dry) DRY_RUN=1 ;;
+      *) ;;
+    esac
+    shift || true
+  done
+
+  case "$cmd" in
+    push) run_copy push ;;
+    pull) run_copy pull ;;
+    status) show_status ;;
+    *)
+      echo "Usage: $0 [push|pull|status] [--dry-run]"
+      exit 1
+      ;;
+  esac
 }
 
 show_status() {
@@ -159,12 +205,4 @@ show_status() {
   fi
 }
 
-case "${1:-push}" in
-  push) run_copy push ;;
-  pull) run_copy pull ;;
-  status) show_status ;;
-  *)
-    echo "Usage: $0 [push|pull|status]"
-    exit 1
-    ;;
-esac
+main "$@"

@@ -4,16 +4,20 @@
 (() => {
   const STORAGE_KEY = 'aos-layout';
   const LAYOUTS = {
-    'grid': { label: '📐 Classic', desc: 'Sidebar + Grid (default)' },
-    'compact': { label: '🔲 Fullscreen', desc: 'No sidebars, just cards' },
-    'list': { label: '📋 Terminal', desc: 'Pure list, no sidebars' },
-    'wide': { label: '⬛ Dashboard', desc: 'Wide 2-col, no sidebars' },
-    'minimal': { label: '▪️ Minimal', desc: 'Text-only, ultra clean' },
-    'masonry': { label: '🎯 Focus', desc: 'Core4 + 3 main cards' },
-    'cards': { label: '🧘 Zen', desc: 'Just menu, centered' }
+    'grid': { label: 'Dock Hover', desc: 'Bottom dock + side rails' },
+    'compact': { label: 'Fullscreen', desc: 'No side rails, dense cards' },
+    'list': { label: 'Terminal', desc: 'Linear list flow' },
+    'wide': { label: 'Dashboard', desc: 'Two-column large cards' },
+    'minimal': { label: 'Minimal', desc: 'Text-first view' },
+    'masonry': { label: 'Focus', desc: 'Top priorities only' },
+    'cards': { label: 'Zen', desc: 'Centered menu canvas' }
   };
 
-  let currentLayout = localStorage.getItem(STORAGE_KEY) || 'grid';
+  const storedLayout = localStorage.getItem(STORAGE_KEY) || "";
+  let currentLayout = storedLayout && LAYOUTS[storedLayout] ? storedLayout : "grid";
+  if (currentLayout !== storedLayout) {
+    localStorage.setItem(STORAGE_KEY, currentLayout);
+  }
 
   // Apply layout on load
   document.documentElement.setAttribute('data-layout', currentLayout);
@@ -40,26 +44,28 @@
   style.textContent = `
     .layout-selector {
       position: fixed;
-      bottom: 20px;
-      left: 20px;
+      bottom: 18px;
+      left: 18px;
       z-index: 99;
     }
 
     .layout-toggle {
-      background: var(--bg-tertiary);
-      border: 2px solid var(--border-primary);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-primary);
       border-radius: var(--border-radius-sm, 8px);
-      padding: 8px 14px;
+      padding: 7px 10px;
       color: var(--text-primary);
       font-family: var(--font-mono);
-      font-size: 0.85em;
+      font-size: 0.72em;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       cursor: pointer;
       transition: all 0.2s ease;
       box-shadow: var(--shadow-sm);
     }
 
     .layout-toggle:hover {
-      transform: translateY(-2px);
+      transform: translateY(-1px);
       border-color: var(--text-accent);
       box-shadow: var(--shadow-md);
     }
@@ -69,10 +75,10 @@
       bottom: calc(100% + 8px);
       left: 0;
       background: var(--bg-modal);
-      border: 2px solid var(--border-primary);
+      border: 1px solid var(--border-primary);
       border-radius: var(--border-radius-md, 10px);
-      padding: 8px;
-      min-width: 220px;
+      padding: 7px;
+      min-width: 200px;
       box-shadow: var(--shadow-lg);
       display: none;
       flex-direction: column;
@@ -88,7 +94,7 @@
       background: transparent;
       border: 1px solid var(--border-tertiary);
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       text-align: left;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -100,7 +106,7 @@
     .layout-option:hover {
       background: var(--bg-secondary);
       border-color: var(--border-primary);
-      transform: translateX(4px);
+      transform: translateX(2px);
     }
 
     .layout-option.active {
@@ -111,24 +117,29 @@
 
     .layout-label {
       color: var(--text-primary);
-      font-size: 0.9em;
+      font-size: 0.78em;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
       font-weight: 600;
     }
 
     .layout-desc {
       color: var(--text-muted);
-      font-size: 0.75em;
+      font-size: 0.68em;
       opacity: 0.8;
     }
 
     @media (max-width: 768px) {
       .layout-selector {
+        left: auto;
         top: auto;
         bottom: 20px;
         right: 20px;
       }
 
       .layout-dropdown {
+        left: auto;
+        right: 0;
         bottom: calc(100% + 8px);
         top: auto;
       }

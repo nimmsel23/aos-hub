@@ -1,409 +1,61 @@
-# CTL Script Guidelines
+# CTL Guidelines (Canonical)
 
-## Overview
+This file defines the contract for `aos-hub/scripts/*ctl`.
 
-All `*ctl` scripts in aos-hub follow consistent patterns for UX and structure.
+## Required Shared Blocks
 
-**Examples:** `routerctl`, `bridgectl`, `tentctl`, `firectl`, `core4ctl`
-
-## Naming Convention
-
-- **Pattern:** `<component>ctl` (no dashes)
-- **Location:** Component directory or `scripts/`
-- **Permissions:** Executable (`chmod +x`)
-
-## UI Framework
-
-**REQUIRED:** Use `gum` or `fzf` for interactive UI elements.
-
-### Why gum/fzf?
-
-- Consistent UX across all ctl scripts
-- Beautiful, intuitive interfaces
-- Graceful fallback when not installed
-
-### Which to use?
-
-**Both are acceptable!**
-
-- **gum** - UI framework (borders, prompts, styles)
-  - Used by: `routerctl`, `bridgectl`, `tentctl`
-  - Better for: Status displays, confirmations, styled output
-
-- **fzf** - Fuzzy finder (selection menus)
-  - Used by: `firectl`
-  - Better for: Long lists, fuzzy search, file selection
-
-**Best practice:** Use both together!
-- `fzf` for selection menus (`ui_choose`)
-- `gum` for UI elements (`ui_title`, `ui_ok`, etc.)
-- Always provide fallback for when neither is installed
-
-### UI Helper Functions
-
-All ctl scripts MUST include these helpers:
+Every strict `*ctl` script must source:
 
 ```bash
-has_gum() { command -v gum >/dev/null 2>&1; }
-has_fzf() { command -v fzf >/dev/null 2>&1; }
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "<centre>" "<tool>" "$@" && exit 0
 
-ui_title()   # Title banner (gum style --border)
-ui_info()    # Faint info text
-ui_ok()      # Green success (✔)
-ui_err()     # Red error (✘)
-ui_warn()    # Yellow warning (⚠)
-ui_confirm() # Yes/No prompt
-ui_input()   # Text input
-ui_choose()  # Menu selection (fzf > gum > select fallback)
-need_cmd()   # Check if command exists, exit if not
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+source "$SCRIPT_DIR/ctl-lib.sh"
 ```
 
-### Shared Helper Library (preferred)
+Notes:
+- `ROOT_DIR` and `SCRIPT_DIR` may vary by script; path resolution must stay correct.
+- `aos_env_load` can be strict or soft fail, depending on tool requirements.
 
-To avoid duplication, use the shared helper library:
+## Helper Policy
 
-```
-scripts/ctl-lib.sh
-```
+Common helpers are centralized in `scripts/ctl-lib.sh`.
 
-It provides the standard UI helpers plus env/curl utilities. When using it,
-keep component-specific logic in the component ctl script.
+Do not redefine locally:
+- `msg`, `warn`, `die`
+- `has_cmd`, `has_gum`, `has_fzf`
+- `ui_title`, `ui_info`, `ui_ok`, `ui_err`, `ui_warn`
+- `choose` (unless explicitly documented as compatibility bridge)
 
-### Utility Functions (Optional)
+Per-tool UI tuning must use `CTL_*` vars, for example:
+- `CTL_APP_PREFIX`
+- `CTL_UI_OK_PREFIX`, `CTL_UI_ERR_PREFIX`, `CTL_UI_WARN_PREFIX`
+- `CTL_CHOOSE_PROMPT`, `CTL_CHOOSE_PREFER`
+- `CTL_FZF_HEIGHT`, `CTL_FZF_REVERSE`, `CTL_FZF_PROMPT_SUFFIX`
 
-For services with HTTP APIs:
+## Script Classes
+
+### strict ctl
+- Full contract required
+- Enforced by `scripts/scripts-lint.sh`
+
+### legacy ctl
+- Still functional, not fully migrated
+- Must be migrated to strict over time
+
+### wrapper ctl
+- Pass-through only (single-responsibility delegate)
+- Should use `exec` to avoid shell nesting
+
+## Validation
+
+Run:
 
 ```bash
-format_json()            # Format JSON (jq > python > cat)
-curl_json(url)           # GET request
-curl_json_post(url)      # POST request (empty body)
-curl_json_post_data(url, data)  # POST request with JSON data
+scripts/scripts-lint.sh
 ```
 
-**Example usage:**
-```bash
-cmd_debug() {
-  if response=$(curl_json "http://127.0.0.1:8080/health" 2>&1); then
-    ui_ok "Service is online"
-    echo "$response" | format_json
-  else
-    ui_err "Service unreachable"
-  fi
-}
-```
-
-**See:** `scripts/ctl-template.sh` for complete implementation
-
-## Standard Commands
-
-Every ctl script SHOULD support:
-
-```
-start      Start the component/service
-stop       Stop the component/service
-restart    Restart
-status     Show current status
-logs       Show logs (if applicable)
-doctor     Health check / diagnostics
-version    Show version
-menu       Interactive menu (gum required)
-help       Show help text
-```
-
-Additional commands as needed for specific components.
-
-## Structure Template
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Header (name, version, description)
-COMPONENTCTL_VERSION="1.0.0"
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-
-# Configuration (paths, env vars)
-
-# UI Helpers (gum/fzf functions)
-
-# Commands (cmd_start, cmd_stop, etc.)
-
-# Main dispatcher (case statement)
-
-main "$@"
-```
-
-**Full template:** `scripts/ctl-template.sh`
-
-## Examples from Existing Scripts
-
-### routerctl (Reference Implementation)
-
-- ✅ gum UI helpers
-- ✅ Systemd service management
-- ✅ Menu command (interactive)
-- ✅ Doctor command (diagnostics)
-- ✅ Heartbeat module (sub-commands)
-
-**Pattern:**
-```bash
-routerctl start
-routerctl status
-routerctl menu
-routerctl heartbeat status
-```
-
-### bridgectl (HTTP Service Example)
-
-- ✅ gum UI helpers (ui_ok, ui_err, ui_warn, ui_info)
-- ✅ HTTP endpoint checks (health, debug)
-- ✅ JSON formatting (format_json)
-- ✅ curl helpers (curl_json, curl_json_post_data)
-- ✅ Comprehensive diagnostics (test-rpc, debug)
-- ✅ Service control
-
-**Pattern:**
-```bash
-bridgectl debug      # Full diagnostics + RPC test
-bridgectl test-rpc   # Quick RPC check
-bridgectl health     # Basic health check
-```
-
-**Example HTTP check:**
-```bash
-cmd_debug() {
-  ui_info "Running diagnostics..."
-  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
-    ui_err "Debug endpoint failed"
-    return 1
-  fi
-  ui_ok "Service is healthy"
-  echo "$response" | format_json
-}
-```
-
-### tentctl
-
-- ✅ gum UI
-- ✅ GAS deployment (clasp)
-- ✅ Webhook management
-- ✅ Test commands
-
-## Integration with aosctl
-
-All component ctl scripts can be wrapped in `aosctl`:
-
-```bash
-# In aosctl
-COMPONENTCTL="$(resolve_bin "$SCRIPT_DIR/path/to/componentctl" || true)"
-
-# In route_component() or specific cmd function
-component)
-  [[ -n "$COMPONENTCTL" ]] || die "componentctl not found"
-  "$COMPONENTCTL" "$@"
-  ;;
-```
-
-**See:** `aosctl` for `tent` integration example
-
-## Best Practices
-
-### 1. Always Use UI Helpers
-
-**Bad:**
-```bash
-echo "Starting service..."
-echo "Error: Failed to start"
-```
-
-**Good:**
-```bash
-ui_info "Starting service..."
-ui_err "Failed to start"
-```
-
-### 2. Graceful Fallbacks
-
-```bash
-# Prefer fzf > gum > builtin select
-ui_choose() {
-  if has_fzf; then
-    printf '%s\n' "${options[@]}" | fzf --prompt="$prompt > "
-  elif has_gum; then
-    gum choose --header="$prompt" "${options[@]}"
-  else
-    select opt in "${options[@]}"; do
-      echo "$opt"
-      return
-    done
-  fi
-}
-```
-
-### 3. Error Handling
-
-```bash
-set -euo pipefail  # Strict mode
-trap 'ui_err "Failed at line $LINENO"; exit 1' ERR
-```
-
-### 4. Help Text
-
-Always include:
-- Usage examples
-- Command descriptions
-- Installation hints for dependencies
-
-### 5. Version Info
-
-```bash
-COMPONENTCTL_VERSION="1.0.0"
-
-cmd_version() {
-  echo "componentctl version $COMPONENTCTL_VERSION"
-  # Optional: show dependency versions
-  gum --version 2>/dev/null || true
-  jq --version 2>/dev/null || true
-}
-```
-
-### 6. HTTP Service Best Practices
-
-For ctl scripts managing HTTP services:
-
-```bash
-# Base URL from env
-BASE_URL="${AOS_SERVICE_URL:-http://127.0.0.1:8080}"
-
-# Health check with formatted output
-cmd_health() {
-  ui_info "Checking service health..."
-  if response=$(curl_json "$BASE_URL/health" 2>&1); then
-    if echo "$response" | grep -q '"ok".*true'; then
-      ui_ok "Service is online"
-      echo "$response" | format_json
-    else
-      ui_warn "Service responded but reported not ok"
-      echo "$response" | format_json
-    fi
-  else
-    ui_err "Health check failed"
-    echo "$response"
-  fi
-}
-
-# Debug command with comprehensive checks
-cmd_debug() {
-  ui_title
-  ui_info "Running diagnostics..."
-  echo ""
-
-  # Try debug endpoint
-  if ! response=$(curl_json "$BASE_URL/debug" 2>&1); then
-    ui_err "Debug endpoint failed (is service running?)"
-    echo "$response"
-    echo ""
-    ui_info "Trying basic health check instead..."
-    cmd_health
-    return 1
-  fi
-
-  # Parse and display
-  ui_ok "Service diagnostics retrieved"
-  echo ""
-  echo "$response" | format_json
-}
-
-# RPC test (if service has RPC endpoint)
-cmd_test_rpc() {
-  local payload='{"action":"health","args":{}}'
-  ui_info "Testing RPC endpoint..."
-
-  if ! response=$(curl_json_post_data "$BASE_URL/rpc" "$payload" 2>&1); then
-    ui_err "RPC endpoint test failed"
-    echo "$response"
-    return 1
-  fi
-
-  if echo "$response" | grep -q '"ok".*true'; then
-    ui_ok "RPC endpoint working"
-  else
-    ui_warn "RPC returned error"
-  fi
-
-  echo "$response" | format_json
-}
-```
-
-## Installation Dependencies
-
-**Required:**
-- bash 4+
-- coreutils (readlink, realpath)
-
-**Recommended:**
-- `gum` - Beautiful UI (yay -S gum)
-- `fzf` - Fuzzy finder (pacman -S fzf)
-
-**Component-specific:**
-- Document in component README
-- Check in `doctor` command
-
-## Testing Checklist
-
-Before committing a new ctl script:
-
-- [ ] Runs with gum installed
-- [ ] Runs without gum (fallback works)
-- [ ] `--help` shows usage
-- [ ] `version` shows version
-- [ ] `doctor` checks dependencies
-- [ ] `menu` works (if gum available)
-- [ ] Integrated into `aosctl` (if applicable)
-- [ ] Added to `COMPONENTCTL_VERSION` variable
-- [ ] Error handling works (trap on ERR)
-
-## Quick Start
-
-1. **Copy template:**
-   ```bash
-   cp scripts/ctl-template.sh <component>/<component>ctl
-   chmod +x <component>/<component>ctl
-   ```
-
-2. **Customize:**
-   - Replace `COMPONENT` with your component name
-   - Implement `cmd_*` functions
-   - Add component-specific commands
-   - Update help text
-
-3. **Test:**
-   ```bash
-   ./<component>ctl doctor
-   ./<component>ctl menu
-   ./<component>ctl --help
-   ```
-
-4. **Integrate:**
-   - Add to `aosctl` (see aosctl integration section)
-   - Document in component README
-   - Commit with appropriate message
-
-## Real-World Reference
-
-**Study these for patterns:**
-- `router/routerctl` - Full-featured (service + heartbeat)
-- `bridge/bridgectl` - Service management
-- `scripts/gasctl` (gasctl tent ...) - GAS Tent Centre management
-- `scripts/firectl` - Report generation
-
-## Questions?
-
-Check existing ctl scripts for patterns:
-```bash
-grep -l "has_gum" **/*ctl
-```
-
-## Version
-
-Guidelines v1.0.0 - January 2026
+The linter is the source of truth for strict/legacy/wrapper classification and contract checks.

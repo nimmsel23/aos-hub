@@ -6,7 +6,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1090
 source "$APP_DIR/bridge-lib.sh"
 
-ENV_FILE="${AOS_BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
 load_env_file_if_present "$ENV_FILE"
 bridge_recompute_config
 
@@ -81,4 +81,3 @@ case "$cmd" in
   funnel) tailscale_funnel_bridge ;;
   *) usage; exit 1 ;;
 esac
-

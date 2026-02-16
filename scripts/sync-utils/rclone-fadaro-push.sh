@@ -23,6 +23,9 @@ fi
 LOCAL_PATH="${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}"
 REMOTE_NAME="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
 REMOTE_PATH="${AOS_FADARO_REMOTE_PATH:-FADARO}"
+DRY_RUN=0
+BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
+BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
 
 RCLONE_OPTIONS=(--verbose --checksum --copy-links --create-empty-src-dirs \
   --exclude '*.tmp' \
@@ -53,8 +56,9 @@ check_rclone_config() {
 }
 
 run_push() {
-  local dry_run="${1:-false}"
   local filter_from=()
+  local backup_dir=""
+  local -a backup_opts=()
   local ignore_file="$LOCAL_PATH/.rcloneignore"
 
   if [ -f "$LOCK_FILE" ]; then
@@ -77,14 +81,30 @@ run_push() {
   fi
 
   rclone mkdir --config "$RCLONE_CONFIG" "${REMOTE_NAME}:${REMOTE_PATH}" 2>/dev/null || true
+  if [ "$BACKUP_OVERWRITES" = "1" ]; then
+    backup_dir="${REMOTE_NAME}:${BACKUP_BASE_REMOTE%/}/fadaro/push/$(date +%Y%m%d-%H%M%S)"
+    backup_opts=(--backup-dir "$backup_dir")
+    log "Overwrite backups enabled: $backup_dir"
+  fi
 
-  if [ "$dry_run" = "true" ]; then
+  if [ "$DRY_RUN" = "1" ]; then
     log "Dry-run: pushing FADARO to ${REMOTE_NAME}:${REMOTE_PATH}"
-    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" --dry-run 2>&1 | tee -a "$LOG_FILE"
+    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run 2>&1 | tee -a "$LOG_FILE"
   else
     log "Pushing FADARO to ${REMOTE_NAME}:${REMOTE_PATH}"
-    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"
+    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"
   fi
 }
 
-run_push "${1:-false}"
+main() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run|--dry) DRY_RUN=1 ;;
+      *) ;;
+    esac
+    shift || true
+  done
+  run_push
+}
+
+main "$@"
