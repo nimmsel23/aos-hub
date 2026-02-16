@@ -2,7 +2,6 @@
 node_modules/
 npm-debug.log
 yarn-error.log
-package-lock.json
 
 # Python
 __pycache__/
@@ -66,12 +65,6 @@ router/router.env
 
 # Local Codex skill scratch (do not commit)
 /skills/
-
-# Local imported blueprint chapters (do not commit)
-/AlphaOS-blueprints
-/AlphaOS - THE *.md
-/AlphaOS-THE-*.md
-/AphaOS-THE-*.md
 
 # IDE
 .vscode/
