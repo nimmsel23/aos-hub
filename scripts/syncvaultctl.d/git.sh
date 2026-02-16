@@ -208,13 +208,74 @@ menu_vitaltrainer_push() {
 }
 
 # Show git sync status
+fallback_repo_status_line() {
+    local label="$1"
+    local repo="$2"
+    safe_git() {
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 5s git -C "$repo" "$@"
+        else
+            git -C "$repo" "$@"
+        fi
+    }
+    if [ -z "$repo" ] || [ ! -d "$repo" ]; then
+        printf "%-20s [~] missing\n" "${label}:"
+        return 0
+    fi
+    if ! safe_git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        printf "%-20s [~] not-a-repo (%s)\n" "${label}:" "$repo"
+        return 0
+    fi
+
+    local branch dirty ahead behind counts
+    branch="$(safe_git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
+    dirty="clean"
+    if [ -n "$(safe_git status --porcelain 2>/dev/null)" ]; then
+        dirty="dirty"
+    fi
+    ahead=0
+    behind=0
+    counts="$(safe_git rev-list --left-right --count '@{upstream}'...HEAD 2>/dev/null || true)"
+    if [ -n "$counts" ]; then
+        behind="$(printf "%s" "$counts" | awk '{print $1}')"
+        ahead="$(printf "%s" "$counts" | awk '{print $2}')"
+        [ -n "$behind" ] || behind=0
+        [ -n "$ahead" ] || ahead=0
+    fi
+    printf "%-20s [OK] %s | %s | +%s/-%s\n" "${label}:" "$branch" "$dirty" "$ahead" "$behind"
+}
+
+fallback_git_status() {
+    echo ""
+    print_msg "$YELLOW" "Fallback status (git-sync-enforcer unavailable/timeout)"
+    local vault_repo vital_repo fadaro_repo
+    vault_repo="$(vault_git_repo || true)"
+    vital_repo="$(vitaltrainer_git_repo || true)"
+    fadaro_repo="${AOS_FADARO_DIR:-$HOME/Dokumente/BUSINESS/FADARO}"
+    fallback_repo_status_line "AOS-HUB" "$ROOT_DIR"
+    fallback_repo_status_line "AlphaOS-Vault" "$vault_repo"
+    fallback_repo_status_line "Vitaltrainer" "$vital_repo"
+    fallback_repo_status_line "FADARO" "$fadaro_repo"
+}
+
 show_git_status() {
     print_header "🔧 GIT SYNC STATUS"
 
     echo ""
     if command -v git-sync-enforcer &>/dev/null; then
-        git-sync-enforcer status
+        if command -v timeout >/dev/null 2>&1; then
+            if ! timeout 10s git-sync-enforcer status; then
+                print_msg "$YELLOW" "git-sync-enforcer status timed out/failed"
+                fallback_git_status
+            fi
+        else
+            if ! git-sync-enforcer status; then
+                print_msg "$YELLOW" "git-sync-enforcer status failed"
+                fallback_git_status
+            fi
+        fi
     else
-        print_msg "$RED" "git-sync-enforcer not found"
+        print_msg "$YELLOW" "git-sync-enforcer not found"
+        fallback_git_status
     fi
 }
