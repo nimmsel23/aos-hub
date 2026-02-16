@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+TODAY="$(date +%F)"
+TIMEOUT="${AOS_CORE4_PROBE_TIMEOUT:-8}"
+INDEX_URL="${AOS_INDEX_URL:-http://127.0.0.1:8799}"
+BRIDGE_URL="${AOS_BRIDGE_URL:-http://127.0.0.1:8080}"
+
+have_curl() {
+  command -v curl >/dev/null 2>&1
+}
+
+probe_url() {
+  local label="$1"
+  local url="$2"
+  echo "== $label"
+  echo "$url"
+  if ! out="$(curl --max-time "$TIMEOUT" -fsS "$url" 2>&1)"; then
+    echo "ERROR: $out"
+    echo ""
+    return 1
+  fi
+  echo "$out"
+  echo ""
+  return 0
+}
+
+probe_today() {
+  local rc=0
+  probe_url "bridge today" "${BRIDGE_URL%/}/bridge/core4/today" || rc=1
+  probe_url "index week-summary(today=${TODAY})" "${INDEX_URL%/}/api/core4/week-summary?date=${TODAY}" || rc=1
+  return "$rc"
+}
+
+probe_week() {
+  local week="${1:-$(date +%G-W%V)}"
+  local rc=0
+  probe_url "bridge week(${week})" "${BRIDGE_URL%/}/bridge/core4/week?week=${week}" || rc=1
+  probe_url "index week-summary(today=${TODAY})" "${INDEX_URL%/}/api/core4/week-summary?date=${TODAY}" || rc=1
+  return "$rc"
+}
+
+probe_all() {
+  local rc=0
+  probe_url "index health" "${INDEX_URL%/}/health" || rc=1
+  probe_url "bridge health" "${BRIDGE_URL%/}/health" || rc=1
+  probe_today || rc=1
+  return "$rc"
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-apictl [all|today|week [YYYY-Www]]
+
+Env overrides:
+  AOS_INDEX_URL=http://127.0.0.1:8799
+  AOS_BRIDGE_URL=http://127.0.0.1:8080
+  AOS_CORE4_PROBE_TIMEOUT=8
+EOF
+}
+
+if ! have_curl; then
+  die "curl not found"
+fi
+
+cmd="${1:-all}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  all) probe_all ;;
+  today) probe_today ;;
+  week) probe_week "${1:-}" ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+
