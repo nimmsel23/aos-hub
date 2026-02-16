@@ -78,8 +78,7 @@ resolve_bin() {
 ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" || true)"
 BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
 INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
-SYNCVAULTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
-SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" "$SCRIPT_DIR/scripts/syncvaultctl" || true)"
+SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
 AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
 ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
 ENVCTL="$(resolve_bin "envctl" || true)"
@@ -95,7 +94,7 @@ GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
 HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
-DOORCTL="$(resolve_bin "$SCRIPT_DIR/scripts/doorctl" || true)"
+DOORCTL="$(resolve_bin "$SCRIPT_DIR/door/cli/doorctl" || true)"
 GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
 VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
@@ -182,7 +181,7 @@ git|$SCRIPT_DIR/scripts/gitctl||AOS_GIT_SILENT AOS_GIT_NOTIFY
 backup|$SCRIPT_DIR/scripts/backupctl||AOS_HUB_DIR
 mount|$SCRIPT_DIR/scripts/mountctl||AOS_CORE4_MOUNT_SERVICE AOS_VOICE_MOUNT_SERVICE AOS_DOOR_MOUNT_SERVICE AOS_GAME_MOUNT_SERVICE
 hook|$SCRIPT_DIR/scripts/hookctl||AOS_HOOK_DIR AOS_HOOK_ENV_DIR AOS_HOOK_ENV_FILE AOS_HOOK_TARGET AOS_HOOK_TELE_BIN AOS_HOOK_TELE_FORMAT AOS_HOOK_TELE_INCLUDE_UUID AOS_HOOK_TELE_SILENT AOS_HOOK_CORE4_TELE_DONE AOS_CORE4_LOG AOS_CORE4_POINTS AOS_TASK_EXPORT_FILTER AOS_TASK_EXPORT_PATH AOS_TASK_EXPORT_VAULT_PATH AOS_TASK_EXPORT_COPY_TO_VAULT AOS_TASK_EXPORT_MIN_INTERVAL_SEC AOS_BRIDGE_URL
-door|$SCRIPT_DIR/scripts/doorctl||AOS_VAULT_DIR AOS_DOOR_STALLED_DAYS
+door|$SCRIPT_DIR/door/cli/doorctl||AOS_VAULT_DIR AOS_DOOR_STALLED_DAYS
 game|$SCRIPT_DIR/scripts/gamectl||AOS_GAME_MOUNT_SERVICE
 voice|$SCRIPT_DIR/scripts/voicectl||AOS_VOICE_MOUNT_SERVICE
 firectl|$SCRIPT_DIR/scripts/firectl||AOS_TASK_BIN AOS_PYTHON_BIN AOS_TASKRC AOS_VAULT_DIR AOS_FIRE_DIR AOS_FIREBOT_SCRIPT AOS_FIRE_ENV_FILE AOS_FIRE_GIT_DIR
@@ -429,6 +428,8 @@ USAGE:
   aosctl <component> <action> [args...]
   aosctl                     # Live dashboard (default entrypoint)
   aosctl menu                # Interactive menu (gum/fzf)
+  aosctl gum                 # Force gum menu
+  aosctl fzf                 # Force fzf menu
   aosctl dashboard [sec]     # Live dashboard (default refresh: 10s)
   aosctl status              # Unified status (no logs) + heartbeat ping
   aosctl ping                # Heartbeat ping (routerctl)
@@ -441,7 +442,7 @@ COMPONENTS:
   router      Router Bot (Telegram aiogram bot)
   bridge      Bridge Service (aiohttp on :8080)
   core4       Core4 tooling (scores/exports/timers)
-  vault       Vault & Domain Sync (syncvaultctl - rclone)
+  vault       Vault & Domain Sync (syncctl - rclone)
   sync        Rclone sync control (syncctl)
   git         Git sync control (gitctl)
   fire        Fire Map scheduling + sync
@@ -473,6 +474,8 @@ COMMON ACTIONS (per component):
 
 EXAMPLES:
   aosctl menu
+  aosctl gum
+  aosctl fzf
   aosctl dashboard
   aosctl dashboard 5
   aosctl status
@@ -704,6 +707,78 @@ legacy_user_unit_notice() {
   fi
 }
 
+user_unit_active_state() {
+  local unit="$1"
+  if ! have systemctl; then
+    printf "unknown\n"
+    return 0
+  fi
+  if ! systemctl --user show-environment >/dev/null 2>&1; then
+    printf "unknown\n"
+    return 0
+  fi
+  local active
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -n "$active" ]] || active="unknown"
+  printf "%s\n" "$active"
+}
+
+scope_guard_check() {
+  local mode="${1:-warn}"   # warn|strict
+  local issues=0
+  local prod dev legacy
+  local prod_active dev_active legacy_active
+
+  msg "Scope guardrails:"
+
+  prod="aos-index.service"; dev="aos-index-dev.service"; legacy="alphaos-index.service"
+  prod_active="$(systemctl is-active "$prod" 2>/dev/null || true)"
+  dev_active="$(user_unit_active_state "$dev")"
+  legacy_active="$(user_unit_active_state "$legacy")"
+  msg "  index  prod=${prod_active:-unknown} dev=${dev_active:-unknown} legacy=${legacy_active:-unknown}"
+  if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip err) parallel run (production + dev)"
+  fi
+  if [[ "$legacy_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip warn) legacy unit active: $legacy"
+  fi
+
+  prod="aos-router.service"; dev="aos-router-dev.service"; legacy="alphaos-router.service"
+  prod_active="$(systemctl is-active "$prod" 2>/dev/null || true)"
+  dev_active="$(user_unit_active_state "$dev")"
+  legacy_active="$(user_unit_active_state "$legacy")"
+  msg "  router prod=${prod_active:-unknown} dev=${dev_active:-unknown} legacy=${legacy_active:-unknown}"
+  if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip err) parallel run (production + dev)"
+  fi
+  if [[ "$legacy_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip warn) legacy unit active: $legacy"
+  fi
+
+  prod="aos-bridge.service"; dev="aos-bridge-dev.service"; legacy="aos-bridge.service"
+  prod_active="$(systemctl is-active "$prod" 2>/dev/null || true)"
+  dev_active="$(user_unit_active_state "$dev")"
+  legacy_active="$(user_unit_active_state "$legacy")"
+  msg "  bridge prod=${prod_active:-unknown} dev=${dev_active:-unknown} legacy-user=${legacy_active:-unknown}"
+  if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip err) parallel run (production + dev)"
+  fi
+  if [[ "$legacy_active" == "active" ]]; then
+    issues=$((issues + 1))
+    msg "    $(aosctl_chip warn) legacy user bridge active: $legacy"
+  fi
+
+  if [[ "$mode" == "strict" && "$issues" -gt 0 ]]; then
+    return 2
+  fi
+  return 0
+}
+
 production_unit_summary() {
   local unit="$1"
   local enabled active state
@@ -824,6 +899,54 @@ render_dashboard_once() {
 run_dashboard() {
   local mode="${1:-once}"
   local interval="${2:-10}"
+
+  show_menu_with_picker() {
+    local picker="$1"
+    case "$picker" in
+      gum|fzf) ;;
+      *) die "Unknown picker: $picker (expected gum|fzf)" ;;
+    esac
+    (
+      CTL_CHOOSE_PREFER="$picker"
+      show_menu
+    )
+  }
+
+  dashboard_hotkey_dispatch() {
+    local key="$1"
+    case "$key" in
+      q|Q)
+        return 99
+        ;;
+      m|M)
+        show_menu || true
+        ;;
+      g|G)
+        show_menu_with_picker gum || true
+        ;;
+      f|F)
+        show_menu_with_picker fzf || true
+        ;;
+      s|S)
+        run_status || true
+        ;;
+      d|D)
+        run_doctor || true
+        ;;
+      p|P)
+        run_ping || true
+        ;;
+      h|H|\?)
+        show_help
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+    ctl_pause_return
+    return 0
+  }
+
   case "$mode" in
     once|"")
       render_dashboard_once
@@ -837,11 +960,17 @@ run_dashboard() {
           break
         fi
         msg ""
-        msg "Refresh every ${interval}s (press q to quit)"
+        msg "Refresh ${interval}s | hotkeys: [m]enu [g]um [f]zf [s]tatus [d]octor [p]ing [h]elp [q]uit"
         local key=""
-        if read -r -t "$interval" -n 1 key; then
+        if ctl_read_key_timed "$interval" key; then
           echo ""
-          if [[ "$key" == "q" || "$key" == "Q" ]]; then
+          if ! dashboard_hotkey_dispatch "$key"; then
+            rc=$?
+            if [[ "$rc" -eq 99 ]]; then
+              break
+            fi
+          fi
+          if [[ "${key:-}" == "q" || "${key:-}" == "Q" ]]; then
             break
           fi
         fi
@@ -866,6 +995,8 @@ run_status() {
   legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
   legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
   legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
+  msg ""
+  scope_guard_check warn || true
   msg ""
 
   if [[ -n "$INDEXCTL" ]]; then
@@ -1023,6 +1154,11 @@ run_doctor() {
   legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
   legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
   legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
+  msg ""
+  if ! scope_guard_check strict; then
+    msg ""
+    die "Scope guardrails failed (parallel production/dev or legacy units active)."
+  fi
   msg ""
 
   if [[ -n "$AOS_DOCTOR" ]]; then
@@ -1460,6 +1596,14 @@ main() {
 
   case "$cmd" in
     menu) show_menu ;;
+    gum) (
+      CTL_CHOOSE_PREFER="gum"
+      show_menu
+    ) ;;
+    fzf) (
+      CTL_CHOOSE_PREFER="fzf"
+      show_menu
+    ) ;;
     dashboard|dash) run_dashboard "$@" ;;
     status) run_status ;;
     ping) run_ping ;;

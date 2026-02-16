@@ -2,6 +2,22 @@
 
 Component for Door lifecycle, War Stacks, Hit tracking, and 4P Flow.
 
+## Blueprint-First Rule
+
+- Door development must start from local chapter/blueprint artifacts in this pillar before adding new logic.
+- Treat chapter files as intent/behavior reference, then map changes into canonical Door code paths (`door/lib/*`, `door/cli/doorctl`, `door/api/*`).
+- Keep this alignment explicit in PR/commit notes when behavior changes.
+- Primary chapter references are local symlinks in `door/` (e.g. `25 - Door.md` ... `31 - Door Summary.md`) pointing to `AlphaOS-blueprints/`.
+- Additional chapter source: `door/gas-door-dev/Door_Chapters.html`.
+- If additional blueprint files are added, keep them in `door/` and extend this section instead of scattering rules elsewhere.
+
+## Lint In Plain Language
+
+- `scripts/scripts-lint.sh` checks wiring/style consistency for ctl scripts.
+- `ERROR` means the change is broken and must be fixed.
+- `WARN` means migration debt or compatibility notes; not always blocking.
+- For this repo: aim for zero errors first, then reduce warnings step by step.
+
 ## Architecture
 
 ```
@@ -79,7 +95,7 @@ CLI (doorctl) OR API (Index Node)
 door/cli/doorctl list
 
 # Via wrapper (backwards compat)
-scripts/doorctl list
+door/cli/doorctl list
 
 # Sources:
 # - door/lib/door_data.sh

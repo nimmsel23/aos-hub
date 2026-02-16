@@ -46,7 +46,6 @@ Regel:
 - `systemstatusctl`
 
 ### Wrapper CTL (nur Weiterleitung)
-- `doorctl`
 - `voicectl`
 - `syncvaultctl` (deprecated -> `syncctl`)
 

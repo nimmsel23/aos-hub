@@ -20,6 +20,20 @@ voice/
 
 **Design Principle:** Single source of truth in bash libs. CLI and API both use same libs.
 
+## Blueprint-First Rule
+
+- Voice development should begin from local blueprint/chapter/spec artifacts in this pillar.
+- Treat these artifacts as intent, then implement in canonical Voice paths (`voice/lib/*`, `voice/cli/voicectl`, future `voice/api/*`).
+- If files are named as chapters/specs (not `blueprint`), they still count as blueprint sources.
+- Primary chapter references are local symlinks in `voice/` (e.g. `19 - The Voice Intro.md` ... `24 - The Voice Summary.md`) pointing to `AlphaOS-blueprints/`.
+- Record blueprint-to-code mapping in commit/PR notes when behavior changes.
+
+## Lint In Plain Language
+
+- `scripts/scripts-lint.sh` validates ctl naming/wiring conventions.
+- `ERROR` means breakage that must be fixed before considering the refactor done.
+- `WARN` means migration/legacy reminders; handle iteratively after errors are zero.
+
 ## Bash Library Guidelines
 
 ### voice_data.sh

@@ -11,6 +11,10 @@
   - `voice/` (Voice pillar)
   - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; bots live in `game/python-firemap/`, `game/python-tent-bot/`; Fruits GAS standalone is external at `~/.gas/fruits-dev`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
+- Domain ownership rule:
+  - Pillar/domain logic lives inside the pillar directory (`door/`, `game/`, `voice/`, `core4/`).
+  - `scripts/` is the orchestration/frontdoor layer and should avoid embedding pillar-specific business logic.
+  - Legacy root-level scripts for pillar behavior should be migrated into the pillar folder and kept as wrappers only during transition.
 - `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
 
 ## Build, Test, and Development Commands
@@ -45,6 +49,15 @@
   - safety rules (what must never be overwritten; what is rebuildable)
   - quick debug/runbook commands (curl/ctl helpers)
 - Prefer a single "mental model" doc per system and link to it from component READMEs (see `DOCS/DOC_SYSTEM.md`).
+
+## Registry Policy
+- `registry.tsv` is the command inventory SSOT for discoverability and naming.
+- Every user-facing command/frontdoor must have a `registry.tsv` entry (`id`, label, command, kind, source, description).
+- When adding, moving, or renaming commands, update `registry.tsv` in the same change.
+- Keep dispatch wiring and registry aligned:
+  - `aosctl`/`hubctl` currently use explicit dispatch code (not automatic registry execution).
+  - If dispatch changes, update both code paths and `registry.tsv` together.
+- Prefer extending existing entries over introducing parallel aliases with overlapping meaning.
 
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.

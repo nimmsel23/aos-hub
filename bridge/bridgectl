@@ -18,7 +18,7 @@ codex_subcmd_maybe "main" "bridgectl" "$@" && exit 0
 # shellcheck disable=SC1090
 source "$APP_DIR/bridge-lib.sh"
 
-SYNCVAULTCTL_BIN="${SYNCVAULTCTL_BIN:-$ROOT_DIR/scripts/syncvaultctl}"
+SYNCCTL_BIN="${SYNCCTL_BIN:-$ROOT_DIR/scripts/syncctl}"
 HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
 SYSTEMSTATUSCTL_BIN="${SYSTEMSTATUSCTL_BIN:-$ROOT_DIR/scripts/systemstatusctl}"
@@ -28,21 +28,21 @@ servicectl() { exec "$APP_DIR/bridge-servicectl" "$@"; }
 apictl() { exec "$APP_DIR/bridge-apictl" "$@"; }
 tsctl() { exec "$APP_DIR/bridge-tsctl" "$@"; }
 
-syncvaultctl_cmd() {
-  if [[ -x "$SYNCVAULTCTL_BIN" ]]; then
-    echo "$SYNCVAULTCTL_BIN"
+syncctl_cmd() {
+  if [[ -x "$SYNCCTL_BIN" ]]; then
+    echo "$SYNCCTL_BIN"
     return 0
   fi
-  if has_cmd syncvaultctl; then
-    echo "syncvaultctl"
+  if has_cmd syncctl; then
+    echo "syncctl"
     return 0
   fi
   return 1
 }
 
-run_syncvaultctl() {
+run_syncctl() {
   local cmd
-  cmd="$(syncvaultctl_cmd)" || die "syncvaultctl not found"
+  cmd="$(syncctl_cmd)" || die "syncctl not found"
   exec "$cmd" "$@"
 }
 
@@ -177,7 +177,7 @@ menu() {
     "systemd diagnose" "systemd fix" \
     "api health" "api debug" "api doctor" "api test-rpc" "api flush" \
     "api sync-status" "api sync-pull" "api sync-push" "api sync-pull (dry-run)" "api sync-push (dry-run)" "api sync-abort" \
-    "syncvaultctl menu" "syncvaultctl status" "syncvaultctl sync" "syncvaultctl pull" \
+    "syncctl menu" "syncctl status" "syncctl sync" "syncctl pull" \
     "gas systemstatus" \
     "heartbeat status" "heartbeat ping" "heartbeat logs" \
     "tailscale status" "tailscale serve" "tailscale funnel" \
@@ -205,10 +205,10 @@ menu() {
     "api sync-push (dry-run)") apictl sync-push --dry-run ;;
     "api sync-abort") apictl sync-abort ;;
 
-    "syncvaultctl menu") run_syncvaultctl menu ;;
-    "syncvaultctl status") run_syncvaultctl status ;;
-    "syncvaultctl sync") run_syncvaultctl sync ;;
-    "syncvaultctl pull") run_syncvaultctl pull ;;
+    "syncctl menu") run_syncctl menu ;;
+    "syncctl status") run_syncctl status ;;
+    "syncctl sync") run_syncctl sync ;;
+    "syncctl pull") run_syncctl pull ;;
 
     "gas systemstatus") run_systemstatus ;;
 
@@ -246,7 +246,7 @@ Tailscale:
   bridgectl tailscale|serve|funnel
 
 Other:
-  bridgectl syncvaultctl <args...>
+  bridgectl syncctl <args...>
   bridgectl heartbeat <cmd>
   bridgectl systemstatus
 
@@ -276,7 +276,7 @@ case "$cmd" in
   serve) tsctl serve ;;
   funnel) tsctl funnel ;;
 
-  syncvaultctl) run_syncvaultctl "$@" ;;
+  syncctl) run_syncctl "$@" ;;
   heartbeat) run_heartbeat "${1:-status}" "${@:2}" ;;
   systemstatus) run_systemstatus "$@" ;;
 

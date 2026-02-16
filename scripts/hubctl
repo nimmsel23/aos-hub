@@ -66,6 +66,7 @@ $APP — unified CLI for the hub repo
 Usage:
   $APP list
   $APP doctor
+  $APP doctor --strict
   $APP dev <status|start|stop|restart|logs|doctor> [index|router|bridge]
   $APP bridge <bridgectl-args...>
   $APP router <routerctl-args...>
@@ -97,7 +98,7 @@ Examples:
   $APP bridge health
   $APP router doctor
   $APP dev status
-  $APP dev restart router
+  $APP dev restart --stop-prod router
   $APP heartbeat status
   $APP systemstatus
   $APP index doctor
@@ -153,6 +154,18 @@ dev_units_for_target() {
   esac
 }
 
+prod_unit_for_dev_target() {
+  local target="$1"
+  case "$target" in
+    index) printf "%s\n" "aos-index.service" ;;
+    router) printf "%s\n" "aos-router.service" ;;
+    bridge) printf "%s\n" "aos-bridge.service" ;;
+    *)
+      die "unknown dev target: $target (use index|router|bridge)"
+      ;;
+  esac
+}
+
 dev_status() {
   local target="${1:-all}"
   user_bus_ok || die "systemctl --user not available (no user bus)"
@@ -169,7 +182,22 @@ dev_status() {
 dev_action_units() {
   local action="$1"
   local target="${2:-all}"
+  local stop_prod="${3:-0}"
   user_bus_ok || die "systemctl --user not available (no user bus)"
+  if [[ "$stop_prod" == "1" && ( "$action" == "start" || "$action" == "restart" ) ]]; then
+    if ! command -v systemctl >/dev/null 2>&1; then
+      die "systemctl not available (cannot stop production units)"
+    fi
+    if [[ "$target" == "all" || -z "$target" ]]; then
+      ui_info "Stopping production units before ${action}: aos-index.service aos-router.service aos-bridge.service"
+      systemctl stop aos-index.service aos-router.service aos-bridge.service
+    else
+      local prod_unit
+      prod_unit="$(prod_unit_for_dev_target "$target")"
+      ui_info "Stopping production unit before ${action}: $prod_unit"
+      systemctl stop "$prod_unit"
+    fi
+  fi
   local units=()
   while read -r unit; do
     [[ -n "$unit" ]] || continue
@@ -197,6 +225,59 @@ dev_doctor() {
   echo ""
   ui_info "Production units are managed via: aosctl (system scope)"
   ui_info "Dev/user units are managed via: hubctl dev ..."
+}
+
+strict_doctor() {
+  local rc=0
+  local strict="${1:-0}"
+  local user_ok=0
+  user_bus_ok && user_ok=1
+  if [[ -x "$ROOT_DIR/scripts/aos-doctor" ]]; then
+    "$ROOT_DIR/scripts/aos-doctor" || true
+    echo ""
+  fi
+
+  ui_title "hubctl strict scope checks"
+  local check_targets=("index:$DEV_INDEX_UNIT:aos-index.service" "router:$DEV_ROUTER_UNIT:aos-router.service" "bridge:$DEV_BRIDGE_UNIT:aos-bridge.service")
+  local item target dev_unit prod_unit dev_active prod_active legacy_active
+  for item in "${check_targets[@]}"; do
+    IFS=':' read -r target dev_unit prod_unit <<<"$item"
+    prod_active="$(systemctl is-active "$prod_unit" 2>/dev/null || true)"
+    if [[ "$user_ok" == "1" ]]; then
+      dev_active="$(systemctl --user is-active "$dev_unit" 2>/dev/null || true)"
+    else
+      dev_active="unknown"
+    fi
+    if [[ "$user_ok" != "1" ]]; then
+      legacy_active="unknown"
+    elif [[ "$target" == "index" ]]; then
+      legacy_active="$(systemctl --user is-active alphaos-index.service 2>/dev/null || true)"
+    elif [[ "$target" == "router" ]]; then
+      legacy_active="$(systemctl --user is-active alphaos-router.service 2>/dev/null || true)"
+    else
+      legacy_active="$(systemctl --user is-active aos-bridge.service 2>/dev/null || true)"
+    fi
+
+    printf "  %-6s prod=%-8s dev=%-8s" "$target" "${prod_active:-unknown}" "${dev_active:-unknown}"
+    if [[ "$legacy_active" == "active" ]]; then
+      printf " legacy=active"
+    fi
+    printf "\n"
+
+    if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
+      rc=2
+      ui_err "parallel run detected for $target (production + dev active)"
+    fi
+    if [[ "$legacy_active" == "active" ]]; then
+      rc=2
+      ui_warn "legacy unit active for $target (migrate away from old unit name)"
+    fi
+  done
+
+  if [[ "$strict" == "1" && "$rc" -ne 0 ]]; then
+    die "strict doctor failed: scope conflicts detected"
+  fi
+  return "$rc"
 }
 
 pick_user_unit_name() {
@@ -245,7 +326,13 @@ case "$cmd" in
   install-cli) install_cli ;;
   uninstall-cli) uninstall_cli ;;
 
-  doctor) repo_exec "scripts/aos-doctor" "$@" ;;
+  doctor)
+    if [[ "${1:-}" == "--strict" ]]; then
+      strict_doctor 1
+    else
+      repo_exec "scripts/aos-doctor" "$@"
+    fi
+    ;;
   bridge) AOS_BRIDGE_USER_SERVICE="${AOS_BRIDGE_USER_SERVICE:-$DEV_BRIDGE_UNIT}" repo_exec "bridge/bridgectl" "$@" ;;
   router) ROUTER_NAME="${ROUTER_NAME:-$(dev_router_name_default)}" repo_exec "router/routerctl" "$@" ;;
   heartbeat) repo_exec "scripts/heartbeat" "${1:-status}" ;;
@@ -255,9 +342,31 @@ case "$cmd" in
     sub="${1:-status}"; shift || true
     case "$sub" in
       status) dev_status "${1:-all}" ;;
-      start) dev_action_units start "${1:-all}" ;;
+      start)
+        stop_prod=0
+        target="all"
+        for arg in "$@"; do
+          if [[ "$arg" == "--stop-prod" ]]; then
+            stop_prod=1
+          else
+            target="$arg"
+          fi
+        done
+        dev_action_units start "$target" "$stop_prod"
+        ;;
       stop) dev_action_units stop "${1:-all}" ;;
-      restart) dev_action_units restart "${1:-all}" ;;
+      restart)
+        stop_prod=0
+        target="all"
+        for arg in "$@"; do
+          if [[ "$arg" == "--stop-prod" ]]; then
+            stop_prod=1
+          else
+            target="$arg"
+          fi
+        done
+        dev_action_units restart "$target" "$stop_prod"
+        ;;
       logs) dev_logs "${1:-all}" ;;
       doctor) dev_doctor "${1:-all}" ;;
       ""|-h|--help|help)
@@ -266,7 +375,8 @@ hubctl dev — user scope dev services
 
 Usage:
   hubctl dev status [index|router|bridge]
-  hubctl dev start|stop|restart [index|router|bridge]
+  hubctl dev start|restart [--stop-prod] [index|router|bridge]
+  hubctl dev stop [index|router|bridge]
   hubctl dev logs [index|router|bridge]
   hubctl dev doctor [index|router|bridge]
 
@@ -291,7 +401,7 @@ EOF
   gas|gasctl) repo_exec "scripts/gasctl" "$@" ;;
   firectl) repo_exec "scripts/firectl" "$@" ;;
   tele|telectl) repo_exec "scripts/telectl" "$@" ;;
-  door|doorctl) repo_exec "scripts/doorctl" "$@" ;;
+  door|doorctl) repo_exec "door/cli/doorctl" "$@" ;;
   game|gamectl) repo_exec "scripts/gamectl" "$@" ;;
   voice|voicectl) repo_exec "scripts/voicectl" "$@" ;;
   fire)

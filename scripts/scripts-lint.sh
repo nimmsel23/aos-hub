@@ -30,7 +30,6 @@ LEGACY_CTLS=(
 )
 
 WRAPPER_CTLS=(
-  doorctl
   syncvaultctl
   voicectl
 )

@@ -32,7 +32,6 @@ BACKUP_SCRIPT="${BACKUP_SCRIPT:-${AOS_HUB_DIR}/scripts/utils/aos-hub-backup-dail
 AOS_HUB_LIVE_SCRIPT="${AOS_HUB_LIVE_SCRIPT:-${AOS_HUB_DIR}/scripts/sync-utils/rclone-aos-hub-live-push.sh}"
 
 SYNCCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncctl"
-SYNCVAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/syncvaultctl"
 VAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/sync-utils/vaultctl"
 RCLONECTL_FALLBACK="${AOS_HUB_DIR}/scripts/rclonectl"
 GITCTL_FALLBACK="${AOS_HUB_DIR}/scripts/gitctl"
@@ -101,18 +100,6 @@ syncctl_bin() {
   fi
   if [[ -x "$SYNCCTL_FALLBACK" ]]; then
     printf "%s\n" "$SYNCCTL_FALLBACK"
-    return 0
-  fi
-  return 1
-}
-
-syncvaultctl_bin() {
-  if has_cmd syncvaultctl; then
-    command -v syncvaultctl
-    return 0
-  fi
-  if [[ -x "$SYNCVAULTCTL_FALLBACK" ]]; then
-    printf "%s\n" "$SYNCVAULTCTL_FALLBACK"
     return 0
   fi
   return 1
@@ -1025,11 +1012,11 @@ run_vaultctl() {
     "$bin" "$@"
     return 0
   fi
-  if bin="$(syncvaultctl_bin)"; then
+  if bin="$(syncctl_bin)"; then
     "$bin" vault "$@"
     return 0
   fi
-  die "vaultctl/syncvaultctl not found"
+  die "vaultctl/syncctl not found"
 }
 
 cmd_push() {
