@@ -1,0 +1,1 @@
+/home/alpha/Dokumente/ALPHA_OS/AlphaOS-THE-FOUNDATION.md

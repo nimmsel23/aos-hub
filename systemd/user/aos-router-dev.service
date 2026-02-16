@@ -1,0 +1,24 @@
+[Unit]
+Description=AOS Router Dev (aiogram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/aos-hub/router
+EnvironmentFile=-%h/.env/aos.env
+EnvironmentFile=-%h/Dokumente/AlphaOs-Vault/.alphaos/tele.env
+EnvironmentFile=-%h/aos-hub/router/.env
+Environment=ROUTER_CONFIG=%h/aos-hub/router/config.yaml
+ExecStart=/usr/bin/python router_bot.py
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=%h/aos-hub/router
+
+[Install]
+WantedBy=default.target

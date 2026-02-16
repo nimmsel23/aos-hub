@@ -1,0 +1,1 @@
+../AlphaOS-blueprints/23 - Strike.md

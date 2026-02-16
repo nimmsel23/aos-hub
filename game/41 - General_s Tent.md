@@ -1,0 +1,1 @@
+../AlphaOS-blueprints/41 - General_s Tent.md

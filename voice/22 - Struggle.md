@@ -1,0 +1,1 @@
+../AlphaOS-blueprints/22 - Struggle.md

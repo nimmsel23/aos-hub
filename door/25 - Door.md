@@ -1,0 +1,1 @@
+../AlphaOS-blueprints/25 - Door.md
