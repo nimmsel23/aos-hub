@@ -124,6 +124,7 @@ const CORE4_JOURNAL_DIR =
   process.env.CORE4_JOURNAL_DIR ||
   path.join(getVaultDir(), "Alpha_Journal", "Entries");
 const CORE4_STORAGE_DIR_ENV = String(process.env.CORE4_STORAGE_DIR || "").trim();
+const CORE4_MOUNT_DIR_ENV = String(process.env.CORE4_MOUNT_DIR || "").trim();
 const CORE4_STORAGE_FALLBACK_DIR = String(
   process.env.CORE4_STORAGE_FALLBACK_DIR ||
   path.join(os.homedir(), ".local", "share", "alphaos", "core4")
@@ -2285,6 +2286,18 @@ function getCore4EventRootDir() {
   return path.join(getCore4StorageDir(), ".core4", "events");
 }
 
+function getCore4MountDir() {
+  return CORE4_MOUNT_DIR_ENV || path.join(getVaultDir(), "Alpha_Core4");
+}
+
+function getCore4EventRootDirs() {
+  const dirs = [
+    getCore4EventRootDir(),
+    path.join(getCore4MountDir(), ".core4", "events"),
+  ];
+  return Array.from(new Set(dirs));
+}
+
 function getCore4JournalRootDir() {
   return path.join(getCore4StorageDir(), "journal");
 }
@@ -2384,27 +2397,30 @@ function core4WriteEvent(entry) {
 function core4ListEventsForDate(dateKey) {
   const day = resolveCore4DateKey(dateKey, false);
   if (!day) return [];
-  const dayDir = path.join(getCore4EventRootDir(), day);
-  if (!fs.existsSync(dayDir)) return [];
-  let names = [];
-  try {
-    names = fs.readdirSync(dayDir);
-  } catch (err) {
-    console.warn(`[core4] cannot read event dir ${dayDir}: ${err?.message || err}`);
-    return [];
-  }
   const out = [];
-  for (const name of names) {
-    const full = path.join(dayDir, name);
-    let st = null;
+  const roots = getCore4EventRootDirs();
+  for (const root of roots) {
+    const dayDir = path.join(root, day);
+    if (!fs.existsSync(dayDir)) continue;
+    let names = [];
     try {
-      st = fs.statSync(full);
-    } catch (_) {
+      names = fs.readdirSync(dayDir);
+    } catch (err) {
+      console.warn(`[core4] cannot read event dir ${dayDir}: ${err?.message || err}`);
       continue;
     }
-    if (!st.isFile() || !name.toLowerCase().endsWith(".json")) continue;
-    const data = readJsonFile(full, null);
-    if (data && data.date === day) out.push(data);
+    for (const name of names) {
+      const full = path.join(dayDir, name);
+      let st = null;
+      try {
+        st = fs.statSync(full);
+      } catch (_) {
+        continue;
+      }
+      if (!st.isFile() || !name.toLowerCase().endsWith(".json")) continue;
+      const data = readJsonFile(full, null);
+      if (data && data.date === day) out.push(data);
+    }
   }
   return out;
 }
