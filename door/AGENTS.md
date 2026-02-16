@@ -1,5 +1,7 @@
 # door/ - Door Management Component
 
+Das zugehörige `doorctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 Component for Door lifecycle, War Stacks, Hit tracking, and 4P Flow.
 
 ## Blueprint-First Rule

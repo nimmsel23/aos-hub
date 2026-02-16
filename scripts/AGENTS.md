@@ -1,5 +1,9 @@
 # Scripts Guidelines
 
+Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
+Die `syncctl`- / `vaultctl`-Scripts sind unsere aktive Codex-Frontdoor für Rclone- und Vault-Syncs; Änderungen sollten dort koordiniert werden.
+
 ## Purpose
 - `scripts/` is the operational control layer for `aos-hub`.
 - Keep command behavior predictable and discoverable.

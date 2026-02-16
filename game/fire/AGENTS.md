@@ -1,5 +1,7 @@
 # Fire Component Guidelines
 
+Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Purpose
 - Fire is the daily/weekly execution view (Taskwarrior → “Firemap” messages + local Fire Centre UI).
 - The hub contains multiple integration points (Taskwarrior, systemd timers, router triggers, Index Node fallback).

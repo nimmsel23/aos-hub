@@ -1,5 +1,7 @@
 # Fire Map Bot Guidelines
 
+Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Purpose
 - `firemap_bot.py` sends Fire Map snapshots from Taskwarrior.
 - `README.md` documents env vars and on-demand usage.

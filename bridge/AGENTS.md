@@ -1,5 +1,7 @@
 # Bridge Guidelines
 
+Das zugehörige `bridgectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Purpose
 - `app.py` is the aiohttp service on port `8080` (Core4/Fruits/Tent + task routing).
 - `bridgectl` is a thin CLI entrypoint (kept stable), dispatching into:

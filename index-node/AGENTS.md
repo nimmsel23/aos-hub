@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Module Organization
 - `server.js` runs the local router API and serves static files from `public/`.
 - `menu.yaml` is the single source of truth for routes shown on the index UI.

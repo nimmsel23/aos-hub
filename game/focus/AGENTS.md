@@ -1,5 +1,7 @@
 # Focus Component Guidelines
 
+Das zugehörige `gamectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Purpose
 - Focus is the monthly (or quarterly) mission: it shrinks the journey from Freedom into actionable steps.
 - Focus Map is not a to-do list; it is the foundation layer that Fire executes weekly.

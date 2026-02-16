@@ -1,5 +1,9 @@
 # Game Guidelines
 
+Das zugehörige `gamectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
+Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, wenn lokale Tent-Reports oder Services angepasst werden.
+
 ## Scope
 - `game/` owns Game pillar domain logic and center-specific behavior (Frame/Freedom/Focus/Fire/Tent).
 - Keep Game-specific implementation in this pillar.

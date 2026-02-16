@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Module Organization
 - `index-node/` is the local HQ web UI + API server (Node.js, port `8799`).
 - `router/` is the Telegram router bot (aiogram) and extensions.

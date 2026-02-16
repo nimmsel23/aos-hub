@@ -1,5 +1,7 @@
 # War Stack Bot Guidelines
 
+Das zugehörige `doorctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Purpose
 - `warstack_bot.py` runs the Telegram-guided War Stack flow.
 - `README.md` documents env flags for GAS output + idle timeout.

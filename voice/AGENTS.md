@@ -1,5 +1,7 @@
 # AGENTS.md - VOICE Component Development
 
+Das zugehörige `voicectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 Guidelines for Claude Code when working on THE VOICE component.
 
 ## Architecture Overview

@@ -1,5 +1,7 @@
 # Core4 Guidelines
 
+Das zugehörige `core4ctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Scope
 - `core4/` owns Core4 domain logic, data flow, and tooling behavior.
 - Keep Core4-specific implementation in this pillar.

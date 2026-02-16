@@ -1,5 +1,7 @@
 # Router Bot Guidelines
 
+Das zugehörige `routerctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+
 ## Project Structure & Purpose
 - `router_bot.py` is the aiogram router (Telegram commands → centre URLs).
 - `extensions/` holds opt-in command modules (e.g., warstack trigger).
