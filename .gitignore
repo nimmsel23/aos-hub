@@ -10,15 +10,14 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+/build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
-lib/
-!index-node/lib/  # Exception: index-node lib is source code, not Python package
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -49,8 +48,8 @@ router/router.env
 .tmpcfg/
 
 # Local convenience symlinks (avoid committing absolute links)
-tele
-aliasctl
+/tele
+/aliasctl
 /gas-creatorking-dev
 /gas-door-dev
 /gas-fruits-dev
@@ -59,20 +58,20 @@ aliasctl
 /gas-voice-dev
 
 # Local vault/blueprints convenience symlinks
-Vault
-blueprints
+/Vault
+/blueprints
 
 # Local docs symlink
-index-node/docs
+/index-node/docs
 
 # Local Codex skill scratch (do not commit)
-skills/
+/skills/
 
 # Local imported blueprint chapters (do not commit)
-AlphaOS-blueprints
-AlphaOS - THE *.md
-AlphaOS-THE-*.md
-AphaOS-THE-*.md
+/AlphaOS-blueprints
+/AlphaOS - THE *.md
+/AlphaOS-THE-*.md
+/AphaOS-THE-*.md
 
 # IDE
 .vscode/
