@@ -61,7 +61,7 @@ agent_registry_sync	agent-registry-sync	agent-registry-sync	script	dotfiles_bin
 ticktick_tag_watcher_py	ticktick_tag_watcher.py	python-ticktick/ticktick_tag_watcher.py	python	aos-hub	
 door_lifecycle_sh	door_lifecycle.sh	door_lifecycle.sh	script	dotfiles_bin	
 door_uuid_sync_py	door_uuid_sync.py	python-ticktick/door_uuid_sync.py	python	aos-hub	
-war_stack_create_sh	war_stack_create.sh	war_stack_create.sh	script	dotfiles_bin	
+war_stack_create_sh	war_stack_create.sh	door/create_warstack.sh	script	aos-hub	
 git_sync_enforcer	git-sync-enforcer	git-sync-enforcer	script	dotfiles_bin	
 syncctl	syncctl	syncctl	script	dotfiles_bin	
 repo_auto_push	repo-auto-push	repo-auto-push	script	dotfiles_bin	

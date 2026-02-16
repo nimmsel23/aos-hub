@@ -9,7 +9,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
-VAULT_ROOT="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+VAULT_ROOT="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
 if command -v realpath >/dev/null 2>&1; then
   VAULT_ROOT="$(realpath -m -- "$VAULT_ROOT")"
 elif command -v readlink >/dev/null 2>&1; then

@@ -9,19 +9,19 @@ Services that run under your user account, don't require root.
 
 **Location:** `~/.config/systemd/user/`
 
-**Active Services:**
-- `aos-index-dev.service` - Index Node (port 8799)
-- `alphaos-router.service` - Router Bot (Telegram)
-- `aos-bridge.service` - Bridge (port 8080)
+**Active Services (Dev/User):**
+- `aos-index-dev.service` - Index Node (dev)
+- `aos-router-dev.service` - Router Bot (dev)
+- `aos-bridge-dev.service` - Bridge (dev)
 
 **Active Timers:**
-- `alphaos-heartbeat.timer` - Router Bot heartbeat (every 5min)
+- `aos-hub-live-push.timer` (optional, user scope live sync)
 
 **Behavior:**
 - User services only use user-owned env files (e.g. `~/.env/*.env`). They must not depend on `/etc/*`.
 - User services require a user session (login) to be started.
 
-### System Services (Optional)
+### System Services (Production)
 Services that run as system services, require root installation.
 
 **Location:** `/etc/systemd/system/`
@@ -44,15 +44,15 @@ The Index Node has two modes:
 - **DEV (user service)**: runs as a user unit and starts when the user logs in.
 - **PROD (system service)**: runs as a system unit and can stay active without a user session.
 
-Mode switching is handled by `scripts/indexctl` (and via `nodectl`):
+Mode switching is handled by `scripts/indexctl`:
 
 - `scripts/indexctl mode-dev` stops the system service and starts the user service.
 - `scripts/indexctl mode-prod` stops the user service and starts the system service.
 - `scripts/indexctl mode-status` shows which one is active.
 
-Note: If your user service name differs (for example `alphaos-index.service`), set:
+Note: If your user service name differs (legacy installs), set:
 
-`AOS_INDEX_USER_SERVICE=alphaos-index.service`
+`AOS_INDEX_USER_SERVICE=<legacy-user-unit>.service`
 
 ## Installation
 
@@ -65,13 +65,13 @@ systemctl --user daemon-reload
 systemctl --user enable aos-index-dev.service
 systemctl --user start aos-index-dev.service
 
-# Router Bot (via routerctl)
+# Router Bot (dev/user)
 cd router
 ./routerctl unit
 ./routerctl enable
 ./routerctl start
 
-# Bridge (via bridgectl)
+# Bridge (dev/user)
 cd bridge
 ./bridgectl enable
 ```
@@ -150,7 +150,7 @@ See `index-node/README.md` for full list.
 Managed via `router/routerctl` - see `router/README.md`.
 
 **Key Features:**
-- Auto-installs to `~/.config/systemd/user/alphaos-router.service`
+- Auto-installs to `~/.config/systemd/user/aos-router-dev.service`
 - Includes heartbeat timer (optional)
 - Single-env support (`~/.env/aos.env`)
 
@@ -159,7 +159,7 @@ Managed via `router/routerctl` - see `router/README.md`.
 Managed via `bridge/bridgectl` - see `bridge/README.md`.
 
 **Key Features:**
-- Auto-installs to `~/.config/systemd/user/aos-bridge.service`
+- Auto-installs to `~/.config/systemd/user/aos-bridge-dev.service`
 - Port 8080
 - Requires env: `~/.env/aos.env`
 
@@ -170,8 +170,8 @@ Managed via `bridge/bridgectl` - see `bridge/README.md`.
 ```bash
 # User services
 systemctl --user status aos-index-dev.service
-systemctl --user status alphaos-router.service
-systemctl --user status aos-bridge.service
+systemctl --user status aos-router-dev.service
+systemctl --user status aos-bridge-dev.service
 
 # System services
 sudo systemctl status aos-index.service
@@ -185,7 +185,7 @@ sudo systemctl status aos-index.service
 ```bash
 # User services
 journalctl --user -u aos-index-dev.service -f
-journalctl --user -u alphaos-router.service -f
+journalctl --user -u aos-router-dev.service -f
 
 # System services
 sudo journalctl -u aos-index.service -f

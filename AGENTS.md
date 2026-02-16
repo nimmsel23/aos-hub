@@ -8,8 +8,8 @@
 - Pillars live at the repo root:
   - `core4/` (Core4 pillar; CLI lives in `core4/python-core4/`)
   - `door/` (Door pillar; tools live in `door/python-hot/`, `door/python-warstack/`, standalone GAS dev in `door/gas-door-dev/`)
-  - `voice/` (Voice pillar; standalone GAS Fruits dev in `voice/gas-fruits-dev/`)
-  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; bots live in `game/python-firemap/`, `game/python-tent-bot/`)
+  - `voice/` (Voice pillar)
+  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; bots live in `game/python-firemap/`, `game/python-tent-bot/`; Fruits GAS standalone is external at `~/.gas/fruits-dev`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
 - `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
 
@@ -19,6 +19,9 @@
 - `cd router && pip install -r requirements.txt && python router_bot.py` runs the Telegram router.
 - `cd bridge && python app.py --host 0.0.0.0 --port 8080` runs the bridge.
 - `./scripts/aos-doctor` or `./hubctl doctor` produces a multi-service health report.
+- Runtime split policy:
+  - `aosctl` = Production frontdoor (systemd system scope, `aos-*` units)
+  - `hubctl dev` = Dev frontdoor (systemd user scope, `aos-*-dev` units)
 - `./nodectl monitor` checks the Node index service (systemd + health).
 - Service CLIs:
   - `./hubctl router ...` (→ `router/routerctl`)

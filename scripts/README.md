@@ -6,6 +6,14 @@ Collection of utility scripts for αOS Door Centre, Core4, and TickTick integrat
 
 ---
 
+## Runtime Frontdoors (Production vs Dev)
+
+- Production/System: `aosctl` (systemd system scope, `aos-*`).
+- Dev/User: `hubctl dev ...` (systemd user scope, `aos-*-dev`).
+- Legacy units (`alphaos-*`) are migration-only and should not be used as primary defaults.
+
+---
+
 ## Directory Structure
 
 ```

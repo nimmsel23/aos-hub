@@ -407,7 +407,7 @@ show_overview() {
 
     section_title "Vault"
     local vault_root
-    vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+    vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
     print_flow_row "Vault:Game"  "<->" "$vault_root/Game"  "${AOS_VAULT_REMOTE_GAME:-eldanioo:Alpha_Game}"
     print_flow_row "Vault:Door"  "<->" "$vault_root/Door"  "${AOS_VAULT_REMOTE_DOOR:-eldanioo:Alpha_Door}"
     print_flow_row "Vault:Voice" "<->" "$vault_root/Voice" "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
@@ -468,7 +468,7 @@ show_overview() {
 
   section_title "Flows"
   local vault_root
-  vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
+  vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
   local domain_local_base domain_remote_base domain_remote_name
   domain_local_base="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
   domain_remote_base="${AOS_DOMAIN_REMOTE_BASE:-}"

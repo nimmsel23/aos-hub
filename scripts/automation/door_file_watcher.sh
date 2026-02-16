@@ -10,7 +10,7 @@ PLAN_DIR="$VAULT_PATH/Door/2-Plan"
 PRODUCTION_DIR="$VAULT_PATH/Door/3-Production"
 LOG_FILE="${LOG_FILE:-$HOME/.dotfiles/logs/door-automation.log}"
 
-WAR_STACK_CREATE="${WAR_STACK_CREATE:-$HOME/.dotfiles/bin/war_stack_create.sh}"
+WAR_STACK_CREATE="${WAR_STACK_CREATE:-$HOME/aos-hub/door/create_warstack.sh}"
 OBSIDIAN_TW_SYNC="${OBSIDIAN_TW_SYNC:-$HOME/.dotfiles/bin/obsidian_tw_sync.sh}"
 
 # PID file for single-instance enforcement

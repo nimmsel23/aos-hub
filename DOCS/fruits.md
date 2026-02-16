@@ -1,6 +1,6 @@
 # Fruits Centre Documentation
 
-**Fruits Map** - Daily Results Tracking (Part of THE VOICE)
+**Fruits Map** - Daily Results Tracking (cross-centre, not Voice-bound)
 
 **Last Updated:** 2026-01-10
 
@@ -12,16 +12,16 @@
 
 ### Purpose
 
-**Daily Results Reflection** - Track outcomes as part of VOICE/Submit radical honesty.
+**Daily Results Reflection** - Track outcomes across execution flows and weekly review.
 
 **Position in αOS:**
-- Part of THE VOICE (Pillar #3)
-- Specifically: **SUBMIT phase** (Stage #2)
-- One of the **4 Fs**: Facts, Feelings, Focus, **Fruit**
+- Cross-centre signal layer (used by HQ/Game/Tent workflows)
+- GAS standalone workspace lives at `~/.gas/fruits-dev`
+- Not coupled to the Voice pillar path structure
 
 ---
 
-## The 4 Fs (VOICE/Submit)
+## The 4 Fs (historical model)
 
 **SUBMIT = Acknowledging truth of Facts, Feelings, Focus, and Fruit**
 
@@ -370,12 +370,12 @@ FRUITS_EXPORT_DIR=~/AlphaOS-Vault/Game/Fruits
 
 ---
 
-## GAS Standalone Dev (`voice/gas-fruits-dev/`)
+## GAS Standalone Dev (`~/.gas/fruits-dev/`)
 
 Separate Apps Script project (own clasp `scriptId`) for independent Fruits WebApp/Bot updates.
 
-**Entry:** `voice/gas-fruits-dev/Code.js` (`doGet`/`doPost`) + `voice/gas-fruits-dev/utils.js` (Drive JSON store)
-**Shared helpers:** `voice/gas-fruits-dev/alphaos_centre_utils.js` (Telegram chunking, trigger helpers, safe filenames)
+**Entry:** `~/.gas/fruits-dev/Code.js` (`doGet`/`doPost`) + `~/.gas/fruits-dev/utils.js` (Drive JSON store)
+**Shared helpers:** `~/.gas/fruits-dev/alphaos_centre_utils.js` (Telegram chunking, trigger helpers, safe filenames)
 
 **Multi-user:** per-user key `...?k=<user_key>` (webapp auto-creates on first visit; stored in `localStorage`)
 - Answers: `fruits_store.json` → `answers_by_key[<user_key>]`

@@ -309,7 +309,7 @@ env_run_check() {
   ENV_CHECK_MESSAGES=()
 
   local user_service=""
-  user_service="$(pick_user_unit_file "${AOS_INDEX_USER_SERVICE:-}" "alphaos-index.service" "aos-index-dev.service")"
+  user_service="$(pick_user_unit_file "${AOS_INDEX_USER_SERVICE:-}" "aos-index-dev.service" "alphaos-index.service")"
   local user_unit="$HOME/.config/systemd/user/$user_service"
   local user_env="${AOS_INDEX_USER_ENV_FILE:-$HOME/.env/aos.env}"
 
@@ -642,13 +642,19 @@ dashboard_http_row() {
 dashboard_unit_row() {
   local label="$1"
   local unit="$2"
+  local scope="${3:-user}"
   if ! have systemctl; then
     msg "  ${label}: systemctl missing"
     return 0
   fi
   local enabled active
-  enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
-  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  if [[ "$scope" == "system" ]]; then
+    enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+    active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  else
+    enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+    active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  fi
   [[ -z "$enabled" ]] && enabled="-"
   [[ -z "$active" ]] && active="-"
   local state="warn"
@@ -670,16 +676,80 @@ dashboard_unit_row() {
   if [[ "$state" == "err" ]]; then
     if [[ "$label" == "Index" && "${DASH_HEALTH_INDEX:-err}" == "ok" ]]; then
       state="warn"
-      msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled}, HTTP reachable)"
+      msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled}, HTTP reachable)"
       return 0
     fi
     if [[ "$label" == "Bridge" && "${DASH_HEALTH_BRIDGE:-err}" == "ok" ]]; then
       state="warn"
-      msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled}, HTTP reachable)"
+      msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled}, HTTP reachable)"
       return 0
     fi
   fi
-  msg "  ${label}: $(aosctl_chip "$state") (${active}/${enabled})"
+  msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled})"
+}
+
+legacy_user_unit_notice() {
+  local unit="$1"
+  local label="$2"
+  if ! have systemctl; then
+    return 0
+  fi
+  if ! systemctl --user show-environment >/dev/null 2>&1; then
+    return 0
+  fi
+  local active
+  active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  if [[ "$active" == "active" ]]; then
+    msg "  ${label}: $(aosctl_chip warn) (${unit} active in user scope)"
+  fi
+}
+
+production_unit_summary() {
+  local unit="$1"
+  local enabled active state
+  if ! have systemctl; then
+    printf "warn|-|-"
+    return 0
+  fi
+  enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  [[ -z "$enabled" ]] && enabled="-"
+  [[ -z "$active" ]] && active="-"
+  state="warn"
+  if [[ "$unit" == *.timer ]]; then
+    if [[ "$enabled" == "not-found" ]]; then
+      state="err"
+    elif [[ "$active" == "active" ]]; then
+      state="ok"
+    fi
+  else
+    if [[ "$active" == "active" ]]; then
+      state="ok"
+    elif [[ "$enabled" == "not-found" || "$active" == "failed" ]]; then
+      state="err"
+    fi
+  fi
+  printf "%s|%s|%s" "$state" "$active" "$enabled"
+}
+
+render_production_units_compact() {
+  local state active enabled
+  msg "=== Production Units (system) ==="
+
+  IFS='|' read -r state active enabled <<<"$(production_unit_summary "aos-index.service")"
+  msg "  Index: $(aosctl_chip "$state") (aos-index.service, $active/$enabled)"
+
+  IFS='|' read -r state active enabled <<<"$(production_unit_summary "aos-bridge.service")"
+  msg "  Bridge: $(aosctl_chip "$state") (aos-bridge.service, $active/$enabled)"
+
+  IFS='|' read -r state active enabled <<<"$(production_unit_summary "aos-router.service")"
+  msg "  Router: $(aosctl_chip "$state") (aos-router.service, $active/$enabled)"
+
+  IFS='|' read -r state active enabled <<<"$(production_unit_summary "aos-hub-backup-daily.timer")"
+  msg "  Daily Timer: $(aosctl_chip "$state") (aos-hub-backup-daily.timer, $active/$enabled)"
+
+  IFS='|' read -r state active enabled <<<"$(production_unit_summary "aos-hub-backup-weekly.timer")"
+  msg "  Weekly Timer: $(aosctl_chip "$state") (aos-hub-backup-weekly.timer, $active/$enabled)"
 }
 
 dashboard_dir_chip() {
@@ -704,31 +774,26 @@ render_dashboard_once() {
   DASH_HEALTH_BRIDGE=err
   dashboard_http_row "Index" "${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
   dashboard_http_row "Bridge" "${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
-  if [[ -n "$ROUTERCTL" ]]; then
-    if "$ROUTERCTL" status >/dev/null 2>&1; then
-      msg "  Router: $(aosctl_chip ok)"
-    else
-      msg "  Router: $(aosctl_chip err)"
-    fi
+  if have systemctl && systemctl -q is-active aos-router.service 2>/dev/null; then
+    msg "  Router: $(aosctl_chip ok)"
   else
-    msg "  Router: $(aosctl_chip warn)"
+    msg "  Router: $(aosctl_chip err)"
   fi
   msg ""
 
-  msg "=== User Units ==="
-  local idx_unit br_unit rt_unit live_timer routine_timer vault_timer
-  idx_unit="$(pick_user_unit_file "${AOS_INDEX_USER_SERVICE:-}" "alphaos-index.service" "aos-index-dev.service")"
-  br_unit="$(pick_user_unit_file "${AOS_BRIDGE_USER_SERVICE:-}" "aos-bridge.service" "alphaos-bridge.service")"
-  rt_unit="$(pick_user_unit_file "${AOS_ROUTER_USER_SERVICE:-}" "aos-router.service" "alphaos-router.service")"
-  live_timer="$(pick_user_unit_file "${AOS_HUB_LIVE_TIMER_UNIT:-}" "aos-hub-live-push.timer" "alphaos-safe-rclone-push.timer")"
-  routine_timer="$(pick_user_unit_file "${AOS_HUB_ROUTINE_TIMER_UNIT:-}" "aos-hub-backup-daily.timer" "aos-hub-daily-routine.timer")"
-  vault_timer="$(pick_user_unit_file "${AOS_VAULT_SYNC_TIMER_UNIT:-}" "alphaos-vault-sync.timer")"
-  dashboard_unit_row "Index" "$idx_unit"
-  dashboard_unit_row "Bridge" "$br_unit"
-  dashboard_unit_row "Router" "$rt_unit"
-  dashboard_unit_row "Hub live timer" "$live_timer"
-  dashboard_unit_row "Hub routine" "$routine_timer"
-  dashboard_unit_row "Vault timer" "$vault_timer"
+  msg "=== Production Units (system) ==="
+  dashboard_unit_row "Index" "aos-index.service" "system"
+  dashboard_unit_row "Bridge" "aos-bridge.service" "system"
+  dashboard_unit_row "Router" "aos-router.service" "system"
+  dashboard_unit_row "Daily Timer" "aos-hub-backup-daily.timer" "system"
+  dashboard_unit_row "Weekly Timer" "aos-hub-backup-weekly.timer" "system"
+  msg ""
+
+  msg "=== Legacy/User Migration Hints ==="
+  legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
+  legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
+  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
+  legacy_user_unit_notice "alphaos-vault-sync.timer" "Legacy Vault Timer"
   msg ""
 
   msg "=== Sync Summary ==="
@@ -794,6 +859,13 @@ run_dashboard() {
 
 run_status() {
   msg "αOS status (no logs)"
+  msg ""
+  render_production_units_compact
+  msg ""
+  msg "Legacy hints:"
+  legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
+  legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
+  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
   msg ""
 
   if [[ -n "$INDEXCTL" ]]; then
@@ -943,16 +1015,24 @@ run_ping() {
 }
 
 run_doctor() {
+  msg "Running production-first health checks..."
+  msg ""
+  render_production_units_compact
+  msg ""
+  msg "Legacy/user migration hints:"
+  legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
+  legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
+  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
+  msg ""
+
   if [[ -n "$AOS_DOCTOR" ]]; then
-    "$AOS_DOCTOR"
+    msg "=== aos-doctor (extended) ==="
+    "$AOS_DOCTOR" || true
     return 0
   fi
 
-  msg "Running basic health checks..."
-  msg ""
-
   if [[ -n "$INDEXCTL" ]]; then
-    msg "=== indexctl ==="
+    msg "=== indexctl (details) ==="
     "$INDEXCTL" status 2>&1 || msg "  ⚠️  Not running"
     msg ""
   else
@@ -960,7 +1040,7 @@ run_doctor() {
   fi
 
   if [[ -n "$ROUTERCTL" ]]; then
-    msg "=== routerctl ==="
+    msg "=== routerctl (details) ==="
     "$ROUTERCTL" status 2>&1 || msg "  ⚠️  Not running"
     msg ""
   else
@@ -968,7 +1048,7 @@ run_doctor() {
   fi
 
   if [[ -n "$BRIDGECTL" ]]; then
-    msg "=== bridgectl ==="
+    msg "=== bridgectl (details) ==="
     "$BRIDGECTL" status 2>&1 || msg "  ⚠️  Not running"
     msg ""
   else
@@ -1106,6 +1186,9 @@ core4_cmd() {
 fire_cmd() {
   local sub="${1:-}"
   shift || true
+  local fire_timer fire_service
+  fire_timer="$(pick_user_unit_file "${AOS_FIREMAP_TIMER_UNIT:-}" "aos-firemap-weekly.timer" "alphaos-firemap-weekly.timer")"
+  fire_service="${fire_timer%.timer}.service"
 
   case "$sub" in
     menu)
@@ -1138,19 +1221,19 @@ fire_cmd() {
       "$FIREMAP_BIN" list
       ;;
     enable)
-      systemctl --user enable --now alphaos-firemap-weekly.timer
+      systemctl --user enable --now "$fire_timer"
       ;;
     disable)
-      systemctl --user disable --now alphaos-firemap-weekly.timer
+      systemctl --user disable --now "$fire_timer"
       ;;
     start)
-      systemctl --user start alphaos-firemap-weekly.timer
+      systemctl --user start "$fire_timer"
       ;;
     stop)
-      systemctl --user stop alphaos-firemap-weekly.timer
+      systemctl --user stop "$fire_timer"
       ;;
     logs)
-      journalctl --user -u alphaos-firemap-weekly.service -n 200 -f
+      journalctl --user -u "$fire_service" -n 200 -f
       ;;
     bot-test)
       [[ -n "$FIREMAP_BOT_PY" ]] || die "python firemap bot not found"

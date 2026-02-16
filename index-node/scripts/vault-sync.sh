@@ -7,8 +7,8 @@ ALLOW_PULL="${VAULT_ALLOW_PULL:-${AOS_ALLOW_PULL:-0}}"
 # Local vault path priority:
 #   1) explicit VAULT_LOCAL
 #   2) shared aos env (AOS_VAULT_DIR / AOS_VAULT_ROOT)
-#   3) legacy default
-LOCAL="${VAULT_LOCAL:-${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}}}"
+#   3) default ~/vault
+LOCAL="${VAULT_LOCAL:-${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/vault}}}"
 REMOTE="${VAULT_REMOTE:-fabian:AlphaOS-Vault}"
 REMOTE_BACKUP="${VAULT_REMOTE_BACKUP:-fabian:AlphaOS-Vault-backups}"
 LOCAL_BACKUP="${VAULT_LOCAL_BACKUP:-$HOME/.local/share/alphaos/vault-backups}"
