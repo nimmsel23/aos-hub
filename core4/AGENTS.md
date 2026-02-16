@@ -10,6 +10,10 @@
 - Frontdoors:
   - Production overview via `aosctl core4 ...`
   - Dev/operator usage via `hubctl core4 ...`
+- API probe helper (Bridge/Index smoke):
+  - `core4ctl probe today`
+  - `core4ctl probe week 2026-W07`
+  - `core4ctl probe all`
 
 ## Coding Rules
 - Reuse shared ctl helpers where applicable (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`, `scripts/lib/codex-subcmd.sh`).

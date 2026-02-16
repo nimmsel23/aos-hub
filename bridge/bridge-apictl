@@ -72,6 +72,224 @@ flush_queue() {
   bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/queue/flush" | format_json
 }
 
+# --- Meta ---
+
+version() {
+  bridge_curl_get "${BRIDGE_BASE_URL%/}/version" | format_json
+}
+
+# --- Core4 ---
+
+core4_today() {
+  bridge_curl_get "${BRIDGE_BASE_URL%/}/bridge/core4/today" | format_json
+}
+
+core4_week() {
+  local week="${1:-}"
+  local url="${BRIDGE_BASE_URL%/}/bridge/core4/week"
+  [[ -n "$week" ]] && url="${url}?week=${week}"
+  bridge_curl_get "$url" | format_json
+}
+
+core4_log() {
+  local domain="${1:-}"
+  local task="${2:-}"
+  if [[ -z "$domain" || -z "$task" ]]; then
+    die "Usage: bridgectl core4-log <domain> <task> [--undo]"
+  fi
+  local done=true
+  if [[ "${3:-}" == "--undo" ]]; then
+    done=false
+  fi
+  local payload
+  payload=$(printf '{"domain":"%s","task":"%s","done":%s}' "$domain" "$task" "$done")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/core4/log" "$payload" | format_json
+}
+
+core4_pull() {
+  ui_info "Pulling Core4 from cloud..."
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/core4/pull" | format_json
+}
+
+# --- Tent ---
+
+tent_fetch() {
+  local week="${1:-}"
+  local url="${BRIDGE_BASE_URL%/}/bridge/tent/fetch"
+  [[ -n "$week" ]] && url="${url}?week=${week}"
+  bridge_curl_get "$url" | format_json
+}
+
+tent_sync() {
+  local week="${1:-}"
+  local url="${BRIDGE_BASE_URL%/}/bridge/tent/sync"
+  [[ -n "$week" ]] && url="${url}?week=${week}"
+  bridge_curl_post "$url" | format_json
+}
+
+tent_summary() {
+  local markdown="${1:-}"
+  local week="${2:-}"
+  if [[ -z "$markdown" ]]; then
+    die "Usage: bridgectl tent-summary <markdown> [YYYY-Wxx]"
+  fi
+  local payload
+  # Use python for safe JSON encoding of markdown content
+  payload=$(python3 -c "import json,sys; print(json.dumps({'markdown':sys.argv[1],'week':sys.argv[2] or None}))" "$markdown" "${week:-}")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/tent/summary" "$payload" | format_json
+}
+
+# --- Fire ---
+
+fire_daily() {
+  local send=0 scope="daily" days=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --send) send=1; shift ;;
+      --scope) scope="${2:-daily}"; shift 2 ;;
+      --days) days="${2:-}"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  local url="${BRIDGE_BASE_URL%/}/bridge/fire/daily?send=${send}&scope=${scope}"
+  [[ -n "$days" ]] && url="${url}&days=${days}"
+  bridge_curl_post "$url" | format_json
+}
+
+fire_review() {
+  bridge_curl_get "${BRIDGE_BASE_URL%/}/bridge/daily-review-data" | format_json
+}
+
+fire_trigger() {
+  ui_info "Triggering weekly Fire Map..."
+  bridge_curl_post "${BRIDGE_BASE_URL%/}/bridge/trigger/weekly-firemap" | format_json
+}
+
+# --- Tasks ---
+
+task_add() {
+  local desc="" tags="" project="" due="" priority=""
+  desc="${1:-}"; shift || true
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tag) tags="${tags:+$tags,}\"${2}\""; shift 2 ;;
+      --project) project="$2"; shift 2 ;;
+      --due) due="$2"; shift 2 ;;
+      --priority) priority="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ -z "$desc" ]]; then
+    die "Usage: bridgectl task-add <description> [--tag TAG] [--project PRJ] [--due DATE] [--priority H|M|L]"
+  fi
+  local payload
+  payload=$(python3 -c "
+import json,sys
+t={'description':sys.argv[1]}
+if sys.argv[2]: t['tags']=sys.argv[2].split(',')
+if sys.argv[3]: t['project']=sys.argv[3]
+if sys.argv[4]: t['due']=sys.argv[4]
+if sys.argv[5]: t['priority']=sys.argv[5]
+print(json.dumps({'task':t}))
+" "$desc" "${tags//\"/}" "$project" "$due" "$priority")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/task/execute" "$payload" | format_json
+}
+
+task_modify() {
+  local uuid="${1:-}"; shift || true
+  if [[ -z "$uuid" ]]; then
+    die "Usage: bridgectl task-modify <uuid> [--tag-add TAG] [--tag-rm TAG] [--project PRJ] [--due DATE] [--priority H|M|L]"
+  fi
+  local tags_add="" tags_rm="" project="" due="" priority=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tag-add) tags_add="${tags_add:+$tags_add,}${2}"; shift 2 ;;
+      --tag-rm) tags_rm="${tags_rm:+$tags_rm,}${2}"; shift 2 ;;
+      --project) project="$2"; shift 2 ;;
+      --due) due="$2"; shift 2 ;;
+      --priority) priority="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  local payload
+  payload=$(python3 -c "
+import json,sys
+u={}
+if sys.argv[1]: u['tags_add']=sys.argv[1].split(',')
+if sys.argv[2]: u['tags_remove']=sys.argv[2].split(',')
+if sys.argv[3]: u['project']=sys.argv[3]
+if sys.argv[4]: u['due']=sys.argv[4]
+if sys.argv[5]: u['priority']=sys.argv[5]
+print(json.dumps({'uuid':sys.argv[6],'updates':u}))
+" "$tags_add" "$tags_rm" "$project" "$due" "$priority" "$uuid")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/task/modify" "$payload" | format_json
+}
+
+task_op() {
+  local payload="${1:-}"
+  if [[ -z "$payload" ]]; then
+    die "Usage: bridgectl task-op '{\"chat_id\":\"...\", ...}'"
+  fi
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/task/operation" "$payload" | format_json
+}
+
+# --- Warstack ---
+
+warstack_draft() {
+  local payload="${1:-}"
+  if [[ -z "$payload" ]]; then
+    die "Usage: bridgectl warstack-draft '{\"user_id\":...,\"warstack\":{...}}'"
+  fi
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/warstack/draft" "$payload" | format_json
+}
+
+# --- Telegram ---
+
+tele_send() {
+  local text="${1:-}"
+  local chat_id="${2:-${AOS_GAS_CHAT_ID:-}}"
+  if [[ -z "$text" ]]; then
+    die "Usage: bridgectl tele-send <text> [--chat-id ID]"
+  fi
+  if [[ "$text" == "--chat-id" ]]; then
+    die "Usage: bridgectl tele-send <text> [--chat-id ID]"
+  fi
+  # Handle --chat-id flag anywhere in args
+  shift || true
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --chat-id) chat_id="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  local payload
+  payload=$(python3 -c "import json,sys; print(json.dumps({'text':sys.argv[1],'chat_id':sys.argv[2]}))" "$text" "$chat_id")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/bridge/telegram/send" "$payload" | format_json
+}
+
+# --- RPC ---
+
+rpc() {
+  local action="${1:-}"
+  if [[ -z "$action" ]]; then
+    die "Usage: bridgectl rpc <action> [JSON-args]"
+  fi
+  shift
+  local args="${*:-}"
+  local payload
+  payload=$(python3 -c "
+import json, sys
+action = sys.argv[1]
+raw = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else '{}'
+try:
+    args = json.loads(raw)
+except Exception:
+    args = {}
+print(json.dumps({'action': action, 'args': args}))
+" "$action" "$args")
+  bridge_curl_post_json "${BRIDGE_BASE_URL%/}/rpc" "$payload" | format_json
+}
+
 sync_push() {
   local suffix=""
   if [[ "${1:-}" == "--dry-run" || "${1:-}" == "--dry" ]]; then
@@ -102,16 +320,51 @@ bridge-apictl
 
 Usage: bridge-apictl <command>
 
-Commands:
-  health
-  debug
-  doctor
-  test-rpc
-  flush
-  sync-push [--dry-run]
-  sync-pull [--dry-run]
-  sync-status
-  sync-abort
+Health & Info:
+  health                          Bridge health check
+  debug                           Debug info + RPC test
+  doctor                          Active probes (/bridge/doctor)
+  version                         Bridge version & deployment info
+
+Core4:
+  core4-today                     Today's Core4 totals & habits
+  core4-week [YYYY-Wxx]           Weekly Core4 data (default: current)
+  core4-log <domain> <task> [--undo]  Log Core4 subtask completion
+  core4-pull                      Pull Core4 data from cloud
+
+Tent:
+  tent-fetch [YYYY-Wxx]           Fetch Tent report (default: current week)
+  tent-sync [YYYY-Wxx]            Sync Tent data to GAS
+  tent-summary <md> [YYYY-Wxx]    Save weekly Tent summary
+
+Fire:
+  fire-daily [--send] [--scope daily|weekly] [--days N]
+  fire-review                     Daily review data (tasks, sessions)
+  fire-trigger                    Trigger weekly Fire Map generation
+
+Tasks:
+  task-add <desc> [--tag T] [--project P] [--due D] [--priority H|M|L]
+  task-modify <uuid> [--tag-add T] [--tag-rm T] [--project P] [--due D]
+  task-op <JSON>                  Forward raw task operation to GAS
+
+Warstack:
+  warstack-draft <JSON>           Save/clear War Stack draft
+
+Telegram:
+  tele-send <text> [--chat-id ID] Send message via GAS webhook
+
+RPC:
+  test-rpc                        Test RPC with health action
+  rpc <action> [JSON-args]        Send arbitrary RPC to GAS Tent
+
+Sync:
+  sync-push [--dry-run]           Push vault to cloud
+  sync-pull [--dry-run]           Pull vault from cloud
+  sync-status                     Current sync status
+  sync-abort                      Abort running sync
+
+Queue:
+  flush                           Flush failed operation queue
 
 Env:
   AOS_ENV_FILE (default: ~/.env/aos.env)
@@ -128,8 +381,33 @@ case "$cmd" in
   health) health ;;
   debug) debug ;;
   doctor) doctor ;;
+  version) version ;;
   test-rpc) test_rpc ;;
   flush) flush_queue ;;
+
+  core4-today) core4_today ;;
+  core4-week) core4_week "${1:-}" ;;
+  core4-log) core4_log "${1:-}" "${2:-}" "${3:-}" ;;
+  core4-pull) core4_pull ;;
+
+  tent-fetch) tent_fetch "${1:-}" ;;
+  tent-sync) tent_sync "${1:-}" ;;
+  tent-summary) tent_summary "${1:-}" "${2:-}" ;;
+
+  fire-daily) fire_daily "$@" ;;
+  fire-review) fire_review ;;
+  fire-trigger) fire_trigger ;;
+
+  task-add) task_add "$@" ;;
+  task-modify) task_modify "$@" ;;
+  task-op) task_op "${1:-}" ;;
+
+  warstack-draft) warstack_draft "${1:-}" ;;
+
+  tele-send) tele_send "$@" ;;
+
+  rpc) rpc "$@" ;;
+
   sync-push) sync_push "${1:-}" ;;
   sync-pull) sync_pull "${1:-}" ;;
   sync-status) sync_status ;;

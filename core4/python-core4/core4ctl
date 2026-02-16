@@ -5,6 +5,7 @@ set -euo pipefail
 # Keep this file small; real logic lives in:
 #   - core4-trackctl  (tracker + taskwarrior wrappers)
 #   - core4-syncctl   (rclone/vault sync)
+#   - core4-apictl    (bridge/index endpoint probes)
 #   - core4-servicectl (systemd mount/timers)
 #   - core4-clinctl   (install/doctor)
 #   - core4-menuctl   (interactive menu)
@@ -13,6 +14,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 trackctl() { exec "$APP_DIR/core4-trackctl" "$@"; }
 syncctl() { exec "$APP_DIR/core4-syncctl" "$@"; }
+apictl() { exec "$APP_DIR/core4-apictl" "$@"; }
 servicectl() { exec "$APP_DIR/core4-servicectl" "$@"; }
 clinctl() { exec "$APP_DIR/core4-clinctl" "$@"; }
 menuctl() { exec "$APP_DIR/core4-menuctl" "$@"; }
@@ -46,6 +48,7 @@ Sync:
   core4ctl sync        # vaultctl sync (whole vault)
   core4ctl pull-core4  # pull .core4/** from Drive + rebuild
   core4ctl sync-core4  # push .core4/** to Drive
+  core4ctl probe [all|today|week [YYYY-Www]]
 
 Systemd:
   core4ctl mount-status|mount-enable|mount-disable|mount-restart|mount-logs
@@ -78,6 +81,10 @@ case "$cmd" in
 
   sync|sync-core4|push|push-core4|pull|pull-core4)
     syncctl "$cmd" "$@"
+    ;;
+
+  probe)
+    apictl "$@"
     ;;
 
   mount-status|mount-enable|mount-disable|mount-restart|mount-logs|install-timers)

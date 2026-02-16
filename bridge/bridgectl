@@ -175,7 +175,12 @@ menu() {
   action="$(choose \
     "service status" "service logs" "service restart" "service enable" "service env" \
     "systemd diagnose" "systemd fix" \
-    "api health" "api debug" "api doctor" "api test-rpc" "api flush" \
+    "api health" "api debug" "api version" "api doctor" "api test-rpc" "api flush" \
+    "core4 today" "core4 week" "core4 pull" \
+    "tent fetch" "tent sync" \
+    "fire daily" "fire review" "fire trigger" \
+    "rpc health" \
+    "tele send" \
     "api sync-status" "api sync-pull" "api sync-push" "api sync-pull (dry-run)" "api sync-push (dry-run)" "api sync-abort" \
     "syncctl menu" "syncctl status" "syncctl sync" "syncctl pull" \
     "gas systemstatus" \
@@ -195,9 +200,26 @@ menu() {
 
     "api health") apictl health ;;
     "api debug") apictl debug ;;
+    "api version") apictl version ;;
     "api doctor") apictl doctor ;;
     "api test-rpc") apictl test-rpc ;;
     "api flush") apictl flush ;;
+
+    "core4 today") apictl core4-today ;;
+    "core4 week") apictl core4-week ;;
+    "core4 pull") apictl core4-pull ;;
+
+    "tent fetch") apictl tent-fetch ;;
+    "tent sync") apictl tent-sync ;;
+
+    "fire daily") apictl fire-daily ;;
+    "fire review") apictl fire-review ;;
+    "fire trigger") apictl fire-trigger ;;
+
+    "rpc health") apictl rpc health ;;
+
+    "tele send") apictl tele-send "bridgectl menu test" ;;
+
     "api sync-status") apictl sync-status ;;
     "api sync-pull") apictl sync-pull ;;
     "api sync-push") apictl sync-push ;;
@@ -230,25 +252,61 @@ usage() {
 Usage: bridgectl <command>
 
 Core:
-  bridgectl menu
-  bridgectl doctor
-  bridgectl diagnose
-  bridgectl fix [--yes]
+  menu                            Interactive menu
+  doctor                          Full system diagnosis
+  diagnose                        Systemd unit diagnosis
+  fix [--yes]                     Fix systemd unit + restart
 
 Service:
-  bridgectl status|enable|start|stop|restart|logs|env
+  status|enable|start|stop|restart|logs|env
 
-API:
-  bridgectl health|debug|doctor|test-rpc|flush
-  bridgectl sync-status|sync-pull|sync-push|sync-abort
+Health & Info:
+  health                          Bridge health check
+  debug                           Debug info + RPC test
+  version                         Version & deployment info
+
+Core4:
+  core4-today                     Today's totals & habits
+  core4-week [YYYY-Wxx]           Weekly data
+  core4-log <domain> <task> [--undo]
+  core4-pull                      Pull from cloud
+
+Tent:
+  tent-fetch [YYYY-Wxx]           Fetch Tent report
+  tent-sync [YYYY-Wxx]            Sync to GAS
+  tent-summary <md> [YYYY-Wxx]    Save weekly summary
+
+Fire:
+  fire-daily [--send] [--scope daily|weekly] [--days N]
+  fire-review                     Daily review data
+  fire-trigger                    Trigger weekly Fire Map
+
+Tasks:
+  task-add <desc> [--tag T] [--project P] [--due D] [--priority H|M|L]
+  task-modify <uuid> [--tag-add T] [--tag-rm T] [--project P] [--due D]
+  task-op <JSON>                  Forward raw op to GAS
+
+Warstack:
+  warstack-draft <JSON>           Save/clear draft
+
+Telegram:
+  tele-send <text> [--chat-id ID]
+
+RPC:
+  test-rpc                        Test RPC endpoint
+  rpc <action> [JSON-args]        Arbitrary GAS Tent RPC
+
+Sync:
+  sync-push|sync-pull [--dry-run]
+  sync-status|sync-abort
 
 Tailscale:
-  bridgectl tailscale|serve|funnel
+  tailscale|serve|funnel
 
 Other:
-  bridgectl syncctl <args...>
-  bridgectl heartbeat <cmd>
-  bridgectl systemstatus
+  syncctl <args...>
+  heartbeat <cmd>
+  systemstatus
 
 Env:
   AOS_ENV_FILE (default: ~/.env/aos.env)
@@ -267,7 +325,13 @@ case "$cmd" in
     servicectl "$cmd" "$@"
     ;;
 
-  health|debug|test-rpc|flush|sync-status|sync-pull|sync-push|sync-abort)
+  health|debug|version|test-rpc|flush|rpc|\
+  core4-today|core4-week|core4-log|core4-pull|\
+  tent-fetch|tent-sync|tent-summary|\
+  fire-daily|fire-review|fire-trigger|\
+  task-add|task-modify|task-op|\
+  warstack-draft|tele-send|\
+  sync-status|sync-pull|sync-push|sync-abort)
     apictl "$cmd" "$@"
     ;;
   doctor-api|api-doctor) apictl doctor ;;
