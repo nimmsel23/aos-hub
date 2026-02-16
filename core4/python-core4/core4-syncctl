@@ -36,6 +36,13 @@ pull_core4() {
 
   # Rebuild derived artifacts locally from all available sources.
   "$APP_DIR/core4-trackctl" build >/dev/null 2>&1 || true
+
+  # Desktop notification
+  if command -v notify-send >/dev/null 2>&1; then
+    local today_events
+    today_events=$(find "$CORE4_LOCAL_DIR/.core4/events/$(date +%Y-%m-%d)" -type f 2>/dev/null | wc -l)
+    notify-send -u low "Core4" "Synced from Drive (${today_events} events today)"
+  fi
 }
 
 usage() {
