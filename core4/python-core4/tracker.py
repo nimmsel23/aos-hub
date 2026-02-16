@@ -131,8 +131,9 @@ def core4_dirs() -> list[Path]:
     Return Core4 directories to consider, in priority order (first = primary write target).
 
     Defaults reflect the "local + gdrive mount" setup:
-      - `AlphaOS-Vault/Core4` (local, rclone-push)
-      - `AlphaOS-Vault/Alpha_Core4` (gdrive mount)
+      - `AOS_CORE4_LOCAL_DIR` (if set)
+      - `AOS_CORE4_MOUNT_DIR` (if set)
+      - fallback: `AlphaOS-Vault/Core4` + `AlphaOS-Vault/Alpha_Core4`
 
     Override with:
       - `AOS_CORE4_DIR` (single dir)
@@ -148,6 +149,19 @@ def core4_dirs() -> list[Path]:
     single = os.getenv("AOS_CORE4_DIR", "").strip()
     if single:
         return [Path(single).expanduser()]
+
+    local_dir = os.getenv("AOS_CORE4_LOCAL_DIR", "").strip()
+    mount_dir = os.getenv("AOS_CORE4_MOUNT_DIR", "").strip()
+    if local_dir or mount_dir:
+        merged: list[Path] = []
+        for raw in (local_dir, mount_dir):
+            if not raw:
+                continue
+            p = Path(raw).expanduser()
+            if p not in merged:
+                merged.append(p)
+        if merged:
+            return merged
 
     return [vault_dir / "Core4", vault_dir / "Alpha_Core4"]
 

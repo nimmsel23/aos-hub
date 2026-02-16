@@ -15,16 +15,17 @@ status() {
   msg ""
   msg "- core4: $CORE4_TRACKER"
   msg "- vault: ${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+  msg "- local core4: $CORE4_LOCAL_DIR"
   msg ""
   "$CORE4_TRACKER" -d --quiet || true
   "$CORE4_TRACKER" -w --quiet || true
   msg ""
-  if [[ -d "$HOME/AlphaOS-Vault/Core4/.core4/events" ]]; then
+  if [[ -d "$CORE4_LOCAL_DIR/.core4/events" ]]; then
     msg "events (local):"
-    find "$HOME/AlphaOS-Vault/Core4/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
+    find "$CORE4_LOCAL_DIR/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
   fi
-  if [[ -f "$HOME/AlphaOS-Vault/Core4/core4_daily.csv" ]]; then
-    msg "daily csv: $HOME/AlphaOS-Vault/Core4/core4_daily.csv"
+  if [[ -f "$CORE4_LOCAL_DIR/core4_daily.csv" ]]; then
+    msg "daily csv: $CORE4_LOCAL_DIR/core4_daily.csv"
   fi
 }
 
