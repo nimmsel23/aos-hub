@@ -3,52 +3,35 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
-GAME_PY="$SCRIPT_DIR/game.py"
 
 source "$ROOT_DIR/scripts/ctl-lib.sh"       2>/dev/null || true
 source "$ROOT_DIR/scripts/lib/aos-env.sh"   2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
 
-py() { python3 "$GAME_PY" "$@"; }
-
 usage() {
   cat <<EOF
-gamectl — Game Map CLI  (Frame → Freedom → Focus → Fire)
+gamectl — Game Pillar CLI  (Frame → Freedom → Focus → Fire)
 
 Usage:
-  gamectl new   <map> [DOMAIN]       Neue Map anlegen  (interaktiv)
-  gamectl show  <map> [DOMAIN]       Map anzeigen
-  gamectl list  <map>                Alle Maps eines Typs auflisten
-  gamectl edit  <map> [DOMAIN]       Map im Editor öffnen
+  gamectl <map> <cmd> [DOMAIN] [options]
 
-Maps:   frame | freedom | focus | fire
-Domain: BODY | BEING | BALANCE | BUSINESS  (optional — alle wenn weggelassen)
+Maps & Commands:
+  gamectl frame   new|show|list|edit  [DOMAIN]
+  gamectl freedom new|show|list|edit  [DOMAIN]
+  gamectl focus   new|show|list|edit  [DOMAIN]
+  gamectl fire    new|show|list|edit  [DOMAIN]
 
-Beispiele:
-  gamectl new  frame  BODY
-  gamectl new  fire
-  gamectl show frame  BUSINESS
-  gamectl list fire
+Delegates to:
+  frame/framectl  |  freedom/freedomctl  |  focus/focusctl  |  fire/firectl
 EOF
 }
 
-_map_arg() {
-  local map="${1:-}"
-  case "$map" in
-    frame|freedom|focus|fire) echo "$map" ;;
-    *) echo "Unbekannter Map-Typ: '$map' (frame|freedom|focus|fire)" >&2; exit 1 ;;
-  esac
-}
-
-cmd_new()  { py new  "$(_map_arg "${1:-}")" ${2:+--domain "$2"}; }
-cmd_show() { py show "$(_map_arg "${1:-}")" ${2:+--domain "$2"}; }
-cmd_list() { py list "$(_map_arg "${1:-}")"; }
-cmd_edit() { py edit "$(_map_arg "${1:-}")" ${2:+--domain "$2"}; }
+MAP="$SCRIPT_DIR/${1:-}"
 
 case "${1:-}" in
-  new)   shift; cmd_new  "${1:-}" "${2:-}" ;;
-  show)  shift; cmd_show "${1:-}" "${2:-}" ;;
-  list)  shift; cmd_list "${1:-}" ;;
-  edit)  shift; cmd_edit "${1:-}" "${2:-}" ;;
+  frame)    shift; exec "$SCRIPT_DIR/frame/framectl"     "$@" ;;
+  freedom)  shift; exec "$SCRIPT_DIR/freedom/freedomctl" "$@" ;;
+  focus)    shift; exec "$SCRIPT_DIR/focus/focusctl"     "$@" ;;
+  fire)     shift; exec "$SCRIPT_DIR/fire/firectl"       "$@" ;;
   help|--help|-h) usage ;;
   *) usage ;;
 esac
