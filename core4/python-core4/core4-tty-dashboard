@@ -1,73 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Core4 TTY Dashboard - Live display for TTY3
+# Core4 TTY Dashboard — live display, auto-refresh
+
+BRIDGE_URL="${AOS_BRIDGE_URL:-http://localhost:8080}"
+REFRESH="${CORE4_DASHBOARD_REFRESH:-10}"
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
+
+draw() {
+  local response total week_label date_key week_total bars=40 filled
+
+  clear
+  echo "════════════════════════════════════════════════════════════════"
+  printf "  CORE4  %s\n" "$(date +'%Y-%m-%d %H:%M:%S')"
+  echo "════════════════════════════════════════════════════════════════"
+  echo ""
+
+  if response=$(curl -sf --connect-timeout 2 --max-time 4 \
+      "${BRIDGE_URL}/bridge/core4/today" 2>/dev/null); then
+
+    total=$(printf '%s' "$response" | jq -r '.total // 0')
+    week_label=$(printf '%s' "$response" | jq -r '.week // "?"')
+    date_key=$(printf '%s' "$response"  | jq -r '.date // "?"')
+
+    # Week total direct from event ledger (tracker is truth)
+    week_total=$(python3 "$TRACKER" -w --quiet 2>/dev/null \
+      | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "?")
+
+    printf "  Day %-12s  %s/4    Week %s:  %s/28\n" \
+      "$date_key" "$total" "$week_label" "$week_total"
+    echo ""
+
+    # Progress bar
+    filled=$(awk "BEGIN {printf \"%.0f\", ($total / 4.0) * $bars}")
+    printf "  ["
+    for ((i=0; i<bars; i++)); do
+      if (( i < filled )); then printf "█"; else printf "░"; fi
+    done
+    LC_NUMERIC=C printf "]  %.1f/4.0\n" "$total"
+    echo ""
+
+    # Habits by domain
+    printf '%s' "$response" | jq -r '
+      .habits as $h |
+      def mark(key): if ($h[key] // false) then "✓" else "·" end;
+      "  BODY      \(mark("fitness")) Fitness     \(mark("fuel")) Fuel",
+      "  BEING     \(mark("meditation")) Meditation  \(mark("memoirs")) Memoirs",
+      "  BALANCE   \(mark("partner")) Partner     \(mark("posterity")) Posterity",
+      "  BUSINESS  \(mark("discover")) Discover    \(mark("declare")) Declare"
+    '
+
+  else
+    echo "  ⚠  Bridge offline — reading from event ledger"
+    echo ""
+    python3 "$TRACKER" -d 2>/dev/null || true
+    echo ""
+    python3 "$TRACKER" -w 2>/dev/null || true
+  fi
+
+  echo ""
+  echo "────────────────────────────────────────────────────────────────"
+  printf "  Refresh every %ss  |  q = quit\n" "$REFRESH"
+}
 
 while true; do
-  clear
-
-  # Header
-  echo "════════════════════════════════════════════════════════════════"
-  echo "  CORE4 DASHBOARD - $(date +'%Y-%m-%d %H:%M:%S')"
-  echo "════════════════════════════════════════════════════════════════"
-  echo ""
-
-  # Fetch current status from bridge
-  if ! response=$(curl -s --connect-timeout 2 --max-time 5 http://localhost:8080/bridge/core4/today 2>/dev/null); then
-    echo "⚠️  Bridge offline or unreachable"
-    sleep 10
-    continue
-  fi
-
-  # Parse response
-  total=$(echo "$response" | jq -r '.total // 0' 2>/dev/null || echo "0")
-  week=$(echo "$response" | jq -r '.week // "N/A"' 2>/dev/null || echo "N/A")
-
-  # Display total with visual bar
-  echo "📊 TODAY'S SCORE: ${total} points (Week ${week})"
-  echo ""
-
-  # Progress bar (out of 4.0 max)
-  local bars filled
-  bars=40
-  filled=$(awk "BEGIN {printf \"%.0f\", ($total / 4.0) * $bars}")
-  printf "["
-  for ((i=0; i<bars; i++)); do
-    if ((i < filled)); then
-      printf "█"
-    else
-      printf "░"
-    fi
-  done
-  printf "] %.1f/4.0\n" "$total"
-  echo ""
-
-  # Habits breakdown
-  echo "COMPLETED HABITS:"
-  echo "────────────────────────────────────────────────────────────────"
-
-  habits=$(echo "$response" | jq -r '.habits | keys[]' 2>/dev/null || true)
-
-  if [[ -z "$habits" ]]; then
-    echo "  (none yet)"
-  else
-    while IFS= read -r habit; do
-      case "$habit" in
-        fuel) echo "  ✓ 💪 Fuel" ;;
-        fitness|train) echo "  ✓ 🏋️  Fitness" ;;
-        meditation) echo "  ✓ 🧘 Meditation" ;;
-        memoirs|posterity) echo "  ✓ 📝 Memoirs" ;;
-        partner) echo "  ✓ 💑 Partner" ;;
-        discover) echo "  ✓ 🔍 Discover" ;;
-        declare) echo "  ✓ 📢 Declare" ;;
-        *) echo "  ✓ ✨ $habit" ;;
-      esac
-    done <<< "$habits"
-  fi
-
-  echo ""
-  echo "────────────────────────────────────────────────────────────────"
-  echo "Auto-refresh every 10s | Ctrl+C to exit"
-
-  sleep 10
+  draw
+  key=""
+  read -r -s -n1 -t "$REFRESH" key 2>/dev/null || true
+  [[ "$key" == "q" || "$key" == "Q" ]] && { printf "\n"; exit 0; }
 done
