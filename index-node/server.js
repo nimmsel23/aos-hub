@@ -3705,7 +3705,39 @@ app.post("/api/generals/report", (req, res) => {
     const filename = `generals_tent_${week}.md`;
     const filepath = path.join(dir, filename);
     fs.writeFileSync(filepath, markdown + "\n", "utf8");
+    // Non-blocking push to bridge for GDrive sync (Alpha_Tent folder).
+    if (BRIDGE_URL) {
+      fetch(`${BRIDGE_URL}/bridge/tent/summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ week, markdown, name: filename }),
+      }).catch(() => {});
+    }
     return res.json({ ok: true, week, path: filepath });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// /api/tent/week - Core4 + status aggregator for tent Component #1.
+// Calls the local Core4 summary (no bridge needed; data is on-disk).
+app.get("/api/tent/week", (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const dateKey = resolveCore4DateKey(req.query?.date || today, true);
+    const core4 = core4GetWeekSummaryForDate(dateKey);
+    const week = (core4.ok && core4.week) ? core4.week : sanitizeWeek(req.query?.week);
+    const totals = core4.ok ? (core4.totals || {}) : {};
+    return res.json({
+      ok: true,
+      week,
+      core4: {
+        total: totals.week_total ?? 0,
+        max: 28,
+        by_domain: totals.by_domain ?? {},
+        by_day: totals.by_day ?? {},
+      },
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

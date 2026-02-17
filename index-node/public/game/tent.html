@@ -594,7 +594,7 @@
             <div class="scorebox">
               <div class="row">
                 <div class="label">The Core</div>
-                <div class="hint">__/28 (daily)</div>
+                <div class="hint" id="coreHint">__/28 (daily)</div>
               </div>
               <div class="scoreinputs">
                 <label>Score
@@ -606,7 +606,7 @@
               </div>
               <div class="scoreline">
                 <div class="big" id="coreDisplay">-- / 28</div>
-                <div class="tag">Return & Report</div>
+                <div class="tag" id="coreTag">Return & Report</div>
               </div>
             </div>
 
@@ -1012,6 +1012,35 @@
     }
   }
 
+  async function fetchCore4Score() {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`/api/tent/week?date=${today}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.ok || !data.core4) return;
+
+      const score = data.core4.total;
+      const max = data.core4.max;
+      const byDomain = data.core4.by_domain || {};
+
+      // Auto-fill score if user hasn't entered anything
+      const el = document.getElementById("coreScore");
+      if (el && !el.dataset.manuallySet) {
+        el.value = score;
+        const tag = document.getElementById("coreTag");
+        if (tag) tag.textContent = "auto-loaded";
+        const hint = document.getElementById("coreHint");
+        if (hint) {
+          const parts = Object.entries(byDomain)
+            .map(([d, v]) => `${d.slice(0,2).toUpperCase()}:${v}`)
+            .join(" ");
+          hint.textContent = `${score}/${max} · ${parts}`;
+        }
+      }
+      updateScoreDisplays();
+    } catch (_) {}
+  }
+
   async function loadAll() {
     await fetchCentres();
     setLinks();
@@ -1020,7 +1049,10 @@
     document.getElementById("tentWeek").textContent = isoWeekString();
     setUpdatedStamp();
 
-    // Load new Tent Intelligence
+    // Auto-fetch Core4 score from local API
+    fetchCore4Score();
+
+    // Load Tent Intelligence
     loadTentIntelligence();
 
     restoreLocal();
