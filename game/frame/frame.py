@@ -1,93 +1,101 @@
 #!/usr/bin/env python3
 """
 Frame Map Engine – Alpha OS
-Primary storage: DOMAIN_frame.yaml
-Node display:    DOMAIN_frame.md  (auto-generated from YAML)
+YAML = current state. MD = history export on demand.
 
 Usage:
     frame.py new   [--domain BODY]
-    frame.py show  [--domain BODY]
+    frame.py show  [--week 2026-W08]
     frame.py list
+    frame.py edit  [--domain BODY]
+    frame.py export [--week 2026-W08]
 """
 
-import sys
-import argparse
-from datetime import date
+import os, sys, argparse, subprocess
 from pathlib import Path
 
 LIB = Path(__file__).parent.parent.parent / "lib"
 sys.path.insert(0, str(LIB))
 
 from domains import DOMAIN_LIST, DOMAINS
-from vault import write_frame_yaml, read_frame_yaml, list_frame_yamls
-from maps import FRAME_QUESTIONS
+from vault import (write_yaml, read_yaml, read_latest_yaml, list_yamls,
+                   update_domain_yaml, current_week, current_yaml_path)
+from maps import FRAME_QUESTIONS, display_frame, export_md
 
 DOMAIN_CHOICES = DOMAIN_LIST + [d.lower() for d in DOMAIN_LIST]
 
 
 def prompt_domain(domain: str) -> dict:
     info = DOMAINS[domain]
-    print(f"\n{'='*44}")
-    print(f"  {info['emoji']}  {domain}  –  FRAME MAP")
-    print(f"{'='*44}")
+    print(f"\n  {info['emoji']}  {domain}")
+    print(f"  {'─'*38}")
     answers = {}
-    for q, hint in FRAME_QUESTIONS:
-        print(f"\n{q}")
+    for key, label, hint in FRAME_QUESTIONS:
+        print(f"\n  {label}")
         print(f"  ({hint})")
-        answers[q] = input("  > ").strip() or "(—)"
+        answers[key] = input("  > ").strip() or "(—)"
     return answers
 
 
-def save_frame(domain: str, answers: dict) -> Path:
-    """Save frame as YAML (primary + only storage)."""
-    today = date.today().isoformat()
-    data = {"domain": domain, "date": today, "answers": answers}
-    return write_frame_yaml(domain, data)
-
-
 def cmd_new(domain: str | None):
+    week = current_week()
     domains = [domain.upper()] if domain else DOMAIN_LIST
+    print(f"\n{'='*44}")
+    print(f"  FRAME MAP  –  {week}")
+    print(f"{'='*44}")
     for d in domains:
-        answers = prompt_domain(d)
-        yaml_p = save_frame(d, answers)
-        print(f"\n  ✔ {d}  →  {yaml_p.name}")
-    print(f"\nFrame Map abgeschlossen. {len(domains)} Domain(s).")
+        data = prompt_domain(d)
+        path = update_domain_yaml("frame", d, data)
+        print(f"\n  ✔ {d} → {path.name}")
+    print()
 
 
-def cmd_show(domain: str | None):
-    domains = [domain.upper()] if domain else DOMAIN_LIST
-    for d in domains:
-        data = read_frame_yaml(d)
-        if data:
-            print(f"\n{'─'*44}")
-            print(f"  {DOMAINS[d]['emoji']}  {d}  –  {data.get('date', '?')}")
-            for q, a in (data.get("answers") or {}).items():
-                print(f"\n## {q}\n  {a}")
-        else:
-            print(f"\n  {d}: kein Frame Map. → framectl new {d}")
+def cmd_show(week: str | None):
+    if week:
+        data = read_yaml("frame", week)
+        if not data:
+            print(f"  Kein Frame für {week}.")
+            return
+    else:
+        result = read_latest_yaml("frame")
+        if not result:
+            print("  Kein Frame vorhanden. → framectl new")
+            return
+        _, data = result
+    display_frame(data)
 
 
 def cmd_list():
-    files = list_frame_yamls()
+    files = list_yamls("frame")
     if not files:
         print("  Keine Frame Maps vorhanden.")
         return
+    from datetime import date
     for f in files:
-        domain = f.stem.replace("_frame", "")
+        period = f.stem[len("frame_"):]
         mtime = date.fromtimestamp(f.stat().st_mtime).isoformat()
-        print(f"  {domain:<12} {mtime}  {f.name}")
+        print(f"  {period:<14} {mtime}  {f.name}")
 
 
 def cmd_edit(domain: str | None):
-    import os, subprocess
-    from vault import yaml_path
-    domains = [domain.upper()] if domain else DOMAIN_LIST
-    for d in domains:
-        p = yaml_path(d)
-        if not p.exists():
-            print(f"  {d}: kein Frame Map. → framectl new {d}")
-            continue
-        subprocess.run([os.environ.get("EDITOR", "nano"), str(p)])
+    path = current_yaml_path("frame")
+    if not path.exists():
+        print(f"  Kein aktuelles Frame. → framectl new")
+        return
+    subprocess.run([os.environ.get("EDITOR", "nano"), str(path)])
+
+
+def cmd_export(week: str | None):
+    from vault import yaml_path, MAP_DIRS
+    data = read_yaml("frame", week) if week else (read_latest_yaml("frame") or (None, None))[1]
+    if not data:
+        print("  Kein Frame vorhanden.")
+        return
+    md = export_md("frame", data)
+    period = data.get("period", week or "export")
+    out = MAP_DIRS["frame"] / f"frame_{period}.md"
+    out.write_text(md, encoding="utf-8")
+    print(f"  ✔ Exportiert: {out.name}")
 
 
 def main():
@@ -98,22 +106,27 @@ def main():
     p_new.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
 
     p_show = sub.add_parser("show")
-    p_show.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
+    p_show.add_argument("--week", "-w")
 
     sub.add_parser("list")
 
     p_edit = sub.add_parser("edit")
     p_edit.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
 
+    p_exp = sub.add_parser("export")
+    p_exp.add_argument("--week", "-w")
+
     args = parser.parse_args()
     if args.cmd == "new":
         cmd_new(args.domain)
     elif args.cmd == "show":
-        cmd_show(args.domain)
+        cmd_show(getattr(args, "week", None))
     elif args.cmd == "list":
         cmd_list()
     elif args.cmd == "edit":
-        cmd_edit(args.domain)
+        cmd_edit(getattr(args, "domain", None))
+    elif args.cmd == "export":
+        cmd_export(getattr(args, "week", None))
     else:
         parser.print_help()
 
