@@ -30,6 +30,7 @@ resolve_bin() {
 
 SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
+NODE_RESTART="$SCRIPT_DIR/scripts/ctl/node-restart.sh"
 
 usage() {
   cat <<EOF
@@ -37,6 +38,7 @@ $APP — αOS frontdoor (stable bash overview)
 
 Usage:
   $APP menu                         # gum menu (if available)
+  $APP restart [all|index|router|bridge]  # restart running node services
   $APP sync <subcommand> [...]      # rclone sync control (syncctl)
   $APP git <subcommand> [...]       # git sync control (gitctl)
   $APP vault <subcommand> [...]     # vault copy (syncctl vault)
@@ -166,8 +168,18 @@ alias_cmd() {
   exec aos-alias "${@:-ui}"
 }
 
+restart_cmd() {
+  local target="${1:-all}"
+  [[ -x "$NODE_RESTART" ]] || die "node-restart not found: $NODE_RESTART"
+  # Source so we stay in the same process (no exec — we want to return)
+  # shellcheck source=scripts/ctl/node-restart.sh
+  source "$NODE_RESTART"
+  node_restart_main "$target"
+}
+
 case "$cmd" in
   menu) menu ;;
+  restart) restart_cmd "$@" ;;
   sync) sync_cmd "$@" ;;
   git) git_cmd "$@" ;;
   vault) vault_cmd "$@" ;;
