@@ -242,7 +242,7 @@ case "${1:-all}" in
     ;;
   dev)
     systemctl --user disable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" || true
-    systemctl --user stop "$SERVICE_NAME" || true
+    svc_stop
     (cd "$INDEX_ROOT" && npm run dev)
     ;;
   autoreload)
@@ -387,16 +387,16 @@ case "${1:-all}" in
     warmup && echo "OK"
     ;;
   start)
-    systemctl --user start "$SERVICE_NAME"
+    svc_start
     ;;
   stop)
-    systemctl --user stop "$SERVICE_NAME"
+    svc_stop
     ;;
   restart)
-    systemctl --user restart "$SERVICE_NAME"
+    svc_restart
     ;;
   logs)
-    journalctl --user -u "$SERVICE_NAME" -n 40 --no-pager
+    svc_logs -n 40 --no-pager
     ;;
   edit)
     file="${2:-server.js}"
@@ -412,12 +412,12 @@ case "${1:-all}" in
     health_menu
     ;;
   doctor)
-    echo "Index service: $SERVICE_NAME"
+    echo "Index service: $SERVICE_NAME (mode: $SVC_MODE)"
     echo "Port: $NODE_PORT"
     echo
     echo "[systemd]"
-    systemctl --user -q is-enabled "$SERVICE_NAME" && echo "enabled: yes" || echo "enabled: no"
-    systemctl --user -q is-active "$SERVICE_NAME" && echo "active: yes" || echo "active: no"
+    svc_is_enabled && echo "enabled: yes" || echo "enabled: no"
+    svc_is_active  && echo "active: yes"  || echo "active: no"
     echo
     echo "[listen]"
     ss -ltnp 2>/dev/null | grep ":${NODE_PORT}" || echo "no listener on :${NODE_PORT}"
