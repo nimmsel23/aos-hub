@@ -20,7 +20,8 @@ aos_env_load "" "$ROOT_DIR" || true
 
 BASE_ROOT="${AOS_ROOT:-$HOME/aos-hub}"
 INDEX_ROOT="${AOS_INDEX_ROOT:-$BASE_ROOT/index-node}"
-SERVICE_NAME="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-aos-index-dev.service}}"
+PROD_SERVICE="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-aos-index.service}}"
+USER_SERVICE="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
 INDEX_MENU_PATH_UNIT="${AOS_INDEX_MENU_PATH_UNIT:-${ALPHAOS_INDEX_MENU_PATH_UNIT:-aos-index-dev-menu.path}}"
 INDEX_PUBLIC_PATH_UNIT="${AOS_INDEX_PUBLIC_PATH_UNIT:-${ALPHAOS_INDEX_PUBLIC_PATH_UNIT:-aos-index-dev-public.path}}"
 NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
@@ -28,6 +29,27 @@ NODE_PORT="${AOS_INDEX_PORT:-${ALPHAOS_INDEX_PORT:-8799}}"
 ROUTERCTL_BIN="${ROUTERCTL_BIN:-$BASE_ROOT/routerctl}"
 BRIDGECTL_BIN="${BRIDGECTL_BIN:-$BASE_ROOT/bridgectl}"
 INDEXCTL_BIN="${INDEXCTL_BIN:-$BASE_ROOT/scripts/indexctl}"
+
+# Auto-detect which index service is currently active (system preferred).
+_detect_svc_mode() {
+  if systemctl -q is-active "$PROD_SERVICE" 2>/dev/null; then
+    echo "system"
+  elif systemctl --user -q is-active "$USER_SERVICE" 2>/dev/null; then
+    echo "user"
+  elif systemctl -q is-enabled "$PROD_SERVICE" 2>/dev/null; then
+    echo "system"
+  else
+    echo "user"
+  fi
+}
+SVC_MODE="$(_detect_svc_mode)"
+if [[ "$SVC_MODE" == "system" ]]; then
+  SERVICE_NAME="$PROD_SERVICE"
+  SVC_FLAGS=()
+else
+  SERVICE_NAME="$USER_SERVICE"
+  SVC_FLAGS=(--user)
+fi
 
 if [[ ! -d "$INDEX_ROOT" ]]; then
   echo "Error: index-node directory missing ($INDEX_ROOT)" >&2
@@ -63,8 +85,33 @@ open_url() {
   fi
 }
 
+svc_is_active()  { systemctl "${SVC_FLAGS[@]}" -q is-active  "$SERVICE_NAME" 2>/dev/null; }
+svc_is_enabled() { systemctl "${SVC_FLAGS[@]}" -q is-enabled "$SERVICE_NAME" 2>/dev/null; }
+svc_start() {
+  if [[ "$SVC_MODE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" start
+  else
+    systemctl "${SVC_FLAGS[@]}" start "$SERVICE_NAME"
+  fi
+}
+svc_stop() {
+  if [[ "$SVC_MODE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" stop || true
+  else
+    systemctl "${SVC_FLAGS[@]}" stop "$SERVICE_NAME" || true
+  fi
+}
+svc_restart() {
+  if [[ "$SVC_MODE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" restart
+  else
+    systemctl "${SVC_FLAGS[@]}" restart "$SERVICE_NAME"
+  fi
+}
+svc_logs() { journalctl "${SVC_FLAGS[@]}" -u "$SERVICE_NAME" "$@"; }
+
 ensure_running() {
-  systemctl --user -q is-active "$SERVICE_NAME" || systemctl --user start --no-block "$SERVICE_NAME" >/dev/null 2>&1
+  svc_is_active || { svc_start >/dev/null 2>&1 || true; }
 }
 
 warmup() {
@@ -159,32 +206,20 @@ show_all() {
 }
 
 show_monitor() {
-  section "Service status"
-  if systemctl --user -q is-active "$SERVICE_NAME" 2>/dev/null; then
+  section "Service status ($SVC_MODE: $SERVICE_NAME)"
+  if svc_is_active; then
     echo "active: yes"
   else
-    err="$(systemctl --user -q is-active "$SERVICE_NAME" 2>&1 || true)"
-    if [[ "$err" == *"Failed to connect to user scope bus"* ]]; then
-      echo "active: unknown (no user bus)"
-    else
-      echo "active: no"
-    fi
+    echo "active: no"
   fi
-  if systemctl --user -q is-enabled "$SERVICE_NAME" 2>/dev/null; then
+  if svc_is_enabled; then
     echo "enabled: yes"
   else
-    err="$(systemctl --user -q is-enabled "$SERVICE_NAME" 2>&1 || true)"
-    if [[ "$err" == *"Failed to connect to user scope bus"* ]]; then
-      echo "enabled: unknown (no user bus)"
-    else
-      echo "enabled: no"
-    fi
+    echo "enabled: no"
   fi
   echo
   section "Recent logs"
-  if ! journalctl --user -u "$SERVICE_NAME" -n 20 --no-pager --output=short 2>/dev/null; then
-    echo "logs: unavailable (no user bus)"
-  fi
+  svc_logs -n 20 --no-pager --output=short 2>/dev/null || echo "logs: unavailable"
   echo
   section "Menu health"
   health_menu
@@ -229,7 +264,7 @@ case "${1:-all}" in
     esac
     ;;
   fix)
-    systemctl --user stop "$SERVICE_NAME" || true
+    svc_stop
     if has_cmd lsof; then
       pids="$(lsof -iTCP:${NODE_PORT} -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $2}' | sort -u)"
       if [[ -n "${pids:-}" ]]; then
@@ -241,7 +276,7 @@ case "${1:-all}" in
     else
       echo "No lsof/fuser available to kill port ${NODE_PORT}" >&2
     fi
-    systemctl --user start "$SERVICE_NAME"
+    svc_start
     ;;
   routerctl)
     if [[ -x "$ROUTERCTL_BIN" ]]; then
