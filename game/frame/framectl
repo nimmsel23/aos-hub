@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+FRAME_PY="$SCRIPT_DIR/frame.py"
+
+# Shared helpers
+source "$ROOT_DIR/scripts/ctl-lib.sh" 2>/dev/null || true
+source "$ROOT_DIR/scripts/lib/aos-env.sh" 2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+
+py() { python3 "$FRAME_PY" "$@"; }
+
+usage() {
+  cat <<EOF
+framectl — Frame Map CLI
+
+Usage:
+  framectl new [BODY|BEING|BALANCE|BUSINESS]   Neuen Frame anlegen
+  framectl show [BODY|BEING|BALANCE|BUSINESS]  Frame anzeigen
+  framectl list                                Alle Frames auflisten
+  framectl edit [DOMAIN]                       Frame im Editor öffnen
+
+EOF
+}
+
+cmd_new()  { py new  ${1:+--domain "$1"}; }
+cmd_show() { py show ${1:+--domain "$1"}; }
+cmd_list() { py list; }
+
+cmd_edit() {
+  local domain="${1:-}"
+  local vault="$HOME/AlphaOS-Vault/Game/Frame"
+  if [[ -n "$domain" ]]; then
+    local file="$vault/${domain^^}_frame.md"
+    [[ -f "$file" ]] || { echo "Kein Frame für $domain. Erst: framectl new $domain"; exit 1; }
+    "${EDITOR:-nano}" "$file"
+  else
+    "${EDITOR:-nano}" "$vault/"
+  fi
+}
+
+case "${1:-}" in
+  new)   shift; cmd_new  "${1:-}" ;;
+  show)  shift; cmd_show "${1:-}" ;;
+  list)  cmd_list ;;
+  edit)  shift; cmd_edit "${1:-}" ;;
+  help|--help|-h) usage ;;
+  *) usage ;;
+esac
