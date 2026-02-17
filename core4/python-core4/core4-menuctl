@@ -11,6 +11,10 @@ core4_recompute_config
 
 menu() {
   ui_title "core4ctl"
+  if [[ -x "${CORE4_TRACKER:-}" ]]; then
+    python3 "$CORE4_TRACKER" -d 2>/dev/null || true
+    echo ""
+  fi
   local action
   action="$(choose \
     "log habit (core4)" \

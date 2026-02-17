@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Core4 TTY Dashboard - Live display for TTY3
+
+while true; do
+  clear
+
+  # Header
+  echo "════════════════════════════════════════════════════════════════"
+  echo "  CORE4 DASHBOARD - $(date +'%Y-%m-%d %H:%M:%S')"
+  echo "════════════════════════════════════════════════════════════════"
+  echo ""
+
+  # Fetch current status from bridge
+  if ! response=$(curl -s --connect-timeout 2 --max-time 5 http://localhost:8080/bridge/core4/today 2>/dev/null); then
+    echo "⚠️  Bridge offline or unreachable"
+    sleep 10
+    continue
+  fi
+
+  # Parse response
+  total=$(echo "$response" | jq -r '.total // 0' 2>/dev/null || echo "0")
+  week=$(echo "$response" | jq -r '.week // "N/A"' 2>/dev/null || echo "N/A")
+
+  # Display total with visual bar
+  echo "📊 TODAY'S SCORE: ${total} points (Week ${week})"
+  echo ""
+
+  # Progress bar (out of 4.0 max)
+  local bars filled
+  bars=40
+  filled=$(awk "BEGIN {printf \"%.0f\", ($total / 4.0) * $bars}")
+  printf "["
+  for ((i=0; i<bars; i++)); do
+    if ((i < filled)); then
+      printf "█"
+    else
+      printf "░"
+    fi
+  done
+  printf "] %.1f/4.0\n" "$total"
+  echo ""
+
+  # Habits breakdown
+  echo "COMPLETED HABITS:"
+  echo "────────────────────────────────────────────────────────────────"
+
+  habits=$(echo "$response" | jq -r '.habits | keys[]' 2>/dev/null || true)
+
+  if [[ -z "$habits" ]]; then
+    echo "  (none yet)"
+  else
+    while IFS= read -r habit; do
+      case "$habit" in
+        fuel) echo "  ✓ 💪 Fuel" ;;
+        fitness|train) echo "  ✓ 🏋️  Fitness" ;;
+        meditation) echo "  ✓ 🧘 Meditation" ;;
+        memoirs|posterity) echo "  ✓ 📝 Memoirs" ;;
+        partner) echo "  ✓ 💑 Partner" ;;
+        discover) echo "  ✓ 🔍 Discover" ;;
+        declare) echo "  ✓ 📢 Declare" ;;
+        *) echo "  ✓ ✨ $habit" ;;
+      esac
+    done <<< "$habits"
+  fi
+
+  echo ""
+  echo "────────────────────────────────────────────────────────────────"
+  echo "Auto-refresh every 10s | Ctrl+C to exit"
+
+  sleep 10
+done
