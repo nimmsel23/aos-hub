@@ -1603,6 +1603,10 @@
   function resetLocal() {
     localStorage.removeItem(LS.prefix + LS.scores);
     localStorage.removeItem(LS.prefix + LS.notes);
+    ["coreScore","coreMax","stackScore","stackMax","doorScore","doorMax"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) delete el.dataset.manuallySet;
+    });
     location.reload();
   }
 
@@ -1628,7 +1632,15 @@
     ["coreScore","coreMax","stackScore","stackMax","doorScore","doorMax"].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener("input", updateScoreDisplays);
+      el.addEventListener("input", () => {
+        // Mark as manually overridden so auto-fetch doesn't clobber it
+        el.dataset.manuallySet = "1";
+        if (id === "coreScore") {
+          const tag = document.getElementById("coreTag");
+          if (tag) tag.textContent = "Return & Report";
+        }
+        updateScoreDisplays();
+      });
     });
   }
 
