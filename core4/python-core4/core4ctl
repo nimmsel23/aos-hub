@@ -10,7 +10,7 @@ set -euo pipefail
 #   - core4-clinctl   (install/doctor)
 #   - core4-menuctl   (interactive menu)
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+APP_DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd -P)"
 
 trackctl() { exec "$APP_DIR/core4-trackctl" "$@"; }
 syncctl() { exec "$APP_DIR/core4-syncctl" "$@"; }
