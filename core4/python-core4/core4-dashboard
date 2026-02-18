@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Core4 TTY Dashboard — live display, auto-refresh
+# Core4 Dashboard — live display, hotkey logging, auto-refresh
 
 BRIDGE_URL="${AOS_BRIDGE_URL:-http://localhost:8080}"
 REFRESH="${CORE4_DASHBOARD_REFRESH:-60}"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
+
+log_habit() {
+  local habit="$1"
+  printf "\n  → %s..." "$habit"
+  python3 "$TRACKER" "$habit" >/dev/null 2>&1
+}
 
 draw() {
   local response total week_label date_key week_total bars=40 filled
@@ -41,14 +47,14 @@ draw() {
     LC_NUMERIC=C printf "]  %.1f/4.0\n" "$total"
     echo ""
 
-    # Habits by domain
+    # Habits with inline hotkeys
     printf '%s' "$response" | jq -r '
       .habits as $h |
       def mark(key): if ($h[key] // false) then "✓" else "·" end;
-      "  BODY      \(mark("fitness")) Fitness     \(mark("fuel")) Fuel",
-      "  BEING     \(mark("meditation")) Meditation  \(mark("memoirs")) Memoirs",
-      "  BALANCE   \(mark("partner")) Partner     \(mark("posterity")) Posterity",
-      "  BUSINESS  \(mark("discover")) Discover    \(mark("declare")) Declare"
+      "  BODY      [1] \(mark("fitness")) Fitness     [2] \(mark("fuel")) Fuel",
+      "  BEING     [3] \(mark("meditation")) Meditation  [4] \(mark("memoirs")) Memoirs",
+      "  BALANCE   [5] \(mark("partner")) Partner     [6] \(mark("posterity")) Posterity",
+      "  BUSINESS  [7] \(mark("discover")) Discover    [8] \(mark("declare")) Declare"
     '
 
   else
@@ -61,12 +67,22 @@ draw() {
 
   echo ""
   echo "────────────────────────────────────────────────────────────────"
-  printf "  Refresh every %ss  |  q = quit\n" "$REFRESH"
+  printf "  [1-8] log habit  |  [q] quit  |  refresh every %ss\n" "$REFRESH"
 }
 
 while true; do
   draw
   key=""
   read -r -s -n1 -t "$REFRESH" key 2>/dev/null || true
-  [[ "$key" == "q" || "$key" == "Q" ]] && { printf "\n"; exit 0; }
+  case "$key" in
+    q|Q) printf "\n"; exit 0 ;;
+    1) log_habit fitness ;;
+    2) log_habit fuel ;;
+    3) log_habit meditation ;;
+    4) log_habit memoirs ;;
+    5) log_habit partner ;;
+    6) log_habit posterity ;;
+    7) log_habit discover ;;
+    8) log_habit declare ;;
+  esac
 done
