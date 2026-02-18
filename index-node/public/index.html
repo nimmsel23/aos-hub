@@ -19,6 +19,14 @@
 <body>
   <canvas id="matrix-rain"></canvas>
 
+  <div class="pwa-launcher">
+    <button class="pwa-launcher-btn" onclick="this.parentElement.classList.toggle('open')" type="button">MOBILE</button>
+    <div class="pwa-launcher-menu">
+      <a class="pwa-launcher-item" href="/core4/" target="_blank">CORE4</a>
+      <a class="pwa-launcher-item pwa-launcher-dim" href="/fire/" target="_blank">FIRE</a>
+    </div>
+  </div>
+
   <div class="index-layout">
     <aside class="doc-panel">
       <div class="doc-title">Chapters</div>
@@ -114,11 +122,6 @@
         <div class="core4-actions">
           <button class="core4-act-btn" id="core4WeekSummaryBtn" type="button">Week Summary</button>
           <button class="core4-act-btn" id="core4WeekExportBtn" type="button">Export -> Vault</button>
-        </div>
-        <div class="pwa-bar">
-          <span class="pwa-bar-label">MOBILE</span>
-          <a class="pwa-chip" href="/core4/" target="_blank">CORE4</a>
-          <a class="pwa-chip pwa-chip-dim" href="/fire/" target="_blank">FIRE</a>
         </div>
       </section>
       <div class="grid" id="menuGrid">
