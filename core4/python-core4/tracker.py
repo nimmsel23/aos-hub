@@ -133,12 +133,27 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
         already = is_already_logged(target)
         label = DISPLAY_HABIT.get(target.habit, target.habit)
         domain = target.domain.upper()
-        date = target.date_key
-        week = week_key(target.day)
+        date_s = target.date_key
+
+        # TW status — read-only, no task_add called
+        try:
+            ensure_taskwarrior()
+            tw_done_uuid = find_completed_uuid(target)
+            tw_pending_uuid = find_pending_uuid(target)
+            if tw_done_uuid:
+                tw_status = f"completed ({tw_done_uuid[:8]})"
+            elif tw_pending_uuid:
+                tw_status = f"pending ({tw_pending_uuid[:8]})"
+            else:
+                tw_status = "no task"
+        except Exception:
+            tw_status = "unavailable"
+
         if already:
-            print(_green(f"✓ {label} ({domain}) {date} — already logged, would skip"))
+            print(_green(f"✓ {label} ({domain}) {date_s} — already logged, would skip"))
         else:
-            print(_yellow(f"→ {label} ({domain}) {date} — would log now"))
+            print(_yellow(f"→ {label} ({domain}) {date_s} — would log now"))
+        print(f"  json: {'logged' if already else 'not logged'}  |  taskwarrior: {tw_status}")
         return finish(0)
 
     if is_already_logged(target):
