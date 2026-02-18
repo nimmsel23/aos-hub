@@ -3675,6 +3675,7 @@ app.use("/api/fire", fireRouter);
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/core4", (_req, res) => res.redirect(302, "/core4/"));
+app.get("/fire",  (_req, res) => res.redirect(302, "/fire/"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
 app.get("/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
 app.get("/voice", (_req, res) => res.redirect(302, "/memoirs/"));
