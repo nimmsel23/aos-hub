@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>αOS · CORE4</title>
+  <link rel="manifest" href="/core4/manifest.json" />
+  <link rel="apple-touch-icon" href="/core4/icon-192.svg" />
   <link rel="stylesheet" href="/core4/style.css" />
 </head>
 <body>
@@ -72,5 +74,10 @@
   </main>
 
   <script src="/core4/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/core4/sw.js", { scope: "/core4/" });
+    }
+  </script>
 </body>
 </html>
