@@ -13,7 +13,8 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
   - `public/door/` is the local Door Centre (`/door`).
   - `public/facts.html` is the local Fruits UI (`/facts`).
   - `public/voice/` contains Voice Centre pages.
-  - `public/core4.html` is the Core4 TTY bridge page.
+  - `public/core4.html` is the Core4 TTY bridge page (legacy terminal view).
+  - `public/core4/` is the **mobile-first Core4 PWA** — served at `/core4/` (redirect from `/core4`).
 - Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
 - Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
@@ -36,6 +37,15 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 - Click every card in `/game` to confirm routes open.
 - In `/door`, generate Hot List, Door War, War Stack, Hit List, Profit, then export each to `/Door/` and confirm the files are written under `~/AlphaOS-Vault/Door`.
 - Verify chapters load in `/door` (they should come from `/api/door/chapters`).
+- Open `/core4` (redirects to `/core4/`) — mobile PWA, 4 domain cards, `.5/.5` toggles.
+  - Uses canonical: `GET /api/core4/day-state`, `GET /api/core4/week-summary`, `POST /api/core4/log`
+  - Do **not** use legacy `POST /api/core4` or `GET /api/core4/today` in new UI code.
+
+## Core4 API Summary
+See `api-map.md` for full reference. Short version:
+- **Canonical:** `/api/core4/log` (POST) · `/api/core4/day-state` (GET) · `/api/core4/week-summary` (GET)
+- **Legacy (compat-only):** `POST /api/core4` · `GET /api/core4/today`
+- Storage: `~/.local/share/alphaos/core4/.core4/events/` (event ledger, append-only, no undo)
 
 ## Commit & Pull Request Guidelines
 - Commit messages are short, imperative, and scoped to the change (e.g., “Load door chapters from vault”).

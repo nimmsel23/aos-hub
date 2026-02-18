@@ -101,12 +101,42 @@ Note:
 | `POST` | `/api/fruits/skip` |
 | `POST` | `/api/fruits/export` |
 
-## Core4, Taskwarrior, Tele
+## Core4
+
+**Canonical endpoints** (use these – event-sourced, full response):
+
+| Method | Path | Body / Query | Purpose |
+|---|---|---|---|
+| `GET` | `/api/core4/day-state` | `?date=YYYY-MM-DD` (opt) | Entries + total for one day |
+| `GET` | `/api/core4/week-summary` | `?date=YYYY-MM-DD` (opt) | Week totals by domain + by day |
+| `POST` | `/api/core4/log` | `{ domain, task, date?, source? }` | Log 0.5 pts; returns updated day+week |
+| `GET` | `/api/core4/journal` | `?date=YYYY-MM-DD` (opt) | Journal entries for date |
+| `POST` | `/api/core4/journal` | `{ domain, habit, text, date? }` | Save journal entry |
+| `POST` | `/api/core4/export-week` | `{ date? }` | Export week summary to markdown |
+
+**Legacy endpoints** (kept for GAS/TTY/bridge-compat, do not use in new code):
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/core4` | subtask-name mapper → core4Log + Taskwarrior sync + bridge |
+| `GET` | `/api/core4/today` | legacy day state + bridge_total hybrid |
+
+**Domains & tasks:**
+- `body`: `fitness`, `fuel`
+- `being`: `meditation`, `memoirs`
+- `balance`: `person1`, `person2`
+- `business`: `discover`, `declare`
+
+Each task = 0.5 pts → domain max 1.0 → daily max 4.0 → weekly max 28.0
+
+**Storage:** `~/.local/share/alphaos/core4/.core4/events/` (event ledger, append-only)
+
+**UI:** `/core4/` — mobile-first PWA, uses canonical endpoints only.
+
+## Taskwarrior, Tele
 
 | Method | Path |
 |---|---|
-| `POST` | `/api/core4` |
-| `GET` | `/api/core4/today` |
 | `POST` | `/api/journal` |
 | `GET` | `/api/taskwarrior/tasks` |
 | `POST` | `/api/taskwarrior/add` |
