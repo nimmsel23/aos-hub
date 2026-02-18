@@ -35,9 +35,20 @@ draw() {
     week_label=$(printf '%s' "$response" | jq -r '.week // "?"')
     date_key=$(printf '%s' "$response"  | jq -r '.date // "?"')
 
-    # Week total direct from event ledger (tracker is truth)
-    week_total=$(python3 "$TRACKER" -w --quiet 2>/dev/null \
-      | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "?")
+    # Week total from pre-built week file (fast single read)
+    week_total=$(python3 -c "
+import json, pathlib, re, sys
+w = '$week_label'
+p = pathlib.Path.home() / '.core4' / f'core4_week_{w}.json'
+if not p.exists():
+    p = pathlib.Path.home() / '.core4' / ('core4_week_' + w + '.json')
+try:
+    d = json.loads(p.read_text())
+    t = d.get('totals', {}).get('week_total') or d.get('week_total') or 0
+    print(f'{float(t):.1f}')
+except Exception:
+    sys.stdout.write('?')
+" 2>/dev/null || echo "?")
 
     printf "  Day %-12s  %s/4    Week %s:  %s/28\n" \
       "$date_key" "$total" "$week_label" "$week_total"
