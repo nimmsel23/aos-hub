@@ -130,9 +130,15 @@ def run_habit_flow(argv: list[str], finish, *, skip_journal: bool) -> int:
             pass
 
     if args.dry_run:
-        print(
-            f"core4 target: habit={target.habit} domain={target.domain} date={target.date_key} week={week_key(target.day)} key={target.entry_key}"
-        )
+        already = is_already_logged(target)
+        label = DISPLAY_HABIT.get(target.habit, target.habit)
+        domain = target.domain.upper()
+        date = target.date_key
+        week = week_key(target.day)
+        if already:
+            print(_green(f"✓ {label} ({domain}) {date} — already logged, would skip"))
+        else:
+            print(_yellow(f"→ {label} ({domain}) {date} — would log now"))
         return finish(0)
 
     if is_already_logged(target):
