@@ -11,6 +11,7 @@ import { execFile, execFileSync } from "child_process";
 
 // Routers
 import gameRouter from "./routes/game.js";
+import fireRouter from "./routes/fire.js";
 
 const app = express();
 
@@ -3668,6 +3669,7 @@ app.get("/api/aos/registry", (req, res) => {
 
 // Mount routers
 app.use("/game", gameRouter);
+app.use("/api/fire", fireRouter);
 
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
