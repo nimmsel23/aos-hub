@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0c0f" />
+  <meta name="theme-color" content="#080808" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -14,64 +14,71 @@
 </head>
 <body>
 
+  <!-- Top tabs -->
   <header class="topbar">
-    <div class="brand">αOS</div>
-    <div class="tabs">
-      <button class="tab active">CORE</button>
-      <button class="tab" onclick="location.href='/fire/'">FIRE</button>
-      <button class="tab" onclick="location.href='/game/focus.html'">FOCUS</button>
-      <button class="tab" onclick="location.href='/'">HUB</button>
-    </div>
+    <button class="tab active">CORE</button>
+    <button class="tab" onclick="location.href='/fire/'">FIRE</button>
+    <button class="tab" onclick="location.href='/game/focus.html'">FOCUS</button>
+    <button class="tab">SCORE</button>
   </header>
 
   <main class="wrap">
 
-    <!-- Hero: Ring + Scores -->
+    <!-- Hero -->
     <section class="hero">
       <div class="ring-wrap">
         <svg class="ring-svg" viewBox="0 0 120 120">
-          <circle class="ring-bg"    cx="60" cy="60" r="52" />
-          <circle class="ring-track" cx="60" cy="60" r="52" id="ringTrack" />
+          <circle class="ring-bg"    cx="60" cy="60" r="50" />
+          <circle class="ring-track" cx="60" cy="60" r="50" id="ringTrack" />
         </svg>
         <div class="ring-center">
-          <div class="ring-score" id="dailyScore">0</div>
-          <div class="ring-label">/ 4</div>
+          <span class="ring-pct" id="dailyPct">0%</span>
         </div>
       </div>
 
-      <div class="scores">
-        <div class="score-card">
-          <div class="sc-label">DAILY</div>
-          <div class="sc-value">
-            <span id="dailyPct">0%</span>
-          </div>
+      <div class="hero-scores">
+        <div class="hs-block">
+          <div class="hs-label">DAILY SCORE</div>
+          <div class="hs-value"><span id="dailyScore">0</span><span class="hs-max">/4</span></div>
         </div>
-        <div class="score-card">
-          <div class="sc-label">WEEKLY</div>
-          <div class="sc-value">
-            <span id="weeklyScore">0</span><span class="sc-max">/28</span>
-          </div>
-        </div>
-        <div class="score-card date-card">
-          <div class="sc-label">TODAY</div>
-          <div class="sc-date" id="dateLabel">—</div>
+        <div class="hs-block">
+          <div class="hs-label">WEEKLY SCORE</div>
+          <div class="hs-value"><span id="weeklyScore">0</span><span class="hs-max">/28 POINTS</span></div>
         </div>
       </div>
     </section>
 
-    <!-- Section header -->
-    <div class="section-head">
-      <span class="sh-title">CORE4</span>
-      <span class="sh-sub" id="weekLabel">—</span>
+    <!-- Section label -->
+    <div class="section-label">
+      <span>CORE4</span>
+      <span class="sl-date" id="dateLabel">—</span>
     </div>
 
-    <!-- Domain cards -->
+    <!-- Cards -->
     <section id="cards" class="cards"></section>
 
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
-
   </main>
+
+  <!-- Bottom nav -->
+  <nav class="bottomnav">
+    <button class="bn-btn active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+      <span>CORE</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/fire/'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c0 0-6 6-6 12a6 6 0 0 0 12 0c0-6-6-12-6-12z"/><path d="M12 12c0 0-3 3-3 5a3 3 0 0 0 6 0c0-2-3-5-3-5z"/></svg>
+      <span>FIRE</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/game/focus.html'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+      <span>FOCUS</span>
+    </button>
+    <button class="bn-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>SCORE</span>
+    </button>
+  </nav>
 
   <script src="/core4/app.js"></script>
   <script>

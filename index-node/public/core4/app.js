@@ -1,82 +1,32 @@
 "use strict";
 
-// ── Domain / Task config ──────────────────────────────────────────────────────
 const DOMAINS = [
-  {
-    key:   "body",
-    label: "BODY",
-    icon:  "🏋",
-    tasks: [
-      { key: "fitness", label: "FITNESS" },
-      { key: "fuel",    label: "FUEL"    },
-    ],
-  },
-  {
-    key:   "being",
-    label: "BEING",
-    icon:  "🧘",
-    tasks: [
-      { key: "meditation", label: "MEDITATION" },
-      { key: "memoirs",    label: "MEMOIRS"    },
-    ],
-  },
-  {
-    key:   "balance",
-    label: "BALANCE",
-    icon:  "👥",
-    tasks: [
-      { key: "person1", label: "PERSON 1" },
-      { key: "person2", label: "PERSON 2" },
-    ],
-  },
-  {
-    key:   "business",
-    label: "BUSINESS",
-    icon:  "⚡",
-    tasks: [
-      { key: "discover", label: "DISCOVER" },
-      { key: "declare",  label: "DECLARE"  },
-    ],
-  },
+  { key: "body",     label: "BODY",     icon: "🏋",
+    tasks: [{ key: "fitness", label: "FITNESS .5" }, { key: "fuel", label: "FUEL .5" }] },
+  { key: "being",    label: "BEING",    icon: "🧘",
+    tasks: [{ key: "meditation", label: "MEDITATION .5" }, { key: "memoirs", label: "MEMOIRS .5" }] },
+  { key: "balance",  label: "BALANCE",  icon: "👥",
+    tasks: [{ key: "person1", label: "PARTNER .5" }, { key: "person2", label: "POSTERITY .5" }] },
+  { key: "business", label: "BUSINESS", icon: "⚡",
+    tasks: [{ key: "discover", label: "DISCOVER .5" }, { key: "declare", label: "DECLARE .5" }] },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const CIRCUMFERENCE = 2 * Math.PI * 50; // 314.16
+
 const $ = (id) => document.getElementById(id);
-const CIRCUMFERENCE = 2 * Math.PI * 52; // 326.7
 
-function todayKey() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
+let state = { done: new Set(), daily: 0, weekly: 0, date: "", week: "" };
 
-async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, opts);
-  if (!res.ok) throw new Error(`HTTP ${res.status} – ${path}`);
-  return res.json();
-}
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let state = {
-  done: new Set(),   // "domain/task" strings
-  daily: 0,
-  weekly: 0,
-  week: "",
-  date: todayKey(),
-};
-
-// ── Ring ──────────────────────────────────────────────────────────────────────
+// ── Ring ─────────────────────────────────────────────────────────────────────
 function updateRing(daily) {
-  const pct = daily / 4;
-  const offset = CIRCUMFERENCE * (1 - pct);
-  $("ringTrack").style.strokeDashoffset = offset.toFixed(2);
+  const pct = Math.min(daily / 4, 1);
+  $("ringTrack").style.strokeDashoffset = (CIRCUMFERENCE * (1 - pct)).toFixed(2);
+  $("dailyPct").textContent = Math.round(pct * 100) + "%";
   $("dailyScore").textContent = daily % 1 === 0 ? daily : daily.toFixed(1);
-  $("dailyPct").textContent   = Math.round(pct * 100) + "%";
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-let toastTimer = null;
+let toastTimer;
 function showToast(msg) {
   const el = $("toast");
   el.textContent = msg;
@@ -91,140 +41,102 @@ function render() {
   root.innerHTML = "";
 
   for (const domain of DOMAINS) {
-    // Count done tasks for this domain
-    const doneTasks = domain.tasks.filter((t) =>
-      state.done.has(`${domain.key}/${t.key}`)
-    );
+    const doneTasks = domain.tasks.filter(t => state.done.has(`${domain.key}/${t.key}`));
     const pts = doneTasks.length * 0.5;
-    const allDone = doneTasks.length === domain.tasks.length;
+    const barPct = (pts / 1.0) * 100;
+    const scoreClass = pts > 0 ? " done" : "";
 
     const card = document.createElement("div");
-    card.className = `domain-card${allDone ? " done" : ""}`;
-
-    // Header
-    const header = document.createElement("div");
-    header.className = "domain-header";
-    header.innerHTML = `
-      <div class="domain-icon">${domain.icon}</div>
-      <div class="domain-info">
-        <div class="domain-name">${domain.label}</div>
-        <div class="domain-score">
-          <span class="pts">${pts.toFixed(1)}</span> / 1.0 pts
+    card.className = "domain-card";
+    card.innerHTML = `
+      <div class="card-body">
+        <div class="card-icon">${domain.icon}</div>
+        <div class="card-info">
+          <div class="card-name">${domain.label}</div>
+          <div class="card-tasks">
+            ${domain.tasks.map(t => {
+              const dk = `${domain.key}/${t.key}`;
+              const done = state.done.has(dk);
+              return `<button class="task-chip${done ? " done" : ""}" data-domain="${domain.key}" data-task="${t.key}">${t.label}</button>`;
+            }).join("")}
+          </div>
         </div>
+        <div class="card-score${scoreClass}">${pts > 0 ? pts.toFixed(1) : "0"}</div>
+      </div>
+      <div class="card-bar">
+        <div class="card-bar-fill" style="width:${barPct}%"></div>
       </div>
     `;
-    card.appendChild(header);
 
-    // Tasks row
-    const row = document.createElement("div");
-    row.className = "tasks-row";
-
-    for (const task of domain.tasks) {
-      const dk = `${domain.key}/${task.key}`;
-      const done = state.done.has(dk);
-
-      const btn = document.createElement("button");
-      btn.className = `task-btn${done ? " done" : ""}`;
-      btn.dataset.domain = domain.key;
-      btn.dataset.task   = task.key;
-      btn.innerHTML = `
-        <div class="task-check">${done ? "✓" : ""}</div>
-        <span class="task-label">${task.label}</span>
-        <span class="task-pts">${done ? "+.5" : ".5"}</span>
-      `;
-
-      if (!done) {
-        btn.addEventListener("click", handleLog);
-      }
-
-      row.appendChild(btn);
-    }
-
-    card.appendChild(row);
     root.appendChild(card);
   }
 
+  root.querySelectorAll(".task-chip:not(.done)").forEach(btn => {
+    btn.addEventListener("click", handleLog);
+  });
+
   updateRing(state.daily);
-  $("weeklyScore").textContent = state.weekly % 1 === 0
-    ? state.weekly
-    : state.weekly.toFixed(1);
-  $("dateLabel").textContent = state.date;
-  $("weekLabel").textContent = state.week;
+  $("weeklyScore").textContent = state.weekly % 1 === 0 ? state.weekly : state.weekly.toFixed(1);
 }
 
-// ── Log handler ───────────────────────────────────────────────────────────────
+// ── Log ───────────────────────────────────────────────────────────────────────
 async function handleLog(e) {
-  const btn    = e.currentTarget;
+  const btn = e.currentTarget;
   const domain = btn.dataset.domain;
   const task   = btn.dataset.task;
-  const dk     = `${domain}/${task}`;
-
   btn.classList.add("logging");
 
   try {
-    const res = await apiFetch("/api/core4/log", {
-      method:  "POST",
+    const res = await fetch("/api/core4/log", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ domain, task, source: "core4-web" }),
+      body: JSON.stringify({ domain, task, source: "core4-pwa" }),
     });
+    const data = await res.json();
 
-    if (res.duplicate) {
-      showToast("Already logged ✓");
-      state.done.add(dk);
-    } else if (res.ok) {
-      state.done.add(dk);
-      // Update scores from response
-      const day = res.day;
-      if (day) {
-        state.daily = Number(day.total || 0);
-      }
-      const week = res.week;
-      if (week?.totals) {
-        state.weekly = Number(week.totals.week_total || 0);
-        state.week   = week.week || state.week;
-      }
-      showToast(`${domain.toUpperCase()} · ${task} logged ✓`);
+    if (data.duplicate || data.ok) {
+      state.done.add(`${domain}/${task}`);
+      if (data.day)          state.daily   = Number(data.day.total  || 0);
+      if (data.week?.totals) state.weekly  = Number(data.week.totals.week_total || 0);
+      showToast(data.duplicate ? "Already logged" : `${domain} · ${task} ✓`);
     }
   } catch (err) {
-    console.error(err);
     showToast("Error – check server");
   }
 
   render();
 }
 
-// ── Load from API ─────────────────────────────────────────────────────────────
+// ── Load ──────────────────────────────────────────────────────────────────────
 async function load() {
-  const date = todayKey();
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
 
   const [dayRes, weekRes] = await Promise.all([
-    apiFetch(`/api/core4/day-state?date=${date}`),
-    apiFetch(`/api/core4/week-summary?date=${date}`),
+    fetch(`/api/core4/day-state?date=${today}`).then(r => r.json()),
+    fetch(`/api/core4/week-summary?date=${today}`).then(r => r.json()),
   ]);
 
-  // Populate done set from entries
-  if (dayRes.ok && Array.isArray(dayRes.entries)) {
-    for (const entry of dayRes.entries) {
-      if (entry.domain && entry.task) {
-        state.done.add(`${entry.domain}/${entry.task}`);
-      }
-    }
+  if (dayRes.ok) {
+    (dayRes.entries || []).forEach(e => {
+      if (e.domain && e.task) state.done.add(`${e.domain}/${e.task}`);
+    });
     state.daily = Number(dayRes.total || 0);
-    state.date  = dayRes.date || date;
-    state.week  = dayRes.week || "";
+    state.date  = dayRes.date  || today;
+    state.week  = dayRes.week  || "";
   }
 
-  if (weekRes.ok && weekRes.totals) {
-    state.weekly = Number(weekRes.totals.week_total || 0);
+  if (weekRes.ok) {
+    state.weekly = Number(weekRes.totals?.week_total || 0);
     state.week   = weekRes.week || state.week;
   }
 
+  $("dateLabel").textContent = state.date;
   render();
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-load().catch((err) => {
-  console.error(err);
-  $("cards").innerHTML =
-    `<p style="padding:20px;color:#f66;font-size:14px">Fehler: ${err.message}</p>`;
+load().catch(err => {
+  $("cards").innerHTML = `<p style="padding:20px;color:#f66;font-size:13px">Fehler: ${err.message}</p>`;
 });
