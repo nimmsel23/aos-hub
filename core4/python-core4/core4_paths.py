@@ -13,6 +13,25 @@ from core4_types import DEFAULT_VAULT_DIR, week_key
 from datetime import date
 
 
+def _load_aos_env() -> None:
+    """Load /etc/aos/aos.env into os.environ if AOS vars are not already set."""
+    env_file = Path("/etc/aos/aos.env")
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_aos_env()
+
+
 def core4_dirs() -> list[Path]:
     """
     Return Core4 directories to consider, in priority order (first = primary write target).
