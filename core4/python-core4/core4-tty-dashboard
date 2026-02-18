@@ -4,7 +4,7 @@ set -euo pipefail
 # Core4 TTY Dashboard — live display, auto-refresh
 
 BRIDGE_URL="${AOS_BRIDGE_URL:-http://localhost:8080}"
-REFRESH="${CORE4_DASHBOARD_REFRESH:-10}"
+REFRESH="${CORE4_DASHBOARD_REFRESH:-60}"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
 
