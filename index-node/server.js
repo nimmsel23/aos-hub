@@ -11,7 +11,8 @@ import { execFile, execFileSync } from "child_process";
 
 // Routers
 import gameRouter from "./routes/game.js";
-import fireRouter from "./routes/fire.js";
+import fireRouter  from "./routes/fire.js";
+import focusRouter from "./routes/focus.js";
 
 const app = express();
 
@@ -3669,13 +3670,15 @@ app.get("/api/aos/registry", (req, res) => {
 
 // Mount routers
 app.use("/game", gameRouter);
-app.use("/api/fire", fireRouter);
+app.use("/api/fire",  fireRouter);
+app.use("/api/focus", focusRouter);
 
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/core4", (_req, res) => res.redirect(302, "/core4/"));
 app.get("/fire",  (_req, res) => res.redirect(302, "/fire/"));
+app.get("/focus", (_req, res) => res.redirect(302, "/focus/"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
 app.get("/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
 app.get("/voice", (_req, res) => res.redirect(302, "/memoirs/"));
