@@ -50,10 +50,22 @@ ctl_readline() {
 ctl_read_key_timed() {
   local timeout="${1:-1}"
   local outvar="${2:-CTL_KEY}"
-  local key=""
+  local key="" old_stty="" rc=1
+
+  _ctl_raw_read() {
+    local _fd_in="${1:-0}" _fd_out="${2:-1}"
+    old_stty="$(stty -g <&"$_fd_in" 2>/dev/null)" || old_stty=""
+    stty -echo raw <&"$_fd_in" 2>/dev/null || true
+    if read -r -t "$timeout" -n 1 key <&"$_fd_in"; then
+      rc=0
+    fi
+    [[ -n "$old_stty" ]] && stty "$old_stty" <&"$_fd_in" 2>/dev/null || true
+    return $rc
+  }
 
   if [[ -t 0 ]]; then
-    if read -r -t "$timeout" -n 1 key; then
+    _ctl_raw_read 0 1
+    if [[ $rc -eq 0 ]]; then
       printf -v "$outvar" "%s" "$key"
       return 0
     fi
@@ -61,7 +73,10 @@ ctl_read_key_timed() {
   fi
 
   if [[ -r /dev/tty && -w /dev/tty ]]; then
-    if read -r -t "$timeout" -n 1 key </dev/tty >/dev/tty; then
+    exec 9</dev/tty
+    _ctl_raw_read 9 9
+    exec 9<&-
+    if [[ $rc -eq 0 ]]; then
       printf -v "$outvar" "%s" "$key"
       return 0
     fi
