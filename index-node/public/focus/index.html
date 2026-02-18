@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>αOS · FOCUS</title>
+  <link rel="stylesheet" href="/focus/style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">αOS</div>
+    <div class="tabs">
+      <button class="tab" onclick="location.href='/core4/'">CORE</button>
+      <button class="tab" onclick="location.href='/fire/'">FIRE</button>
+      <button class="tab active">FOCUS</button>
+      <button class="tab" onclick="location.href='/'">HUB</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="ring-wrap">
+        <svg class="ring-svg" viewBox="0 0 120 120">
+          <circle class="ring-bg"    cx="60" cy="60" r="52" />
+          <circle class="ring-track" cx="60" cy="60" r="52" id="ringTrack" />
+        </svg>
+        <div class="ring-center">
+          <div class="ring-score" id="overallPct">0%</div>
+          <div class="ring-label">overall</div>
+        </div>
+      </div>
+      <div class="scores">
+        <div class="score-card">
+          <div class="sc-label">MONTH</div>
+          <div class="sc-value sc-month" id="monthLabel">—</div>
+        </div>
+        <div class="score-card">
+          <div class="sc-label">STATUS</div>
+          <div class="sc-value sc-status" id="statusLabel">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section head -->
+    <div class="section-head">
+      <span class="sh-title">FOCUS</span>
+      <span class="sh-sub">MONTHLY OUTCOMES</span>
+    </div>
+
+    <!-- Domain cards -->
+    <section id="cards" class="cards"></section>
+
+    <!-- Add outcome -->
+    <div class="section-head" style="margin-top:20px">
+      <span class="sh-title">ADD OUTCOME</span>
+    </div>
+    <div class="add-form" id="addForm">
+      <select class="add-select" id="addDomain">
+        <option value="body">BODY</option>
+        <option value="being">BEING</option>
+        <option value="balance">BALANCE</option>
+        <option value="business">BUSINESS</option>
+      </select>
+      <input class="add-input" id="addTitle" placeholder="Outcome (z.B. 12 Trainings)" maxlength="80" />
+      <select class="add-select" id="addType">
+        <option value="count">count</option>
+        <option value="delta">delta</option>
+      </select>
+      <input class="add-input add-num" id="addTarget" type="number" step="0.1" placeholder="target" />
+      <button class="add-btn" id="addBtn">＋ Add</button>
+    </div>
+    <div class="add-hint">count = 0..target &nbsp;·&nbsp; delta = change vs baseline (z.B. −2kg)</div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+  </main>
+
+  <script src="/focus/app.js"></script>
+</body>
+</html>
