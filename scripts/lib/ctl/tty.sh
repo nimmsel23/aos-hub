@@ -50,36 +50,29 @@ ctl_readline() {
 ctl_read_key_timed() {
   local timeout="${1:-1}"
   local outvar="${2:-CTL_KEY}"
-  local key="" old_stty="" rc=1
+  # NOTE: internal var is _ctl_key (not "key") so printf -v "$outvar" can
+  # reach the *caller's* variable via bash dynamic scoping.
+  local _ctl_key="" _ctl_stty="" _ctl_rc=1
 
-  _ctl_raw_read() {
-    local _fd_in="${1:-0}" _fd_out="${2:-1}"
-    old_stty="$(stty -g <&"$_fd_in" 2>/dev/null)" || old_stty=""
-    stty -echo raw <&"$_fd_in" 2>/dev/null || true
-    if read -r -t "$timeout" -n 1 key <&"$_fd_in"; then
-      rc=0
+  _ctl_read_raw() {
+    local _fd="${1:-0}"
+    _ctl_stty="$(stty -g <&"$_fd" 2>/dev/null)" || _ctl_stty=""
+    [[ -n "$_ctl_stty" ]] && stty -icanon -echo min 1 time 0 <&"$_fd" 2>/dev/null || true
+    if IFS= read -r -t "$timeout" -n 1 _ctl_key <&"$_fd" 2>/dev/null; then
+      _ctl_rc=0
     fi
-    [[ -n "$old_stty" ]] && stty "$old_stty" <&"$_fd_in" 2>/dev/null || true
-    return $rc
+    [[ -n "$_ctl_stty" ]] && stty "$_ctl_stty" <&"$_fd" 2>/dev/null || true
   }
 
   if [[ -t 0 ]]; then
-    _ctl_raw_read 0 1
-    if [[ $rc -eq 0 ]]; then
-      printf -v "$outvar" "%s" "$key"
-      return 0
-    fi
-    return 1
+    _ctl_read_raw 0
+  elif [[ -r /dev/tty ]]; then
+    exec 9</dev/tty 2>/dev/null && { _ctl_read_raw 9; exec 9<&-; } || true
   fi
 
-  if [[ -r /dev/tty && -w /dev/tty ]]; then
-    exec 9</dev/tty
-    _ctl_raw_read 9 9
-    exec 9<&-
-    if [[ $rc -eq 0 ]]; then
-      printf -v "$outvar" "%s" "$key"
-      return 0
-    fi
+  if [[ $_ctl_rc -eq 0 ]]; then
+    printf -v "$outvar" "%s" "$_ctl_key"
+    return 0
   fi
   return 1
 }
