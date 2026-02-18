@@ -8,6 +8,11 @@ REFRESH="${CORE4_DASHBOARD_REFRESH:-60}"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
 
+# With args → pass through to tracker directly
+if [[ $# -gt 0 ]]; then
+    exec python3 "$TRACKER" "$@"
+fi
+
 log_habit() {
   local habit="$1"
   printf "\n  → %s..." "$habit"
