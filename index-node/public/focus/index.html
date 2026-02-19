@@ -23,65 +23,46 @@
   </header>
 
   <main class="wrap">
+    <div class="shell">
 
-    <!-- Hero -->
-    <section class="hero">
-      <div class="ring-wrap">
-        <svg class="ring-svg" viewBox="0 0 120 120">
-          <circle class="ring-bg"    cx="60" cy="60" r="52" />
-          <circle class="ring-track" cx="60" cy="60" r="52" id="ringTrack" />
-        </svg>
-        <div class="ring-center">
-          <div class="ring-score" id="overallPct">0%</div>
-          <div class="ring-label">overall</div>
+      <!-- Left: Timeline -->
+      <aside class="panel-left">
+        <div class="panel-head">
+          <div class="panel-head-info">
+            <div class="panel-label">MONTHLY MISSION</div>
+            <div class="panel-month" id="monthLabel">—</div>
+          </div>
+          <div class="mini-ring" id="miniRing">
+            <div class="mini-ring-inner"><span id="overallPct">0%</span></div>
+          </div>
         </div>
-      </div>
-      <div class="scores">
-        <div class="score-card">
-          <div class="sc-label">MONTH</div>
-          <div class="sc-value sc-month" id="monthLabel">—</div>
+
+        <div class="domain-bars" id="domainBars"></div>
+
+        <div class="panel-actions">
+          <button class="action-btn mission-btn" id="btnMission">Mission</button>
+          <button class="action-btn new-btn" id="btnNewEntry">＋ Entry</button>
         </div>
-        <div class="score-card">
-          <div class="sc-label">STATUS</div>
-          <div class="sc-value sc-status" id="statusLabel">—</div>
+
+        <div class="entries-label">ENTRIES</div>
+        <div class="entries-list" id="entryList"></div>
+      </aside>
+
+      <!-- Right: Editor -->
+      <section class="panel-right">
+        <div class="editor-head">
+          <div class="editor-title" id="editorTitle">—</div>
+          <button class="save-btn" id="btnSave">Save</button>
         </div>
-      </div>
-    </section>
+        <textarea id="editor" class="editor" spellcheck="false" placeholder="Start writing…"></textarea>
+        <div class="editor-hint">Markdown + YAML frontmatter · Obsidian-compatible</div>
+      </section>
 
-    <!-- Section head -->
-    <div class="section-head">
-      <span class="sh-title">FOCUS</span>
-      <span class="sh-sub">MONTHLY OUTCOMES</span>
     </div>
-
-    <!-- Domain cards -->
-    <section id="cards" class="cards"></section>
-
-    <!-- Add outcome -->
-    <div class="section-head" style="margin-top:20px">
-      <span class="sh-title">ADD OUTCOME</span>
-    </div>
-    <div class="add-form" id="addForm">
-      <select class="add-select" id="addDomain">
-        <option value="body">BODY</option>
-        <option value="being">BEING</option>
-        <option value="balance">BALANCE</option>
-        <option value="business">BUSINESS</option>
-      </select>
-      <input class="add-input" id="addTitle" placeholder="Outcome (z.B. 12 Trainings)" maxlength="80" />
-      <select class="add-select" id="addType">
-        <option value="count">count</option>
-        <option value="delta">delta</option>
-      </select>
-      <input class="add-input add-num" id="addTarget" type="number" step="0.1" placeholder="target" />
-      <button class="add-btn" id="addBtn">＋ Add</button>
-    </div>
-    <div class="add-hint">count = 0..target &nbsp;·&nbsp; delta = change vs baseline (z.B. −2kg)</div>
-
-    <!-- Toast -->
-    <div class="toast" id="toast"></div>
-
   </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
 
   <script src="/focus/app.js"></script>
 </body>
