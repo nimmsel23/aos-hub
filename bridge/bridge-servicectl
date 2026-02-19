@@ -193,19 +193,51 @@ PY
 
   local rc=0
   msg ""
+
+  # System scope (aos-bridge.service — production)
+  if has_cmd systemctl; then
+    local sys_active sys_enabled
+    sys_active="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+    sys_enabled="$(systemctl is-enabled "aos-bridge.service" 2>/dev/null || true)"
+    [[ -z "$sys_active" ]]  && sys_active="-"
+    [[ -z "$sys_enabled" ]] && sys_enabled="-"
+    msg "Systemd (system): active=$sys_active enabled=$sys_enabled"
+    if [[ "$sys_active" == "active" ]]; then
+      systemctl status "aos-bridge.service" --no-pager -l --lines=3 2>/dev/null || true
+      msg ""
+    fi
+  fi
+
+  # User scope (aos-bridge-dev.service — dev)
   if systemd_user_available; then
     local active enabled
     active="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
     enabled="$(systemctl_user is-enabled "$SERVICE_NAME" 2>/dev/null || true)"
-
-    msg "Systemd (user): active=$active enabled=$enabled"
-    systemctl_user status "$SERVICE_NAME" --no-pager || true
-
-    if [[ "$active" != "active" ]]; then
-      rc=1
+    [[ -z "$active" ]]  && active="-"
+    [[ -z "$enabled" ]] && enabled="-"
+    msg "Systemd (user):   active=$active enabled=$enabled  [$SERVICE_NAME]"
+    if [[ "$active" == "active" ]]; then
+      systemctl_user status "$SERVICE_NAME" --no-pager -l --lines=3 2>/dev/null || true
+      msg ""
     fi
   else
     ui_warn "systemctl --user not available (no user bus)."
+  fi
+
+  # Determine effective mode
+  local sys_a dev_a
+  sys_a="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+  dev_a="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
+  if [[ "$sys_a" == "active" && "$dev_a" == "active" ]]; then
+    ui_warn "Both system and user bridge are active — double-run risk"
+    rc=1
+  elif [[ "$sys_a" == "active" ]]; then
+    ui_ok "Active mode: system (aos-bridge.service)"
+  elif [[ "$dev_a" == "active" ]]; then
+    ui_ok "Active mode: user ($SERVICE_NAME)"
+  else
+    ui_warn "Bridge not active in either scope"
+    rc=1
   fi
 
   return "$rc"

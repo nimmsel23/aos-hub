@@ -1098,49 +1098,47 @@ run_status() {
     msg ""
   fi
 
-  # ── Legacy Units (user scope, alphaos-*) ──────────────────────
-  local legacy_units=()
-  while IFS= read -r unit; do
-    [[ -n "$unit" ]] || continue
-    legacy_units+=("$unit")
-  done < <(systemctl --user list-units --all --no-legend 2>/dev/null \
-    | awk '{print $1}' \
-    | grep "^alphaos-" \
-    | grep -v "\.mount$" \
-    | sort)
-
-  if [[ ${#legacy_units[@]} -gt 0 ]]; then
-    msg "── Legacy Units (user: alphaos-*) ─────────────────────────────"
-    local shown=0
-    for unit in "${legacy_units[@]}"; do
-      local act
-      act="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
-      [[ -z "$act" || "$act" == "inactive" || "$act" == "dead" ]] && continue
-      if [[ "$unit" == *.timer ]]; then
-        _status_timer_line "$unit" "user"
-      else
-        _status_unit_line "$unit" "$unit" "user"
-      fi
-      shown=$((shown + 1))
-    done
-    if [[ "$shown" -eq 0 ]]; then
-      msg "  (none active)"
-    fi
-    msg ""
-  fi
-
-  # ── Timers (system: aos-*) ─────────────────────────────────────
-  msg "── Timers (system: aos-*) ─────────────────────────────────────"
-  local any_timer=0
+  # ── Sync Timers ───────────────────────────────────────────────
+  local _sync_shown=0
+  msg "── Sync Timers ────────────────────────────────────────────────"
+  # system: aos-* backup/live timers
   while IFS= read -r unit; do
     [[ -n "$unit" ]] || continue
     _status_timer_line "$unit" "system"
-    any_timer=1
+    _sync_shown=$((_sync_shown + 1))
   done < <(systemctl list-units --all --no-legend 2>/dev/null \
+    | awk '{print $1}' | grep "^aos-.*\.timer$" | sort)
+  # user: aos-sync@* + aos-hub-live + alphaos sync-related
+  while IFS= read -r unit; do
+    [[ -n "$unit" ]] || continue
+    local _ua; _ua="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    [[ -z "$_ua" || "$_ua" == "inactive" ]] && continue
+    _status_timer_line "$unit" "user"
+    _sync_shown=$((_sync_shown + 1))
+  done < <(systemctl --user list-units --all --no-legend 2>/dev/null \
     | awk '{print $1}' \
-    | grep "^aos-.*\.timer$" \
-    | sort)
-  [[ "$any_timer" -eq 0 ]] && msg "  (none)"
+    | grep -E "^(aos-sync@|aos-hub-live|alphaos-vault-sync|alphaos-safe-rclone|alphaos-dokumente)" \
+    | grep "\.timer$" | sort)
+  [[ "$_sync_shown" -eq 0 ]] && msg "  (none active)"
+  msg ""
+
+  # ── Other Legacy Timers (user: alphaos-*, non-sync) ───────────
+  local _legacy_shown=0
+  msg "── Other Timers (user: alphaos-*) ─────────────────────────────"
+  while IFS= read -r unit; do
+    [[ -n "$unit" ]] || continue
+    [[ "$unit" =~ alphaos-vault-sync|alphaos-safe-rclone|alphaos-dokumente ]] && continue
+    local _ua; _ua="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    [[ -z "$_ua" || "$_ua" == "inactive" || "$_ua" == "dead" ]] && continue
+    if [[ "$unit" == *.timer ]]; then
+      _status_timer_line "$unit" "user"
+    else
+      _status_unit_line "$unit" "$unit" "user"
+    fi
+    _legacy_shown=$((_legacy_shown + 1))
+  done < <(systemctl --user list-units --all --no-legend 2>/dev/null \
+    | awk '{print $1}' | grep "^alphaos-" | grep -v "\.mount$" | sort)
+  [[ "$_legacy_shown" -eq 0 ]] && msg "  (none active)"
   msg ""
 
   # ── CTL availability (one line each) ─────────────────────────

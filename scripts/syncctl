@@ -699,13 +699,22 @@ pause() {
 run_aos_sync() {
   local bin
   bin="$(pick_bin "$AOS_SYNC" "" "aos-sync")" || die "aos-sync not found"
-  exec "$bin" "$@"
+  # Use exec only when not in menu context (direct CLI call)
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
 }
 
 run_vault() {
   local bin
   bin="$(pick_bin "$VAULTCTL_PRIMARY" "$VAULTCTL_FALLBACK" "vaultctl")" || die "vaultctl not found"
-  exec "$bin" "$@"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
 }
 
 run_domains() {
@@ -717,31 +726,48 @@ run_domains() {
     for d in BODY BEING BALANCE BUSINESS; do
       "$bin" "$d" status
     done
-    exit 0
+    [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]] || exit 0
+    return 0
   fi
 
   local domain="$1"
   shift || true
   [[ -n "$domain" ]] || die "domains requires <DOMAIN>"
-  exec "$bin" "$domain" "$@"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$domain" "$@"
+  else
+    exec "$bin" "$domain" "$@"
+  fi
 }
 
 run_vitaltrainer() {
   local bin
   bin="$(pick_bin "$VITAL_PRIMARY" "$VITAL_FALLBACK" "")" || die "rclone-vitaltrainer-copy.sh not found"
-  exec "$bin" "$@"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
 }
 
 run_fadaro() {
   local bin
   bin="$(pick_bin "$FADARO_PRIMARY" "" "")" || die "rclone-fadaro-push.sh not found"
-  exec "$bin" "$@"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
 }
 
 run_hub_live() {
   local bin
   bin="$(pick_bin "$HUB_LIVE_PRIMARY" "$HUB_LIVE_FALLBACK" "")" || die "rclone-aos-hub-live-push.sh not found"
-  exec "$bin" "$@"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
 }
 
 menu_targets() {
@@ -973,6 +999,9 @@ run_menu() {
     doctor_tty >&2
     exit 2
   fi
+
+  # Signal helper functions to NOT use exec (so menu can continue after sub-commands)
+  export SYNCCTL_IN_MENU=1
 
   echo ""
   echo "syncctl menu"
