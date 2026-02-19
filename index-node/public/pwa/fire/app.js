@@ -84,6 +84,7 @@ function render(data) {
   if (!data) return;
   fireData = data;
   $("weekLabel").textContent = data.week || "—";
+  $("appWeek").textContent   = data.week || "—";
 
   const root = $("cards");
   root.innerHTML = "";

@@ -25,52 +25,38 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── Topbar ── */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+/* ── Appbar ── */
+.appbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: rgba(11,12,15,.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
   border-bottom: 1px solid var(--line);
 }
 
-.brand {
-  font-size: 14px;
+.app-title {
+  font-size: 13px;
   font-weight: 900;
-  letter-spacing: .14em;
-  color: var(--muted);
-  white-space: nowrap;
+  letter-spacing: .18em;
+  color: var(--text);
 }
 
-.tabs { display: flex; gap: 6px; flex: 1; justify-content: flex-end; }
-
-.tab {
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  background: transparent;
+.app-week {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
   color: var(--muted);
-  border-radius: 10px;
-  letter-spacing: .1em;
-  font-weight: 700;
-  font-size: 12px;
-  cursor: pointer;
-  transition: color .15s, border-color .15s;
 }
-.tab:hover   { color: var(--text); }
-.tab.active  { color: var(--text); border-color: #2a3442; }
-.tab:disabled { opacity: .35; cursor: default; }
 
 /* ── Wrap ── */
 .wrap {
   max-width: 540px;
   margin: 0 auto;
-  padding: 16px 14px 100px; /* extra bottom for sheet trigger */
+  padding: 16px 14px 130px; /* sheet trigger + bottomnav */
 }
 
 /* ── Hero ── */
@@ -550,6 +536,40 @@ body {
   margin-top: 4px;
 }
 .slot-picker-back:hover { color: var(--text); }
+
+/* ── Bottom Nav ── */
+.bottomnav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  background: rgba(11,12,15,.95);
+  border-top: 1px solid var(--line);
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 50;
+}
+
+.bn-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.bn-btn svg { width: 22px; height: 22px; }
+.bn-btn.active { color: var(--fire); }
+.bn-btn:hover  { color: var(--text); }
 
 /* ── Responsive ── */
 @media (max-width: 380px) {
