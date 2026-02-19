@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>αOS · FOCUS</title>
+  <link rel="stylesheet" href="/focus/style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">αOS</div>
+    <div class="tabs">
+      <button class="tab" onclick="location.href='/core4/'">CORE</button>
+      <button class="tab" onclick="location.href='/fire/'">FIRE</button>
+      <button class="tab active">FOCUS</button>
+      <button class="tab" onclick="location.href='/'">HUB</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="shell">
+
+      <!-- Left: Timeline -->
+      <aside class="panel-left">
+        <div class="panel-head">
+          <div class="panel-head-info">
+            <div class="panel-label">MONTHLY MISSION</div>
+            <div class="panel-month" id="monthLabel">—</div>
+          </div>
+          <div class="mini-ring" id="miniRing">
+            <div class="mini-ring-inner"><span id="overallPct">0%</span></div>
+          </div>
+        </div>
+
+        <div class="domain-bars" id="domainBars"></div>
+
+        <div class="panel-actions">
+          <button class="action-btn mission-btn" id="btnMission">Mission</button>
+          <button class="action-btn new-btn" id="btnNewEntry">＋ Entry</button>
+        </div>
+
+        <div class="entries-label">ENTRIES</div>
+        <div class="entries-list" id="entryList"></div>
+      </aside>
+
+      <!-- Right: Editor -->
+      <section class="panel-right">
+        <div class="editor-head">
+          <div class="editor-title" id="editorTitle">—</div>
+          <button class="save-btn" id="btnSave">Save</button>
+        </div>
+        <textarea id="editor" class="editor" spellcheck="false" placeholder="Start writing…"></textarea>
+        <div class="editor-hint">Markdown + YAML frontmatter · Obsidian-compatible</div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/focus/app.js"></script>
+</body>
+</html>
