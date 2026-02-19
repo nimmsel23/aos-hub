@@ -480,6 +480,8 @@ EXAMPLES:
   aosctl dashboard 5
   aosctl status
   aosctl hub status
+  aosctl hub deploy            # sync hub/index-node → /opt/aos/index + restart
+  aosctl hub deploy --dry-run  # preview only
   aosctl core4 status
   aosctl router status
   aosctl bridge logs
@@ -1225,8 +1227,13 @@ route_component() {
 
   case "$component" in
     hub|index)
-      [[ -n "$INDEXCTL" ]] || die "indexctl not found"
-      "$INDEXCTL" "$@"
+      if [[ "${1:-}" == "deploy" ]]; then
+        shift || true
+        index_deploy_cmd "$@"
+      else
+        [[ -n "$INDEXCTL" ]] || die "indexctl not found"
+        "$INDEXCTL" "$@"
+      fi
       ;;
     core4|core4ctl)
       core4_cmd "$@"
@@ -1490,6 +1497,69 @@ fruits_cmd() {
 creatorking_cmd() {
   [[ -n "$CREATORKING_BIN" ]] || die "creatorking CLI not found (set AOS_CREATORKING_BIN or install $SCRIPT_DIR/python-creatorking/creatorking)"
   "$CREATORKING_BIN" "$@"
+}
+
+index_deploy_cmd() {
+  local src="${AOS_INDEX_DEPLOY_SRC:-$SCRIPT_DIR/index-node}"
+  local dst="${AOS_INDEX_DEPLOY_DST:-/opt/aos/index}"
+  local service="aos-index.service"
+  local dry_run=0
+
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run|-n) dry_run=1 ;;
+      --src=*) src="${arg#--src=}" ;;
+      --dst=*) dst="${arg#--dst=}" ;;
+      *) die "Usage: aosctl index deploy [--dry-run] [--src=PATH] [--dst=PATH]" ;;
+    esac
+  done
+
+  [[ -d "$src" ]] || die "Source not found: $src"
+  [[ -d "$dst" ]] || die "Destination not found: $dst (is aos-index.service installed?)"
+
+  msg "Index Deploy"
+  msg "  src : $src"
+  msg "  dst : $dst"
+  msg "  svc : $service"
+  if [[ "$dry_run" == "1" ]]; then
+    msg "  mode: DRY RUN (no changes)"
+    msg ""
+    msg "Would run:"
+    if have rsync; then
+      msg "  rsync -a --exclude='node_modules/' --exclude='.git/' $src/ $dst/"
+    else
+      msg "  sudo cp -r [files from $src, excluding node_modules/.git] → $dst/"
+    fi
+    msg "  sudo systemctl restart $service"
+    return 0
+  fi
+  msg ""
+
+  if have rsync; then
+    sudo rsync -a --delete \
+      --exclude='node_modules/' \
+      --exclude='.git/' \
+      --exclude='.claude/' \
+      "$src/" "$dst/"
+  else
+    # copy file by file, skip node_modules and .git
+    sudo find "$src" -maxdepth 1 -mindepth 1 \
+      ! -name 'node_modules' ! -name '.git' ! -name '.claude' \
+      -exec sudo cp -r {} "$dst/" \;
+  fi
+  msg "[$(aosctl_chip ok)] Files synced to $dst"
+
+  sudo systemctl restart "$service"
+  sleep 1
+  local active
+  active="$(systemctl is-active "$service" 2>/dev/null || true)"
+  if [[ "$active" == "active" ]]; then
+    msg "[$(aosctl_chip ok)] $service restarted and active"
+  else
+    msg "[$(aosctl_chip err)] $service status: $active"
+    msg "  → check: sudo journalctl -u $service -n 30"
+    return 1
+  fi
 }
 
 centre_cmd() {
