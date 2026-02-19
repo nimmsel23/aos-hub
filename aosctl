@@ -988,155 +988,196 @@ run_dashboard() {
   esac
 }
 
+_status_unit_line() {
+  # _status_unit_line <label> <unit> <scope:system|user> [note]
+  local label="$1" unit="$2" scope="${3:-system}" note="${4:-}"
+  local active enabled chip
+  if [[ "$scope" == "system" ]]; then
+    active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  else
+    active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  fi
+  [[ -z "$active" ]]  && active="-"
+  [[ -z "$enabled" ]] && enabled="-"
+  case "$active" in
+    active)                        chip="$(aosctl_chip ok)" ;;
+    activating|deactivating)       chip="$(aosctl_chip warn)" ;;
+    failed)                        chip="$(aosctl_chip err)" ;;
+    inactive|dead|-)               chip="$(aosctl_chip warn)" ;;
+    *)                             chip="$(aosctl_chip err)" ;;
+  esac
+  local suffix="$active"
+  [[ "$enabled" != "enabled" && "$enabled" != "-" ]] && suffix="$active/$enabled"
+  [[ -n "$note" ]] && suffix="$suffix — $note"
+  printf "  %-26s [%s] %s\n" "$label" "$chip" "$suffix"
+}
+
+_status_timer_line() {
+  local unit="$1" scope="${2:-system}"
+  local active next
+  if [[ "$scope" == "system" ]]; then
+    active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    next="$(systemctl show "$unit" -p NextElapseUSecRealtime --value 2>/dev/null | head -1 || true)"
+  else
+    active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    next="$(systemctl --user show "$unit" -p NextElapseUSecRealtime --value 2>/dev/null | head -1 || true)"
+  fi
+  [[ -z "$active" ]] && return 0
+  [[ "$active" == "inactive" ]] && return 0
+  local chip
+  [[ "$active" == "active" ]] && chip="$(aosctl_chip ok)" || chip="$(aosctl_chip warn)"
+  printf "  %-46s [%s]\n" "$unit" "$chip"
+}
+
+_index_deploy_drift() {
+  local prod_file="/opt/aos/index/server.js"
+  local repo_file="${SCRIPT_DIR}/index-node/server.js"
+  if [[ ! -f "$prod_file" || ! -f "$repo_file" ]]; then
+    return 0
+  fi
+  local prod_ts repo_ts prod_sz repo_sz
+  prod_ts="$(date -r "$prod_file" '+%Y-%m-%d %H:%M' 2>/dev/null || true)"
+  repo_ts="$(date -r "$repo_file" '+%Y-%m-%d %H:%M' 2>/dev/null || true)"
+  prod_sz="$(stat -c%s "$prod_file" 2>/dev/null || true)"
+  repo_sz="$(stat -c%s "$repo_file" 2>/dev/null || true)"
+  local drift_chip
+  if [[ "$prod_ts" == "$repo_ts" && "$prod_sz" == "$repo_sz" ]]; then
+    drift_chip="$(aosctl_chip ok)"
+    printf "  prod  %-12s %6s bytes  [%s] in sync\n" "$prod_ts" "$prod_sz" "$drift_chip"
+  else
+    drift_chip="$(aosctl_chip warn)"
+    printf "  prod  %-12s %6s bytes\n" "$prod_ts" "$prod_sz"
+    printf "  repo  %-12s %6s bytes  [%s] STALE — run: aosctl hub deploy\n" "$repo_ts" "$repo_sz" "$drift_chip"
+  fi
+}
+
 run_status() {
-  msg "αOS status (no logs)"
-  msg ""
-  render_production_units_compact
-  msg ""
-  msg "Legacy hints:"
-  legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
-  legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
-  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
-  msg ""
-  scope_guard_check warn || true
+  local verbose=0
+  for arg in "$@"; do
+    case "$arg" in
+      -v|--verbose) verbose=1 ;;
+    esac
+  done
+
+  msg "αOS Status — $(date '+%Y-%m-%d %H:%M')"
   msg ""
 
-  if [[ -n "$INDEXCTL" ]]; then
-    msg "=== indexctl ==="
-    "$INDEXCTL" status || true
-    msg ""
-  else
-    warn "indexctl not found"
-  fi
+  # ── Core Services (system scope, aos-*) ───────────────────────
+  msg "── Core Services (system: aos-*) ─────────────────────────────"
+  _status_unit_line "Index      (aos-index)"  "aos-index.service"  "system"
+  _status_unit_line "Bridge     (aos-bridge)" "aos-bridge.service" "system"
+  _status_unit_line "Router     (aos-router)" "aos-router.service" "system"
+  msg ""
 
-  if [[ -n "$ROUTERCTL" ]]; then
-    msg "=== routerctl ==="
-    "$ROUTERCTL" status || true
-    msg ""
-  else
-    warn "routerctl not found"
-  fi
+  # ── Dev Units (user scope, aos-*) ─────────────────────────────
+  local dev_index_active dev_bridge_active dev_router_active
+  dev_index_active="$(systemctl --user is-active "aos-index-dev.service"  2>/dev/null || true)"
+  dev_bridge_active="$(systemctl --user is-active "aos-bridge-dev.service" 2>/dev/null || true)"
+  dev_router_active="$(systemctl --user is-active "aos-router-dev.service" 2>/dev/null || true)"
 
-  if [[ -n "$BRIDGECTL" ]]; then
-    msg "=== bridgectl ==="
-    "$BRIDGECTL" status || true
-    msg ""
-  else
-    warn "bridgectl not found"
-  fi
+  if [[ "$dev_index_active" == "active" || "$dev_bridge_active" == "active" || "$dev_router_active" == "active" ]]; then
+    msg "── Dev Units (user: aos-*-dev) ────────────────────────────────"
+    [[ "$dev_index_active"  != "inactive" && -n "$dev_index_active"  ]] && _status_unit_line "Index-dev  (user)" "aos-index-dev.service"  "user"
+    [[ "$dev_bridge_active" != "inactive" && -n "$dev_bridge_active" ]] && _status_unit_line "Bridge-dev (user)" "aos-bridge-dev.service" "user"
+    [[ "$dev_router_active" != "inactive" && -n "$dev_router_active" ]] && _status_unit_line "Router-dev (user)" "aos-router-dev.service" "user"
 
-  if [[ -n "$SYNCCTL" ]]; then
-    msg "=== syncctl ==="
-    "$SYNCCTL" status || true
-    msg ""
-  else
-    warn "syncctl not found"
-  fi
-
-  if [[ -n "$GITCTL" ]]; then
-    msg "=== gitctl ==="
-    "$GITCTL" status || true
-    msg ""
-  else
-    warn "gitctl not found"
-  fi
-
-  msg "=== rclone backend ==="
-  if have curl; then
-    if curl --max-time 1 -fsS "$RCLONE_RC_URL" >/dev/null 2>&1; then
-      msg "Status: rClone Backend is connected and working as expected"
-    else
-      msg "Status: rClone Backend unreachable"
+    local prod_idx_active
+    prod_idx_active="$(systemctl is-active "aos-index.service" 2>/dev/null || true)"
+    if [[ "$prod_idx_active" == "active" && "$dev_index_active" == "active" ]]; then
+      msg "  $(aosctl_chip err) PORT CONFLICT: prod + dev both on port — run: aosctl hub deploy"
     fi
-    msg "Current IP Address: $RCLONE_RC_URL"
-    msg ""
-  else
-    warn "curl not found (cannot check rclone backend)"
-  fi
-
-  if [[ -n "$FIREMAP_BIN" ]]; then
-    msg "=== firemap ==="
-    "$FIREMAP_BIN" status || true
-    msg ""
-  else
-    warn "firemap not found"
-  fi
-
-  if [[ -n "$BACKUPCTL" ]]; then
-    msg "=== backupctl ==="
-    "$BACKUPCTL" status || true
-    msg ""
-  else
-    warn "backupctl not found"
-  fi
-
-  if [[ -n "$MOUNTCTL" ]]; then
-    msg "=== mountctl ==="
-    "$MOUNTCTL" status || true
-    msg ""
-  else
-    warn "mountctl not found"
-  fi
-
-  if [[ -n "$HOOKCTL" ]]; then
-    msg "=== hookctl ==="
-    "$HOOKCTL" status || true
-    msg ""
-  else
-    warn "hookctl not found"
-  fi
-
-  if [[ -n "$DOORCTL" ]]; then
-    msg "=== doorctl ==="
-    "$DOORCTL" status || true
-    msg ""
-  else
-    warn "doorctl not found"
-  fi
-
-  if [[ -n "$GAMECTL" ]]; then
-    msg "=== gamectl ==="
-    "$GAMECTL" status || true
-    msg ""
-  else
-    warn "gamectl not found"
-  fi
-
-  if [[ -n "$VOICECTL" ]]; then
-    msg "=== voicectl ==="
-    "$VOICECTL" status || true
-    msg ""
-  else
-    warn "voicectl not found"
-  fi
-
-  if [[ -n "$ENVCTL" ]]; then
-    msg "=== envctl ==="
-    "$ENVCTL" list || true
-    msg ""
-  else
-    warn "envctl not found"
-  fi
-
-  if [[ -n "$ALIASCTL" ]]; then
-    msg "=== aliasctl ==="
-    "$ALIASCTL" doctor 2>/dev/null || true
-    msg ""
-  else
-    warn "aos-aliasctl not found"
-  fi
-
-  if [[ -n "$CORE4CTL" ]]; then
-    msg "=== core4ctl ==="
-    "$CORE4CTL" status || true
     msg ""
   fi
 
-  if [[ -n "$ROUTERCTL" ]]; then
-    msg "=== heartbeat ==="
-    "$ROUTERCTL" heartbeat ping || true
+  # ── Index: Prod vs Repo (deploy drift) ────────────────────────
+  if [[ -f "/opt/aos/index/server.js" ]]; then
+    msg "── Index Deploy Drift ─────────────────────────────────────────"
+    _index_deploy_drift
     msg ""
   fi
+
+  # ── Legacy Units (user scope, alphaos-*) ──────────────────────
+  local legacy_units=()
+  while IFS= read -r unit; do
+    [[ -n "$unit" ]] || continue
+    legacy_units+=("$unit")
+  done < <(systemctl --user list-units --all --no-legend 2>/dev/null \
+    | awk '{print $1}' \
+    | grep "^alphaos-" \
+    | grep -v "\.mount$" \
+    | sort)
+
+  if [[ ${#legacy_units[@]} -gt 0 ]]; then
+    msg "── Legacy Units (user: alphaos-*) ─────────────────────────────"
+    local shown=0
+    for unit in "${legacy_units[@]}"; do
+      local act
+      act="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+      [[ -z "$act" || "$act" == "inactive" || "$act" == "dead" ]] && continue
+      if [[ "$unit" == *.timer ]]; then
+        _status_timer_line "$unit" "user"
+      else
+        _status_unit_line "$unit" "$unit" "user"
+      fi
+      shown=$((shown + 1))
+    done
+    if [[ "$shown" -eq 0 ]]; then
+      msg "  (none active)"
+    fi
+    msg ""
+  fi
+
+  # ── Timers (system: aos-*) ─────────────────────────────────────
+  msg "── Timers (system: aos-*) ─────────────────────────────────────"
+  local any_timer=0
+  while IFS= read -r unit; do
+    [[ -n "$unit" ]] || continue
+    _status_timer_line "$unit" "system"
+    any_timer=1
+  done < <(systemctl list-units --all --no-legend 2>/dev/null \
+    | awk '{print $1}' \
+    | grep "^aos-.*\.timer$" \
+    | sort)
+  [[ "$any_timer" -eq 0 ]] && msg "  (none)"
+  msg ""
+
+  # ── CTL availability (one line each) ─────────────────────────
+  msg "── CTL Tools ──────────────────────────────────────────────────"
+  local ctl_ok ctl_chip
+  for ctl_entry in \
+    "indexctl:$INDEXCTL" \
+    "routerctl:$ROUTERCTL" \
+    "bridgectl:$BRIDGECTL" \
+    "syncctl:$SYNCCTL" \
+    "gitctl:$GITCTL" \
+    "backupctl:$BACKUPCTL" \
+    "mountctl:$MOUNTCTL" \
+    "hookctl:$HOOKCTL" \
+    "doorctl:$DOORCTL" \
+    "gamectl:$GAMECTL" \
+    "voicectl:$VOICECTL" \
+    "firectl:$FIRECTL_BIN" \
+    "tentctl:$TENTCTL" \
+    "gasctl:$GASCTL" \
+    "core4ctl:$CORE4CTL" \
+    "envctl:$ENVCTL" \
+    "aliasctl:$ALIASCTL"
+  do
+    local ctl_name="${ctl_entry%%:*}"
+    local ctl_path="${ctl_entry#*:}"
+    if [[ -n "$ctl_path" && -x "$ctl_path" ]]; then
+      ctl_chip="$(aosctl_chip ok)"
+    elif [[ -n "$ctl_path" ]]; then
+      ctl_chip="$(aosctl_chip warn)"  # resolved but not executable
+    else
+      ctl_chip="$(aosctl_chip err)"
+    fi
+    printf "  %-12s [%s]  %s\n" "$ctl_name" "$ctl_chip" "${ctl_path:-not found}"
+  done
+  msg ""
+  msg "  (details: aosctl menu  or  aosctl <component> status)"
 }
 
 run_ping() {
