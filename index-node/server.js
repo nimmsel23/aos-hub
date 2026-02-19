@@ -88,7 +88,262 @@ function uiBasicAuthMiddleware(req, res, next) {
   return next();
 }
 
+function ensurePinStoreDir() {
+  if (!fs.existsSync(PIN_STORE_DIR)) {
+    fs.mkdirSync(PIN_STORE_DIR, { recursive: true });
+  }
+}
+
+function hashPin(pin, salt = null, iterations = PIN_HASH_ITERATIONS) {
+  const normalized = String(pin || "").trim();
+  const saltValue = salt || crypto.randomBytes(16).toString("hex");
+  const derived = crypto.pbkdf2Sync(normalized, saltValue, iterations, 32, "sha256");
+  return {
+    hash: derived.toString("hex"),
+    salt: saltValue,
+    iterations,
+  };
+}
+
+function loadPinConfig() {
+  if (PIN_CONFIG_CACHE) return PIN_CONFIG_CACHE;
+  try {
+    if (!fs.existsSync(PIN_CONFIG_PATH)) return null;
+    const raw = fs.readFileSync(PIN_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.hash && parsed.salt && parsed.iterations) {
+      PIN_CONFIG_CACHE = parsed;
+      return PIN_CONFIG_CACHE;
+    }
+  } catch (err) {
+    console.error("[pin] failed to load config", err);
+  }
+  return null;
+}
+
+function persistPinConfig(config) {
+  try {
+    ensurePinStoreDir();
+    fs.writeFileSync(PIN_CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
+    PIN_CONFIG_CACHE = config;
+    return true;
+  } catch (err) {
+    console.error("[pin] failed to persist config", err);
+    return false;
+  }
+}
+
+function pinConfigExists() {
+  return Boolean(loadPinConfig()?.hash);
+}
+
+function verifyPin(pin) {
+  const config = loadPinConfig();
+  if (!config) return false;
+  const candidate = hashPin(pin, config.salt, config.iterations);
+  const expected = Buffer.from(config.hash, "hex");
+  const actual = Buffer.from(candidate.hash, "hex");
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(actual, expected);
+}
+
+function loadPinSessions() {
+  if (PIN_SESSIONS_CACHE) return PIN_SESSIONS_CACHE;
+  try {
+    if (!fs.existsSync(PIN_SESSIONS_PATH)) {
+      PIN_SESSIONS_CACHE = {};
+      return PIN_SESSIONS_CACHE;
+    }
+    const raw = fs.readFileSync(PIN_SESSIONS_PATH, "utf8").trim();
+    PIN_SESSIONS_CACHE = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.error("[pin] failed to load sessions", err);
+    PIN_SESSIONS_CACHE = {};
+  }
+  return PIN_SESSIONS_CACHE;
+}
+
+function persistPinSessions() {
+  try {
+    ensurePinStoreDir();
+    const sessions = loadPinSessions();
+    fs.writeFileSync(PIN_SESSIONS_PATH, JSON.stringify(sessions, null, 2), "utf8");
+  } catch (err) {
+    console.error("[pin] failed to persist sessions", err);
+  }
+}
+
+function cleanupPinSessions() {
+  const sessions = loadPinSessions();
+  const now = Date.now();
+  let changed = false;
+  Object.keys(sessions).forEach((token) => {
+    if (!sessions[token] || sessions[token] <= now) {
+      delete sessions[token];
+      changed = true;
+    }
+  });
+  if (changed) persistPinSessions();
+  return sessions;
+}
+
+function createPinSession() {
+  const sessions = cleanupPinSessions();
+  const token = crypto.randomBytes(24).toString("hex");
+  sessions[token] = Date.now() + PIN_SESSION_TTL_MS;
+  persistPinSessions();
+  return token;
+}
+
+function isPinSessionValid(token) {
+  if (!token) return false;
+  const sessions = cleanupPinSessions();
+  const expires = sessions[token];
+  return Boolean(expires && expires > Date.now());
+}
+
+function revokePinSession(token) {
+  if (!token) return false;
+  const sessions = cleanupPinSessions();
+  if (!sessions[token]) return false;
+  delete sessions[token];
+  persistPinSessions();
+  return true;
+}
+
+function getPinTokenCandidate(req) {
+  const header = String(req.headers[PIN_SESSION_HEADER] || "").trim();
+  if (header) return header;
+  return getCookieValue(req, PIN_COOKIE_NAME);
+}
+
+function pinBarrier(req, res, next) {
+  const method = String(req.method || "").toUpperCase();
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return next();
+  const path = String(req.path || "");
+  if (path.startsWith("/pin")) return next();
+  if (!pinConfigExists()) {
+    return res.status(503).json({ ok: false, error: "pin_not_configured" });
+  }
+
+  const pinCandidate =
+    String(req.headers["x-pin"] || "")
+      .trim() ||
+    String(req.body?.pin || "")
+      .trim() ||
+    String(req.query?.pin || "")
+      .trim();
+
+  if (pinCandidate) {
+    if (!verifyPin(pinCandidate)) {
+      return res.status(401).json({ ok: false, error: "invalid_pin" });
+    }
+    const token = createPinSession();
+    setPinTokenCookie(res, token, req);
+    req.pinToken = token;
+    return next();
+  }
+
+  const token = getPinTokenCandidate(req);
+  if (token && isPinSessionValid(token)) {
+    req.pinToken = token;
+    return next();
+  }
+
+  return res.status(401).json({ ok: false, error: "pin_required" });
+}
+
+function getCookieValue(req, name) {
+  const header = String(req.headers.cookie || "");
+  if (!header) return "";
+  const needle = name.toLowerCase();
+  for (const chunk of header.split(";")) {
+    const [key, ...rest] = chunk.trim().split("=");
+    if (!key) continue;
+    if (key.toLowerCase() !== needle) continue;
+    return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+
+function buildPinCookieOptions(req) {
+  const forwarded = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  const secure = PIN_COOKIE_SECURE || req.secure || forwarded === "https";
+  return {
+    httpOnly: true,
+    sameSite: "Strict",
+    secure,
+    path: "/",
+  };
+}
+
+function setPinTokenCookie(res, token, req) {
+  const opts = buildPinCookieOptions(req);
+  opts.maxAge = PIN_SESSION_TTL_MS;
+  res.cookie(PIN_COOKIE_NAME, token, opts);
+}
+
+function clearPinTokenCookie(res, req) {
+  const opts = buildPinCookieOptions(req);
+  opts.maxAge = 0;
+  res.clearCookie(PIN_COOKIE_NAME, opts);
+}
+
 app.use(uiBasicAuthMiddleware);
+
+app.post("/api/pin/set", (req, res) => {
+  const pin = String(req.body?.pin || "").trim();
+  if (!pin) {
+    return res.status(400).json({ ok: false, error: "missing_pin" });
+  }
+  const existing = loadPinConfig();
+  if (existing) {
+    const currentPin = String(req.body?.current_pin || req.headers["x-pin"] || "").trim();
+    if (!currentPin || !verifyPin(currentPin)) {
+      return res.status(401).json({ ok: false, error: "invalid_current_pin" });
+    }
+  }
+  const config = hashPin(pin);
+  if (!persistPinConfig(config)) {
+    return res.status(500).json({ ok: false, error: "pin_save_failed" });
+  }
+  return res.json({ ok: true, replaced: Boolean(existing) });
+});
+
+app.post("/api/pin/login", (req, res) => {
+  if (!pinConfigExists()) {
+    return res.status(503).json({ ok: false, error: "pin_not_configured" });
+  }
+  const pin =
+    String(req.body?.pin || "").trim() || String(req.headers["x-pin"] || "").trim();
+  if (!pin) {
+    return res.status(400).json({ ok: false, error: "missing_pin" });
+  }
+  if (!verifyPin(pin)) {
+    return res.status(401).json({ ok: false, error: "invalid_pin" });
+  }
+  const token = createPinSession();
+  setPinTokenCookie(res, token, req);
+  return res.json({ ok: true, token });
+});
+
+app.post("/api/pin/logout", (req, res) => {
+  const token = getPinTokenCandidate(req);
+  if (token) {
+    revokePinSession(token);
+  }
+  clearPinTokenCookie(res, req);
+  return res.json({ ok: true });
+});
+
+app.get("/api/pin/status", (_req, res) => {
+  return res.json({
+    ok: true,
+    configured: pinConfigExists(),
+  });
+});
+
+app.use("/api", pinBarrier);
 
 app.use(
   express.static("public", {
@@ -194,6 +449,17 @@ const FIRE_TASK_TAGS = String(
   .split(",")
   .map((tag) => tag.trim().toLowerCase())
   .filter(Boolean);
+const PIN_STORE_DIR = path.join(os.homedir(), ".aos");
+const PIN_CONFIG_PATH = path.join(PIN_STORE_DIR, "pin.json");
+const PIN_SESSIONS_PATH = path.join(PIN_STORE_DIR, "pin-sessions.json");
+const PIN_COOKIE_NAME = "aos-pin-token";
+const PIN_SESSION_HEADER = "x-pin-token";
+const PIN_SESSION_TTL_MS = Number(process.env.PIN_SESSION_TTL_MS || 6 * 60 * 60 * 1000);
+const PIN_COOKIE_SECURE = String(process.env.PIN_COOKIE_SECURE || "0").trim() === "1";
+const PIN_HASH_ITERATIONS = Number(process.env.PIN_HASH_ITERATIONS || 310000);
+
+let PIN_CONFIG_CACHE = null;
+let PIN_SESSIONS_CACHE = null;
 const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "scheduled,due,wait")
   .split(",")
   .map((field) => field.trim())
