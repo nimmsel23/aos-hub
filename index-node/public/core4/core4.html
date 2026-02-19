@@ -14,12 +14,10 @@
 </head>
 <body>
 
-  <!-- Top tabs -->
-  <header class="topbar">
-    <button class="tab active">CORE</button>
-    <button class="tab" onclick="location.href='/fire/'">FIRE</button>
-    <button class="tab" onclick="location.href='/focus/'">FOCUS</button>
-    <button class="tab">SCORE</button>
+  <!-- App header -->
+  <header class="appbar">
+    <span class="app-title">αOS · CORE4</span>
+    <span class="app-date" id="dateLabel">—</span>
   </header>
 
   <main class="wrap">
@@ -33,6 +31,7 @@
         </svg>
         <div class="ring-center">
           <span class="ring-pct" id="dailyPct">0%</span>
+          <span class="ring-sub">TODAY</span>
         </div>
       </div>
 
@@ -43,15 +42,19 @@
         </div>
         <div class="hs-block">
           <div class="hs-label">WEEKLY SCORE</div>
-          <div class="hs-value"><span id="weeklyScore">0</span><span class="hs-max">/28 POINTS</span></div>
+          <div class="hs-value"><span id="weeklyScore">0</span><span class="hs-max">/28</span></div>
+        </div>
+        <div class="hs-block">
+          <div class="hs-label">WEEK</div>
+          <div class="hs-value hs-week" id="weekLabel">—</div>
         </div>
       </div>
     </section>
 
     <!-- Section label -->
     <div class="section-label">
-      <span>CORE4</span>
-      <span class="sl-date" id="dateLabel">—</span>
+      <span>HABITS</span>
+      <span class="sl-hint">ring = completions this week / 7</span>
     </div>
 
     <!-- Cards -->

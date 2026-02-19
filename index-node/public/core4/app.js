@@ -11,13 +11,27 @@ const DOMAINS = [
     tasks: [{ key: "discover", label: "DISCOVER .5" }, { key: "declare", label: "DECLARE .5" }] },
 ];
 
-const CIRCUMFERENCE = 2 * Math.PI * 50; // 314.16
+const CIRCUMFERENCE      = 2 * Math.PI * 50;   // main ring r=50 → 314.16
+const MINI_CIRC          = 2 * Math.PI * 11;   // mini ring r=11 → 69.12
 
 const $ = (id) => document.getElementById(id);
 
-let state = { done: new Set(), daily: 0, weekly: 0, date: "", week: "" };
+let state = {
+  done: new Set(),
+  daily: 0,
+  weekly: 0,
+  date: "",
+  week: "",
+  weekHabits: {},   // "body:fitness" → count (0-7)
+};
 
-// ── Ring ─────────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function habitCount(domain, task) {
+  const pts = state.weekHabits[`${domain}:${task}`] || 0;
+  return Math.round(pts / 0.5);   // 0..7
+}
+
+// ── Main ring ─────────────────────────────────────────────────────────────────
 function updateRing(daily) {
   const pct = Math.min(daily / 4, 1);
   $("ringTrack").style.strokeDashoffset = (CIRCUMFERENCE * (1 - pct)).toFixed(2);
@@ -35,6 +49,26 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2000);
 }
 
+// ── Mini ring HTML ────────────────────────────────────────────────────────────
+function miniRingHTML(count) {
+  const max    = 7;
+  const pct    = Math.min(count / max, 1);
+  const offset = (MINI_CIRC * (1 - pct)).toFixed(2);
+  const empty  = count === 0 ? " empty" : "";
+  const numCls = count > 0  ? " active" : "";
+  return `
+    <div class="mini-ring-wrap">
+      <svg class="mini-ring-svg" viewBox="0 0 34 34">
+        <circle class="mini-ring-bg"    cx="17" cy="17" r="11"/>
+        <circle class="mini-ring-track${empty}" cx="17" cy="17" r="11"
+          style="stroke-dasharray:${MINI_CIRC.toFixed(2)};stroke-dashoffset:${offset}"/>
+      </svg>
+      <div class="mini-ring-center">
+        <span class="mini-ring-num${numCls}">${count}</span>
+      </div>
+    </div>`;
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   const root = $("cards");
@@ -42,9 +76,21 @@ function render() {
 
   for (const domain of DOMAINS) {
     const doneTasks = domain.tasks.filter(t => state.done.has(`${domain.key}/${t.key}`));
-    const pts = doneTasks.length * 0.5;
-    const barPct = (pts / 1.0) * 100;
+    const pts       = doneTasks.length * 0.5;
+    const barPct    = (pts / 1.0) * 100;
     const scoreClass = pts > 0 ? " done" : "";
+
+    const habitsHTML = domain.tasks.map(t => {
+      const dk    = `${domain.key}/${t.key}`;
+      const done  = state.done.has(dk);
+      const count = habitCount(domain.key, t.key);
+      return `
+        <div class="habit-row">
+          <button class="task-chip${done ? " done" : ""}"
+            data-domain="${domain.key}" data-task="${t.key}">${t.label}</button>
+          ${miniRingHTML(count)}
+        </div>`;
+    }).join("");
 
     const card = document.createElement("div");
     card.className = "domain-card";
@@ -53,13 +99,7 @@ function render() {
         <div class="card-icon">${domain.icon}</div>
         <div class="card-info">
           <div class="card-name">${domain.label}</div>
-          <div class="card-tasks">
-            ${domain.tasks.map(t => {
-              const dk = `${domain.key}/${t.key}`;
-              const done = state.done.has(dk);
-              return `<button class="task-chip${done ? " done" : ""}" data-domain="${domain.key}" data-task="${t.key}">${t.label}</button>`;
-            }).join("")}
-          </div>
+          <div class="card-habits">${habitsHTML}</div>
         </div>
         <div class="card-score${scoreClass}">${pts > 0 ? pts.toFixed(1) : "0"}</div>
       </div>
@@ -67,7 +107,6 @@ function render() {
         <div class="card-bar-fill" style="width:${barPct}%"></div>
       </div>
     `;
-
     root.appendChild(card);
   }
 
@@ -77,30 +116,35 @@ function render() {
 
   updateRing(state.daily);
   $("weeklyScore").textContent = state.weekly % 1 === 0 ? state.weekly : state.weekly.toFixed(1);
+  const wl = $("weekLabel");
+  if (wl) wl.textContent = state.week || "—";
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
 async function handleLog(e) {
-  const btn = e.currentTarget;
+  const btn    = e.currentTarget;
   const domain = btn.dataset.domain;
   const task   = btn.dataset.task;
   btn.classList.add("logging");
 
   try {
-    const res = await fetch("/api/core4/log", {
-      method: "POST",
+    const res  = await fetch("/api/core4/log", {
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain, task, source: "core4-pwa" }),
+      body:    JSON.stringify({ domain, task, source: "core4-pwa" }),
     });
     const data = await res.json();
 
     if (data.duplicate || data.ok) {
       state.done.add(`${domain}/${task}`);
-      if (data.day)          state.daily   = Number(data.day.total  || 0);
-      if (data.week?.totals) state.weekly  = Number(data.week.totals.week_total || 0);
+      if (data.day)          state.daily      = Number(data.day.total  || 0);
+      if (data.week?.totals) {
+        state.weekly     = Number(data.week.totals.week_total || 0);
+        state.weekHabits = data.week.totals.by_habit || {};
+      }
       showToast(data.duplicate ? "Already logged" : `${domain} · ${task} ✓`);
     }
-  } catch (err) {
+  } catch {
     showToast("Error – check server");
   }
 
@@ -129,11 +173,15 @@ async function load() {
   }
 
   if (weekRes.ok) {
-    state.weekly = Number(weekRes.totals?.week_total || 0);
-    state.week   = weekRes.week || state.week;
+    state.weekly     = Number(weekRes.totals?.week_total || 0);
+    state.week       = weekRes.week || state.week;
+    state.weekHabits = weekRes.totals?.by_habit || {};
   }
 
   $("dateLabel").textContent = state.date;
+  const wl = $("weekLabel");
+  if (wl) wl.textContent = state.week || "—";
+
   render();
 }
 

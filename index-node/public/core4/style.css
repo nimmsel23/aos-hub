@@ -21,34 +21,31 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Topbar ── */
-.topbar {
+/* ── Appbar ── */
+.appbar {
   display: flex;
-  gap: 4px;
-  padding: 12px 16px 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
   background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 10;
+  border-bottom: 1px solid var(--line);
 }
 
-.tab {
-  flex: 1;
-  padding: 8px 4px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .14em;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color .15s, border-color .15s;
-}
-
-.tab.active {
+.app-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .18em;
   color: var(--text);
-  border-bottom-color: var(--ok);
+}
+
+.app-date {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--muted);
 }
 
 /* ── Wrap ── */
@@ -98,14 +95,25 @@ body {
 .ring-center {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .ring-pct {
   font-size: 26px;
   font-weight: 900;
   letter-spacing: -.02em;
+  line-height: 1;
+}
+
+.ring-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--muted);
+  margin-top: 2px;
 }
 
 /* Hero scores */
@@ -136,10 +144,18 @@ body {
   margin-left: 3px;
 }
 
+.hs-week {
+  font-size: 14px !important;
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em;
+}
+
 /* ── Section label ── */
 .section-label {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .18em;
@@ -147,7 +163,12 @@ body {
   margin-bottom: 10px;
 }
 
-.sl-date { font-weight: 600; }
+.sl-hint {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  color: #3a3f48;
+}
 
 /* ── Cards ── */
 .cards { display: grid; gap: 8px; }
@@ -184,11 +205,17 @@ body {
   letter-spacing: .06em;
 }
 
-.card-tasks {
+.card-habits {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .task-chip {
@@ -217,6 +244,59 @@ body {
 .task-chip.logging {
   opacity: .4;
   pointer-events: none;
+}
+
+/* ── Mini habit ring (weekly count / 7) ── */
+.mini-ring-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+}
+
+.mini-ring-svg {
+  width: 34px;
+  height: 34px;
+  transform: rotate(-90deg);
+}
+
+.mini-ring-bg {
+  fill: none;
+  stroke: #1c1c1c;
+  stroke-width: 3;
+}
+
+.mini-ring-track {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 69.12; /* 2π×11 */
+  stroke-dashoffset: 69.12;
+  transition: stroke-dashoffset .5s ease, stroke .3s;
+}
+
+.mini-ring-track.empty {
+  stroke: #2a2d33;
+}
+
+.mini-ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.mini-ring-num {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.mini-ring-num.active {
+  color: var(--ok);
 }
 
 .card-score {
