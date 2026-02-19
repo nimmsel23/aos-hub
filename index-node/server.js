@@ -3676,12 +3676,17 @@ app.use("/api/focus", focusRouter);
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
-app.get("/core4",  (_req, res) => res.redirect(302, "/core4/"));
-app.get("/fire",   (_req, res) => res.redirect(302, "/fire/"));
-app.get("/focus",  (_req, res) => res.redirect(302, "/focus/"));
-app.get("/core4/", (_req, res) => res.sendFile(path.resolve("public/core4/index.html")));
-app.get("/fire/",  (_req, res) => res.sendFile(path.resolve("public/fire/fire.html")));
-app.get("/focus/", (_req, res) => res.sendFile(path.resolve("public/focus/focus.html")));
+// PWA — canonical paths under /pwa/ (express.static serves index.html automatically)
+app.get("/pwa/core4", (_req, res) => res.redirect(301, "/pwa/core4/"));
+app.get("/pwa/fire",  (_req, res) => res.redirect(301, "/pwa/fire/"));
+app.get("/pwa/focus", (_req, res) => res.redirect(301, "/pwa/focus/"));
+// Legacy short paths → permanent redirect to new canonical paths
+app.get("/core4",  (_req, res) => res.redirect(301, "/pwa/core4/"));
+app.get("/core4/", (_req, res) => res.redirect(301, "/pwa/core4/"));
+app.get("/fire",   (_req, res) => res.redirect(301, "/pwa/fire/"));
+app.get("/fire/",  (_req, res) => res.redirect(301, "/pwa/fire/"));
+app.get("/focus",  (_req, res) => res.redirect(301, "/pwa/focus/"));
+app.get("/focus/", (_req, res) => res.redirect(301, "/pwa/focus/"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
 app.get("/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
 app.get("/voice", (_req, res) => res.redirect(302, "/memoirs/"));
