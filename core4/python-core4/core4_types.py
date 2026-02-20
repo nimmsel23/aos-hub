@@ -66,7 +66,7 @@ HABIT_PROMPTS = {
     "declare": "Did you declare?",
 }
 
-DEFAULT_VAULT_DIR = Path.home() / "AlphaOS-Vault"
+DEFAULT_VAULT_DIR = Path.home() / "vault"
 BRIDGE_URL = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
 TZ = ZoneInfo(os.environ.get("AOS_TZ", "Europe/Vienna"))
 CORE4CTL = Path(os.environ.get("AOS_CORE4CTL", str(Path(__file__).resolve().parent / "core4ctl"))).expanduser()

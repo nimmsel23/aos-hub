@@ -61,6 +61,64 @@ def _latest_week_file(base_dir: Path) -> str:
     return files[-1] if files else ""
 
 
+def _latest_event_info(base_dir: Path) -> tuple[str, str, str]:
+    """
+    Find the most recent Core4 event file and extract:
+    - date (YYYY-MM-DD)
+    - habit name
+    - timestamp (ISO format from filename or mtime)
+
+    Returns: (date, habit, timestamp_display) or ("", "", "") if no events found
+    """
+    ev_root = core4_event_dir(base_dir)
+    if not ev_root.exists():
+        return ("", "", "")
+
+    # Find all event files across all day directories
+    all_events = []
+    for day_dir in ev_root.iterdir():
+        if not day_dir.is_dir():
+            continue
+        for event_file in day_dir.glob("*.json"):
+            if event_file.is_file():
+                all_events.append(event_file)
+
+    if not all_events:
+        return ("", "", "")
+
+    # Sort by mtime (most recent first)
+    all_events.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    latest = all_events[0]
+
+    # Parse filename: DATE__DOMAIN__HABIT__TIMESTAMP__SOURCE.json
+    parts = latest.stem.split("__")
+    event_date = parts[0] if len(parts) > 0 else ""
+    habit = parts[2] if len(parts) > 2 else ""
+    timestamp_raw = parts[3] if len(parts) > 3 else ""
+
+    # Convert timestamp to human-readable
+    # Format 1: 2026-02-19T11-00-00-000Z → 2026-02-19 11:00
+    # Format 2: 20260219T120000_0100 → 2026-02-19 12:00
+    if not timestamp_raw:
+        timestamp_display = ""
+    elif "T" in timestamp_raw:
+        if timestamp_raw.count("-") > 2:
+            # ISO format with dashes
+            timestamp_display = timestamp_raw.replace("T", " ").replace("-00-000Z", "").replace("-", ":")[:16]
+        else:
+            # Compact format: 20260219T120000_0100
+            try:
+                date_part = timestamp_raw[:8]  # 20260219
+                time_part = timestamp_raw[9:15]  # 120000
+                timestamp_display = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}"
+            except Exception:
+                timestamp_display = timestamp_raw
+    else:
+        timestamp_display = timestamp_raw
+
+    return (event_date, habit, timestamp_display)
+
+
 def show_sources() -> int:
     dirs = core4_dirs()
     if not dirs:
@@ -72,6 +130,7 @@ def show_sources() -> int:
         ev_root = core4_event_dir(base)
         latest_day = _latest_event_day(base)
         latest_week = _latest_week_file(base)
+        event_date, habit, timestamp = _latest_event_info(base)
         exists = base.exists()
         events_ok = ev_root.exists()
         print(f"- {base}")
@@ -79,6 +138,11 @@ def show_sources() -> int:
         print(f"  events: {str(ev_root) if events_ok else _yellow('missing')}")
         print(f"  latest_day: {_green(latest_day) if latest_day else _yellow('n/a')}")
         print(f"  latest_week: {_green(latest_week) if latest_week else _yellow('n/a')}")
+        if event_date and habit:
+            display_habit = DISPLAY_HABIT.get(habit, habit)
+            print(f"  latest_event: {_green(event_date)} {_cyan(display_habit)} at {timestamp}")
+        else:
+            print(f"  latest_event: {_yellow('n/a')}")
     return 0
 
 

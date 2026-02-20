@@ -36,7 +36,7 @@ core4_recompute_config() {
   CORE4_REMOTE_STANDALONE="${AOS_CORE4_REMOTE_STANDALONE:-eldanioo:Alpha_Core4}"
 
   # Legacy compat
-  CORE4_MOUNT_DIR="${AOS_CORE4_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_Core4}"
+  CORE4_MOUNT_DIR="${AOS_CORE4_MOUNT_DIR:-$HOME/vault/Alpha_Core4}"
   CORE4_REMOTE="${CORE4_REMOTE_HQ}"  # Default to HQ
   CORE4_MOUNT_SERVICE="${AOS_CORE4_MOUNT_SERVICE:-rclone-alpha-core4.service}"
 }

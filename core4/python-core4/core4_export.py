@@ -179,7 +179,7 @@ def finalize_week(week: str, *, force: bool = False) -> Dict[str, Any]:
 def prune_events(*, keep_weeks: int = 8) -> Dict[str, Any]:
     """
     Remove local event files older than `keep_weeks` to limit growth.
-    Only touches the *local* ledger under `~/AlphaOS-Vault/Core4/.core4/events`.
+    Only touches the *local* ledger under `~/.core4/events`.
     """
     keep_weeks = max(1, min(int(keep_weeks), 52))
     cutoff = date.today() - timedelta(days=keep_weeks * 7)

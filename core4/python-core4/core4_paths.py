@@ -39,7 +39,7 @@ def core4_dirs() -> list[Path]:
     Defaults reflect the "local + gdrive mount" setup:
       - `AOS_CORE4_LOCAL_DIR` (if set)
       - `AOS_CORE4_MOUNT_DIR` (if set)
-      - fallback: `AlphaOS-Vault/Core4` + `AlphaOS-Vault/Alpha_Core4`
+      - fallback: `vault/Core4` + `vault/Alpha_Core4`
 
     Override with:
       - `AOS_CORE4_DIR` (single dir)

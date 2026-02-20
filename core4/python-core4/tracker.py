@@ -4,7 +4,7 @@ Core4 tracker CLI (idempotent via append-only event ledger).
 
 Design:
 - The *source of truth* for "already logged" is the append-only event ledger:
-  `AlphaOS-Vault/*Core4/.core4/events/YYYY-MM-DD/*.json`
+  `~/.core4/events/YYYY-MM-DD/*.json`
 - If the stable entry key already exists (done=true), we do nothing.
 - Otherwise we create+complete a Taskwarrior task so existing hooks handle:
   - Bridge `/bridge/core4/log` (weekly JSON)
