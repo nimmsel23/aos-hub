@@ -314,11 +314,12 @@ def _core4_chat_user() -> tuple[Optional[int], Optional[int]]:
 
 
 def _send_desktop_notify(domain: str, task: str, points: float, total_today: float) -> None:
-    """Send desktop notification via dunstify (runs in user session via systemd-run)."""
+    """Send desktop notification via notify-send (compatible with all notification daemons)."""
     if not CORE4_DESKTOP_NOTIFY:
         return
     try:
         # Use systemd-run --user to ensure notification runs in user session (with DISPLAY/DBUS)
+        # notify-send works with dunst, Plasma, GNOME, etc.
         summary = f"Core4: {domain}/{task}"
         body = f"+{points:.1f} points | Today: {total_today:.1f}"
         subprocess.run(
@@ -326,7 +327,7 @@ def _send_desktop_notify(domain: str, task: str, points: float, total_today: flo
                 "systemd-run",
                 "--user",
                 "--scope",
-                "dunstify",
+                "notify-send",
                 "-u",
                 "normal",
                 "-i",
