@@ -57,6 +57,7 @@ TELE_BIN = os.getenv("AOS_TELE_BIN", "tele").strip()
 CORE4_NOTIFY = os.getenv("AOS_CORE4_NOTIFY", "0").strip() == "1"
 CORE4_NOTIFY_SILENT = os.getenv("AOS_CORE4_NOTIFY_SILENT", "0").strip() == "1"
 CORE4_NOTIFY_MODE = os.getenv("AOS_CORE4_NOTIFY_MODE", "tele").strip().lower()
+CORE4_DESKTOP_NOTIFY = os.getenv("AOS_CORE4_DESKTOP_NOTIFY", "1").strip() == "1"
 CORE4_AUTO_PUSH = os.getenv("AOS_CORE4_AUTO_PUSH", "0").strip() == "1"
 CORE4_AUTO_PUSH_MIN_INTERVAL = int(os.getenv("AOS_CORE4_AUTO_PUSH_MIN_INTERVAL", "60") or "60")
 CORE4CTL_BIN = os.getenv(
@@ -310,6 +311,36 @@ def _core4_chat_user() -> tuple[Optional[int], Optional[int]]:
         return int(chat_id), int(user_id)
     except ValueError:
         return None, None
+
+
+def _send_desktop_notify(domain: str, task: str, points: float, total_today: float) -> None:
+    """Send desktop notification via dunstify (runs in user session via systemd-run)."""
+    if not CORE4_DESKTOP_NOTIFY:
+        return
+    try:
+        # Use systemd-run --user to ensure notification runs in user session (with DISPLAY/DBUS)
+        summary = f"Core4: {domain}/{task}"
+        body = f"+{points:.1f} points | Today: {total_today:.1f}"
+        subprocess.run(
+            [
+                "systemd-run",
+                "--user",
+                "--scope",
+                "dunstify",
+                "-u",
+                "normal",
+                "-i",
+                "checkbox-checked-symbolic",
+                summary,
+                body,
+            ],
+            check=False,
+            timeout=3,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        LOGGER.warning("desktop notify failed: %s", e)
 
 
 async def _send_core4_notify(text: str) -> None:
@@ -1356,6 +1387,7 @@ async def handle_core4_log(request: web.Request) -> web.Response:
     if CORE4_NOTIFY:
         message = _format_core4_notify(domain, task, points, total_today, source, ts)
         await _send_core4_notify(message)
+    _send_desktop_notify(domain, task, points, total_today)
     if CORE4_AUTO_PUSH:
         asyncio.create_task(_core4_auto_push())
     # Complete matching TW task → on-modify hook fires (tele + TickTick)

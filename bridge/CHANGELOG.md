@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Desktop notifications**: Add dunst notifications when Core4 events are logged (via `AOS_CORE4_DESKTOP_NOTIFY=1`).
 - **Fix: GAS HQ → Bridge → local sync**: Configure `AOS_RCLONE_REMOTE` for automatic event pull from `eldanioo:Alpha_HQ`.
 - Validate core4 points inputs and ignore invalid stored values when computing totals.
 - Guard tent summary file writes to stay inside AOS_TENT_DIR.
