@@ -64,6 +64,7 @@ usage() {
 $APP — unified CLI for the hub repo
 
 Usage:
+  $APP menu
   $APP list
   $APP doctor
   $APP doctor --strict
@@ -72,7 +73,8 @@ Usage:
   $APP router <routerctl-args...>
   $APP heartbeat <cmd>   (standalone heartbeat manager)
   $APP systemstatus      (trigger GAS system status via local Bridge)
-  $APP index  <indexctl-args...>
+  $APP index  <status|start|stop|restart|logs|doctor|health>
+  $APP node   <status|start|stop|restart|logs|doctor|health>
   $APP sync   <syncctl-args...>
   $APP git    <gitctl-args...>
   $APP backup <backupctl-args...>
@@ -101,7 +103,9 @@ Examples:
   $APP dev restart --stop-prod router
   $APP heartbeat status
   $APP systemstatus
-  $APP index doctor
+  $APP index status
+  $APP index restart
+  $APP node doctor
   $APP sync status
   $APP git status
   $APP git split status
@@ -125,6 +129,39 @@ Examples:
 Env:
   AOS_ENV_FILE=$ROOT_DIR/.env/aos.env
 EOF
+}
+
+show_menu() {
+  ui_title "hubctl"
+  local choice=""
+  choice="$(choose \
+    "Doctor (strict scope checks)" \
+    "Dev: status (all)" \
+    "Dev: restart (all)" \
+    "Index Dev: status" \
+    "Index Dev: doctor" \
+    "Bridge: health" \
+    "Router: status" \
+    "Systemstatus: trigger" \
+    "Fire: status" \
+    "Quit")" || {
+      usage
+      return 0
+    }
+
+  case "$choice" in
+    "Doctor (strict scope checks)") "$0" doctor --strict ;;
+    "Dev: status (all)") "$0" dev status ;;
+    "Dev: restart (all)") "$0" dev restart ;;
+    "Index Dev: status") "$0" index status ;;
+    "Index Dev: doctor") "$0" index doctor ;;
+    "Bridge: health") "$0" bridge health ;;
+    "Router: status") "$0" router status ;;
+    "Systemstatus: trigger") "$0" systemstatus ;;
+    "Fire: status") "$0" fire status ;;
+    "Quit") return 0 ;;
+    *) usage ;;
+  esac
 }
 
 DEV_INDEX_UNIT="${AOS_INDEX_DEV_UNIT:-aos-index-dev.service}"
@@ -227,6 +264,77 @@ dev_doctor() {
   ui_info "Dev/user units are managed via: hubctl dev ..."
 }
 
+index_dev_status() {
+  user_bus_ok || die "systemctl --user not available (no user bus)"
+  local active enabled
+  active="$(systemctl --user is-active "$DEV_INDEX_UNIT" 2>/dev/null || true)"
+  enabled="$(systemctl --user is-enabled "$DEV_INDEX_UNIT" 2>/dev/null || true)"
+  printf "  %-24s active=%-10s enabled=%s\n" "$DEV_INDEX_UNIT" "${active:-unknown}" "${enabled:-unknown}"
+}
+
+index_dev_health() {
+  local health_url="${AOS_INDEX_DEV_HEALTH_URL:-http://127.0.0.1:8798/health}"
+  if command -v curl >/dev/null 2>&1 && curl -fsS "$health_url" >/dev/null 2>&1; then
+    ui_ok "index-dev health OK: $health_url"
+  else
+    ui_warn "index-dev health failed: $health_url"
+    ui_info "Tip: set AOS_INDEX_DEV_HEALTH_URL if your dev port differs."
+  fi
+}
+
+index_dev_cmd() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    ""|-h|--help|help)
+      cat <<EOF
+hubctl index|node — dev/user index control
+
+Usage:
+  hubctl index status|start|stop|restart|logs|doctor|health
+  hubctl node  status|start|stop|restart|logs|doctor|health
+
+Unit:
+  $DEV_INDEX_UNIT
+EOF
+      ;;
+    status)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      ui_title "hubctl index status (dev/user)"
+      index_dev_status
+      ;;
+    start)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user start "$DEV_INDEX_UNIT"
+      ;;
+    stop)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user stop "$DEV_INDEX_UNIT"
+      ;;
+    restart)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user restart "$DEV_INDEX_UNIT"
+      ;;
+    logs)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      journalctl --user -u "$DEV_INDEX_UNIT" -n 200 -f
+      ;;
+    health)
+      index_dev_health
+      ;;
+    doctor)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      ui_title "hubctl index doctor (dev/user)"
+      index_dev_status
+      index_dev_health
+      ui_info "Production Index is managed via: aosctl index ..."
+      ;;
+    *)
+      die "unknown index command: $sub"
+      ;;
+  esac
+}
+
 strict_doctor() {
   local rc=0
   local strict="${1:-0}"
@@ -321,7 +429,8 @@ cmd="${1:-}"
 shift || true
 
 case "$cmd" in
-  -h|--help|help|"") usage ;;
+  -h|--help|help) usage ;;
+  ""|menu) show_menu ;;
   list) list_scripts ;;
   install-cli) install_cli ;;
   uninstall-cli) uninstall_cli ;;
@@ -337,7 +446,8 @@ case "$cmd" in
   router) ROUTER_NAME="${ROUTER_NAME:-$(dev_router_name_default)}" repo_exec "router/routerctl" "$@" ;;
   heartbeat) repo_exec "scripts/heartbeat" "${1:-status}" ;;
   systemstatus) repo_exec "scripts/systemstatusctl" trigger "$@" ;;
-  index) AOS_INDEX_USER_SERVICE="${AOS_INDEX_USER_SERVICE:-$DEV_INDEX_UNIT}" repo_exec "scripts/indexctl" "$@" ;;
+  index) index_dev_cmd "$@" ;;
+  node|nodectl) index_dev_cmd "$@" ;;
   dev)
     sub="${1:-status}"; shift || true
     case "$sub" in

@@ -11,6 +11,9 @@ fi
 
 have() { command -v "$1" >/dev/null 2>&1; }
 die() { echo "[$APP] $*" >&2; exit 1; }
+can_prompt() {
+  [[ -t 0 && -t 1 ]]
+}
 
 resolve_bin() {
   local primary="$1"; shift
@@ -30,6 +33,8 @@ resolve_bin() {
 
 SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
+AOSCTL="$(resolve_bin "$SCRIPT_DIR/aosctl" || true)"
+HUBCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hubctl" || true)"
 NODE_RESTART="$SCRIPT_DIR/scripts/ctl/node-restart.sh"
 
 usage() {
@@ -77,7 +82,18 @@ shift || true
 
 # ---- gum top menu ----
 menu() {
-  have gum || die "gum not found. Install gum OR use: aos sync / aos router / aos alias"
+  if ! can_prompt; then
+    usage
+    return 0
+  fi
+  if ! have gum; then
+    if [[ -n "$AOSCTL" ]]; then
+      exec "$AOSCTL" menu
+    elif [[ -n "$HUBCTL" ]]; then
+      exec "$HUBCTL" menu
+    fi
+    die "gum not found and no aosctl/hubctl menu fallback available"
+  fi
 
   local choice
   choice="$(printf "%s\n" \
@@ -185,7 +201,8 @@ case "$cmd" in
   vault) vault_cmd "$@" ;;
   router) router_cmd "$@" ;;
   alias) alias_cmd "$@" ;;
-  help|-h|--help|"") usage ;;
+  help|-h|--help) usage ;;
+  "") menu ;;
   *)
     echo "[$APP] Unknown command: $cmd" >&2
     usage

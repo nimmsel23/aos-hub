@@ -1260,19 +1260,67 @@ run_doctor() {
   msg "   $SCRIPT_DIR/scripts/aos-doctor"
 }
 
+aos_index_prod_cmd() {
+  local sub="${1:-status}"
+  shift || true
+  local unit="aos-index.service"
+  local health_url="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+
+  case "$sub" in
+    start|stop|restart|enable|disable)
+      sudo systemctl "$sub" "$unit"
+      ;;
+    status)
+      systemctl status "$unit" --no-pager
+      ;;
+    logs)
+      journalctl -u "$unit" -n 200 -f
+      ;;
+    health)
+      if have curl && curl -fsS "$health_url" >/dev/null 2>&1; then
+        msg "[$(aosctl_chip ok)] index health OK: $health_url"
+      else
+        msg "[$(aosctl_chip err)] index health failed: $health_url"
+        return 1
+      fi
+      ;;
+    doctor)
+      ui_title "Index Doctor (production)"
+      render_production_units_compact
+      msg ""
+      aos_index_prod_cmd health || true
+      ;;
+    deploy)
+      index_deploy_cmd "$@"
+      ;;
+    ""|-h|--help|help)
+      cat <<'__INDEX_HELP__'
+aosctl index — production index control (/opt/aos + system scope)
+
+Usage:
+  aosctl index status|start|stop|restart|logs|health|doctor
+  aosctl index enable|disable
+  aosctl index deploy [--dry-run] [--src=PATH] [--dst=PATH]
+__INDEX_HELP__
+      ;;
+    *)
+      if [[ -n "$INDEXCTL" ]]; then
+        warn "fallback to legacy indexctl for subcommand: $sub"
+        "$INDEXCTL" "$sub" "$@"
+      else
+        die "Unknown index command: $sub"
+      fi
+      ;;
+  esac
+}
+
 route_component() {
   local component="$1"
   shift || true
 
   case "$component" in
     hub|index)
-      if [[ "${1:-}" == "deploy" ]]; then
-        shift || true
-        index_deploy_cmd "$@"
-      else
-        [[ -n "$INDEXCTL" ]] || die "indexctl not found"
-        "$INDEXCTL" "$@"
-      fi
+      aos_index_prod_cmd "$@"
       ;;
     core4|core4ctl)
       core4_cmd "$@"

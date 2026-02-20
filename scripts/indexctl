@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  ROOT_DIR="$HOME/aos-hub"
+fi
 
 # Shared ctl helpers (msg/warn/die/has_cmd/ui_*).
 # shellcheck disable=SC1091
@@ -220,6 +224,11 @@ hub_doctor() {
 usage() {
   cat <<EOF
 indexctl - manage αOS index-node service
+
+Compatibility note:
+  - Production-first control: aosctl index ...
+  - Dev/user control:         hubctl index ...
+  - indexctl remains for compatibility during migration.
 
 Usage:
   scripts/indexctl install

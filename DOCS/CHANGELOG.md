@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `scripts/hot-list/aos-hot.fish` (fish Hot List CLI) synced from dotfiles.
 - GAS HQ: `gas/hotlist_client.html` for modular Hot List UI handlers.
 
+### Changed
+- `nodectl`: restructure service/doctor helpers, refresh CLI grouping, and simplify dev pass-throughs while keeping the system index service as the default focus; help text now calls out routerctl/bridgectl/indexctl usage.
+
 ### Fixed - 2026-01-01
 
 #### Taskwarrior Integration (Critical Fix)

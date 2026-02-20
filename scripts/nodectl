@@ -128,6 +128,11 @@ usage() {
   cat <<'USAGE'
 Usage: nodectl <command>
 
+Compatibility note:
+  - Production-first index control: aosctl index ...
+  - Dev/user index control:         hubctl index ... (or hubctl node ...)
+  - nodectl remains as compatibility toolbox.
+
 General:
   all, monitor, status   show summary + doctor + urls (default: all)
   doctor                service + port + tailscale diagnostics
