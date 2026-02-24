@@ -3970,9 +3970,11 @@ app.use("/api/frame",   frameRouter);
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
 app.get("/tent", (_req, res) => res.redirect(302, "/game/tent"));
 // PWA — canonical paths under /pwa/ (express.static serves index.html automatically)
-app.get("/pwa/core4", (_req, res) => res.redirect(301, "/pwa/core4/"));
-app.get("/pwa/fire",  (_req, res) => res.redirect(301, "/pwa/fire/"));
-app.get("/pwa/focus", (_req, res) => res.redirect(301, "/pwa/focus/"));
+app.get("/pwa/core4",   (_req, res) => res.redirect(301, "/pwa/core4/"));
+app.get("/pwa/fire",    (_req, res) => res.redirect(301, "/pwa/fire/"));
+app.get("/pwa/focus",   (_req, res) => res.redirect(301, "/pwa/focus/"));
+app.get("/pwa/freedom", (_req, res) => res.redirect(301, "/pwa/freedom/"));
+app.get("/pwa/frame",   (_req, res) => res.redirect(301, "/pwa/frame/"));
 // Legacy short paths → permanent redirect to new canonical paths
 app.get("/core4",  (_req, res) => res.redirect(301, "/pwa/core4/"));
 app.get("/core4/", (_req, res) => res.redirect(301, "/pwa/core4/"));
