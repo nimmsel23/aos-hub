@@ -7,10 +7,14 @@
 //
 // Routes:
 //   GET  /api/fire/week        → current week data + score
-//   GET  /api/fire/tasks       → pending Taskwarrior tasks (for pool)
+//   GET  /api/fire/tasks       → pending tasks (TickTick → TW fallback)
 //   POST /api/fire/toggle      → { domain, index } toggle done
 //   POST /api/fire/rename      → { domain, index, title } rename strike
 //   POST /api/fire/reorder     → { domain, order: [0,2,1,3] } reorder strikes
+//
+// Task Sources:
+//   1. TickTick API (primary, cloud)
+//   2. Taskwarrior export (fallback, local)
 //
 // ================================================================
 
@@ -22,10 +26,36 @@ import { execFileSync } from "child_process";
 
 const router = express.Router();
 
+// ── Config ────────────────────────────────────────────────────────────────────
+
 const FIRE_DIR = process.env.FIRE_DIR || path.join(os.homedir(), ".aos", "fire");
 const ALLOWED  = new Set(["body", "being", "balance", "business"]);
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// TickTick
+const TICK_ENV_PATH = process.env.TICK_ENV || path.join(os.homedir(), ".alpha_os", "tick.env");
+
+// Taskwarrior
+const TASK_EXPORT_PATH = process.env.TASK_EXPORT || path.join(os.homedir(), ".local", "share", "alphaos", "task_export.json");
+const TASK_BIN         = process.env.TASK_BIN || "task";
+const TASKRC           = process.env.TASKRC || "";
+const TASK_CACHE_TTL   = Number(process.env.TASK_CACHE_TTL || 30);
+const TASK_EXPORT_FILTER = String(process.env.TASK_EXPORT_FILTER || "").trim();
+
+// Fire task filtering
+const FIRE_INCLUDE_UNDATED = String(process.env.FIRE_INCLUDE_UNDATED || "1").trim() !== "0";
+const FIRE_TASK_TAGS_MODE  = String(process.env.FIRE_TASK_TAGS_MODE || (process.env.FIRE_TASK_TAGS_ALL ? "all" : "any")).trim().toLowerCase();
+const FIRE_TASK_TAGS = String(process.env.FIRE_TASK_TAGS || process.env.FIRE_TASK_TAGS_ALL || "production,hit,fire")
+  .split(",")
+  .map((tag) => tag.trim().toLowerCase())
+  .filter(Boolean);
+const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "scheduled,due,wait")
+  .split(",")
+  .map((field) => field.trim())
+  .filter(Boolean);
+
+let TASK_CACHE = { ts: 0, tasks: [], error: null };
+
+// ── Fire Storage Helpers ──────────────────────────────────────────────────────
 
 function ensureDir() {
   fs.mkdirSync(FIRE_DIR, { recursive: true });
@@ -79,7 +109,255 @@ function score(data) {
   return { strikesDone: all.filter((s) => s.done).length, strikesMax: 16 };
 }
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+// ── TickTick Helpers ──────────────────────────────────────────────────────────
+
+function parseEnvFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return {};
+    const raw = fs.readFileSync(filePath, "utf8");
+    const out = {};
+    raw.split("\n").forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return;
+      const idx = trimmed.indexOf("=");
+      if (idx === -1) return;
+      const key = trimmed.slice(0, idx).trim();
+      const val = trimmed.slice(idx + 1).trim();
+      if (!key) return;
+      out[key] = val.replace(/^['"]|['"]$/g, "");
+    });
+    return out;
+  } catch (_) {
+    return {};
+  }
+}
+
+function getTickConfig() {
+  const env = parseEnvFile(TICK_ENV_PATH);
+  const token = env.TICKTICK_TOKEN || env.TICKTICK_API_TOKEN || "";
+  const projectId = env.TICKTICK_PROJECT_ID || env.TICKTICK_PROJECT || "";
+  return { token, projectId };
+}
+
+async function ticktickListProjectTasks() {
+  const { token, projectId } = getTickConfig();
+  if (!token) {
+    throw new Error("ticktick-token-missing");
+  }
+  if (!projectId) {
+    throw new Error("ticktick-project-missing");
+  }
+
+  const res = await fetch(
+    `https://api.ticktick.com/open/v1/project/${encodeURIComponent(projectId)}/tasks`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ticktick-error-${res.status}:${text}`);
+  }
+
+  return res.json();
+}
+
+function parseTickTickDue(task) {
+  if (!task) return null;
+  const raw = task.dueDateTime || task.dueDate || task.due;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function taskInRange(task, start, end) {
+  const due = parseTickTickDue(task);
+  if (!due) return false;
+  return due >= start && due < end;
+}
+
+function detectDomainFromTags(tags) {
+  const tagStr = (tags || []).map((t) => String(t || "").toLowerCase()).join(" ");
+  if (/\bbody\b/.test(tagStr)) return "body";
+  if (/\bbeing\b/.test(tagStr)) return "being";
+  if (/\bbalance\b/.test(tagStr)) return "balance";
+  if (/\bbusiness\b/.test(tagStr)) return "business";
+  return "other";
+}
+
+// ── Taskwarrior Helpers ───────────────────────────────────────────────────────
+
+function loadTaskwarriorExport() {
+  const now = Date.now();
+  if (TASK_CACHE_TTL > 0 && now - TASK_CACHE.ts < TASK_CACHE_TTL * 1000 && TASK_CACHE.tasks.length) {
+    return { ok: true, tasks: TASK_CACHE.tasks, source: "cache" };
+  }
+
+  const readExportFile = (allowStale = false) => {
+    try {
+      if (!TASK_EXPORT_PATH || !fs.existsSync(TASK_EXPORT_PATH)) return null;
+      const st = fs.statSync(TASK_EXPORT_PATH);
+      if (!allowStale && TASK_CACHE_TTL > 0 && now - st.mtimeMs > TASK_CACHE_TTL * 1000) {
+        return null;
+      }
+      const raw = fs.readFileSync(TASK_EXPORT_PATH, "utf8");
+      const tasks = JSON.parse(raw);
+      if (!Array.isArray(tasks)) return null;
+      TASK_CACHE = { ts: now, tasks, error: null };
+      return { ok: true, tasks, source: allowStale ? "file-stale" : "file" };
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const fileFresh = readExportFile(false);
+  if (fileFresh) return fileFresh;
+
+  const args = [];
+  if (TASK_EXPORT_FILTER) {
+    args.push(...TASK_EXPORT_FILTER.split(/\s+/).filter(Boolean));
+  }
+  args.push("export");
+
+  try {
+    const env = TASKRC ? { ...process.env, TASKRC } : process.env;
+    const stdout = execFileSync(TASK_BIN, args, { encoding: "utf8", timeout: 8000, env });
+    const tasks = JSON.parse(stdout);
+    if (!Array.isArray(tasks)) return { ok: false, error: "invalid-export" };
+    TASK_CACHE = { ts: now, tasks, error: null };
+    try {
+      if (TASK_EXPORT_PATH) {
+        const dir = path.dirname(TASK_EXPORT_PATH);
+        fs.mkdirSync(dir, { recursive: true });
+        const tmp = `${TASK_EXPORT_PATH}.tmp`;
+        fs.writeFileSync(tmp, JSON.stringify(tasks, null, 2), "utf8");
+        fs.renameSync(tmp, TASK_EXPORT_PATH);
+      }
+    } catch (_) {}
+    return { ok: true, tasks, source: "live" };
+  } catch (err) {
+    const fileStale = readExportFile(true);
+    if (fileStale) {
+      TASK_CACHE.error = String(err);
+      return fileStale;
+    }
+    return { ok: false, error: String(err) };
+  }
+}
+
+function parseTaskwarriorDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  const match = text.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  return new Date(Date.UTC(year, month, day, hour, minute, second));
+}
+
+function fireTaskHasAllTags(taskTags, required) {
+  if (!required.length) return true;
+  const tags = (taskTags || []).map((t) => String(t || "").toLowerCase());
+  return required.every((tag) => tags.includes(tag));
+}
+
+function fireTaskHasAnyTag(taskTags, required) {
+  if (!required.length) return true;
+  const tags = (taskTags || []).map((t) => String(t || "").toLowerCase());
+  return required.some((tag) => tags.includes(tag));
+}
+
+function fireTaskMatchesTags(taskTags, required) {
+  if (!required.length) return true;
+  if (FIRE_TASK_TAGS_MODE === "all") return fireTaskHasAllTags(taskTags, required);
+  return fireTaskHasAnyTag(taskTags, required);
+}
+
+function fireTaskDateCandidates(task) {
+  const dates = [];
+  FIRE_TASK_DATE_FIELDS.forEach((field) => {
+    const value = parseTaskwarriorDate(task[field]);
+    if (value) dates.push(value);
+  });
+  return dates;
+}
+
+function fireTaskPrimaryDate(task) {
+  const dates = fireTaskDateCandidates(task);
+  if (!dates.length) return null;
+  return new Date(Math.min(...dates.map((d) => d.getTime())));
+}
+
+function fireTaskInRange(task, start, end, includeOverdue) {
+  const date = fireTaskPrimaryDate(task);
+  if (!date) return false;
+  if (includeOverdue && date < start) return true;
+  return date >= start && date < end;
+}
+
+function detectFireDomain(task) {
+  const tags = (task.tags || []).map((t) => String(t || "").toLowerCase());
+  const project = String(task.project || "").toLowerCase();
+  const haystack = `${project} ${tags.join(" ")}`;
+  if (/\bbody\b/.test(haystack)) return "body";
+  if (/\bbeing\b/.test(haystack)) return "being";
+  if (/\bbalance\b/.test(haystack)) return "balance";
+  if (/\bbusiness\b/.test(haystack)) return "business";
+  return "other";
+}
+
+function normalizeFireTask(task, referenceDate) {
+  const date = fireTaskPrimaryDate(task);
+  return {
+    id: task.id || task.uuid,
+    title: task.description || "(ohne Titel)",
+    tags: task.tags || [],
+    project: task.project || "",
+    due: task.due || "",
+    scheduled: task.scheduled || "",
+    date: date ? date.toISOString() : "",
+    domain: detectFireDomain(task),
+    overdue: date ? date < referenceDate : false,
+  };
+}
+
+function isoWeekString(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+function getWeekRangeLocal(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(d);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  const week = isoWeekString(start);
+  const rangeLabel = `${start.toLocaleDateString("de-DE")} – ${new Date(end.getTime() - 1).toLocaleDateString("de-DE")}`;
+  return { start, end, week, rangeLabel };
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET /api/fire/week
 router.get("/week", (req, res) => {
@@ -96,25 +374,70 @@ router.get("/week", (req, res) => {
   }
 });
 
-// GET /api/fire/tasks  – pending TW tasks for the task pool
-router.get("/tasks", (req, res) => {
+// GET /api/fire/tasks  – pending tasks (TickTick → TW fallback)
+router.get("/tasks", async (req, res) => {
+  const { start, end } = getWeekRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "ticktick";
+
+  // Try TickTick FIRST (primary cloud source)
   try {
-    const raw   = execFileSync("task", ["export", "status:pending"], { encoding: "utf8", timeout: 5000 });
-    const tasks = JSON.parse(raw)
-      .filter((t) => t.description)
-      .map((t) => ({
-        uuid:        t.uuid,
-        description: t.description,
-        tags:        t.tags || [],
-        project:     t.project || "",
-        priority:    t.priority || "",
-      }))
-      .slice(0, 80);
-    res.json({ ok: true, tasks });
-  } catch {
-    // Taskwarrior not available or no tasks – return empty pool gracefully
-    res.json({ ok: true, tasks: [] });
+    const raw = await ticktickListProjectTasks();
+    const filtered = raw
+      .filter((task) => !task.isCompleted && !task.completedTime)
+      .filter((task) => taskInRange(task, start, end))
+      .map((task) => {
+        const due = parseTickTickDue(task);
+        return {
+          id: task.id,
+          title: task.title || "(no title)",
+          tags: task.tags || [],
+          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          domain: detectDomainFromTags(task.tags),
+          overdue: due ? due < start : false
+        };
+      });
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+  } catch (tickErr) {
+    // TickTick failed, try Taskwarrior as offline fallback
+    source = "taskwarrior";
+    error = tickErr?.message || String(tickErr);
+    try {
+      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+      if (!ok) throw new Error(taskError || "task-export-failed");
+
+      const filtered = twTasks
+        .filter((task) => {
+          const st = String(task.status || "").toLowerCase();
+          return st === "pending" || st === "waiting";
+        })
+        .filter((task) => {
+          if (fireTaskInRange(task, start, end, true)) return true;
+          if (!FIRE_INCLUDE_UNDATED) return false;
+          if (fireTaskPrimaryDate(task)) return false;
+          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+        })
+        .map((task) => normalizeFireTask(task, start));
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (twErr) {
+      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    }
   }
+
+  res.json({ ok: true, tasks, source, error });
 });
 
 // POST /api/fire/toggle  { domain, index }
