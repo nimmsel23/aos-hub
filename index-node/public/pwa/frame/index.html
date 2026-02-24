@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0e11" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>αOS · FRAME</title>
+  <link rel="manifest" href="/pwa/frame/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/frame/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/frame/style.css" />
+</head>
+<body>
+
+  <!-- App header -->
+  <header class="appbar">
+    <span class="app-title">αOS · FRAME</span>
+    <span class="app-subtitle">Current Reality</span>
+  </header>
+
+  <!-- Shell: two-panel layout (list | editor), data-view switches on mobile -->
+  <div class="shell" data-view="list">
+
+    <!-- ── Left sidebar ── -->
+    <aside class="panel-left">
+
+      <!-- Panel header -->
+      <div class="panel-head">
+        <div class="panel-label">CURRENT FRAME</div>
+        <div class="panel-subtitle">Where am I now?</div>
+      </div>
+
+      <!-- Domain cards -->
+      <div class="domain-cards" id="domainCards"></div>
+
+    </aside>
+
+    <!-- ── Right editor panel ── -->
+    <section class="panel-right">
+      <div class="editor-head">
+        <!-- Back button: mobile only -->
+        <button class="back-btn" id="btnBack" aria-label="Back to list">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <div class="editor-title" id="editorTitle">—</div>
+        <button class="save-btn" id="btnSave">Save</button>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="editor" class="editor" spellcheck="false" placeholder="Describe your current reality…"></textarea>
+      </div>
+      <div class="editor-hint">Markdown · Obsidian-compatible</div>
+    </section>
+
+  </div><!-- /.shell -->
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Bottom nav -->
+  <nav class="bottomnav">
+    <button class="bn-btn active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="6" height="6" rx="1"/>
+        <rect x="15" y="3" width="6" height="6" rx="1"/>
+        <rect x="3" y="15" width="6" height="6" rx="1"/>
+        <rect x="15" y="15" width="6" height="6" rx="1"/>
+      </svg>
+      <span>FRAME</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/pwa/freedom/'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span>FREE</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/pwa/focus/'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="4"/>
+        <line x1="12" y1="2" x2="12" y2="5"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="5" y2="12"/>
+        <line x1="19" y1="12" x2="22" y2="12"/>
+      </svg>
+      <span>FOCUS</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/pwa/fire/'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2c0 0-6 6-6 12a6 6 0 0 0 12 0c0-6-6-12-6-12z"/>
+        <path d="M12 12c0 0-3 3-3 5a3 3 0 0 0 6 0c0-2-3-5-3-5z"/>
+      </svg>
+      <span>FIRE</span>
+    </button>
+  </nav>
+
+  <script src="/pwa/frame/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/frame/sw.js", { scope: "/pwa/frame/" });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,407 @@
+/* ── Design Tokens ── */
+:root {
+  --bg:          #0d0e11;
+  --sidebar:     #111318;
+  --editor:      #0d0e11;
+  --surface:     #16181f;
+  --text:        #e8ecf0;
+  --muted:       #5c6370;
+  --line:        #1e2128;
+  --accent:      #e8a838;
+  --accent-dim:  rgba(232,168,56,.10);
+  --accent-ring: rgba(232,168,56,.30);
+  --r:           14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Appbar ── */
+.appbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  color: var(--text);
+}
+
+.app-year {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--muted);
+}
+
+/* ── Shell: split layout ── */
+.shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: calc(100dvh - 45px - 56px); /* subtract appbar + bottomnav */
+  overflow: hidden;
+}
+
+/* ── Left Sidebar ── */
+.panel-left {
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.panel-left::-webkit-scrollbar { width: 4px; }
+.panel-left::-webkit-scrollbar-track { background: transparent; }
+.panel-left::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+/* Year navigation */
+.year-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.year-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+  flex-shrink: 0;
+}
+.year-btn:hover { color: var(--text); border-color: rgba(255,255,255,.15); background: rgba(255,255,255,.03); }
+.year-btn svg { width: 16px; height: 16px; }
+
+.year-label {
+  flex: 1;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* Domain cards */
+.domain-cards {
+  display: grid;
+  gap: 10px;
+}
+
+.domain-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  color: var(--text);
+}
+.domain-card:hover { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.02); }
+.domain-card.active { border-color: var(--accent-ring); background: var(--accent-dim); }
+
+.domain-icon {
+  flex-shrink: 0;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.domain-icon svg {
+  width: 24px;
+  height: 24px;
+  opacity: .75;
+}
+
+.domain-body { flex: 1; min-width: 0; }
+
+.domain-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: var(--text);
+  text-transform: uppercase;
+  opacity: .9;
+}
+
+.domain-updated {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.domain-preview {
+  font-size: 11.5px;
+  color: var(--text);
+  margin-top: 5px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  opacity: .65;
+}
+
+/* ── Right Editor Panel ── */
+.panel-right {
+  background: var(--editor);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Editor head */
+.editor-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* Back button (hidden on desktop, shown on mobile) */
+.back-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.back-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.back-btn svg { width: 20px; height: 20px; }
+
+.editor-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.save-btn {
+  padding: 7px 18px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-ring);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.save-btn:hover    { background: rgba(232,168,56,.22); border-color: var(--accent); }
+.save-btn:disabled { opacity: .35; cursor: default; }
+
+/* Typewriter/editor wrap: centers content with max-width */
+.editor-wrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 16px;
+}
+
+/* The textarea itself */
+.editor {
+  width: 100%;
+  max-width: 680px;
+  resize: none;
+  background: transparent;
+  border: none;
+  border-left: 1px solid transparent;
+  border-right: 1px solid transparent;
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", Menlo, "Courier New", monospace;
+  font-size: 13.5px;
+  line-height: 1.7;
+  padding: 24px 8px 48px;
+  outline: none;
+  caret-color: var(--accent);
+}
+.editor:focus {
+  border-left-color: var(--line);
+  border-right-color: var(--line);
+}
+.editor::placeholder { color: var(--muted); opacity: .5; }
+
+/* Editor hint bar */
+.editor-hint {
+  flex-shrink: 0;
+  padding: 8px 24px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--muted);
+  opacity: .5;
+  border-top: 1px solid var(--line);
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: rgba(20,22,28,.96);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  z-index: 200;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Bottom Nav ── */
+.bottomnav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  background: rgba(13,14,17,.96);
+  border-top: 1px solid var(--line);
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 50;
+}
+
+.bn-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.bn-btn svg { width: 22px; height: 22px; }
+.bn-btn.active { color: var(--accent); }
+.bn-btn:hover { color: var(--text); }
+
+/* ── Mobile: fullscreen switching ── */
+@media (max-width: 719px) {
+
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    height: calc(100dvh - 45px - 56px);
+  }
+
+  /* Back button appears on mobile */
+  .back-btn { display: flex; }
+
+  /* Default: show sidebar, hide editor */
+  .shell[data-view="list"] .panel-left  { display: flex; }
+  .shell[data-view="list"] .panel-right { display: none; }
+
+  /* On domain tap: show editor, hide sidebar */
+  .shell[data-view="editor"] .panel-left  { display: none; }
+  .shell[data-view="editor"] .panel-right {
+    display: flex;
+    position: fixed;
+    inset: 45px 0 56px; /* below appbar, above bottomnav */
+    z-index: 20;
+    background: var(--editor);
+  }
+
+  /* Sidebar scrolls independently on mobile */
+  .panel-left {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  /* Editor textarea more comfortable on mobile */
+  .editor {
+    font-size: 14px;
+    padding: 20px 4px 60px;
+  }
+
+  .editor-head {
+    padding: 10px 14px 8px;
+  }
+
+  .editor-wrap {
+    padding: 0 10px;
+  }
+}
+
+/* ── Desktop: sidebar sticky, editor fills height ── */
+@media (min-width: 720px) {
+  .back-btn { display: none !important; }
+
+  .panel-right {
+    height: 100%;
+  }
+
+  /* Always show both panels on desktop */
+  .panel-left, .panel-right { display: flex !important; }
+}
