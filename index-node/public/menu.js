@@ -82,7 +82,7 @@ function renderDocButtons() {
     { label: "Foundation", doc: "foundation" },
     { label: "Code", doc: "code" },
     { label: "Core", doc: "core" },
-    { label: "Memoirs", doc: "voice" },
+    { label: "Memoirs", doc: "memoirs" },
     { label: "Door", doc: "door" },
     { label: "Game", doc: "game" },
   ];

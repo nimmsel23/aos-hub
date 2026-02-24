@@ -966,7 +966,24 @@ function sanitizeWeek(week) {
 }
 
 function getVaultDir() {
-  return path.join(os.homedir(), "AlphaOS-Vault");
+  const envCandidates = [
+    process.env.AOS_VAULT_DIR,
+    process.env.ALPHAOS_VAULT_DIR,
+    process.env.VAULT_DIR,
+  ]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+
+  const fileCandidates = [...envCandidates, path.join(os.homedir(), "vault")];
+
+  for (const candidate of fileCandidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch (_) {}
+  }
+
+  // Keep deterministic fallback even when vault is not mounted yet.
+  return path.join(os.homedir(), "vault");
 }
 
 function getDoorVaultDir() {
@@ -3769,6 +3786,10 @@ const DOC_PATHS = {
     path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-GAME.md"),
     path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE GAME.md"),
   ],
+  memoirs: [
+    path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-MEMOIRS.md"),
+    path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE MEMOIRS.md"),
+  ],
   voice: [
     path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-VOICE.md"),
     path.join(getVaultDir(), "ALPHA_OS", "ALPHA_OS - THE VOICE.md"),
@@ -3776,8 +3797,10 @@ const DOC_PATHS = {
 };
 
 function loadDoc(name) {
-  const paths = DOC_PATHS[name];
-  if (!Array.isArray(paths)) return null;
+  const key = String(name || "").toLowerCase().trim();
+  const keys = key === "memoirs" ? ["memoirs", "voice"] : key === "voice" ? ["voice", "memoirs"] : [key];
+  const paths = keys.flatMap((k) => (Array.isArray(DOC_PATHS[k]) ? DOC_PATHS[k] : []));
+  if (!paths.length) return null;
   const chunks = [];
   for (const p of paths) {
     try {

@@ -12,7 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
     core: "The Core",
     door: "The Door",
     game: "The Game",
-    voice: "The Voice",
+    memoirs: "Memoirs",
+    voice: "Memoirs",
   };
 
   if (title) title.textContent = labels[doc] || "Chapters";
