@@ -27,5 +27,30 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 
 ---
 
+---
+
+## 2026-02-24
+
+### Structure (all 5 PWAs live)
+- Added **FREEDOM** PWA at `/pwa/freedom/` — Annual IPW Vision (Ideal Parallel World)
+  - Year selector (← 2025 · **2026** · 2027 →), 4 domain cards per year
+  - Storage: `~/.aos/freedom/YYYY/{domain}.md`
+  - Gold/amber accent (#e8a838), horizon+sun icon
+  - API: GET /year, GET /domain, POST /domain/save
+- Added **FRAME** PWA at `/pwa/frame/` — Current Reality Snapshot ("Where am I now?")
+  - 4 domain cards with staleness indicators (fresh <30d / aging 30-90d / stale >90d)
+  - Storage: `~/.aos/frame/{domain}.md`
+  - Green accent (#7ec8a0), four-corners frame icon
+  - API: GET /domains (with preview+timestamp), GET /domain, POST /domain/save
+  - Auto-updates `updated:` frontmatter field on save
+- Both PWAs: DayOne-inspired design, mobile fullscreen switching, installable (manifest+sw)
+- MOBILE launcher updated: now shows all 5 (FRAME/FREE/FOCUS/FIRE/CORE4)
+- Committed: `3815d05`
+
+### focus
+- No changes (already DayOne-style from fd768d5)
+
+---
+
 ## Format
 Each entry: date → what changed → why (if non-obvious) → commit ref if known.
