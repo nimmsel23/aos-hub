@@ -12,6 +12,11 @@
       "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
     },
     {
+      "label": "Fitness Centre",
+      "cmd": "fitness",
+      "url": "/pwa/fitness/"
+    },
+    {
       "label": "Being GPT",
       "cmd": "being",
       "url": "https://chatgpt.com/g/g-p-67e3d1630b648191a2b0b4cd86845604-being/project"

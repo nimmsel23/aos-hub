@@ -6383,6 +6383,55 @@ app.get("/api/centres", (_req, res) => {
   }
 });
 
+app.get("/api/fitness-centre/status", (_req, res) => {
+  try {
+    const repoDir = String(
+      process.env.FITNESS_CENTRE_DIR || path.join(os.homedir(), "core4-fitness-centre")
+    );
+    const habitsPath = path.join(repoDir, "data", "habits.json");
+    const journalDir = path.join(repoDir, "personal", "journal");
+    const habitsDir = path.join(repoDir, "personal", "habits");
+
+    let habitCount = 0;
+    let habitsConfigExists = false;
+    try {
+      if (fs.existsSync(habitsPath)) {
+        habitsConfigExists = true;
+        const raw = fs.readFileSync(habitsPath, "utf8");
+        const parsed = JSON.parse(raw);
+        habitCount = Array.isArray(parsed?.habits) ? parsed.habits.length : 0;
+      }
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: `habits.json parse failed: ${String(err)}` });
+    }
+
+    return res.json({
+      ok: true,
+      service: "fitness-centre",
+      updated_at: new Date().toISOString(),
+      repo: {
+        path: repoDir,
+        exists: fs.existsSync(repoDir),
+      },
+      dirs: {
+        journal_exists: fs.existsSync(journalDir),
+        habits_exists: fs.existsSync(habitsDir),
+      },
+      habits: {
+        config_exists: habitsConfigExists,
+        count: habitCount,
+      },
+      pwa: {
+        base_url: "/pwa/fitness/",
+        journal_url: "/pwa/fitness/journal/",
+        habits_url: "/pwa/fitness/habits/",
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 
 // Health
 app.get("/health", (_req, res) => res.json({ ok: true, service: "index-centre" }));
@@ -6473,3 +6522,5 @@ wss.on("connection", (ws, req) => {
 server.listen(PORT, HOST, () => {
   console.log(`αOS Index listening on http://${HOST}:${PORT}`);
 });
+
+
