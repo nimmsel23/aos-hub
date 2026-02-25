@@ -581,7 +581,18 @@ def _core4_read_event(path: Path) -> Optional[Dict[str, Any]]:
 
 def _core4_events_for_day(day_key: str) -> list[Dict[str, Any]]:
     out: list[Dict[str, Any]] = []
-    for base in (CORE4_LOCAL_DIR, CORE4_MOUNT_DIR):
+    # Optimization: Skip mount directories that don't exist or are set to /nonexistent
+    # This prevents 30s hangs on hung rclone mounts
+    bases = []
+    if CORE4_LOCAL_DIR.exists():
+        bases.append(CORE4_LOCAL_DIR)
+    # Skip mount if it's /nonexistent or doesn't exist (avoid exists() on hung mount)
+    mount_path_str = str(CORE4_MOUNT_DIR)
+    if mount_path_str != "/nonexistent" and not mount_path_str.endswith("/nonexistent"):
+        if CORE4_MOUNT_DIR.exists():
+            bases.append(CORE4_MOUNT_DIR)
+
+    for base in bases:
         day_dir = _core4_event_dir(base) / day_key
         if not day_dir.exists():
             continue
@@ -1381,10 +1392,12 @@ async def handle_core4_log(request: web.Request) -> web.Response:
 
     async with core4_lock:
         _core4_write_event(event)
-        _core4_build_day(date_key)
-        data = _core4_build_week_for_date(ts.date())
+        day_data = _core4_build_day(date_key)
+        # Optimization: Don't rebuild week JSON on every log (expensive: reads 7 days)
+        # Week is rebuilt on-demand via /bridge/core4/week endpoint
+        # We only need today's total for the response
 
-    total_today = _core4_total_for_date(data.get("entries") or [], date_key)
+    total_today = day_data.get("day_total", 0.0) if day_data else 0.0
     if CORE4_NOTIFY:
         message = _format_core4_notify(domain, task, points, total_today, source, ts)
         await _send_core4_notify(message)
@@ -1394,7 +1407,7 @@ async def handle_core4_log(request: web.Request) -> web.Response:
     # Complete matching TW task → on-modify hook fires (tele + TickTick)
     if done and TASK_EXEC_ENABLED:
         asyncio.create_task(_complete_core4_tw_task(_CORE4_TW_TAG.get(task, task), date_key))
-    return web.json_response({"ok": True, "week": data.get("week") or week, "total_today": total_today})
+    return web.json_response({"ok": True, "week": week, "total_today": total_today})
 
 
 async def handle_core4_week(request: web.Request) -> web.Response:
