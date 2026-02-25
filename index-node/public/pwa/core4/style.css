@@ -257,6 +257,31 @@ body {
   cursor: default;
 }
 
+/* Domain-specific task chip colors */
+.domain-card.body .task-chip.done {
+  background: rgba(93,184,93,.1);
+  border-color: rgba(93,184,93,.4);
+  color: var(--body);
+}
+
+.domain-card.being .task-chip.done {
+  background: rgba(91,157,216,.1);
+  border-color: rgba(91,157,216,.4);
+  color: var(--being);
+}
+
+.domain-card.balance .task-chip.done {
+  background: rgba(184,93,184,.1);
+  border-color: rgba(184,93,184,.4);
+  color: var(--balance);
+}
+
+.domain-card.business .task-chip.done {
+  background: rgba(216,157,91,.1);
+  border-color: rgba(216,157,91,.4);
+  color: var(--business);
+}
+
 .task-chip.logging {
   opacity: .4;
   pointer-events: none;
