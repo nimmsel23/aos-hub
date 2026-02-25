@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# c4 — Fast Core4 status reader (event ledger → terminal)
+# Reads directly from ~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json
+# No bridge dependency, no timeout issues.
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
+source "$SCRIPT_DIR/core4-lib.sh" 2>/dev/null || true
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+GRAY='\033[0;90m'
+RESET='\033[0m'
+
+# Config
+CORE4_STORAGE="${CORE4_STORAGE_DIR:-$HOME/.core4}"
+TODAY="${1:-$(date +%Y-%m-%d)}"
+WEEK="$(date -d "$TODAY" +%Y-W%V)"
+
+# Find today's aggregate file
+DAY_FILE="$CORE4_STORAGE/core4_day_$TODAY.json"
+
+if [[ ! -f "$DAY_FILE" ]]; then
+  echo -e "${GRAY}No Core4 data for $TODAY${RESET}"
+  echo -e "${GRAY}File: $DAY_FILE${RESET}"
+  exit 0
+fi
+
+# Parse entries using jq
+declare -A habits=(
+  [memoirs]=0
+  [partner]=0
+  [posterity]=0
+  [meditation]=0
+  [fitness]=0
+  [fuel]=0
+  [discover]=0
+)
+
+# Extract totals and entries
+total=$(jq -r '.totals.week_total // 0' "$DAY_FILE" 2>/dev/null || echo "0")
+
+# Parse entries and mark completed habits
+while IFS= read -r entry; do
+  task=$(echo "$entry" | jq -r '.task // empty')
+  done=$(echo "$entry" | jq -r '.done // false')
+
+  # Map task names to habit keys
+  case "$task" in
+    person1|person2) habit="partner" ;;
+    posterity) habit="posterity" ;;
+    memoirs) habit="memoirs" ;;
+    meditation) habit="meditation" ;;
+    fitness) habit="fitness" ;;
+    fuel) habit="fuel" ;;
+    discover) habit="discover" ;;
+    *) habit="" ;;
+  esac
+
+  if [[ -n "$habit" && "$done" == "true" ]]; then
+    habits["$habit"]=1
+  fi
+done < <(jq -c '.entries[]' "$DAY_FILE" 2>/dev/null || echo "")
+
+# Output
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BLUE}  Core4 Status${RESET} — ${GRAY}$TODAY ($WEEK)${RESET}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo ""
+
+# Habit status
+for habit in memoirs partner posterity meditation fitness fuel discover; do
+  if [[ "${habits[$habit]}" == "1" ]]; then
+    echo -e "  ${GREEN}✓${RESET} $habit"
+  else
+    echo -e "  ${GRAY}○${RESET} $habit"
+  fi
+done
+
+echo ""
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "  Total: ${GREEN}$total${RESET} / 7.0"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+# Optional: Bridge health check
+if command -v curl &>/dev/null; then
+  bridge_status=$(curl -s --max-time 1 http://127.0.0.1:8080/health 2>/dev/null || echo "")
+  if [[ -n "$bridge_status" ]]; then
+    echo -e "${GRAY}Bridge: online${RESET}"
+  else
+    echo -e "${YELLOW}Bridge: offline (reading from ledger)${RESET}"
+  fi
+fi
