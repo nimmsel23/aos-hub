@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+FOCUS_PY="$SCRIPT_DIR/focus.py"
+
+source "$ROOT_DIR/scripts/ctl-lib.sh"       2>/dev/null || true
+source "$ROOT_DIR/scripts/lib/aos-env.sh"   2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+
+py() { python3 "$FOCUS_PY" "$@"; }
+
+usage() {
+  cat <<EOF
+focusctl — Focus Map CLI  (Monthly Mission)
+
+Usage:
+  focusctl new  [DOMAIN] [YYYY-MM]   Neue Focus Map (Frame + Freedom Pflicht)
+  focusctl show [DOMAIN]             Focus Map anzeigen
+  focusctl list                      Alle Focus Maps auflisten
+  focusctl edit [DOMAIN]             Im Editor öffnen
+
+Domain: BODY | BEING | BALANCE | BUSINESS  (optional — alle wenn weggelassen)
+EOF
+}
+
+cmd_new()  { py new  ${1:+--domain "$1"} ${2:+--month "$2"}; }
+cmd_show() { py show ${1:+--domain "$1"}; }
+cmd_list() { py list; }
+cmd_edit() { py edit ${1:+--domain "$1"}; }
+
+case "${1:-}" in
+  new)   shift; cmd_new  "${1:-}" "${2:-}" ;;
+  show)  shift; cmd_show "${1:-}" ;;
+  list)  cmd_list ;;
+  edit)  shift; cmd_edit "${1:-}" ;;
+  help|--help|-h) usage ;;
+  *) usage ;;
+esac

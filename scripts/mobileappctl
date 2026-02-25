@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "pwa" "mobileappctl" "$@" && exit 0
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+
+BASE_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799}"
+BASE_URL="${BASE_URL%/health}"
+PWA_BASE_DIR="$ROOT_DIR/index-node/public/pwa"
+PWA_NAMES=(core4 fire focus)
+PWA_FILES=(index.html app.js style.css)
+
+usage() {
+  cat <<EOF
+Usage: mobileappctl <command> [args]
+Commands:
+  list           show registry table for available PWAs
+  health         curl /pwa/<name>/ for each PWA and report HTTP status
+  open [name]    xdg-open the named PWA (all if omitted)
+  check          verify index.html, app.js, style.css in each PWA
+  changelog      show index-node/public/pwa/CHANGELOG.md
+  routes         print canonical /pwa/<name>/ URLs
+  new <name>     scaffold a new PWA stub (index/app/style)
+  doctor         run check + health and summarize results
+  help           show this message
+EOF
+}
+
+pwa_dir() {
+  local name="${1?}"
+  printf "%s/%s" "$PWA_BASE_DIR" "$name"
+}
+
+pwa_route() {
+  local name="${1?}"
+  printf "/pwa/%s/" "$name"
+}
+
+list_cmd() {
+  printf "%-8s %-16s %-12s %-12s %-10s %-10s\n" "name" "route" "dir" "index.html" "app.js" "style.css"
+  for name in "${PWA_NAMES[@]}"; do
+    local dir
+    dir="$(pwa_dir "$name")"
+    local has_dir="no"
+    [[ -d "$dir" ]] && has_dir="yes"
+    local index_status="no"
+    local app_status="no"
+    local style_status="no"
+    [[ -f "$dir/index.html" ]] && index_status="yes"
+    [[ -f "$dir/app.js" ]] && app_status="yes"
+    [[ -f "$dir/style.css" ]] && style_status="yes"
+    printf "%-8s %-16s %-12s %-12s %-10s %-10s\n" \
+      "$name" "$(pwa_route "$name")" "$has_dir" "$index_status" "$app_status" "$style_status"
+  done
+}
+
+health_cmd() {
+  local failures=0
+  for name in "${PWA_NAMES[@]}"; do
+    local route url status
+    route="$(pwa_route "$name")"
+    url="$BASE_URL$route"
+    status="$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)"
+    if curl -fsS -o /dev/null "$url"; then
+      msg "[health] $name -> $status"
+    else
+      warn "[health] $name -> fail (${status:-?})"
+      failures=$((failures + 1))
+    fi
+  done
+  return $failures
+}
+
+open_cmd() {
+  local targets=()
+  if (( $# == 0 )); then
+    targets=("${PWA_NAMES[@]}")
+  else
+    targets=("$@")
+  fi
+  if ! has_cmd xdg-open; then
+    warn "xdg-open not available; cannot open PWAs"
+    return 1
+  fi
+  local failures=0
+  for name in "${targets[@]}"; do
+    local route url
+    route="$(pwa_route "$name")"
+    url="$BASE_URL$route"
+    if ! xdg-open "$url" >/dev/null 2>&1; then
+      warn "failed to xdg-open $url"
+      failures=$((failures + 1))
+    fi
+  done
+  return $failures
+}
+
+check_cmd() {
+  local missing=0
+  for name in "${PWA_NAMES[@]}"; do
+    local dir file
+    dir="$(pwa_dir "$name")"
+    for file in "${PWA_FILES[@]}"; do
+      if [[ ! -f "$dir/$file" ]]; then
+        warn "missing $file for $name in $dir"
+        missing=1
+      fi
+    done
+  done
+  return $missing
+}
+
+changelog_cmd() {
+  local file="$PWA_BASE_DIR/CHANGELOG.md"
+  [[ -f "$file" ]] || die "changelog not found at $file"
+  if [[ -t 1 ]] && has_cmd less; then
+    less "$file"
+  else
+    cat "$file"
+  fi
+}
+
+routes_cmd() {
+  for name in "${PWA_NAMES[@]}"; do
+    printf "%s%s\n" "$BASE_URL" "$(pwa_route "$name")"
+  done
+}
+
+new_cmd() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || die "Usage: mobileappctl new <name>"
+  local dir
+  dir="$(pwa_dir "$name")"
+  if [[ -e "$dir" ]]; then
+    die "$dir already exists"
+  fi
+  mkdir -p "$dir"
+  local core_tab="tab"
+  local fire_tab="tab"
+  local focus_tab="tab"
+  local hub_tab="tab"
+  [[ "$name" == "core4" ]] && core_tab="tab active"
+  [[ "$name" == "fire" ]] && fire_tab="tab active"
+  [[ "$name" == "focus" ]] && focus_tab="tab active"
+  cat <<EOF >"$dir/index.html"
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>αOS · ${name}</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">αOS</span>
+    <nav class="tabs">
+      <a class="$core_tab" href="/pwa/core4/">CORE</a>
+      <a class="$fire_tab" href="/pwa/fire/">FIRE</a>
+      <a class="$focus_tab" href="/pwa/focus/">FOCUS</a>
+      <a class="$hub_tab" href="/">HUB</a>
+    </nav>
+  </header>
+  <main class="wrap">
+    <h1>αOS · ${name}</h1>
+    <p class="intro">Placeholder for the ${name} progressive web app.</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
+EOF
+  cat <<EOF >"$dir/app.js"
+"use strict";
+
+// TODO: wire ${name} runtime logic here.
+EOF
+  cat <<'EOF' >"$dir/style.css"
+:root {
+  --bg:       #0b0c0f;
+  --surface:  #12141a;
+  --text:     #e9edf2;
+  --muted:    #8a94a0;
+  --line:     #1d212b;
+  --radius:   18px;
+  --focus:    #6a9cf5;
+  --focus-dim: rgba(106,156,245,.12);
+  --focus-ring: rgba(106,156,245,.28);
+  --ring-bg:  #1d222e;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  text-decoration: none;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.tab.active {
+  border-color: var(--focus);
+  color: var(--text);
+  background: rgba(106,156,245,0.15);
+}
+
+.wrap {
+  padding: 32px 20px;
+}
+
+.intro {
+  margin-top: 12px;
+  color: var(--muted);
+}
+EOF
+}
+
+doctor_cmd() {
+  local check_status=0
+  local health_status=0
+  set +e
+  check_cmd
+  check_status=$?
+  health_cmd
+  health_status=$?
+  set -e
+  if [[ $check_status -eq 0 && $health_status -eq 0 ]]; then
+    msg "doctor: all checks passed"
+    return 0
+  fi
+  warn "doctor: check=$check_status health=$health_status"
+  return 1
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  list) list_cmd ;; 
+  health) health_cmd ;; 
+  open) open_cmd "$@" ;; 
+  check) check_cmd ;; 
+  changelog) changelog_cmd ;; 
+  routes) routes_cmd ;; 
+  new) new_cmd "$@" ;; 
+  doctor) doctor_cmd ;; 
+  help|-h|--help) usage ;; 
+  *)
+    die "Unknown command: $cmd"
+    ;;
+esac

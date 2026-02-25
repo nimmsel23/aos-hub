@@ -52,5 +52,19 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 
 ---
 
+## 2026-02-25
+
+### core4
+- **Design overhaul**: Replaced emoji icons with custom SVG piktograms (consistent with awesome habits)
+- **Domain color system**: Each domain now has its own color (Body: green, Being: blue, Balance: purple, Business: orange)
+  - Applied to: card icons, mini rings, progress bars, score numbers
+- **Mini rings**: Increased size (34px → 40px) for better visibility
+- **Date format**: Improved from "2026-02-25" → "25. Feb 2026"
+- **Bottom nav**: Updated to show all 5 PWAs (FRAME/FREE/FOCUS/FIRE/CORE) instead of outdated SCORE button
+- **Card icons**: Reduced size (40px → 32px) for cleaner look
+- Result: Unified design language across all PWAs, better visual hierarchy, domain-specific color coding
+
+---
+
 ## Format
 Each entry: date → what changed → why (if non-obvious) → commit ref if known.

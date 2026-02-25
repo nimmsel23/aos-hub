@@ -1,0 +1,575 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="hubctl"
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Codex session helper: hubctl codex [purpose...]
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "main" "hubctl" "$@" && exit 0
+
+# Load global env (optional) so subcommands inherit exported AOS_* vars.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+# Shared UI helpers (gum/fzf fallback + consistent messages).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ctl-lib.sh"
+
+export CTL_APP_PREFIX="$APP"
+export CTL_UI_OK_PREFIX="[$APP]"
+export CTL_UI_WARN_PREFIX="[$APP]"
+export CTL_UI_ERR_PREFIX="[$APP]"
+
+repo_exec() {
+  local rel="$1"; shift || true
+  local path="$ROOT_DIR/$rel"
+  [[ -e "$path" ]] || die "missing: $path"
+  [[ -x "$path" ]] || die "not executable: $path"
+  exec "$path" "$@"
+}
+
+install_cli() {
+  local bin_dir="${HUBCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/hubctl"
+  mkdir -p "$bin_dir" 2>/dev/null || die "cannot create: $bin_dir (set HUBCTL_BIN_DIR=... )"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    die "refusing to overwrite non-symlink: $dst"
+  fi
+  ln -sf "$ROOT_DIR/scripts/hubctl" "$dst"
+  ui_ok "installed: $dst"
+  if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+    ui_warn "PATH does not include $bin_dir"
+    ui_info "Add it with: export PATH=\"$bin_dir:\$PATH\""
+  fi
+}
+
+uninstall_cli() {
+  local bin_dir="${HUBCTL_BIN_DIR:-$HOME/.local/bin}"
+  local dst="$bin_dir/hubctl"
+  if [[ -L "$dst" ]]; then
+    rm -f "$dst"
+    ui_ok "removed: $dst"
+    return 0
+  fi
+  ui_info "nothing to remove at: $dst"
+}
+
+usage() {
+  cat <<EOF
+$APP — unified CLI for the hub repo
+
+Usage:
+  $APP menu
+  $APP list
+  $APP doctor
+  $APP doctor --strict
+  $APP dev <status|start|stop|restart|logs|doctor> [index|router|bridge]
+  $APP bridge <bridgectl-args...>
+  $APP router <routerctl-args...>
+  $APP heartbeat <cmd>   (standalone heartbeat manager)
+  $APP systemstatus      (trigger GAS system status via local Bridge)
+  $APP index  <status|start|stop|restart|logs|doctor|health>
+  $APP node   <status|start|stop|restart|logs|doctor|health>
+  $APP sync   <syncctl-args...>
+  $APP git    <gitctl-args...>
+  $APP backup <backupctl-args...>
+  $APP mount  <mountctl-args...>
+  $APP hook   <hookctl-args...>
+  $APP core4  <core4ctl-args...>
+  $APP tent   <tentctl-args...>
+  $APP gas    <gasctl-args...>
+  $APP firectl <firectl-args...>
+  $APP tele  <telectl-args...>
+  $APP door   <doorctl-args...>
+  $APP game   <gamectl-args...>
+  $APP voice  <voicectl-args...>
+  $APP fire   <command>
+
+Install into PATH (optional):
+  $APP install-cli
+  $APP uninstall-cli
+
+Examples:
+  $APP list
+  $APP doctor
+  $APP bridge health
+  $APP router doctor
+  $APP dev status
+  $APP dev restart --stop-prod router
+  $APP heartbeat status
+  $APP systemstatus
+  $APP index status
+  $APP index restart
+  $APP node doctor
+  $APP sync status
+  $APP git status
+  $APP git split status
+  $APP git split push all
+  $APP backup status
+  $APP backup live setup 00:00
+  $APP mount status
+  $APP hook status
+  $APP core4 status
+  $APP tent status
+  $APP gas tent status
+  $APP firectl status
+  $APP tele status
+  $APP door status
+  $APP game status
+  $APP voice status
+  $APP fire status
+  $APP fire enable
+  $APP fire run
+
+Env:
+  AOS_ENV_FILE=$ROOT_DIR/.env/aos.env
+EOF
+}
+
+show_menu() {
+  ui_title "hubctl"
+  local choice=""
+  choice="$(choose \
+    "Doctor (strict scope checks)" \
+    "Dev: status (all)" \
+    "Dev: restart (all)" \
+    "Index Dev: status" \
+    "Index Dev: doctor" \
+    "Bridge: health" \
+    "Router: status" \
+    "Systemstatus: trigger" \
+    "Fire: status" \
+    "Quit")" || {
+      usage
+      return 0
+    }
+
+  case "$choice" in
+    "Doctor (strict scope checks)") "$0" doctor --strict ;;
+    "Dev: status (all)") "$0" dev status ;;
+    "Dev: restart (all)") "$0" dev restart ;;
+    "Index Dev: status") "$0" index status ;;
+    "Index Dev: doctor") "$0" index doctor ;;
+    "Bridge: health") "$0" bridge health ;;
+    "Router: status") "$0" router status ;;
+    "Systemstatus: trigger") "$0" systemstatus ;;
+    "Fire: status") "$0" fire status ;;
+    "Quit") return 0 ;;
+    *) usage ;;
+  esac
+}
+
+DEV_INDEX_UNIT="${AOS_INDEX_DEV_UNIT:-aos-index-dev.service}"
+DEV_ROUTER_UNIT="${AOS_ROUTER_DEV_UNIT:-aos-router-dev.service}"
+DEV_BRIDGE_UNIT="${AOS_BRIDGE_DEV_UNIT:-aos-bridge-dev.service}"
+
+dev_router_name_default() {
+  local u="$DEV_ROUTER_UNIT"
+  printf "%s\n" "${u%.service}"
+}
+
+user_bus_ok() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+dev_units_for_target() {
+  local target="${1:-all}"
+  case "$target" in
+    all|"") printf "%s\n" "$DEV_INDEX_UNIT" "$DEV_ROUTER_UNIT" "$DEV_BRIDGE_UNIT" ;;
+    index) printf "%s\n" "$DEV_INDEX_UNIT" ;;
+    router) printf "%s\n" "$DEV_ROUTER_UNIT" ;;
+    bridge) printf "%s\n" "$DEV_BRIDGE_UNIT" ;;
+    *)
+      die "unknown dev target: $target (use index|router|bridge)"
+      ;;
+  esac
+}
+
+prod_unit_for_dev_target() {
+  local target="$1"
+  case "$target" in
+    index) printf "%s\n" "aos-index.service" ;;
+    router) printf "%s\n" "aos-router.service" ;;
+    bridge) printf "%s\n" "aos-bridge.service" ;;
+    *)
+      die "unknown dev target: $target (use index|router|bridge)"
+      ;;
+  esac
+}
+
+dev_status() {
+  local target="${1:-all}"
+  user_bus_ok || die "systemctl --user not available (no user bus)"
+  ui_title "hubctl dev status"
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    local active enabled
+    active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+    printf "  %-24s active=%-10s enabled=%s\n" "$unit" "${active:-unknown}" "${enabled:-unknown}"
+  done < <(dev_units_for_target "$target")
+}
+
+dev_action_units() {
+  local action="$1"
+  local target="${2:-all}"
+  local stop_prod="${3:-0}"
+  user_bus_ok || die "systemctl --user not available (no user bus)"
+  if [[ "$stop_prod" == "1" && ( "$action" == "start" || "$action" == "restart" ) ]]; then
+    if ! command -v systemctl >/dev/null 2>&1; then
+      die "systemctl not available (cannot stop production units)"
+    fi
+    if [[ "$target" == "all" || -z "$target" ]]; then
+      ui_info "Stopping production units before ${action}: aos-index.service aos-router.service aos-bridge.service"
+      systemctl stop aos-index.service aos-router.service aos-bridge.service
+    else
+      local prod_unit
+      prod_unit="$(prod_unit_for_dev_target "$target")"
+      ui_info "Stopping production unit before ${action}: $prod_unit"
+      systemctl stop "$prod_unit"
+    fi
+  fi
+  local units=()
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    units+=("$unit")
+  done < <(dev_units_for_target "$target")
+  [[ "${#units[@]}" -gt 0 ]] || die "no dev units selected"
+  systemctl --user "$action" "${units[@]}"
+}
+
+dev_logs() {
+  local target="${1:-all}"
+  user_bus_ok || die "systemctl --user not available (no user bus)"
+  local args=()
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    args+=("-u" "$unit")
+  done < <(dev_units_for_target "$target")
+  [[ "${#args[@]}" -gt 0 ]] || die "no dev units selected"
+  journalctl --user "${args[@]}" -n 200 -f
+}
+
+dev_doctor() {
+  ui_title "hubctl dev doctor"
+  dev_status "${1:-all}"
+  echo ""
+  ui_info "Production units are managed via: aosctl (system scope)"
+  ui_info "Dev/user units are managed via: hubctl dev ..."
+}
+
+index_dev_status() {
+  user_bus_ok || die "systemctl --user not available (no user bus)"
+  local active enabled
+  active="$(systemctl --user is-active "$DEV_INDEX_UNIT" 2>/dev/null || true)"
+  enabled="$(systemctl --user is-enabled "$DEV_INDEX_UNIT" 2>/dev/null || true)"
+  printf "  %-24s active=%-10s enabled=%s\n" "$DEV_INDEX_UNIT" "${active:-unknown}" "${enabled:-unknown}"
+}
+
+index_dev_health() {
+  local health_url="${AOS_INDEX_DEV_HEALTH_URL:-http://127.0.0.1:8798/health}"
+  if command -v curl >/dev/null 2>&1 && curl -fsS "$health_url" >/dev/null 2>&1; then
+    ui_ok "index-dev health OK: $health_url"
+  else
+    ui_warn "index-dev health failed: $health_url"
+    ui_info "Tip: set AOS_INDEX_DEV_HEALTH_URL if your dev port differs."
+  fi
+}
+
+index_dev_cmd() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    ""|-h|--help|help)
+      cat <<EOF
+hubctl index|node — dev/user index control
+
+Usage:
+  hubctl index status|start|stop|restart|logs|doctor|health
+  hubctl node  status|start|stop|restart|logs|doctor|health
+
+Unit:
+  $DEV_INDEX_UNIT
+EOF
+      ;;
+    status)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      ui_title "hubctl index status (dev/user)"
+      index_dev_status
+      ;;
+    start)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user start "$DEV_INDEX_UNIT"
+      ;;
+    stop)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user stop "$DEV_INDEX_UNIT"
+      ;;
+    restart)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      systemctl --user restart "$DEV_INDEX_UNIT"
+      ;;
+    logs)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      journalctl --user -u "$DEV_INDEX_UNIT" -n 200 -f
+      ;;
+    health)
+      index_dev_health
+      ;;
+    doctor)
+      user_bus_ok || die "systemctl --user not available (no user bus)"
+      ui_title "hubctl index doctor (dev/user)"
+      index_dev_status
+      index_dev_health
+      ui_info "Production Index is managed via: aosctl index ..."
+      ;;
+    *)
+      die "unknown index command: $sub"
+      ;;
+  esac
+}
+
+strict_doctor() {
+  local rc=0
+  local strict="${1:-0}"
+  local user_ok=0
+  user_bus_ok && user_ok=1
+  if [[ -x "$ROOT_DIR/scripts/aos-doctor" ]]; then
+    "$ROOT_DIR/scripts/aos-doctor" || true
+    echo ""
+  fi
+
+  ui_title "hubctl strict scope checks"
+  local check_targets=("index:$DEV_INDEX_UNIT:aos-index.service" "router:$DEV_ROUTER_UNIT:aos-router.service" "bridge:$DEV_BRIDGE_UNIT:aos-bridge.service")
+  local item target dev_unit prod_unit dev_active prod_active legacy_active
+  for item in "${check_targets[@]}"; do
+    IFS=':' read -r target dev_unit prod_unit <<<"$item"
+    prod_active="$(systemctl is-active "$prod_unit" 2>/dev/null || true)"
+    if [[ "$user_ok" == "1" ]]; then
+      dev_active="$(systemctl --user is-active "$dev_unit" 2>/dev/null || true)"
+    else
+      dev_active="unknown"
+    fi
+    if [[ "$user_ok" != "1" ]]; then
+      legacy_active="unknown"
+    elif [[ "$target" == "index" ]]; then
+      legacy_active="$(systemctl --user is-active alphaos-index.service 2>/dev/null || true)"
+    elif [[ "$target" == "router" ]]; then
+      legacy_active="$(systemctl --user is-active alphaos-router.service 2>/dev/null || true)"
+    else
+      legacy_active="$(systemctl --user is-active aos-bridge.service 2>/dev/null || true)"
+    fi
+
+    printf "  %-6s prod=%-8s dev=%-8s" "$target" "${prod_active:-unknown}" "${dev_active:-unknown}"
+    if [[ "$legacy_active" == "active" ]]; then
+      printf " legacy=active"
+    fi
+    printf "\n"
+
+    if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
+      rc=2
+      ui_err "parallel run detected for $target (production + dev active)"
+    fi
+    if [[ "$legacy_active" == "active" ]]; then
+      rc=2
+      ui_warn "legacy unit active for $target (migrate away from old unit name)"
+    fi
+  done
+
+  if [[ "$strict" == "1" && "$rc" -ne 0 ]]; then
+    die "strict doctor failed: scope conflicts detected"
+  fi
+  return "$rc"
+}
+
+pick_user_unit_name() {
+  local first_nonempty=""
+  local cand=""
+  for cand in "$@"; do
+    [[ -n "$cand" ]] || continue
+    [[ -z "$first_nonempty" ]] && first_nonempty="$cand"
+    if [[ -f "$HOME/.config/systemd/user/$cand" ]]; then
+      printf "%s\n" "$cand"
+      return 0
+    fi
+  done
+  printf "%s\n" "$first_nonempty"
+}
+
+list_scripts() {
+  ui_title "$APP list"
+  ui_info "Available scripts:"
+  local dir="$ROOT_DIR/scripts"
+  if [[ -d "$dir" ]]; then
+    while IFS= read -r -d '' p; do
+      local rel="${p#$ROOT_DIR/}"
+      [[ "$rel" == "scripts/hubctl" ]] && continue
+      echo "  - $rel"
+    done < <(find "$dir" -maxdepth 1 -type f -perm -u+x -print0 2>/dev/null | sort -z)
+  else
+    ui_warn "missing: $dir"
+  fi
+
+  echo ""
+  ui_info "Other tools:"
+  for p in "$ROOT_DIR/router/routerctl" "$ROOT_DIR/bridge/bridgectl" "$ROOT_DIR/aosctl"; do
+    if [[ -x "$p" ]]; then
+      echo "  - ${p#$ROOT_DIR/}"
+    fi
+  done
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  ""|menu) show_menu ;;
+  list) list_scripts ;;
+  install-cli) install_cli ;;
+  uninstall-cli) uninstall_cli ;;
+
+  doctor)
+    if [[ "${1:-}" == "--strict" ]]; then
+      strict_doctor 1
+    else
+      repo_exec "scripts/aos-doctor" "$@"
+    fi
+    ;;
+  bridge) AOS_BRIDGE_USER_SERVICE="${AOS_BRIDGE_USER_SERVICE:-$DEV_BRIDGE_UNIT}" repo_exec "bridge/bridgectl" "$@" ;;
+  router) ROUTER_NAME="${ROUTER_NAME:-$(dev_router_name_default)}" repo_exec "router/routerctl" "$@" ;;
+  heartbeat) repo_exec "scripts/heartbeat" "${1:-status}" ;;
+  systemstatus) repo_exec "scripts/systemstatusctl" trigger "$@" ;;
+  index) index_dev_cmd "$@" ;;
+  node|nodectl) index_dev_cmd "$@" ;;
+  dev)
+    sub="${1:-status}"; shift || true
+    case "$sub" in
+      status) dev_status "${1:-all}" ;;
+      start)
+        stop_prod=0
+        target="all"
+        for arg in "$@"; do
+          if [[ "$arg" == "--stop-prod" ]]; then
+            stop_prod=1
+          else
+            target="$arg"
+          fi
+        done
+        dev_action_units start "$target" "$stop_prod"
+        ;;
+      stop) dev_action_units stop "${1:-all}" ;;
+      restart)
+        stop_prod=0
+        target="all"
+        for arg in "$@"; do
+          if [[ "$arg" == "--stop-prod" ]]; then
+            stop_prod=1
+          else
+            target="$arg"
+          fi
+        done
+        dev_action_units restart "$target" "$stop_prod"
+        ;;
+      logs) dev_logs "${1:-all}" ;;
+      doctor) dev_doctor "${1:-all}" ;;
+      ""|-h|--help|help)
+        cat <<EOF
+hubctl dev — user scope dev services
+
+Usage:
+  hubctl dev status [index|router|bridge]
+  hubctl dev start|restart [--stop-prod] [index|router|bridge]
+  hubctl dev stop [index|router|bridge]
+  hubctl dev logs [index|router|bridge]
+  hubctl dev doctor [index|router|bridge]
+
+Mapped units:
+  $DEV_INDEX_UNIT
+  $DEV_ROUTER_UNIT
+  $DEV_BRIDGE_UNIT
+EOF
+        ;;
+      *)
+        die "unknown dev command: $sub"
+        ;;
+    esac
+    ;;
+  sync) repo_exec "scripts/syncctl" "$@" ;;
+  git) repo_exec "scripts/gitctl" "$@" ;;
+  backup) repo_exec "scripts/backupctl" "$@" ;;
+  mount) repo_exec "scripts/mountctl" "$@" ;;
+  hook|hooks) repo_exec "scripts/hookctl" "$@" ;;
+  core4) repo_exec "core4/python-core4/core4ctl" "$@" ;;
+  tent|tentctl) repo_exec "game/python-tent-bot/tentctl" "$@" ;;
+  gas|gasctl) repo_exec "scripts/gasctl" "$@" ;;
+  firectl) repo_exec "scripts/firectl" "$@" ;;
+  tele|telectl) repo_exec "scripts/telectl" "$@" ;;
+  door|doorctl) repo_exec "door/cli/doorctl" "$@" ;;
+  game|gamectl) repo_exec "scripts/gamectl" "$@" ;;
+  voice|voicectl) repo_exec "scripts/voicectl" "$@" ;;
+  fire)
+    sub="${1:-}"; shift || true
+    fire_timer="$(pick_user_unit_name "${AOS_FIREMAP_TIMER_UNIT:-}" "aos-firemap-weekly.timer" "alphaos-firemap-weekly.timer")"
+    fire_service="${fire_timer%.timer}.service"
+    case "$sub" in
+      setup)
+        repo_exec "scripts/setup-fire-map.sh" "$@"
+        ;;
+      run|sync)
+        repo_exec "firemap" sync "$@"
+        ;;
+      status)
+        repo_exec "firemap" status
+        ;;
+      list)
+        repo_exec "firemap" list
+        ;;
+      enable)
+        systemctl --user enable --now "$fire_timer"
+        ;;
+      disable)
+        systemctl --user disable --now "$fire_timer"
+        ;;
+      start)
+        systemctl --user start "$fire_timer"
+        ;;
+      stop)
+        systemctl --user stop "$fire_timer"
+        ;;
+      logs)
+        journalctl --user -u "$fire_service" -n 200 -f
+        ;;
+      ""|-h|--help|help)
+        cat <<EOF
+hubctl fire — Fire Map scheduling + sync
+
+Commands:
+  hubctl fire setup        # install Taskwarrior config + weekly timer
+  hubctl fire enable       # enable + start weekly timer
+  hubctl fire disable      # disable + stop weekly timer
+  hubctl fire start|stop   # start/stop weekly timer
+  hubctl fire status       # show Fire Map status (current week)
+  hubctl fire list         # list Fire Maps
+  hubctl fire run|sync     # sync Fire Maps to Taskwarrior now
+  hubctl fire logs         # follow weekly sync logs
+EOF
+        ;;
+      *)
+        die "unknown fire command: $sub"
+        ;;
+    esac
+    ;;
+
+  *)
+    ui_err "unknown command: $cmd"
+    usage
+    exit 1
+    ;;
+esac

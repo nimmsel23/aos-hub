@@ -9,6 +9,12 @@
   --ok-dim:  rgba(93,184,93,.1);
   --ok-bar:  rgba(93,184,93,.7);
   --r:       16px;
+
+  /* Domain Colors */
+  --body:     #5db85d;
+  --being:    #5b9dd8;
+  --balance:  #b85db8;
+  --business: #d89d5b;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -187,15 +193,25 @@ body {
 }
 
 .card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   background: var(--card2);
   display: grid;
   place-items: center;
-  font-size: 18px;
   flex-shrink: 0;
 }
+
+.card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Domain-specific icon colors */
+.domain-card.body .card-icon svg { color: var(--body); }
+.domain-card.being .card-icon svg { color: var(--being); }
+.domain-card.balance .card-icon svg { color: var(--balance); }
+.domain-card.business .card-icon svg { color: var(--business); }
 
 .card-info { flex: 1; min-width: 0; }
 
@@ -250,36 +266,42 @@ body {
 .mini-ring-wrap {
   position: relative;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   margin-left: auto;
 }
 
 .mini-ring-svg {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   transform: rotate(-90deg);
 }
 
 .mini-ring-bg {
   fill: none;
   stroke: #1c1c1c;
-  stroke-width: 3;
+  stroke-width: 3.5;
 }
 
 .mini-ring-track {
   fill: none;
   stroke: var(--ok);
-  stroke-width: 3;
+  stroke-width: 3.5;
   stroke-linecap: round;
-  stroke-dasharray: 69.12; /* 2π×11 */
-  stroke-dashoffset: 69.12;
+  stroke-dasharray: 75.4; /* 2π×12 */
+  stroke-dashoffset: 75.4;
   transition: stroke-dashoffset .5s ease, stroke .3s;
 }
 
 .mini-ring-track.empty {
   stroke: #2a2d33;
 }
+
+/* Domain-specific mini ring colors */
+.domain-card.body .mini-ring-track { stroke: var(--body); }
+.domain-card.being .mini-ring-track { stroke: var(--being); }
+.domain-card.balance .mini-ring-track { stroke: var(--balance); }
+.domain-card.business .mini-ring-track { stroke: var(--business); }
 
 .mini-ring-center {
   position: absolute;
@@ -299,6 +321,12 @@ body {
   color: var(--ok);
 }
 
+/* Domain-specific active number colors */
+.domain-card.body .mini-ring-num.active { color: var(--body); }
+.domain-card.being .mini-ring-num.active { color: var(--being); }
+.domain-card.balance .mini-ring-num.active { color: var(--balance); }
+.domain-card.business .mini-ring-num.active { color: var(--business); }
+
 .card-score {
   font-size: 22px;
   font-weight: 900;
@@ -310,6 +338,12 @@ body {
 }
 
 .card-score.done { color: var(--ok); }
+
+/* Domain-specific score colors */
+.domain-card.body .card-score.done { color: var(--body); }
+.domain-card.being .card-score.done { color: var(--being); }
+.domain-card.balance .card-score.done { color: var(--balance); }
+.domain-card.business .card-score.done { color: var(--business); }
 
 /* Progress bar */
 .card-bar {
@@ -323,6 +357,12 @@ body {
   border-radius: 0 2px 2px 0;
   transition: width .4s ease;
 }
+
+/* Domain-specific progress bars */
+.domain-card.body .card-bar-fill { background: rgba(93,184,93,.7); }
+.domain-card.being .card-bar-fill { background: rgba(91,157,216,.7); }
+.domain-card.balance .card-bar-fill { background: rgba(184,93,184,.7); }
+.domain-card.business .card-bar-fill { background: rgba(216,157,91,.7); }
 
 /* ── Toast ── */
 .toast {

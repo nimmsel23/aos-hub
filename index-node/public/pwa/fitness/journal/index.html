@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0f14" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Journal - AOS Fitness Centre</title>
+    <link rel="manifest" href="/pwa/fitness/manifest.json" />
+    <link rel="apple-touch-icon" href="/pwa/fitness/icon-192.svg" />
+    <link rel="stylesheet" href="../_shared/styles.css" />
+    <style>
+      .layout {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 14px;
+        margin-top: 14px;
+      }
+      @media (max-width: 820px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+      .side { padding: 14px; }
+      .main { padding: 14px; }
+      .side h2 { font-size: 18px; margin-bottom: 10px; }
+      .list { display: grid; gap: 8px; max-height: 52vh; overflow: auto; padding-right: 6px; }
+      .item {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 10px 10px; border-radius: 12px; border: 1px solid var(--line);
+        background: rgba(255,255,255,0.72); cursor: pointer;
+        transition: transform 120ms ease, border-color 120ms ease;
+      }
+      .item:hover { transform: translateY(-1px); border-color: rgba(228, 87, 46, 0.25); }
+      .item.active { border-color: rgba(27, 153, 139, 0.4); }
+      .item .date { font-weight: 800; }
+      .item .tag { font-size: 12px; color: var(--muted); }
+      textarea {
+        width: 100%; min-height: 54vh; resize: vertical;
+        border: 1px solid var(--line); border-radius: 14px;
+        padding: 12px 12px; background: rgba(255,255,255,0.8);
+        font: 500 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: var(--ink);
+      }
+      .preview {
+        border: 1px solid var(--line); border-radius: 14px;
+        padding: 12px 14px; background: rgba(255,255,255,0.82);
+        min-height: 54vh;
+      }
+      .md-h1,.md-h2,.md-h3 {
+        font-family: "Fraunces", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+        margin: 10px 0 6px;
+      }
+      .md-h1 { font-size: 22px; }
+      .md-h2 { font-size: 18px; }
+      .md-h3 { font-size: 16px; }
+      .md-p { margin: 6px 0; line-height: 1.45; }
+      .md-ul { margin: 6px 0 6px 18px; }
+      .md-pre { overflow: auto; padding: 10px; border-radius: 12px; background: rgba(19,23,32,0.07); border: 1px solid rgba(19,23,32,0.12); }
+      .md-sp { height: 10px; }
+      .hint { color: var(--muted); font-size: 13px; line-height: 1.35; }
+    </style>
+  </head>
+  <body>
+    <div class="bg"></div>
+    <main class="shell">
+      <header class="top reveal" style="--delay: 20ms;">
+        <div class="row" style="justify-content: space-between; align-items: baseline; gap: 12px;">
+          <div>
+            <div class="kicker">Journal</div>
+            <h1>Daily Entries</h1>
+          </div>
+          <a class="btn ghost" href="../">Back</a>
+        </div>
+        <div class="bar">
+          <div class="row">
+            <button class="btn primary" id="connectBtn">Connect Folder</button>
+            <span class="mono" id="status">read-only</span>
+          </div>
+          <div class="row">
+            <input type="date" id="dateInput" />
+            <button class="btn" id="loadBtn">Load</button>
+            <button class="btn" id="newBtn">New</button>
+            <button class="btn primary" id="saveBtn" disabled>Save</button>
+            <button class="btn" id="toggleBtn">Preview</button>
+          </div>
+        </div>
+        <p class="lead">Fast free text capture. Extract and analyze later.</p>
+      </header>
+
+      <section class="layout">
+        <aside class="panel side reveal" style="--delay: 120ms;">
+          <h2>Recent</h2>
+          <div class="list" id="list"></div>
+          <p class="hint" style="margin-top: 10px;">
+            Files are stored under <code>personal/journal/YYYY-MM-DD.md</code>.
+          </p>
+        </aside>
+
+        <section class="panel main reveal" style="--delay: 160ms;">
+          <div id="editorWrap">
+            <textarea id="editor" spellcheck="false" placeholder="Connect folder to edit and save..."></textarea>
+          </div>
+          <div id="previewWrap" style="display:none;">
+            <div class="preview" id="preview"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/pwa/fitness/sw.js", { scope: "/pwa/fitness/" });
+      }
+    </script>
+  </body>
+</html>

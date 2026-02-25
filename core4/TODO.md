@@ -1,0 +1,1 @@
+- [ ] Core4 weekly CSV export (tagesweise) — nach General's Tent triggern, analog zur monatlichen CSV

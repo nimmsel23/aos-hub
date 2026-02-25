@@ -1,18 +1,25 @@
 "use strict";
 
+const ICONS = {
+  body:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11m-11 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21v-8m6-8v17m6-9v9"/></svg>',
+  being:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+  balance:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87m-4-12a4 4 0 0 1 0 7.75"/></svg>',
+  business: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+};
+
 const DOMAINS = [
-  { key: "body",     label: "BODY",     icon: "🏋",
+  { key: "body",     label: "BODY",     icon: ICONS.body,
     tasks: [{ key: "fitness", label: "FITNESS .5" }, { key: "fuel", label: "FUEL .5" }] },
-  { key: "being",    label: "BEING",    icon: "🧘",
+  { key: "being",    label: "BEING",    icon: ICONS.being,
     tasks: [{ key: "meditation", label: "MEDITATION .5" }, { key: "memoirs", label: "MEMOIRS .5" }] },
-  { key: "balance",  label: "BALANCE",  icon: "👥",
+  { key: "balance",  label: "BALANCE",  icon: ICONS.balance,
     tasks: [{ key: "person1", label: "PARTNER .5" }, { key: "person2", label: "POSTERITY .5" }] },
-  { key: "business", label: "BUSINESS", icon: "⚡",
+  { key: "business", label: "BUSINESS", icon: ICONS.business,
     tasks: [{ key: "discover", label: "DISCOVER .5" }, { key: "declare", label: "DECLARE .5" }] },
 ];
 
 const CIRCUMFERENCE      = 2 * Math.PI * 50;   // main ring r=50 → 314.16
-const MINI_CIRC          = 2 * Math.PI * 11;   // mini ring r=11 → 69.12
+const MINI_CIRC          = 2 * Math.PI * 12;   // mini ring r=12 → 75.4
 
 const $ = (id) => document.getElementById(id);
 
@@ -58,9 +65,9 @@ function miniRingHTML(count) {
   const numCls = count > 0  ? " active" : "";
   return `
     <div class="mini-ring-wrap">
-      <svg class="mini-ring-svg" viewBox="0 0 34 34">
-        <circle class="mini-ring-bg"    cx="17" cy="17" r="11"/>
-        <circle class="mini-ring-track${empty}" cx="17" cy="17" r="11"
+      <svg class="mini-ring-svg" viewBox="0 0 40 40">
+        <circle class="mini-ring-bg"    cx="20" cy="20" r="12"/>
+        <circle class="mini-ring-track${empty}" cx="20" cy="20" r="12"
           style="stroke-dasharray:${MINI_CIRC.toFixed(2)};stroke-dashoffset:${offset}"/>
       </svg>
       <div class="mini-ring-center">
@@ -93,7 +100,7 @@ function render() {
     }).join("");
 
     const card = document.createElement("div");
-    card.className = "domain-card";
+    card.className = `domain-card ${domain.key}`;
     card.innerHTML = `
       <div class="card-body">
         <div class="card-icon">${domain.icon}</div>
@@ -178,7 +185,14 @@ async function load() {
     state.weekHabits = weekRes.totals?.by_habit || {};
   }
 
-  $("dateLabel").textContent = state.date;
+  // Format date: "25. Feb 2026"
+  const dateObj = new Date(state.date + "T12:00:00");
+  const months = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  const day = dateObj.getDate();
+  const month = months[dateObj.getMonth()];
+  const year = dateObj.getFullYear();
+  $("dateLabel").textContent = `${day}. ${month} ${year}`;
+
   const wl = $("weekLabel");
   if (wl) wl.textContent = state.week || "—";
 
