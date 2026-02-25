@@ -16,7 +16,7 @@ usage() {
 framectl — Frame Map CLI
 
 Usage:
-  framectl new [BODY|BEING|BALANCE|BUSINESS]   Neuen Frame anlegen
+  framectl new [DOMAIN] [--mode domain-first|question-first]  Neuen Frame anlegen (default: alle Domains, question-first)
   framectl show [BODY|BEING|BALANCE|BUSINESS]  Frame anzeigen
   framectl list                                Alle Frames auflisten
   framectl edit [DOMAIN]                       Frame im Editor öffnen
@@ -24,10 +24,13 @@ Usage:
 EOF
 }
 
-cmd_new()  { py new  ${1:+--domain "$1"}; }
+cmd_new()  {
+  local domain="${1:-}"
+  shift || true
+  py new ${domain:+--domain "$domain"} "$@"
+}
 cmd_show() { py show ${1:+--domain "$1"}; }
 cmd_list() { py list; }
-
 cmd_edit() {
   local domain="${1:-}"
   local vault="$HOME/AlphaOS-Vault/Game/Frame"
@@ -41,7 +44,7 @@ cmd_edit() {
 }
 
 case "${1:-}" in
-  new)   shift; cmd_new  "${1:-}" ;;
+  new)   shift; cmd_new  "$@" ;;
   show)  shift; cmd_show "${1:-}" ;;
   list)  cmd_list ;;
   edit)  shift; cmd_edit "${1:-}" ;;

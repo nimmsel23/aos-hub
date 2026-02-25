@@ -5,7 +5,7 @@ Annual vision (IPW). Requires current Frame YAML.
 YAML = state. MD = export on demand.
 
 Usage:
-    freedom.py new   [--domain BODY] [--year 2026]
+    freedom.py new   [--domain BODY] [--year 2026] [--mode domain-first|question-first]
     freedom.py show  [--year 2026]
     freedom.py list
     freedom.py edit
@@ -24,6 +24,7 @@ from vault import (write_yaml, read_yaml, read_latest_yaml, list_yamls,
 from maps import FREEDOM_QUESTIONS, display_freedom, export_md
 
 DOMAIN_CHOICES = DOMAIN_LIST + [d.lower() for d in DOMAIN_LIST]
+PROMPT_MODES = ("domain-first", "question-first")
 
 
 def prompt_domain(domain: str, frame_data: dict | None) -> dict:
@@ -43,7 +44,29 @@ def prompt_domain(domain: str, frame_data: dict | None) -> dict:
     return answers
 
 
-def cmd_new(domain: str | None, year: str | None):
+def prompt_question_first(domains: list[str], frame_data: dict | None) -> dict[str, dict]:
+    answers_by_domain = {d: {} for d in domains}
+    for key, label, hint in FREEDOM_QUESTIONS:
+        print(f"\n{'='*44}")
+        print(f"  {label}")
+        print(f"  {hint}")
+        print(f"{'='*44}")
+        for domain in domains:
+            info = DOMAINS[domain]
+            frame_preview = ""
+            if frame_data:
+                domain_frame = (frame_data.get("domains") or {}).get(domain, {})
+                current = (domain_frame or {}).get("where_am_i_now", "")
+                if current:
+                    frame_preview = f"  📍 Frame: {current[:80]}{'…' if len(current) > 80 else ''}"
+            print(f"\n  {info['emoji']}  {domain}")
+            if frame_preview:
+                print(frame_preview)
+            answers_by_domain[domain][key] = input("  > ").strip() or "(—)"
+    return answers_by_domain
+
+
+def cmd_new(domain: str | None, year: str | None, mode: str):
     year = year or current_year()
     frame_result = read_latest_yaml("frame")
     if not frame_result:
@@ -55,10 +78,16 @@ def cmd_new(domain: str | None, year: str | None):
     domains = [domain.upper()] if domain else DOMAIN_LIST
     print(f"\n{'='*44}")
     print(f"  FREEDOM MAP  –  {year}  (Frame: {frame_period})")
+    print(f"  Prompt mode: {mode}")
     print(f"{'='*44}")
+
+    if mode == "question-first":
+        answers_by_domain = prompt_question_first(domains, frame_data)
+    else:
+        answers_by_domain = {d: prompt_domain(d, frame_data) for d in domains}
+
     for d in domains:
-        data = prompt_domain(d, frame_data)
-        path = update_domain_yaml("freedom", d, data, period=year)
+        path = update_domain_yaml("freedom", d, answers_by_domain[d], period=year)
         print(f"\n  ✔ {d} → {path.name}")
     print()
 
@@ -118,6 +147,7 @@ def main():
     p_new = sub.add_parser("new")
     p_new.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
     p_new.add_argument("--year", "-y")
+    p_new.add_argument("--mode", choices=PROMPT_MODES, default="question-first")
 
     p_show = sub.add_parser("show")
     p_show.add_argument("--year", "-y")
@@ -130,7 +160,7 @@ def main():
 
     args = parser.parse_args()
     if args.cmd == "new":
-        cmd_new(args.domain, getattr(args, "year", None))
+        cmd_new(args.domain, getattr(args, "year", None), getattr(args, "mode", "question-first"))
     elif args.cmd == "show":
         cmd_show(getattr(args, "year", None))
     elif args.cmd == "list":

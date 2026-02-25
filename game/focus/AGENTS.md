@@ -24,9 +24,12 @@ Das zugehörige `gamectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 - Keep Focus filenames stable because Fire Maps reference them via YAML `focus_maps:` (cascade queries).
 - Prefer YAML front matter for machine-readable metadata (phase, month, domain).
 - Keep router triggers thin; Focus is primarily UI + vault storage + YAML semantics.
+- Prototype scaffold for terminal flow tests writes `game/focus/prototypes/<DOMAIN>/<YYYY-MM>/monthly.md`
+  with YAML front matter and `source_refs` to Frame/Freedom YAML.
 
 ## Quick Debug Commands
 - Health: `curl -s http://127.0.0.1:8799/health`
 - Focus UI: `xdg-open http://127.0.0.1:8799/game/focus` (or paste in browser)
 - Draft state: `curl -s http://127.0.0.1:8799/api/game/focus/state | jq .`
 - List maps (BODY/current): `curl -s "http://127.0.0.1:8799/api/game/focus/list?domain=BODY&month=current" | jq .`
+- Prototype monthly map: `game/focus/focusctl scaffold BODY 2026-02`

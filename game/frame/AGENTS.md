@@ -22,4 +22,10 @@ framectl new [DOMAIN]    # create/update frame
 framectl show [DOMAIN]   # display
 framectl list            # all frames
 framectl edit [DOMAIN]   # open in $EDITOR
+framectl scaffold [DOMAIN|all] [YEAR]   # prototype annual.yaml in repo
 ```
+
+## Prototype Scaffold (Codex Session)
+- Prototype files are written to `game/frame/prototypes/<DOMAIN>/<YEAR>/annual.yaml`.
+- This scaffold is for terminal-first cascade flow tests and future Node/GAS adapters.
+- Keep YAML keys stable (`type`, `domain`, `period`, `source_refs`) once downstream readers depend on them.

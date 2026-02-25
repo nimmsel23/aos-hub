@@ -4,6 +4,7 @@
 
 ## Docs
 
+- Script reference (maintenance-critical): `core4/CORE4-SCRIPTS.md`
 - Architecture: `core4/ARCHITECTURE.md`
 - Cheatsheet: `core4/CHEATSHEET.md`
 - Changelog: `core4/CHANGELOG.md`
@@ -11,6 +12,12 @@
 ## Quick Start
 
 ```bash
+# Wrapper/frontdoor help (recommended starting point)
+core4 --help
+c4 --help
+c4d --help
+wcore4 --help
+
 # Check today's status
 core4ctl today
 

@@ -1,1 +1,2 @@
-- [ ] Core4 weekly CSV export (tagesweise) — nach General's Tent triggern, analog zur monatlichen CSV
+- [ ] `weekly_core4score.csv` exportieren (Tent-wochenbezogen) — nach General's Tent triggern, analog zur monatlichen CSV (Owner: Tent-Centre Route/Service, nicht `server.js`)
+- [ ] Sealed Tent-Bundle schreiben: `generalstent_KW**.md` (Core4-Wochenscore + Tent-Synthese gebuendelt; in `index-node/routes/game.tent.js` / `index-node/services/tent.service.js`)

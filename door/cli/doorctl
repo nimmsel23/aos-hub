@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-DOORCTL_VERSION="2.0.0"
+DOORCTL_VERSION="2.1.0"
+DOORCTL_OUTPUT_FORMAT="text"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 DOOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -16,9 +17,13 @@ source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
 codex_subcmd_maybe "door" "doorctl" "$@" && exit 0
 
 # Load global env
+DOORCTL_PRESET_AOS_VAULT_DIR="${AOS_VAULT_DIR-}"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
+if [[ -n "${DOORCTL_PRESET_AOS_VAULT_DIR:-}" ]]; then
+  AOS_VAULT_DIR="$DOORCTL_PRESET_AOS_VAULT_DIR"
+fi
 
 # Load UI helpers
 # shellcheck disable=SC1091
@@ -37,8 +42,13 @@ source "$DOOR_DIR/lib/door_format.sh"
 # Config
 VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
 STALLED_DAYS="${AOS_DOOR_STALLED_DAYS:-7}"
+ATTENTION_DAYS="${AOS_DOOR_ATTENTION_DAYS:-3}"
 TASK_BIN="${TASK_BIN:-task}"
 HOT_PY="$DOOR_DIR/python-hot/hot.py"
+HOT_TO_MD_SH="$DOOR_DIR/hot_to_md.sh"
+CREATE_WARSTACK_SH="$DOOR_DIR/create_warstack.sh"
+DOOR_FILE_WATCHER_SH="$DOOR_DIR/door_file_watcher.sh"
+DOOR_LIFECYCLE_SH="$DOOR_DIR/door_lifecycle.sh"
 
 #───────────────────────────────────────────────────────────────────────────────
 # Helpers / Flow Views
@@ -48,19 +58,379 @@ have_task() {
   command -v "$TASK_BIN" >/dev/null 2>&1
 }
 
+have_jq() {
+  command -v jq >/dev/null 2>&1
+}
+
+json_mode() {
+  [[ "$DOORCTL_OUTPUT_FORMAT" == "json" ]]
+}
+
+require_jq() {
+  if have_jq; then
+    return 0
+  fi
+  ui_err "jq is required for this command/output mode"
+  return 1
+}
+
+require_task() {
+  if have_task; then
+    return 0
+  fi
+  ui_err "Taskwarrior not found: $TASK_BIN"
+  return 1
+}
+
+require_exec_script() {
+  local file="${1:?}"
+  local label="${2:-script}"
+  if [[ -x "$file" ]]; then
+    return 0
+  fi
+  ui_err "$label not found or not executable: $file"
+  return 1
+}
+
+select_editor() {
+  if command -v micro >/dev/null 2>&1; then
+    printf "micro"
+  elif command -v nano >/dev/null 2>&1; then
+    printf "nano"
+  else
+    printf "%s" "${EDITOR:-nano}"
+  fi
+}
+
+warstack_path() {
+  local door_name="${1:?}"
+  printf "%s/Door/War-Stacks/%s.md" "$VAULT_DIR" "$door_name"
+}
+
+note_path() {
+  local door_name="${1:?}"
+  printf "%s/Door/notes/%s.md" "$VAULT_DIR" "$door_name"
+}
+
+print_command_catalog() {
+  cat <<'EOF'
+menu	menu	Interactive terminal menu (TTY default when no args)
+dashboard	dashboard	Compact Door dashboard (hotlist + focus + health)
+list	list	List all active doors with status
+show	show <door>	Show detail view for a specific door
+hotlist	hotlist [list|json|open|add]	Potential / Hot List flow (JSON source supported)
+hot	hot [list|open|add|json]	Hot List frontdoor (interactive UI on TTY)
+doorwar	doorwar [list|status|review|activate|promote|<door>]	Plan-phase + HotList->WarStack activation
+warstack	warstack <door> [show|edit]	Alias for war (no door -> production report)
+review	review	Compact phase review + health + focus
+doctor	doctor	Environment + dependency + Task/Vault health checks
+commands	commands	Machine-friendly command catalog
+potential	potential [subcmd]	Potential frontdoor (Hot List / Possibilities)
+plan	plan [subcmd]	Plan frontdoor (Door War / War Stack)
+production	production [subcmd]	Production frontdoor (Hits / execution)
+profit	profit [subcmd]	Profit frontdoor (Review / achieved & done)
+hits	hits [door] [status]	List hits (all or scoped to a door)
+next	next [door]	Show next hit(s)
+done	done <uuid>	Mark hit as completed
+edit	edit <uuid>	Edit hit in Taskwarrior
+open	open <uuid>	Open hit with taskopen
+hitlist	hitlist	Show all pending hits
+focus	focus	Show top 3 pending hits
+health	health	Door health overview (stalled/attention/healthy)
+stalled	stalled	List stalled doors only
+war	war <door> [show|edit]	View/edit war stack markdown
+note	note <door>	View/edit door note markdown
+version	version	Show version
+help	help	Show help
+EOF
+}
+
+cmd_commands() {
+  if json_mode; then
+    require_jq || return 1
+    print_command_catalog \
+      | jq -R 'select(length > 0) | split("\t") | {name: .[0], usage: .[1], summary: .[2]}' \
+      | jq -s '.'
+    return 0
+  fi
+
+  ui_title "doorctl Commands"
+  print_command_catalog | while IFS=$'\t' read -r name usage summary; do
+    printf "  %-10s %-30s %s\n" "$name" "$usage" "$summary"
+  done
+}
+
+build_health_json() {
+  require_jq || return 1
+
+  local doors_json="${1:-[]}"
+  local items=()
+  local healthy_count=0
+  local attention_count=0
+  local stalled_count=0
+
+  while IFS= read -r door; do
+    [[ -z "$door" ]] && continue
+    local name modified activity health_status
+    name="$(printf "%s" "$door" | jq -r '.name')"
+    modified="$(printf "%s" "$door" | jq -r '.modified // ""')"
+    activity="$(time_ago "$modified")"
+    health_status="$(get_health_status "$modified")"
+
+    case "$health_status" in
+      healthy) healthy_count=$((healthy_count + 1)) ;;
+      attention) attention_count=$((attention_count + 1)) ;;
+      stalled) stalled_count=$((stalled_count + 1)) ;;
+    esac
+
+    items+=("$(printf "%s" "$door" | jq -c --arg activity "$activity" --arg health_status "$health_status" \
+      '. + {activity: $activity, health_status: $health_status}')")
+  done < <(printf "%s" "$doors_json" | jq -c '.[]?')
+
+  if ((${#items[@]} == 0)); then
+    jq -n \
+      --argjson healthy "$healthy_count" \
+      --argjson attention "$attention_count" \
+      --argjson stalled "$stalled_count" \
+      '{summary:{healthy:$healthy, attention:$attention, stalled:$stalled, total:0}, doors:[]}'
+    return 0
+  fi
+
+  printf "%s\n" "${items[@]}" | jq -s \
+    --argjson healthy "$healthy_count" \
+    --argjson attention "$attention_count" \
+    --argjson stalled "$stalled_count" \
+    '{summary:{healthy:$healthy, attention:$attention, stalled:$stalled, total:length}, doors:.}'
+}
+
 cmd_phase_report() {
   local phase="${1:?}"
   local status_filter="${2:-pending}"
 
-  ui_title "Door Phase: ${phase^}"
+  require_task || return 1
 
-  if ! have_task; then
-    ui_err "Taskwarrior not found: $TASK_BIN"
-    return 1
+  if json_mode; then
+    require_jq || return 1
+    "$TASK_BIN" "+$phase" "status:$status_filter" export 2>/dev/null
+    return 0
   fi
+
+  ui_title "Door Phase: ${phase^}"
 
   # Tag-based phase view keeps this portable across older setups while UDA migration settles.
   "$TASK_BIN" "+$phase" "status:$status_filter"
+}
+
+cmd_potential() {
+  local sub="${1:-list}"
+  shift || true
+
+  case "$sub" in
+    list|show|"")
+      cmd_hotlist list "$@"
+      ;;
+    json)
+      cmd_hotlist json "${1:-active}"
+      ;;
+    add)
+      cmd_hotlist add "$@"
+      ;;
+    open)
+      cmd_hotlist open "$@"
+      ;;
+    import|capture)
+      [[ $# -ge 2 ]] || { ui_err "Usage: doorctl potential import <task-uuid> <description...>"; return 1; }
+      require_exec_script "$HOT_TO_MD_SH" "hot_to_md.sh" || return 1
+      "$HOT_TO_MD_SH" "$@"
+      ;;
+    report)
+      cmd_phase_report potential "${1:-pending}"
+      ;;
+    pending|completed|deleted|waiting|all)
+      # Backward compatibility: `doorctl potential pending`
+      cmd_phase_report potential "$sub"
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl potential
+
+Potential = Hot List / Possibilities (Chapter 26)
+
+Usage:
+  doorctl potential [list]
+  doorctl potential json [active|all|promoted]
+  doorctl potential add <idea...>
+  doorctl potential open <task-number>
+  doorctl potential import <task-uuid> <description...>
+  doorctl potential report [status]
+EOF
+      ;;
+    *)
+      ui_err "Unknown potential command: $sub"
+      return 2
+      ;;
+  esac
+}
+
+cmd_plan() {
+  local sub="${1:-list}"
+  shift || true
+
+  case "$sub" in
+    list|show|status|"")
+      cmd_doorwar list "$@"
+      ;;
+    activate|promote)
+      cmd_doorwar_activate "$@"
+      ;;
+    war)
+      cmd_war "$@"
+      ;;
+    warstack)
+      cmd_warstack "$@"
+      ;;
+    automate)
+      [[ $# -ge 1 ]] || { ui_err "Usage: doorctl plan automate <war-stack-file.md>"; return 1; }
+      require_exec_script "$CREATE_WARSTACK_SH" "create_warstack.sh" || return 1
+      "$CREATE_WARSTACK_SH" "$@"
+      ;;
+    transition)
+      [[ $# -ge 2 ]] || { ui_err "Usage: doorctl plan transition <task_id> <title...>"; return 1; }
+      require_exec_script "$DOOR_LIFECYCLE_SH" "door_lifecycle.sh" || return 1
+      local task_id="$1"; shift
+      "$DOOR_LIFECYCLE_SH" "potential" "plan" "$task_id" "$*"
+      ;;
+    report)
+      cmd_phase_report plan "${1:-pending}"
+      ;;
+    pending|completed|deleted|waiting|all)
+      cmd_phase_report plan "$sub"
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl plan
+
+Plan = Door War / War Stack (Chapter 27/28)
+
+Usage:
+  doorctl plan [list]
+  doorctl plan activate <hot-selector> [door-name] [--force]
+  doorctl plan war <door> [show|edit]
+  doorctl plan automate <war-stack-file.md>
+  doorctl plan report [status]
+EOF
+      ;;
+    *)
+      ui_err "Unknown plan command: $sub"
+      return 2
+      ;;
+  esac
+}
+
+cmd_production() {
+  local sub="${1:-focus}"
+  shift || true
+
+  case "$sub" in
+    focus|today|"")
+      cmd_focus "$@"
+      ;;
+    hitlist|hits)
+      if [[ "$sub" == "hits" ]]; then
+        cmd_hits "$@"
+      else
+        cmd_hitlist "$@"
+      fi
+      ;;
+    next)
+      cmd_next "$@"
+      ;;
+    done)
+      cmd_done "$@"
+      ;;
+    edit)
+      cmd_edit "$@"
+      ;;
+    open)
+      cmd_open "$@"
+      ;;
+    watch)
+      require_exec_script "$DOOR_FILE_WATCHER_SH" "door_file_watcher.sh" || return 1
+      "$DOOR_FILE_WATCHER_SH" "$@"
+      ;;
+    report)
+      cmd_phase_report production "${1:-pending}"
+      ;;
+    pending|completed|deleted|waiting|all)
+      cmd_phase_report production "$sub"
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl production
+
+Production = Hit execution / progress sync (Chapter 29)
+
+Usage:
+  doorctl production [focus]
+  doorctl production hitlist
+  doorctl production hits [door] [status]
+  doorctl production next [door]
+  doorctl production done <uuid>
+  doorctl production watch
+  doorctl production report [status]
+EOF
+      ;;
+    *)
+      ui_err "Unknown production command: $sub"
+      return 2
+      ;;
+  esac
+}
+
+cmd_profit() {
+  local sub="${1:-review}"
+  shift || true
+
+  case "$sub" in
+    review|status|"")
+      cmd_review "$@"
+      ;;
+    health)
+      cmd_health "$@"
+      ;;
+    stalled)
+      cmd_stalled "$@"
+      ;;
+    transition)
+      [[ $# -ge 2 ]] || { ui_err "Usage: doorctl profit transition <task_id> <title...>"; return 1; }
+      require_exec_script "$DOOR_LIFECYCLE_SH" "door_lifecycle.sh" || return 1
+      local task_id="$1"; shift
+      "$DOOR_LIFECYCLE_SH" "production" "profit" "$task_id" "$*"
+      ;;
+    report)
+      cmd_phase_report profit "${1:-pending}"
+      ;;
+    pending|completed|deleted|waiting|all)
+      cmd_phase_report profit "$sub"
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl profit
+
+Profit = Achieved & Done / Review (Chapter 30)
+
+Usage:
+  doorctl profit [review]
+  doorctl profit health
+  doorctl profit stalled
+  doorctl profit report [status]
+EOF
+      ;;
+    *)
+      ui_err "Unknown profit command: $sub"
+      return 2
+      ;;
+  esac
 }
 
 phase_count() {
@@ -75,13 +445,359 @@ phase_count() {
   printf "%s" "$count"
 }
 
+hotlist_index_path() {
+  printf "%s/Door/1-Potential/hotlist_index.json" "$VAULT_DIR"
+}
+
+hotlist_load_index() {
+  require_jq || return 1
+  local path
+  path="$(hotlist_index_path)"
+
+  if [[ ! -f "$path" ]]; then
+    printf '{"items":[]}\n'
+    return 0
+  fi
+
+  jq -c '
+    if type == "array" then
+      {items: .}
+    elif type == "object" then
+      . + {items: (.items // [])}
+    else
+      {items: []}
+    end
+  ' "$path"
+}
+
+hotlist_save_index() {
+  require_jq || return 1
+  local json="${1:?}"
+  local path tmp
+  path="$(hotlist_index_path)"
+  mkdir -p "$(dirname "$path")"
+  tmp="$(mktemp /tmp/doorctl-hotlist.XXXXXX.json)"
+  printf "%s\n" "$json" | jq '.' > "$tmp"
+  mv "$tmp" "$path"
+}
+
+hotlist_list_json() {
+  local mode="${1:-active}"
+  local data items
+  data="$(hotlist_load_index)"
+
+  case "$mode" in
+    all)
+      printf "%s\n" "$data" | jq '
+        [(.items // [])[] | . as $i | .]
+      '
+      ;;
+    active|open)
+      printf "%s\n" "$data" | jq '
+        [(.items // [])[]
+         | select((.status // "active") as $s | ($s == "active" or $s == "new"))
+        ]
+      '
+      ;;
+    promoted|plan)
+      printf "%s\n" "$data" | jq '
+        [(.items // [])[]
+         | select((.status // "") == "promoted" or (.phase // "") == "plan")
+        ]
+      '
+      ;;
+    *)
+      ui_err "Unknown hotlist json mode: $mode (use all|active|promoted)"
+      return 2
+      ;;
+  esac
+}
+
+hotlist_enumerated_json() {
+  local mode="${1:-all}"
+  hotlist_list_json "$mode" | jq '
+    to_entries
+    | map(.value + {_hot_index0: .key, hot_index: (.key + 1)})
+  '
+}
+
+hotlist_select_entry_json() {
+  local selector="${1:?}"
+  require_jq || return 1
+  local data
+  data="$(hotlist_enumerated_json all)"
+
+  if [[ "$selector" =~ ^[0-9]+$ ]]; then
+    printf "%s\n" "$data" | jq -c --argjson idx "$selector" '
+      map(select(.hot_index == $idx)) | .[0] // empty
+    '
+    return 0
+  fi
+
+  printf "%s\n" "$data" | jq -c --arg s "$selector" '
+    map(select(
+      (.tw_uuid // "" | startswith($s))
+      or (.task_uuid // "" | startswith($s))
+      or (.id // "" | startswith($s))
+      or (.idea // "" == $s)
+      or (.title // "" == $s)
+      or (.door_name // "" == $s)
+      or (.file // "" == $s)
+      or (.md_name // "" == $s)
+      or ((.file // "") | endswith("/" + $s))
+    )) | .[0] // empty
+  '
+}
+
+slugify_door_name() {
+  local raw="${1:-}"
+  raw="$(printf "%s" "$raw" | tr '[:upper:]' '[:lower:]')"
+  raw="$(printf "%s" "$raw" | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+  [[ -n "$raw" ]] || raw="door"
+  printf "%s" "$raw"
+}
+
+yaml_quote() {
+  local s="${1:-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf "\"%s\"" "$s"
+}
+
+iso_now() {
+  date -Iseconds
+}
+
+render_warstack_from_hotlist_template() {
+  local door_name="${1:?}"
+  local idea="${2:?}"
+  local hot_index="${3:?}"
+  local tw_uuid="${4:-}"
+  local hot_file="${5:-}"
+  local selected_at="${6:?}"
+  local hot_item_id="${7:-}"
+  local hot_json_path
+  hot_json_path="$(hotlist_index_path)"
+
+  cat <<EOF
+---
+type: "door-war-stack"
+status: "active"
+phase: "plan"
+door_name: $(yaml_quote "$door_name")
+title: $(yaml_quote "$idea")
+created: $(yaml_quote "$selected_at")
+updated: $(yaml_quote "$selected_at")
+source_potential:
+  kind: "hotlist-json"
+  hot_index: $hot_index
+  hot_item_id: $(yaml_quote "$hot_item_id")
+  hotlist_json: $(yaml_quote "$hot_json_path")
+  hot_file: $(yaml_quote "$hot_file")
+  tw_uuid: $(yaml_quote "$tw_uuid")
+profit_review:
+  status: "open"
+  reviewed_at: null
+  score: null
+---
+
+# ⚔️ WAR STACK — $door_name
+
+## Potential Source
+
+- Idea: $idea
+- Hot List index: $hot_index
+- Task UUID: ${tw_uuid:-n/a}
+- Selected: $selected_at
+
+---
+
+## PLAN / Door War
+
+### Objective
+
+### Fact
+
+### Obstacle
+
+### Strike
+
+### Responsibility
+
+---
+
+## 4 Hits (Production Prep)
+
+1. [ ] Hit 1
+2. [ ] Hit 2
+3. [ ] Hit 3
+4. [ ] Hit 4
+
+---
+
+## PROFIT / REVIEW
+
+### Outcome
+
+### Evidence
+
+### Wins
+
+### Lessons
+
+### Next Door(s)
+
+EOF
+}
+
+cmd_hotlist_json() {
+  local mode="${1:-active}"
+  require_jq || return 1
+  local items_json
+  items_json="$(hotlist_enumerated_json "$mode")"
+
+  if json_mode; then
+    printf "%s\n" "$items_json"
+    return 0
+  fi
+
+  ui_title "Hot List JSON ($mode)"
+  if [[ "$(printf "%s" "$items_json" | jq 'length')" == "0" ]]; then
+    ui_info "No hotlist entries in mode: $mode"
+    return 0
+  fi
+
+  printf "%s\n" "$items_json" | jq -r '
+    .[] | [
+      (.hot_index|tostring),
+      (.status // "active"),
+      (.phase // "potential"),
+      (.door_name // "-"),
+      (.idea // .title // "-")
+    ] | @tsv
+  ' | while IFS=$'\t' read -r idx status phase door idea; do
+    printf "  [%s] %-10s %-10s %-18s %s\n" "$idx" "$status" "$phase" "$door" "$idea"
+  done
+}
+
+cmd_doorwar_activate() {
+  local selector="${1:-}"
+  shift || true
+  local requested_door_name=""
+  local force=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force="--force" ;;
+      *)
+        if [[ -z "$requested_door_name" ]]; then
+          requested_door_name="$1"
+        else
+          ui_err "Unexpected argument: $1"
+          return 2
+        fi
+        ;;
+    esac
+    shift || true
+  done
+
+  [[ -n "$selector" ]] || {
+    ui_err "Usage: doorctl doorwar activate <hot-index|tw_uuid|idea|file> [door-name]"
+    return 1
+  }
+
+  require_jq || return 1
+  local entry
+  entry="$(hotlist_select_entry_json "$selector")"
+  if [[ -z "$entry" ]]; then
+    ui_err "Hot List entry not found for selector: $selector"
+    return 1
+  fi
+
+  local current_status
+  current_status="$(printf "%s" "$entry" | jq -r '.status // "active"')"
+  if [[ "$current_status" == "promoted" && "$force" != "--force" ]]; then
+    ui_warn "Hot List entry already promoted. Use --force to regenerate the War Stack."
+  fi
+
+  local idea tw_uuid hot_file hot_index0 hot_index selected_at hot_item_id
+  idea="$(printf "%s" "$entry" | jq -r '.idea // .title // ""')"
+  tw_uuid="$(printf "%s" "$entry" | jq -r '.tw_uuid // .task_uuid // ""')"
+  hot_file="$(printf "%s" "$entry" | jq -r '.file // .md_name // .md_url // ""')"
+  hot_index0="$(printf "%s" "$entry" | jq -r '._hot_index0')"
+  hot_index="$(printf "%s" "$entry" | jq -r '.hot_index')"
+  hot_item_id="$(printf "%s" "$entry" | jq -r '.id // ""')"
+  selected_at="$(iso_now)"
+
+  local door_name
+  if [[ -n "$requested_door_name" ]]; then
+    door_name="$requested_door_name"
+  else
+    door_name="$(printf "%s" "$entry" | jq -r '.door_name // ""')"
+    [[ -n "$door_name" && "$door_name" != "null" ]] || door_name="$(slugify_door_name "$idea")"
+  fi
+
+  local warstack_file
+  warstack_file="$(warstack_path "$door_name")"
+  mkdir -p "$(dirname "$warstack_file")"
+
+  if [[ -f "$warstack_file" && "$force" != "--force" ]]; then
+    ui_err "War Stack already exists: $warstack_file"
+    ui_info "Use: doorctl doorwar activate $selector \"$door_name\" --force"
+    return 1
+  fi
+
+  render_warstack_from_hotlist_template \
+    "$door_name" "$idea" "$hot_index" "$tw_uuid" "$hot_file" "$selected_at" "$hot_item_id" > "$warstack_file"
+
+  local updated_index
+  updated_index="$(
+    hotlist_load_index | jq -c \
+      --argjson idx "$hot_index0" \
+      --arg status "promoted" \
+      --arg phase "plan" \
+      --arg door_name "$door_name" \
+      --arg warstack_file "$warstack_file" \
+      --arg promoted_at "$selected_at" '
+      .items[$idx].status = $status
+      | .items[$idx].phase = $phase
+      | .items[$idx].door_name = $door_name
+      | .items[$idx].warstack_file = $warstack_file
+      | .items[$idx].promoted_at = $promoted_at
+    '
+  )"
+  hotlist_save_index "$updated_index"
+
+  if json_mode; then
+    jq -n \
+      --arg selector "$selector" \
+      --arg door_name "$door_name" \
+      --arg warstack_file "$warstack_file" \
+      --arg hot_index "$hot_index" \
+      --arg promoted_at "$selected_at" \
+      '{ok:true, action:"doorwar.activate", selector:$selector, door_name:$door_name, warstack_file:$warstack_file, hot_index:($hot_index|tonumber), promoted_at:$promoted_at}'
+    return 0
+  fi
+
+  ui_ok "Activated Door from Hot List"
+  printf "Door: %s\n" "$door_name"
+  printf "Source Hot List entry: #%s\n" "$hot_index"
+  printf "War Stack: %s\n" "$warstack_file"
+  ui_info "Next: doorctl war \"$door_name\" edit"
+}
+
 cmd_hotlist() {
   local sub="${1:-list}"
   shift || true
 
   case "$sub" in
+    json)
+      cmd_hotlist_json "${1:-active}"
+      ;;
     list|show)
-      if [[ -f "$HOT_PY" ]] && command -v python3 >/dev/null 2>&1; then
+      if json_mode; then
+        cmd_hotlist_json active
+      elif [[ -f "$HOT_PY" ]] && command -v python3 >/dev/null 2>&1; then
         python3 "$HOT_PY" list
       else
         cmd_phase_report potential pending
@@ -110,6 +826,7 @@ doorctl hotlist
 
 Usage:
   doorctl hotlist [list]
+  doorctl hotlist json [active|all|promoted]
   doorctl hotlist open <task-number>
   doorctl hotlist add <idea...>
 EOF
@@ -121,12 +838,95 @@ EOF
   esac
 }
 
+cmd_hot_ui() {
+  if ! ctl_can_prompt; then
+    cmd_hotlist list
+    return $?
+  fi
+
+  while true; do
+    printf '\033c'
+    ui_title "Door Hot List"
+    cmd_hotlist list || true
+    printf "\n[A]dd idea  [O]pen entry  [R]efresh  [Q]uit\n"
+
+    local choice=""
+    read -r -p "> " choice || return 0
+    choice="${choice,,}"
+
+    case "$choice" in
+      ""|r|refresh) ;;
+      q|quit|exit) return 0 ;;
+      a|add)
+        local idea=""
+        read -r -p "Idea: " idea || return 0
+        if [[ -z "${idea// }" ]]; then
+          read -r -p "No idea entered. Press Enter..." _ || true
+          continue
+        fi
+        cmd_hotlist add "$idea" || true
+        read -r -p "Press Enter..." _ || true
+        ;;
+      o|open)
+        local ref=""
+        read -r -p "Task number: " ref || return 0
+        if [[ -z "${ref// }" ]]; then
+          read -r -p "No task number entered. Press Enter..." _ || true
+          continue
+        fi
+        cmd_hotlist open "$ref" || true
+        read -r -p "Press Enter..." _ || true
+        ;;
+      *)
+        read -r -p "Unknown command. Press Enter..." _ || true
+        ;;
+    esac
+  done
+}
+
+cmd_hot() {
+  local sub="${1:-}"
+  if [[ $# -eq 0 ]]; then
+    cmd_hot_ui
+    return $?
+  fi
+
+  case "$sub" in
+    ui|menu)
+      shift || true
+      cmd_hot_ui "$@"
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl hot
+
+Usage:
+  doorctl hot                 # interactive Hot List UI (TTY)
+  doorctl hot ui              # force interactive UI
+  doorctl hot list            # list Hot List
+  doorctl hot json [mode]     # json view (active|all|promoted)
+  doorctl hot open <task-id>  # open Hot List entry by task number
+  doorctl hot add <idea...>   # add idea to Hot List
+  doorctl hot "idea..."       # shortcut for add
+EOF
+      ;;
+    list|show|json|open|add)
+      cmd_hotlist "$@"
+      ;;
+    *)
+      # Convenience parity with frontdoor `hot "idea..."`
+      cmd_hotlist add "$@"
+      ;;
+  esac
+}
+
 cmd_doorwar() {
   local sub="${1:-list}"
   shift || true
   case "$sub" in
     list|show|status) cmd_phase_report plan pending ;;
     review) cmd_phase_report plan pending ;;
+    activate|promote) cmd_doorwar_activate "$@" ;;
     help|-h|--help)
       cat <<'EOF'
 doorctl doorwar
@@ -135,6 +935,8 @@ Terminal plan-phase view (Door War / 2-Plan).
 
 Usage:
   doorctl doorwar [list|status|review]
+  doorctl doorwar activate <hot-index|tw_uuid|idea|file> [door-name] [--force]
+  doorctl doorwar promote  <hot-index|tw_uuid|idea|file> [door-name] [--force]
 EOF
       ;;
     *)
@@ -154,6 +956,38 @@ cmd_warstack() {
 }
 
 cmd_review() {
+  if json_mode; then
+    require_jq || return 1
+    local doors_json health_json focus_json
+    doors_json="$(get_doors 2>/dev/null || echo '[]')"
+    health_json="$(build_health_json "$doors_json")"
+    if have_task; then
+      focus_json="$("$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null || echo '[]')"
+    else
+      focus_json='[]'
+    fi
+    jq -n \
+      --arg version "$DOORCTL_VERSION" \
+      --arg potential "$(phase_count potential)" \
+      --arg plan "$(phase_count plan)" \
+      --arg production "$(phase_count production)" \
+      --arg profit "$(phase_count profit)" \
+      --argjson health "$health_json" \
+      --argjson focus "$focus_json" \
+      '{
+        version: $version,
+        counts: {
+          potential: $potential,
+          plan: $plan,
+          production: $production,
+          profit: $profit
+        },
+        health: $health,
+        focus: $focus
+      }'
+    return 0
+  fi
+
   ui_title "Door Review"
   printf "Counts (pending): potential=%s  plan=%s  production=%s  profit=%s\n" \
     "$(phase_count potential)" \
@@ -190,13 +1024,16 @@ cmd_menu_phase() {
         prompt="Potential (Hot List)"
         action="$(ui_choose "$prompt" \
           "list hotlist" \
+          "show hotlist json" \
           "add hotlist idea..." \
           "open hotlist item..." \
+          "activate hotlist -> doorwar..." \
           "phase report (potential)" \
           "review dashboard" \
           "back")" || return 0
         case "$action" in
           "list hotlist") cmd_hotlist list ;;
+          "show hotlist json") cmd_hotlist json active ;;
           "add hotlist idea...")
             local idea
             idea="$(ui_input "Idea" "")" || true
@@ -206,6 +1043,18 @@ cmd_menu_phase() {
             local ref
             ref="$(ui_input "Hotlist task number" "")" || true
             [[ -n "${ref:-}" ]] && cmd_hotlist open "$ref"
+            ;;
+          "activate hotlist -> doorwar...")
+            local selector door
+            selector="$(ui_input "Hot List selector (index/uuid/idea)" "")" || true
+            if [[ -n "${selector:-}" ]]; then
+              door="$(ui_input "Door name (optional)" "")" || true
+              if [[ -n "${door:-}" ]]; then
+                cmd_doorwar activate "$selector" "$door"
+              else
+                cmd_doorwar activate "$selector"
+              fi
+            fi
             ;;
           "phase report (potential)") cmd_phase_report potential pending ;;
           "review dashboard") cmd_review ;;
@@ -217,6 +1066,7 @@ cmd_menu_phase() {
         prompt="Plan (Door War)"
         action="$(ui_choose "$prompt" \
           "doorwar list" \
+          "activate from hotlist..." \
           "phase report (plan)" \
           "show warstack..." \
           "edit warstack..." \
@@ -224,6 +1074,18 @@ cmd_menu_phase() {
           "back")" || return 0
         case "$action" in
           "doorwar list") cmd_doorwar list ;;
+          "activate from hotlist...")
+            local selector door
+            selector="$(ui_input "Hot List selector (index/uuid/idea)" "")" || true
+            if [[ -n "${selector:-}" ]]; then
+              door="$(ui_input "Door name (optional)" "")" || true
+              if [[ -n "${door:-}" ]]; then
+                cmd_doorwar activate "$selector" "$door"
+              else
+                cmd_doorwar activate "$selector"
+              fi
+            fi
+            ;;
           "phase report (plan)") cmd_phase_report plan pending ;;
           "show warstack...")
             local door
@@ -328,6 +1190,7 @@ cmd_menu() {
     ui_title "doorctl"
     local action
     action="$(ui_choose "Door Flow" \
+      "dashboard" \
       "phase > potential" \
       "phase > plan" \
       "phase > production" \
@@ -345,10 +1208,12 @@ cmd_menu() {
       "warstack show..." \
       "warstack edit..." \
       "note..." \
+      "doctor" \
       "help" \
       "quit")" || return 0
 
     case "$action" in
+      "dashboard") cmd_dashboard ;;
       "phase > potential") cmd_menu_phase potential ;;
       "phase > plan") cmd_menu_phase plan ;;
       "phase > production") cmd_menu_phase production ;;
@@ -382,6 +1247,7 @@ cmd_menu() {
         door="$(ui_input "Door name" "")" || true
         [[ -n "${door:-}" ]] && cmd_note "$door"
         ;;
+      "doctor") cmd_doctor ;;
       "help") show_help ;;
       "quit") return 0 ;;
       *) return 0 ;;
@@ -391,18 +1257,359 @@ cmd_menu() {
   done
 }
 
+# Render one compact dashboard snapshot. This function is intentionally pure-ish:
+# it prints a full "frame" based on current data, and does not prompt.
+dashboard_render_snapshot() {
+  local doors_json='[]'
+  local health_json='{"summary":{"healthy":0,"attention":0,"stalled":0,"total":0},"doors":[]}'
+  local hot_json='[]'
+
+  # We keep collection defensive so the dashboard still opens even when one
+  # dependency (task/jq/hotlist file) is temporarily unavailable.
+  if have_jq; then
+    hot_json="$(hotlist_enumerated_json active 2>/dev/null || echo '[]')"
+    if have_task; then
+      doors_json="$(get_doors 2>/dev/null || echo '[]')"
+      health_json="$(build_health_json "$doors_json" 2>/dev/null || echo "$health_json")"
+    fi
+  fi
+
+  ui_title "Door Dashboard"
+  printf "Counts (pending): potential=%s  plan=%s  production=%s  profit=%s\n" \
+    "$(phase_count potential)" \
+    "$(phase_count plan)" \
+    "$(phase_count production)" \
+    "$(phase_count profit)"
+
+  if have_jq; then
+    # Health summary stays compact here; detailed per-door diagnostics live in
+    # `doorctl health`.
+    printf "Health: doors=%s  healthy=%s  attention=%s  stalled=%s\n" \
+      "$(printf "%s" "$health_json" | jq -r '.summary.total // 0' 2>/dev/null || echo 0)" \
+      "$(printf "%s" "$health_json" | jq -r '.summary.healthy // 0' 2>/dev/null || echo 0)" \
+      "$(printf "%s" "$health_json" | jq -r '.summary.attention // 0' 2>/dev/null || echo 0)" \
+      "$(printf "%s" "$health_json" | jq -r '.summary.stalled // 0' 2>/dev/null || echo 0)"
+  else
+    ui_warn "jq missing: dashboard summaries limited"
+  fi
+
+  echo
+  # Make the 4 Door phases visible as filesystem "anchors" right in the dashboard.
+  # This mirrors the user's real vault workflow (1-/2-/3-/4- folders) and reduces
+  # context-switching when deciding where something belongs next.
+  ui_info "Door Phase Folders"
+  local door_root="$VAULT_DIR/Door"
+  printf "  1-Potential  %s%s\n" "$door_root/1-Potential" "$( [[ -d "$door_root/1-Potential" ]] && printf '' || printf '  (missing)' )"
+  printf "  2-Plan       %s%s\n" "$door_root/2-Plan" "$( [[ -d "$door_root/2-Plan" ]] && printf '' || printf '  (missing)' )"
+  printf "  3-Production %s%s\n" "$door_root/3-Production" "$( [[ -d "$door_root/3-Production" ]] && printf '' || printf '  (missing)' )"
+  printf "  4-Profit     %s%s\n" "$door_root/4-Profit" "$( [[ -d "$door_root/4-Profit" ]] && printf '' || printf '  (missing)' )"
+
+  echo
+  ui_info "Hot List (active, top 8)"
+  if ! have_jq; then
+    printf "  jq required for hotlist preview\n"
+  elif [[ "$(printf "%s" "$hot_json" | jq 'length' 2>/dev/null || echo 0)" == "0" ]]; then
+    printf "  No active Hot List entries (add with: doorctl hot \"Idea ...\")\n"
+  else
+    printf "%s" "$hot_json" | jq -r '
+      .[:8][] |
+      [
+        ("#" + ((.hot_index // 0)|tostring)),
+        ((.idea // .title // "Untitled") | tostring | gsub("[\\r\\n]+";" ") | .[0:72]),
+        ((.status // "active") | tostring),
+        ((.tw_uuid // "") | tostring | if length>0 then .[0:8] else "-" end)
+      ] | @tsv
+    ' | while IFS=$'\t' read -r idx idea status tw; do
+      printf "  %-4s %-72s  %-9s %s\n" "$idx" "$idea" "$status" "$tw"
+    done
+  fi
+
+  echo
+  ui_info "Focus (Top 3 pending hits)"
+  if have_task; then
+    "$TASK_BIN" +door +hit status:pending limit:3 2>/dev/null || true
+  else
+    printf "  Taskwarrior not found\n"
+  fi
+
+  echo
+  ui_info "Door Chapters (Blueprint Reader)"
+  printf "  Press [c] to open chapter list / reader (Door chapters 25-31)\n"
+  printf "  Tip: [C] opens the ALPHA_OS Door chapter variant when available\n"
+
+  echo
+  ui_info "Hotkeys"
+  printf "  [m] menu  [h] hot UI  [a] add hot  [o] open hot  [w] doorwar  [l] list doors\n"
+  printf "  [v] review [f] focus  [c] chapters [C] alphaos chapter  [r]/[Enter] refresh  [q] quit\n"
+}
+
+# Door blueprint chapter paths mirror the HQ API's Door chapter feed, but are local
+# CLI helpers so the dashboard can offer an offline reader without requiring index-node.
+door_chapter_paths() {
+  local source="${1:-blueprints}"
+  local base="$VAULT_DIR"
+
+  case "$source" in
+    alphaos)
+      printf "%s\n" "$base/ALPHA_OS/ALPHA_OS - THE DOOR.md"
+      ;;
+    blueprints|*)
+      printf "%s\n" \
+        "$base/AlphaOS-blueprints/25 - Door.md" \
+        "$base/AlphaOS-blueprints/26 - Possibilities.md" \
+        "$base/AlphaOS-blueprints/27 - Door War.md" \
+        "$base/AlphaOS-blueprints/28 - War Stack.md" \
+        "$base/AlphaOS-blueprints/29 - Production.md" \
+        "$base/AlphaOS-blueprints/30 - Profit.md" \
+        "$base/AlphaOS-blueprints/31 - Door Summary.md"
+      ;;
+  esac
+}
+
+# Compact chapter list for the dashboard. Each line is "index<TAB>path<TAB>title".
+door_chapter_catalog() {
+  local source="${1:-blueprints}"
+  local i=0
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    [[ -f "$p" ]] || continue
+    i=$((i + 1))
+    printf "%s\t%s\t%s\n" "$i" "$p" "$(basename "$p" .md)"
+  done < <(door_chapter_paths "$source")
+}
+
+# Minimal markdown/text reader used by the dashboard. Preference order:
+# glow -> bat -> less -> cat. It returns to the dashboard after the pager exits.
+door_read_file() {
+  local path="${1:?}"
+  [[ -f "$path" ]] || { ui_err "File not found: $path"; return 1; }
+
+  if command -v glow >/dev/null 2>&1; then
+    glow -p "$path"
+  elif command -v bat >/dev/null 2>&1; then
+    bat --style=plain "$path"
+  elif command -v less >/dev/null 2>&1; then
+    less -R "$path"
+  else
+    cat "$path"
+  fi
+}
+
+# Interactive chapter reader entrypoint for the dashboard. It is intentionally
+# simple: choose by number, render, return to list, then back to dashboard.
+cmd_dashboard_chapters() {
+  local source="${1:-blueprints}"
+  if ! ctl_can_prompt; then
+    ui_info "Door chapters (non-interactive)"
+    door_chapter_catalog "$source" | while IFS=$'\t' read -r idx path title; do
+      printf "  [%s] %s (%s)\n" "$idx" "$title" "$path"
+    done
+    return 0
+  fi
+
+  while true; do
+    printf '\033c'
+    ui_title "Door Chapters Reader"
+    printf "Source: %s\n\n" "$source"
+
+    local any=0
+    door_chapter_catalog "$source" | while IFS=$'\t' read -r idx path title; do
+      any=1
+      printf "  [%s] %s\n" "$idx" "$title"
+      printf "      %s\n" "$path"
+    done
+
+    # The while above runs in a subshell in bash when piped. Recompute cheaply for
+    # existence checks so the UI stays correct.
+    local count=0
+    count="$(door_chapter_catalog "$source" | wc -l | tr -d ' ')"
+    if [[ "$count" == "0" ]]; then
+      ui_warn "No Door chapters found in $VAULT_DIR (expected blueprints 25-31 / ALPHA_OS door file)"
+      printf "\nPress Enter to return..."
+      read -r _ || true
+      return 0
+    fi
+
+    printf "\nChoose chapter number, [s] switch source, [q] back: "
+    local pick=""
+    read -r pick || return 0
+
+    case "$pick" in
+      q|Q|"")
+        return 0
+        ;;
+      s|S)
+        if [[ "$source" == "blueprints" ]]; then
+          source="alphaos"
+        else
+          source="blueprints"
+        fi
+        continue
+        ;;
+    esac
+
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+      ui_pause
+      continue
+    fi
+
+    # Avoid `awk ... exit` on a pipeline here because with `pipefail` enabled it
+    # can surface SIGPIPE warnings from the producer (`door_chapter_catalog`).
+    local selected_path=""
+    while IFS=$'\t' read -r idx path _title; do
+      if [[ "$idx" == "$pick" ]]; then
+        selected_path="$path"
+      fi
+    done < <(door_chapter_catalog "$source")
+    if [[ -z "$selected_path" ]]; then
+      ui_warn "No chapter with number: $pick"
+      ui_pause
+      continue
+    fi
+
+    printf '\033c'
+    ui_title "Reader: $(basename "$selected_path" .md)"
+    printf "Path: %s\n\n" "$selected_path"
+    door_read_file "$selected_path" || true
+    echo
+    printf "Press Enter to return to chapter list..."
+    read -r _ || true
+  done
+}
+
+# Dashboard command:
+# - JSON mode returns a structured snapshot
+# - non-TTY prints a one-shot snapshot
+# - TTY runs a fullscreen loop with single-key navigation
+cmd_dashboard() {
+  if json_mode; then
+    require_jq || return 1
+    local doors_json='[]'
+    local health_json='{"summary":{"healthy":0,"attention":0,"stalled":0,"total":0},"doors":[]}'
+    local hot_json='[]'
+    local focus_json='[]'
+
+    hot_json="$(hotlist_enumerated_json active 2>/dev/null || echo '[]')"
+    if have_task; then
+      doors_json="$(get_doors 2>/dev/null || echo '[]')"
+      health_json="$(build_health_json "$doors_json" 2>/dev/null || echo "$health_json")"
+      focus_json="$("$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null || echo '[]')"
+    fi
+
+    jq -n \
+      --arg version "$DOORCTL_VERSION" \
+      --arg potential "$(phase_count potential)" \
+      --arg plan "$(phase_count plan)" \
+      --arg production "$(phase_count production)" \
+      --arg profit "$(phase_count profit)" \
+      --argjson health "$health_json" \
+      --argjson hotlist "$hot_json" \
+      --argjson focus "$focus_json" \
+      '{
+        version: $version,
+        counts: {
+          potential: $potential,
+          plan: $plan,
+          production: $production,
+          profit: $profit
+        },
+        health: $health,
+        hotlist: $hotlist,
+        focus: $focus
+      }'
+    return 0
+  fi
+
+  if ! ctl_can_prompt; then
+    dashboard_render_snapshot
+    return 0
+  fi
+
+  while true; do
+    # Fullscreen feel: clear on every frame so the dashboard "owns" the terminal.
+    printf '\033c'
+    dashboard_render_snapshot
+
+    local key=""
+    IFS= read -r -s -n 1 key || return 0
+
+    case "$key" in
+      ""|$'\n'|$'\r'|r|R)
+        continue
+        ;;
+      q|Q)
+        return 0
+        ;;
+      m|M)
+        cmd_menu || true
+        ;;
+      h|H)
+        cmd_hot_ui || true
+        ;;
+      a|A)
+        local idea=""
+        printf "\nIdea: "
+        read -r idea || return 0
+        [[ -n "${idea// }" ]] && cmd_hotlist add "$idea" || true
+        ui_pause
+        ;;
+      o|O)
+        local ref=""
+        printf "\nHot task number: "
+        read -r ref || return 0
+        [[ -n "${ref// }" ]] && cmd_hotlist open "$ref" || true
+        ui_pause
+        ;;
+      w|W)
+        cmd_doorwar list || true
+        ui_pause
+        ;;
+      l|L)
+        cmd_list || true
+        ui_pause
+        ;;
+      v|V)
+        cmd_review || true
+        ui_pause
+        ;;
+      f|F)
+        cmd_focus || true
+        ui_pause
+        ;;
+      c)
+        cmd_dashboard_chapters blueprints || true
+        ;;
+      C)
+        cmd_dashboard_chapters alphaos || true
+        ;;
+      *)
+        # Unknown keys are ignored to keep navigation "zero-friction".
+        :
+        ;;
+    esac
+  done
+}
+
 #───────────────────────────────────────────────────────────────────────────────
 # Commands
 #───────────────────────────────────────────────────────────────────────────────
 
 cmd_list() {
-  ui_title "Active Doors"
+  require_task || return 1
+  require_jq || return 1
 
   local doors
-  doors=$(get_doors)
+  doors="$(get_doors 2>/dev/null || echo '[]')"
+
+  if json_mode; then
+    printf "%s\n" "$doors"
+    return 0
+  fi
+
+  ui_title "Active Doors"
 
   if [[ "$doors" == "[]" || -z "$doors" ]]; then
-    ui_info "No doors found. Create your first door with: doorctl create"
+    ui_info "No doors found yet. Start with: doorctl hotlist add \"Idea ...\""
     return 0
   fi
 
@@ -424,10 +1631,11 @@ cmd_show() {
   local door_name="$1"
   [[ -z "$door_name" ]] && { ui_err "Usage: doorctl show <door-name>"; exit 1; }
 
-  ui_title "Door: $door_name"
+  require_task || return 1
+  require_jq || return 1
 
   local tasks
-  tasks=$(get_door_tasks "$door_name")
+  tasks="$(get_door_tasks "$door_name" 2>/dev/null || echo '[]')"
 
   if [[ "$tasks" == "[]" || -z "$tasks" ]]; then
     ui_err "Door not found: $door_name"
@@ -450,6 +1658,26 @@ cmd_show() {
   tags=$(echo "$meta" | jq -r '.tags | join(", ")')
   local phase
   phase=$(get_door_phase "$(echo "$meta" | jq -r '.tags')")
+
+  if json_mode; then
+    jq -n \
+      --arg door "$door_name" \
+      --arg phase "$phase" \
+      --arg warstack "$(warstack_path "$door_name")" \
+      --arg note "$(note_path "$door_name")" \
+      --argjson meta "$meta" \
+      --argjson tasks "$tasks" \
+      '{
+        door: $door,
+        phase: $phase,
+        meta: $meta,
+        tasks: $tasks,
+        paths: { warstack: $warstack, note: $note }
+      }'
+    return 0
+  fi
+
+  ui_title "Door: $door_name"
 
   echo "Phase: $(format_phase "$phase")"
   echo "Project: $project"
@@ -482,22 +1710,36 @@ cmd_hits() {
   local door_name="${1:-}"
   local status_filter="${2:-pending}"
 
+  require_task || return 1
+
   if [[ -z "$door_name" ]]; then
+    if json_mode; then
+      "$TASK_BIN" +hit "status:$status_filter" export 2>/dev/null
+      return 0
+    fi
     # Show all hits across all doors
     ui_title "All Hits"
     "$TASK_BIN" +hit status:"$status_filter"
     return
   fi
 
-  ui_title "Hits for: $door_name"
+  require_jq || return 1
 
   local tasks
-  tasks=$(get_door_tasks "$door_name")
+  tasks="$(get_door_tasks "$door_name" 2>/dev/null || echo '[]')"
 
   if [[ "$tasks" == "[]" || -z "$tasks" ]]; then
     ui_err "No hits found for door: $door_name"
     return 1
   fi
+
+  if json_mode; then
+    printf "%s\n" "$tasks" | jq --arg status "$status_filter" \
+      '[.[] | select(.status == $status)]'
+    return 0
+  fi
+
+  ui_title "Hits for: $door_name"
 
   echo "$tasks" | jq -r --arg status "$status_filter" '.[] | select(.status == $status) | @json' | while IFS= read -r task; do
     format_task_item "$task" "🔲"
@@ -506,6 +1748,17 @@ cmd_hits() {
 
 cmd_next() {
   local door_name="${1:-}"
+
+  require_task || return 1
+
+  if json_mode; then
+    if [[ -n "$door_name" ]]; then
+      "$TASK_BIN" +door +hit "door_name:$door_name" status:pending limit:1 export 2>/dev/null
+    else
+      "$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null
+    fi
+    return 0
+  fi
 
   ui_title "Next Hit"
 
@@ -527,15 +1780,28 @@ cmd_done() {
 }
 
 cmd_hitlist() {
+  require_task || return 1
+  if json_mode; then
+    "$TASK_BIN" +hit status:pending export 2>/dev/null
+    return 0
+  fi
   ui_title "Hit List (All Pending Hits)"
   "$TASK_BIN" +hit status:pending
 }
 
 cmd_health() {
-  ui_title "Door Health Check"
+  require_task || return 1
+  require_jq || return 1
 
   local doors
-  doors=$(get_doors)
+  doors="$(get_doors 2>/dev/null || echo '[]')"
+
+  if json_mode; then
+    build_health_json "$doors"
+    return 0
+  fi
+
+  ui_title "Door Health Check"
 
   if [[ "$doors" == "[]" || -z "$doors" ]]; then
     ui_info "No doors to check."
@@ -568,10 +1834,33 @@ cmd_health() {
 }
 
 cmd_stalled() {
-  ui_title "Stalled Doors"
+  require_task || return 1
+  require_jq || return 1
 
   local doors
-  doors=$(get_doors)
+  doors="$(get_doors 2>/dev/null || echo '[]')"
+
+  if json_mode; then
+    local items=()
+    while IFS= read -r door; do
+      [[ -z "$door" ]] && continue
+      local modified activity
+      modified="$(printf "%s" "$door" | jq -r '.modified // ""')"
+      if is_stalled "$modified"; then
+        activity="$(time_ago "$modified")"
+        items+=("$(printf "%s" "$door" | jq -c --arg activity "$activity" '. + {activity: $activity}')")
+      fi
+    done < <(printf "%s" "$doors" | jq -c '.[]?')
+
+    if ((${#items[@]} == 0)); then
+      printf '[]\n'
+    else
+      printf "%s\n" "${items[@]}" | jq -s '.'
+    fi
+    return 0
+  fi
+
+  ui_title "Stalled Doors"
 
   if [[ "$doors" == "[]" || -z "$doors" ]]; then
     ui_info "No doors found."
@@ -579,7 +1868,7 @@ cmd_stalled() {
   fi
 
   local found=0
-  echo "$doors" | jq -r '.[] | @json' | while IFS= read -r door; do
+  while IFS= read -r door; do
     local name
     name=$(echo "$door" | jq -r '.name')
     local modified
@@ -591,7 +1880,7 @@ cmd_stalled() {
       echo "- $name ($activity)"
       found=1
     fi
-  done
+  done < <(echo "$doors" | jq -r '.[] | @json')
 
   if ((found == 0)); then
     ui_ok "No stalled doors!"
@@ -599,6 +1888,11 @@ cmd_stalled() {
 }
 
 cmd_focus() {
+  require_task || return 1
+  if json_mode; then
+    "$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null
+    return 0
+  fi
   ui_title "Today's Focus (Top 3 Hits)"
   "$TASK_BIN" +door +hit status:pending limit:3
 }
@@ -606,14 +1900,7 @@ cmd_focus() {
 cmd_edit() {
   local uuid_prefix="$1"
   [[ -z "$uuid_prefix" ]] && { ui_err "Usage: doorctl edit <uuid-prefix>"; exit 1; }
-
-  # Detect best available editor
-  local editor="${EDITOR:-nano}"
-  if command -v micro >/dev/null 2>&1; then
-    editor=micro
-  elif command -v nano >/dev/null 2>&1; then
-    editor=nano
-  fi
+  require_task || return 1
 
   # Use task edit (interactive)
   "$TASK_BIN" "$uuid_prefix" edit
@@ -639,7 +1926,18 @@ cmd_war() {
 
   [[ -z "$door_name" ]] && { ui_err "Usage: doorctl war <door-name> [show|edit]"; exit 1; }
 
-  local warstack_file="$VAULT_DIR/Door/War-Stacks/${door_name}.md"
+  local warstack_file
+  warstack_file="$(warstack_path "$door_name")"
+
+  if json_mode && [[ "$action" == "show" || "$action" == "view" ]]; then
+    require_jq || return 1
+    jq -n \
+      --arg door "$door_name" \
+      --arg path "$warstack_file" \
+      --argjson exists "$( [[ -f "$warstack_file" ]] && echo true || echo false )" \
+      '{door:$door, path:$path, exists:$exists}'
+    return 0
+  fi
 
   case "$action" in
     show|view)
@@ -660,14 +1958,8 @@ cmd_war() {
       ;;
 
     edit)
-      local editor="${EDITOR:-nano}"
-
-      # Detect best editor
-      if command -v micro >/dev/null 2>&1; then
-        editor=micro
-      elif command -v nano >/dev/null 2>&1; then
-        editor=nano
-      fi
+      local editor
+      editor="$(select_editor)"
 
       # Create if doesn't exist
       if [[ ! -f "$warstack_file" ]]; then
@@ -700,7 +1992,7 @@ EOF
         ui_info "Created template: $warstack_file"
       fi
 
-      $editor "$warstack_file"
+      "$editor" "$warstack_file"
       ui_ok "War Stack edited: $door_name"
       ;;
 
@@ -715,15 +2007,21 @@ cmd_note() {
   local door_name="$1"
   [[ -z "$door_name" ]] && { ui_err "Usage: doorctl note <door-name>"; exit 1; }
 
-  local note_file="$VAULT_DIR/Door/notes/${door_name}.md"
-  local editor="${EDITOR:-nano}"
+  local note_file
+  note_file="$(note_path "$door_name")"
 
-  # Detect best editor
-  if command -v micro >/dev/null 2>&1; then
-    editor=micro
-  elif command -v nano >/dev/null 2>&1; then
-    editor=nano
+  if json_mode; then
+    require_jq || return 1
+    jq -n \
+      --arg door "$door_name" \
+      --arg path "$note_file" \
+      --argjson exists "$( [[ -f "$note_file" ]] && echo true || echo false )" \
+      '{door:$door, path:$path, exists:$exists}'
+    return 0
   fi
+
+  local editor
+  editor="$(select_editor)"
 
   # Create if doesn't exist
   if [[ ! -f "$note_file" ]]; then
@@ -742,8 +2040,102 @@ EOF
     ui_info "Created note: $note_file"
   fi
 
-  $editor "$note_file"
+  "$editor" "$note_file"
   ui_ok "Note saved: $door_name"
+}
+
+cmd_doctor() {
+  local task_ok=false
+  local jq_ok=false
+  local python_ok=false
+  local hot_py_ok=false
+  local vault_ok=false
+  local door_dir_ok=false
+  local war_dir_ok=false
+  local notes_dir_ok=false
+  local task_export_ok=false
+  local doors_detected="?"
+
+  have_task && task_ok=true
+  have_jq && jq_ok=true
+  command -v python3 >/dev/null 2>&1 && python_ok=true
+  [[ -f "$HOT_PY" ]] && hot_py_ok=true
+  [[ -d "$VAULT_DIR" ]] && vault_ok=true
+  [[ -d "$VAULT_DIR/Door" ]] && door_dir_ok=true
+  [[ -d "$VAULT_DIR/Door/War-Stacks" ]] && war_dir_ok=true
+  [[ -d "$VAULT_DIR/Door/notes" ]] && notes_dir_ok=true
+
+  if [[ "$task_ok" == true ]]; then
+    if "$TASK_BIN" export >/dev/null 2>&1; then
+      task_export_ok=true
+    fi
+  fi
+
+  if [[ "$task_ok" == true && "$jq_ok" == true ]]; then
+    doors_detected="$(get_door_count 2>/dev/null || echo '?')"
+  fi
+
+  local ready=false
+  if [[ "$task_ok" == true && "$jq_ok" == true && "$task_export_ok" == true && "$vault_ok" == true ]]; then
+    ready=true
+  fi
+
+  if json_mode; then
+    require_jq || return 1
+    jq -n \
+      --arg version "$DOORCTL_VERSION" \
+      --arg task_bin "$TASK_BIN" \
+      --arg vault_dir "$VAULT_DIR" \
+      --arg hot_py "$HOT_PY" \
+      --arg doors_detected "$doors_detected" \
+      --argjson ready "$ready" \
+      --argjson task_ok "$task_ok" \
+      --argjson jq_ok "$jq_ok" \
+      --argjson python_ok "$python_ok" \
+      --argjson hot_py_ok "$hot_py_ok" \
+      --argjson vault_ok "$vault_ok" \
+      --argjson door_dir_ok "$door_dir_ok" \
+      --argjson war_dir_ok "$war_dir_ok" \
+      --argjson notes_dir_ok "$notes_dir_ok" \
+      --argjson task_export_ok "$task_export_ok" \
+      '{
+        version: $version,
+        ready: $ready,
+        task_bin: $task_bin,
+        vault_dir: $vault_dir,
+        hot_py: $hot_py,
+        doors_detected: $doors_detected,
+        checks: {
+          task_bin: $task_ok,
+          jq: $jq_ok,
+          python3: $python_ok,
+          hot_py: $hot_py_ok,
+          vault_dir: $vault_ok,
+          door_dir: $door_dir_ok,
+          war_stacks_dir: $war_dir_ok,
+          notes_dir: $notes_dir_ok,
+          task_export: $task_export_ok
+        }
+      }'
+    return 0
+  fi
+
+  ui_title "doorctl Doctor"
+  [[ "$task_ok" == true ]] && ui_ok "Taskwarrior: $TASK_BIN" || ui_err "Taskwarrior missing: $TASK_BIN"
+  [[ "$jq_ok" == true ]] && ui_ok "jq: installed" || ui_err "jq: missing (required for door dashboards/json)"
+  [[ "$python_ok" == true ]] && ui_ok "python3: installed" || ui_warn "python3: missing (hotlist helper unavailable)"
+  [[ "$hot_py_ok" == true ]] && ui_ok "Hot helper: $HOT_PY" || ui_warn "Hot helper missing: $HOT_PY"
+  [[ "$vault_ok" == true ]] && ui_ok "Vault: $VAULT_DIR" || ui_err "Vault missing: $VAULT_DIR"
+  [[ "$door_dir_ok" == true ]] && ui_ok "Door dir: $VAULT_DIR/Door" || ui_warn "Door dir missing: $VAULT_DIR/Door"
+  [[ "$war_dir_ok" == true ]] && ui_ok "War Stacks dir: $VAULT_DIR/Door/War-Stacks" || ui_warn "War Stacks dir missing: $VAULT_DIR/Door/War-Stacks"
+  [[ "$notes_dir_ok" == true ]] && ui_ok "Notes dir: $VAULT_DIR/Door/notes" || ui_warn "Notes dir missing: $VAULT_DIR/Door/notes"
+  [[ "$task_export_ok" == true ]] && ui_ok "Task export: ok" || ui_err "Task export: failed"
+  printf "Doors detected: %s\n" "$doors_detected"
+  if [[ "$ready" == true ]]; then
+    ui_ok "doorctl is ready"
+  else
+    ui_warn "doorctl is not fully ready (see checks above)"
+  fi
 }
 
 #───────────────────────────────────────────────────────────────────────────────
@@ -751,22 +2143,51 @@ EOF
 #───────────────────────────────────────────────────────────────────────────────
 
 show_help() {
+  if json_mode; then
+    require_jq || return 1
+    local commands_json
+    commands_json="$(
+      print_command_catalog \
+        | jq -R 'select(length > 0) | split("\t") | {name: .[0], usage: .[1], summary: .[2]}' \
+        | jq -s '.'
+    )"
+    jq -n \
+      --arg version "$DOORCTL_VERSION" \
+      --arg usage 'doorctl [--json] <command> [args...]' \
+      --argjson commands "$commands_json" \
+      '{
+        name: "doorctl",
+        version: $version,
+        usage: $usage,
+        global_flags: [{flag:"--json", summary:"Emit JSON for supported commands"}],
+        commands: $commands
+      }'
+    return 0
+  fi
+
   cat <<'EOF'
-doorctl v2.0 - Door Task Management System
+doorctl v2.1.0 - Door Task Management System
 
 Usage:
-  doorctl <command> [args...]
+  doorctl [--json] <command> [args...]
 
 Commands:
+  dashboard               Compact door dashboard (hotlist + focus + health)
   list                    List all active doors with status
   show <door>             Show detail view for specific door
+  hot [subcmd]            Hot List frontdoor (TTY UI by default)
   hotlist [subcmd]        Potential/Hot List flow (list/open/add)
   doorwar [subcmd]        Plan-phase terminal view (Door War)
   warstack <door> [...]   Alias for war (or production view if no door)
   review                  Compact phase review + health + focus
-  menu                    Interactive terminal menu (default in TTY when no args)
-  potential|plan|production|profit
-                          Phase reports in terminal (Taskwarrior)
+  doctor                  Check dependencies + vault/task readiness
+  commands                List command catalog (supports --json)
+  menu                    Interactive terminal menu
+  potential               Potential frontdoor (Hot List / Chapter 26)
+  plan                    Plan frontdoor (Door War / Chapter 27-28)
+  production              Production frontdoor (Hits / Chapter 29)
+  profit                  Profit frontdoor (Review / Chapter 30)
+                          Use: <phase> report [status] for Taskwarrior phase report
   hits [door] [status]    List hits for door (default: pending)
   next [door]             Show next hit to work on
   done <uuid>             Mark hit as completed
@@ -784,6 +2205,20 @@ Commands:
 
 Examples:
   doorctl list
+  doorctl --json list
+  doorctl dashboard
+  doorctl hot
+  doorctl hot "Idea ..."
+  doorctl hotlist json active
+  doorctl doorwar activate 1
+  doorctl --json doorwar activate 1
+  doorctl potential
+  doorctl potential report
+  doorctl plan activate 1
+  doorctl production focus
+  doorctl profit review
+  doorctl --json review
+  doorctl doctor
   doorctl hotlist
   doorctl hotlist add "Idea ..."
   doorctl doorwar
@@ -804,6 +2239,7 @@ Examples:
 Config (env vars):
   AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
   AOS_DOOR_STALLED_DAYS   Days before door is stalled (default: 7)
+  AOS_DOOR_ATTENTION_DAYS Days before door needs attention (default: 3)
   TASK_BIN                Taskwarrior binary (default: task)
   EDITOR                  Preferred editor (default: nano)
 
@@ -819,14 +2255,55 @@ Notes:
   - Tasks must have +door or +hit tags
   - Uses task export for data
   - Logic in: door/lib/*.sh (reusable by Index Node)
+  - JSON mode works for: list/show/review/doctor/commands/hits/next/hitlist/focus/health/stalled
 EOF
 }
 
 main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        DOORCTL_OUTPUT_FORMAT="json"
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      --help)
+        show_help
+        return 0
+        ;;
+      --version)
+        if json_mode; then
+          require_jq || return 1
+          jq -n --arg version "$DOORCTL_VERSION" '{name:"doorctl", version:$version}'
+        else
+          echo "doorctl v$DOORCTL_VERSION"
+        fi
+        return 0
+        ;;
+      -*)
+        ui_err "Unknown global option: $1"
+        show_help
+        return 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  # Default entrypoint behavior:
+  # - JSON mode: help (safe / machine-friendly)
+  # - Interactive TTY: dashboard (fast situational overview)
+  # - Non-interactive text: help
   local cmd="${1:-}"
   if [[ -z "$cmd" ]]; then
-    if ctl_can_prompt; then
-      cmd="menu"
+    if json_mode; then
+      cmd="help"
+    elif ctl_can_prompt; then
+      cmd="dashboard"
     else
       cmd="help"
     fi
@@ -835,14 +2312,21 @@ main() {
   fi
 
   case "$cmd" in
+    dashboard|dash) cmd_dashboard ;;
     menu) cmd_menu ;;
     list|ls) cmd_list ;;
     show) cmd_show "$@" ;;
+    hot) cmd_hot "$@" ;;
     hotlist) cmd_hotlist "$@" ;;
     doorwar) cmd_doorwar "$@" ;;
     warstack) cmd_warstack "$@" ;;
     review) cmd_review ;;
-    potential|plan|production|profit) cmd_phase_report "$cmd" "${1:-pending}" ;;
+    doctor) cmd_doctor ;;
+    commands|cmds) cmd_commands ;;
+    potential) cmd_potential "$@" ;;
+    plan) cmd_plan "$@" ;;
+    production) cmd_production "$@" ;;
+    profit) cmd_profit "$@" ;;
     hits) cmd_hits "$@" ;;
     next) cmd_next "$@" ;;
     done) cmd_done "$@" ;;
@@ -854,7 +2338,14 @@ main() {
     stalled) cmd_stalled ;;
     war) cmd_war "$@" ;;
     note|notes) cmd_note "$@" ;;
-    version) echo "doorctl v$DOORCTL_VERSION" ;;
+    version)
+      if json_mode; then
+        require_jq || return 1
+        jq -n --arg version "$DOORCTL_VERSION" '{name:"doorctl", version:$version}'
+      else
+        echo "doorctl v$DOORCTL_VERSION"
+      fi
+      ;;
     help|-h|--help) show_help ;;
     *)
       ui_err "Unknown command: $cmd"

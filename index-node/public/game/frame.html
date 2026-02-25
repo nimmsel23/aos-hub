@@ -301,12 +301,56 @@ function safeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}`;
 }
 
-async function postFrameEntry(domain, markdown, ticktick) {
-  const title = `${domain}_frame_${new Date().toISOString().slice(0,10)}`;
+function yamlBlock(key, value, indent = 0) {
+  const text = String(value || '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const pad = ' '.repeat(indent);
+  const pad2 = ' '.repeat(indent + 2);
+  return [
+    `${pad}${key}: |-`,
+    ...lines.map(line => `${pad2}${line}`),
+  ].join('\n');
+}
+
+function buildFrameYaml(domain, answers, now) {
+  const domainUpper = String(domain || '').toUpperCase();
+  const timestamp = now.toISOString();
+  const dateFormatted = now.toLocaleDateString('de-DE');
+  const year = now.getFullYear();
+  const sessionId = safeId('FRM');
+  return [
+    `domain: ${domainUpper}`,
+    `year: ${year}`,
+    `date: ${dateFormatted}`,
+    `created: ${timestamp}`,
+    `type: frame-map`,
+    `cadence: annual`,
+    `status: grounded`,
+    `session: ${sessionId}`,
+    `title: "${domainUpper} Annual Frame ${year}"`,
+    `questions:`,
+    yamlBlock('where_am_i_now', answers.whereNow, 2),
+    yamlBlock('how_did_i_get_here', answers.howGotHere, 2),
+    yamlBlock('how_do_i_feel', answers.howFeel, 2),
+    yamlBlock('what_is_working', answers.whatWorking, 2),
+    yamlBlock('what_is_not_working', answers.whatNotWorking, 2),
+  ].join('\n');
+}
+
+async function postFrameEntry(domain, yamlText, ticktick) {
+  const now = new Date();
+  const title = `${String(domain || '').toUpperCase()}_annual_frame_${now.getFullYear()}`;
   const res = await fetch('/api/game/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ map: 'frame', title, markdown, ticktick: !!ticktick })
+    body: JSON.stringify({
+      map: 'frame',
+      title,
+      format: 'yaml',
+      yaml: yamlText,
+      ticktick: !!ticktick,
+      meta: { domain: String(domain || '').toUpperCase(), year: now.getFullYear() }
+    })
   });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'save failed');
@@ -325,34 +369,11 @@ async function save(domain, ticktick) {
 
   if (!answers.whereNow) return alert('Where am I now? nicht leer lassen');
 
-  const header = [
-    `# FRAME MAP – ${domain}`,
-    `**Session:** ${safeId('FRM')}`,
-    `**Datum:** ${new Date().toLocaleDateString('de-DE')}`,
-    '',
-    '---',
-    ''
-  ].join('\n');
-
-  const body = [
-    '**1. Where am I now?**',
-    answers.whereNow || '-',
-    '',
-    '**2. How did I get here?**',
-    answers.howGotHere || '-',
-    '',
-    '**3. How do I feel about where I am?**',
-    answers.howFeel || '-',
-    '',
-    '**4. What is working?**',
-    answers.whatWorking || '-',
-    '',
-    '**5. What is not working?**',
-    answers.whatNotWorking || '-'
-  ].join('\n');
+  const now = new Date();
+  const yamlText = buildFrameYaml(domain, answers, now);
 
   try {
-    await postFrameEntry(domain, header + body, ticktick);
+    await postFrameEntry(domain, yamlText, ticktick);
     ['_where','_how','_feel','_working','_not'].forEach(s => {
       const el = document.getElementById(p + s);
       if (el) el.value = '';

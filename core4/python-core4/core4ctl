@@ -23,6 +23,20 @@ usage() {
   cat <<EOF
 Usage: core4ctl <command>
 
+Frontdoor (daily use):
+  core4               # live dashboard (or tracker pass-through)
+  c4d                 # explicit dashboard shortcut
+  c4                  # fast ledger-only status
+  wcore4              # Taskwarrior week + core4 week score
+
+Help / self-discovery:
+  core4 --help
+  c4 --help
+  c4d --help
+  wcore4 --help
+  core4ctl help
+  See also: aos-hub/core4/CHEATSHEET.md
+
 Core:
   core4ctl menu
   core4ctl doctor

@@ -8,6 +8,44 @@ REFRESH="${CORE4_DASHBOARD_REFRESH:-60}"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
 
+usage() {
+  cat <<'EOF'
+Usage: core4 [tracker-args]
+       core4 [help|--help|-h]
+
+Core4 live dashboard (default with no args) with tracker pass-through.
+
+Common:
+  core4          # open live dashboard
+  c4d            # explicit dashboard shortcut
+  c4             # fast ledger-only status
+  core4 -d       # tracker score for today
+  core4 -w       # tracker score for current week
+  wcore4         # Taskwarrior week + core4 week score
+
+Log habits (tracker pass-through):
+  core4 fitness
+  core4 fuel
+  core4 meditation
+  core4 memoirs
+  core4 partner
+  core4 posterity
+  core4 discover
+  core4 declare
+
+More:
+  core4ctl help
+  See also: aos-hub/core4/CHEATSHEET.md
+EOF
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
 # With args → pass through to tracker directly
 if [[ $# -gt 0 ]]; then
     exec python3 "$TRACKER" "$@"

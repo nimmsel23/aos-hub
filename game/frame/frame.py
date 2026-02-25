@@ -4,7 +4,7 @@ Frame Map Engine – Alpha OS
 YAML = current state. MD = history export on demand.
 
 Usage:
-    frame.py new   [--domain BODY]
+    frame.py new   [--domain BODY] [--mode domain-first|question-first]
     frame.py show  [--week 2026-W08]
     frame.py list
     frame.py edit  [--domain BODY]
@@ -23,6 +23,7 @@ from vault import (write_yaml, read_yaml, read_latest_yaml, list_yamls,
 from maps import FRAME_QUESTIONS, display_frame, export_md
 
 DOMAIN_CHOICES = DOMAIN_LIST + [d.lower() for d in DOMAIN_LIST]
+PROMPT_MODES = ("domain-first", "question-first")
 
 
 def prompt_domain(domain: str) -> dict:
@@ -37,15 +38,35 @@ def prompt_domain(domain: str) -> dict:
     return answers
 
 
-def cmd_new(domain: str | None):
+def prompt_question_first(domains: list[str]) -> dict[str, dict]:
+    answers_by_domain = {d: {} for d in domains}
+    for key, label, hint in FRAME_QUESTIONS:
+        print(f"\n{'='*44}")
+        print(f"  {label}")
+        print(f"  {hint}")
+        print(f"{'='*44}")
+        for domain in domains:
+            info = DOMAINS[domain]
+            print(f"\n  {info['emoji']}  {domain}")
+            answers_by_domain[domain][key] = input("  > ").strip() or "(—)"
+    return answers_by_domain
+
+
+def cmd_new(domain: str | None, mode: str):
     week = current_week()
     domains = [domain.upper()] if domain else DOMAIN_LIST
     print(f"\n{'='*44}")
     print(f"  FRAME MAP  –  {week}")
+    print(f"  Prompt mode: {mode}")
     print(f"{'='*44}")
+
+    if mode == "question-first":
+        answers_by_domain = prompt_question_first(domains)
+    else:
+        answers_by_domain = {d: prompt_domain(d) for d in domains}
+
     for d in domains:
-        data = prompt_domain(d)
-        path = update_domain_yaml("frame", d, data)
+        path = update_domain_yaml("frame", d, answers_by_domain[d])
         print(f"\n  ✔ {d} → {path.name}")
     print()
 
@@ -104,6 +125,7 @@ def main():
 
     p_new = sub.add_parser("new")
     p_new.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
+    p_new.add_argument("--mode", choices=PROMPT_MODES, default="question-first")
 
     p_show = sub.add_parser("show")
     p_show.add_argument("--week", "-w")
@@ -118,7 +140,7 @@ def main():
 
     args = parser.parse_args()
     if args.cmd == "new":
-        cmd_new(args.domain)
+        cmd_new(args.domain, getattr(args, "mode", "domain-first"))
     elif args.cmd == "show":
         cmd_show(getattr(args, "week", None))
     elif args.cmd == "list":

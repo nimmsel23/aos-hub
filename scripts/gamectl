@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GAMECTL_VERSION="1.1.0"
+GAMECTL_VERSION="1.2.0"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -31,19 +31,6 @@ GAME_BASE_URL="${AOS_GAME_BASE_URL:-${AOS_INDEX_BASE_URL:-${INDEX_HEALTH_URL%/he
 CURL_BIN="${CURL_BIN:-curl}"
 GAME_CENTRES=(frame freedom focus fire tent)
 
-UNITS=(
-  "$SERVICE_GAME"
-)
-
-get_units() {
-  local out=()
-  local unit
-  for unit in "${UNITS[@]}"; do
-    [[ -n "$unit" ]] && out+=("$unit")
-  done
-  printf '%s\n' "${out[@]}"
-}
-
 show_help() {
   cat <<'EOF_HELP'
 gamectl - Game service manager
@@ -52,29 +39,115 @@ Usage:
   gamectl <command> [args...]
 
 Commands:
-  list                       List managed units
-  status [--full]            Compact status (+ centres) / verbose systemctl status
-  centres [--brief]          List/check frame freedom focus fire tent routes
+  list [--json]                     List managed units
+  config [--json]                   Show resolved config/env-derived defaults
+  status [--full|--compact] [--json]
+                                   Compact status (+ centres) / verbose systemctl status
+  centres [--brief] [--json] [names...]
+                                   List/check game centre routes (optionally subset)
   frame|freedom|focus|fire|tent [status|url|open]
-  start                      Start all units
-  stop                       Stop all units
-  restart                    Restart all units
-  enable                     Enable all units
-  disable                    Disable all units
-  logs [--follow|-f] [unit]  Show logs for a unit (defaults to all units)
-  doctor                     Health check (units + systemd)
-  menu                       Interactive menu
-  version                    Show version
-  help                        Show this help
+  start                            Start all units
+  stop                             Stop all units
+  restart                          Restart all units
+  enable                           Enable all units
+  disable                          Disable all units
+  logs [--follow|-f] [unit...]     Show logs (defaults to all managed units)
+  doctor [--strict] [--json]       Health check (deps + user systemd + units + centres)
+  menu                             Interactive menu
+  version                          Show version
+  help                             Show this help
 
 Notes:
   - Uses systemd user units (systemctl --user).
-  - Override unit via AOS_GAME_MOUNT_SERVICE.
+  - Units from AOS_GAME_UNITS (comma/space separated) or AOS_GAME_MOUNT_SERVICE.
+  - Base URL from AOS_GAME_BASE_URL / AOS_INDEX_BASE_URL / AOS_INDEX_HEALTH_URL.
 EOF_HELP
 }
 
-cmd_list() {
-  get_units
+json_escape() {
+  local s="${1-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+json_q() {
+  printf '"%s"' "$(json_escape "${1-}")"
+}
+
+bool_word() {
+  if [[ "${1:-0}" == "1" ]]; then
+    printf "yes"
+  else
+    printf "no"
+  fi
+}
+
+has_systemctl() { has_cmd "$SYSTEMCTL_BIN"; }
+has_journalctl() { has_cmd "$JOURNALCTL_BIN"; }
+has_curl_bin() { has_cmd "$CURL_BIN"; }
+
+user_bus_ok() {
+  has_systemctl || return 1
+  "$SYSTEMCTL_BIN" --user --version >/dev/null 2>&1 || return 1
+  "$SYSTEMCTL_BIN" --user is-active default.target >/dev/null 2>&1 && return 0
+  "$SYSTEMCTL_BIN" --user list-unit-files >/dev/null 2>&1
+}
+
+get_units() {
+  local out=()
+  local raw="${AOS_GAME_UNITS:-}"
+  local unit
+
+  if [[ -n "$raw" ]]; then
+    raw="${raw//$'\n'/ }"
+    raw="${raw//$'\t'/ }"
+    raw="${raw//,/ }"
+    read -r -a out <<<"$raw"
+  fi
+
+  if ((${#out[@]} == 0)) && [[ -n "$SERVICE_GAME" ]]; then
+    out+=("$SERVICE_GAME")
+  fi
+
+  for unit in "${out[@]}"; do
+    [[ -n "$unit" ]] && printf '%s\n' "$unit"
+  done
+}
+
+unit_active_state() {
+  local unit="${1:?}"
+  if ! has_systemctl; then
+    printf "systemctl?"
+    return 0
+  fi
+  if ! user_bus_ok; then
+    printf "user-bus?"
+    return 0
+  fi
+  "$SYSTEMCTL_BIN" --user is-active "$unit" 2>/dev/null || echo "inactive"
+}
+
+unit_enabled_state() {
+  local unit="${1:?}"
+  if ! has_systemctl; then
+    printf "systemctl?"
+    return 0
+  fi
+  if ! user_bus_ok; then
+    printf "user-bus?"
+    return 0
+  fi
+  "$SYSTEMCTL_BIN" --user is-enabled "$unit" 2>/dev/null || echo "disabled"
+}
+
+http_code_ok() {
+  local code="${1:-}"
+  [[ "$code" =~ ^[0-9]{3}$ ]] || return 1
+  ((10#$code >= 200 && 10#$code < 400))
 }
 
 centre_url() {
@@ -84,7 +157,7 @@ centre_url() {
 
 centre_http_code() {
   local url="$1"
-  if ! has_cmd "$CURL_BIN"; then
+  if ! has_curl_bin; then
     printf "curl?"
     return 0
   fi
@@ -97,21 +170,177 @@ centre_http_code() {
   fi
 }
 
+resolve_centres() {
+  local requested=("$@")
+  local req known name
+  if ((${#requested[@]} == 0)); then
+    printf '%s\n' "${GAME_CENTRES[@]}"
+    return 0
+  fi
+
+  for req in "${requested[@]}"; do
+    known=0
+    for name in "${GAME_CENTRES[@]}"; do
+      if [[ "$name" == "$req" ]]; then
+        known=1
+        break
+      fi
+    done
+    if ((known == 0)); then
+      ui_err "Unknown centre: $req"
+      ui_err "Known centres: ${GAME_CENTRES[*]}"
+      return 2
+    fi
+    printf '%s\n' "$req"
+  done
+}
+
+cmd_list() {
+  local as_json=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) as_json=1 ;;
+      *)
+        ui_err "Unknown list option: $1"
+        return 2
+        ;;
+    esac
+    shift || true
+  done
+
+  mapfile -t units < <(get_units)
+  if ((as_json == 1)); then
+    local i
+    printf '{"units":['
+    for i in "${!units[@]}"; do
+      ((i > 0)) && printf ','
+      json_q "${units[$i]}"
+    done
+    printf ']}\n'
+    return 0
+  fi
+
+  printf '%s\n' "${units[@]}"
+}
+
+cmd_config() {
+  local as_json=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) as_json=1 ;;
+      *)
+        ui_err "Unknown config option: $1"
+        return 2
+        ;;
+    esac
+    shift || true
+  done
+
+  mapfile -t units < <(get_units)
+  mapfile -t centres < <(resolve_centres)
+
+  if ((as_json == 1)); then
+    local i
+    printf '{'
+    printf '"version":'; json_q "$GAMECTL_VERSION"; printf ','
+    printf '"root_dir":'; json_q "$ROOT_DIR"; printf ','
+    printf '"systemctl_bin":'; json_q "$SYSTEMCTL_BIN"; printf ','
+    printf '"journalctl_bin":'; json_q "$JOURNALCTL_BIN"; printf ','
+    printf '"curl_bin":'; json_q "$CURL_BIN"; printf ','
+    printf '"service_game_fallback":'; json_q "$SERVICE_GAME"; printf ','
+    printf '"units_source":'; json_q "$([[ -n "${AOS_GAME_UNITS:-}" ]] && echo "AOS_GAME_UNITS" || echo "AOS_GAME_MOUNT_SERVICE")"; printf ','
+    printf '"game_base_url":'; json_q "$GAME_BASE_URL"; printf ','
+    printf '"index_health_url":'; json_q "$INDEX_HEALTH_URL"; printf ','
+    printf '"units":['
+    for i in "${!units[@]}"; do
+      ((i > 0)) && printf ','
+      json_q "${units[$i]}"
+    done
+    printf '],'
+    printf '"centres":['
+    for i in "${!centres[@]}"; do
+      ((i > 0)) && printf ','
+      json_q "${centres[$i]}"
+    done
+    printf ']'
+    printf '}\n'
+    return 0
+  fi
+
+  ui_title "gamectl config"
+  printf "version        %s\n" "$GAMECTL_VERSION"
+  printf "root_dir       %s\n" "$ROOT_DIR"
+  printf "systemctl      %s\n" "$SYSTEMCTL_BIN"
+  printf "journalctl     %s\n" "$JOURNALCTL_BIN"
+  printf "curl           %s\n" "$CURL_BIN"
+  printf "base_url       %s\n" "$GAME_BASE_URL"
+  printf "health_url     %s\n" "$INDEX_HEALTH_URL"
+  printf "units_source   %s\n" "$([[ -n "${AOS_GAME_UNITS:-}" ]] && echo "AOS_GAME_UNITS" || echo "AOS_GAME_MOUNT_SERVICE")"
+  printf "fallback_unit  %s\n" "$SERVICE_GAME"
+  printf "units          %s\n" "${#units[@]}"
+  local u
+  for u in "${units[@]}"; do
+    printf "  - %s\n" "$u"
+  done
+  printf "centres        %s\n" "${#centres[@]}"
+  local c
+  for c in "${centres[@]}"; do
+    printf "  - %s -> %s\n" "$c" "$(centre_url "$c")"
+  done
+}
+
 cmd_centres() {
   local brief=0
-  if [[ "${1:-}" == "--brief" ]]; then
-    brief=1
+  local as_json=0
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --brief) brief=1 ;;
+      --json) as_json=1 ;;
+      *)
+        args+=("$1")
+        ;;
+    esac
+    shift || true
+  done
+
+  local centres_text
+  centres_text="$(resolve_centres "${args[@]}")" || return
+  mapfile -t centres <<<"$centres_text"
+  if ((as_json == 1)); then
+    local i name url code
+    printf '{"base_url":'
+    json_q "$GAME_BASE_URL"
+    printf ',"centres":['
+    for i in "${!centres[@]}"; do
+      name="${centres[$i]}"
+      url="$(centre_url "$name")"
+      code="$(centre_http_code "$url")"
+      ((i > 0)) && printf ','
+      printf '{'
+      printf '"name":'; json_q "$name"; printf ','
+      printf '"url":'; json_q "$url"; printf ','
+      printf '"http":'; json_q "$code"; printf ','
+      if http_code_ok "$code"; then
+        printf '"ok":true'
+      else
+        printf '"ok":false'
+      fi
+      printf '}'
+    done
+    printf ']}\n'
+    return 0
   fi
 
   (( brief == 1 )) || ui_title "gamectl centres"
   local name url code
-  for name in "${GAME_CENTRES[@]}"; do
+  for name in "${centres[@]}"; do
     url="$(centre_url "$name")"
     code="$(centre_http_code "$url")"
     if (( brief == 1 )); then
-      printf "  %-8s http=%-5s %s\n" "$name" "$code" "$url"
+      printf "  %-8s http=%-8s %s\n" "$name" "$code" "$url"
     else
-      printf "%-8s  http=%-5s  %s\n" "$name" "$code" "$url"
+      printf "%-8s  http=%-8s  %s\n" "$name" "$code" "$url"
     fi
   done
 }
@@ -156,12 +385,68 @@ cmd_status_full() {
   "${SYSTEMCTL_USER[@]}" status "${units[@]}"
 }
 
+cmd_status_json() {
+  mapfile -t units < <(get_units)
+  mapfile -t centres < <(resolve_centres)
+  local i unit name url code active enabled centre_ok
+
+  printf '{'
+  printf '"mode":"compact",'
+  printf '"version":'; json_q "$GAMECTL_VERSION"; printf ','
+  printf '"base_url":'; json_q "$GAME_BASE_URL"; printf ','
+  if has_systemctl; then
+    printf '"systemctl_available":true,'
+  else
+    printf '"systemctl_available":false,'
+  fi
+  if user_bus_ok; then
+    printf '"user_bus":true,'
+  else
+    printf '"user_bus":false,'
+  fi
+  printf '"units":['
+  for i in "${!units[@]}"; do
+    unit="${units[$i]}"
+    active="$(unit_active_state "$unit")"
+    enabled="$(unit_enabled_state "$unit")"
+    ((i > 0)) && printf ','
+    printf '{'
+    printf '"name":'; json_q "$unit"; printf ','
+    printf '"active":'; json_q "$active"; printf ','
+    printf '"enabled":'; json_q "$enabled"
+    printf '}'
+  done
+  printf '],'
+  printf '"centres":['
+  for i in "${!centres[@]}"; do
+    name="${centres[$i]}"
+    url="$(centre_url "$name")"
+    code="$(centre_http_code "$url")"
+    ((i > 0)) && printf ','
+    printf '{'
+    printf '"name":'; json_q "$name"; printf ','
+    printf '"url":'; json_q "$url"; printf ','
+    printf '"http":'; json_q "$code"; printf ','
+    if http_code_ok "$code"; then
+      centre_ok=true
+    else
+      centre_ok=false
+    fi
+    printf '"ok":%s' "$centre_ok"
+    printf '}'
+  done
+  printf ']'
+  printf '}\n'
+}
+
 cmd_status() {
   local mode="compact"
+  local as_json=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --full) mode="full" ;;
       --compact) mode="compact" ;;
+      --json) as_json=1 ;;
       *)
         ui_err "Unknown status option: $1"
         return 2
@@ -171,108 +456,210 @@ cmd_status() {
   done
 
   if [[ "$mode" == "full" ]]; then
+    if ((as_json == 1)); then
+      ui_err "status --full cannot be combined with --json"
+      return 2
+    fi
     cmd_status_full
     return
   fi
 
+  if ((as_json == 1)); then
+    cmd_status_json
+    return
+  fi
+
   ui_title "gamectl status"
-  need_cmd "$SYSTEMCTL_BIN"
+  if ! has_systemctl; then
+    ui_warn "systemctl not found"
+  elif ! user_bus_ok; then
+    ui_warn "systemctl --user not available (no user bus)"
+  fi
+
   mapfile -t units < <(get_units)
   if ((${#units[@]} == 0)); then
     ui_warn "No units configured"
   else
     local unit active enabled
     for unit in "${units[@]}"; do
-      active="$("${SYSTEMCTL_USER[@]}" is-active "$unit" 2>/dev/null || echo "inactive")"
-      enabled="$("${SYSTEMCTL_USER[@]}" is-enabled "$unit" 2>/dev/null || echo "disabled")"
-      printf "unit   %-28s active=%-9s enabled=%s\n" "$unit" "$active" "$enabled"
+      active="$(unit_active_state "$unit")"
+      enabled="$(unit_enabled_state "$unit")"
+      printf "unit   %-28s active=%-12s enabled=%s\n" "$unit" "$active" "$enabled"
     done
   fi
   echo
   cmd_centres --brief
 }
 
-cmd_start() {
+cmd_units_systemctl() {
+  local op="${1:?}"
+  shift || true
   need_cmd "$SYSTEMCTL_BIN"
   mapfile -t units < <(get_units)
   ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" start "${units[@]}"
+  "${SYSTEMCTL_USER[@]}" "$op" "${units[@]}"
 }
 
-cmd_stop() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" stop "${units[@]}"
-}
-
-cmd_restart() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" restart "${units[@]}"
-}
-
-cmd_enable() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" enable "${units[@]}"
-}
-
-cmd_disable() {
-  need_cmd "$SYSTEMCTL_BIN"
-  mapfile -t units < <(get_units)
-  ((${#units[@]} > 0)) || { ui_warn "No units configured"; return 0; }
-  "${SYSTEMCTL_USER[@]}" disable "${units[@]}"
-}
+cmd_start() { cmd_units_systemctl start "$@"; }
+cmd_stop() { cmd_units_systemctl stop "$@"; }
+cmd_restart() { cmd_units_systemctl restart "$@"; }
+cmd_enable() { cmd_units_systemctl enable "$@"; }
+cmd_disable() { cmd_units_systemctl disable "$@"; }
 
 cmd_logs() {
   need_cmd "$JOURNALCTL_BIN"
-  local follow=""
-  local unit=""
+  local -a follow_args=()
+  local -a targets=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -f|--follow) follow="--follow" ;;
-      *) unit="$1" ;;
+      -f|--follow) follow_args+=(--follow) ;;
+      --) shift; while [[ $# -gt 0 ]]; do targets+=("$1"); shift; done; break ;;
+      *) targets+=("$1") ;;
     esac
-    shift
+    shift || true
   done
 
-  if [[ -n "$unit" ]]; then
-    "${JOURNALCTL_USER[@]}" $follow -u "$unit"
-    return
+  if ((${#targets[@]} == 0)); then
+    mapfile -t targets < <(get_units)
   fi
-
-  mapfile -t units < <(get_units)
-  if ((${#units[@]} == 0)); then
+  if ((${#targets[@]} == 0)); then
     ui_warn "No units configured"
     return 0
   fi
 
-  "${JOURNALCTL_USER[@]}" $follow "${units[@]/#/-u }"
+  local -a unit_args=()
+  local unit
+  for unit in "${targets[@]}"; do
+    unit_args+=(-u "$unit")
+  done
+  "${JOURNALCTL_USER[@]}" "${follow_args[@]}" "${unit_args[@]}"
 }
 
 cmd_doctor() {
-  ui_title "gamectl doctor"
-  if ! has_cmd "$SYSTEMCTL_BIN"; then
-    ui_err "systemctl not found"
-    return 1
-  fi
+  local strict=0
+  local as_json=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --strict) strict=1 ;;
+      --json) as_json=1 ;;
+      *)
+        ui_err "Unknown doctor option: $1"
+        return 2
+        ;;
+    esac
+    shift || true
+  done
+
+  local have_systemctl_bin=0 have_journalctl_bin=0 have_curl=0 have_user_bus=0
+  has_systemctl && have_systemctl_bin=1
+  has_journalctl && have_journalctl_bin=1
+  has_curl_bin && have_curl=1
+  user_bus_ok && have_user_bus=1
 
   mapfile -t units < <(get_units)
-  if ((${#units[@]} == 0)); then
-    ui_warn "No units configured"
+  mapfile -t centres < <(resolve_centres)
+
+  local ok=1
+  ((have_systemctl_bin == 1)) || ok=0
+  ((have_user_bus == 1)) || ok=0
+
+  local i unit active enabled name url code centre_ok
+
+  if ((as_json == 1)); then
+    printf '{'
+    printf '"precheck_ok":%s,' "$([[ $ok -eq 1 ]] && echo true || echo false)"
+    printf '"strict":%s,' "$([[ $strict -eq 1 ]] && echo true || echo false)"
+    printf '"deps":{'
+    printf '"systemctl":%s,' "$([[ $have_systemctl_bin -eq 1 ]] && echo true || echo false)"
+    printf '"journalctl":%s,' "$([[ $have_journalctl_bin -eq 1 ]] && echo true || echo false)"
+    printf '"curl":%s,' "$([[ $have_curl -eq 1 ]] && echo true || echo false)"
+    printf '"user_bus":%s' "$([[ $have_user_bus -eq 1 ]] && echo true || echo false)"
+    printf '},'
+    printf '"units":['
+    for i in "${!units[@]}"; do
+      unit="${units[$i]}"
+      active="$(unit_active_state "$unit")"
+      enabled="$(unit_enabled_state "$unit")"
+      [[ "$active" == "active" ]] || ok=0
+      ((i > 0)) && printf ','
+      printf '{'
+      printf '"name":'; json_q "$unit"; printf ','
+      printf '"active":'; json_q "$active"; printf ','
+      printf '"enabled":'; json_q "$enabled"; printf ','
+      printf '"ok":%s' "$([[ "$active" == "active" ]] && echo true || echo false)"
+      printf '}'
+    done
+    printf '],'
+    printf '"centres":['
+    for i in "${!centres[@]}"; do
+      name="${centres[$i]}"
+      url="$(centre_url "$name")"
+      code="$(centre_http_code "$url")"
+      centre_ok=0
+      if http_code_ok "$code"; then
+        centre_ok=1
+      fi
+      ((centre_ok == 1)) || ok=0
+      ((i > 0)) && printf ','
+      printf '{'
+      printf '"name":'; json_q "$name"; printf ','
+      printf '"url":'; json_q "$url"; printf ','
+      printf '"http":'; json_q "$code"; printf ','
+      printf '"ok":%s' "$([[ $centre_ok -eq 1 ]] && echo true || echo false)"
+      printf '}'
+    done
+    printf '],'
+    printf '"ok":%s' "$([[ $ok -eq 1 ]] && echo true || echo false)"
+    printf '}\n'
+    if ((strict == 1 && ok == 0)); then
+      return 1
+    fi
     return 0
   fi
 
-  for unit in "${units[@]}"; do
-    if "${SYSTEMCTL_USER[@]}" is-active --quiet "$unit"; then
-      ui_ok "$unit active"
+  ui_title "gamectl doctor"
+  printf "deps   systemctl=%s journalctl=%s curl=%s user-bus=%s\n" \
+    "$(bool_word "$have_systemctl_bin")" \
+    "$(bool_word "$have_journalctl_bin")" \
+    "$(bool_word "$have_curl")" \
+    "$(bool_word "$have_user_bus")"
+
+  if ((${#units[@]} == 0)); then
+    ui_warn "No units configured"
+    ok=0
+  else
+    for unit in "${units[@]}"; do
+      active="$(unit_active_state "$unit")"
+      enabled="$(unit_enabled_state "$unit")"
+      if [[ "$active" == "active" ]]; then
+        ui_ok "unit $unit active=$active enabled=$enabled"
+      else
+        ui_warn "unit $unit active=$active enabled=$enabled"
+        ok=0
+      fi
+    done
+  fi
+
+  for name in "${centres[@]}"; do
+    url="$(centre_url "$name")"
+    code="$(centre_http_code "$url")"
+    if http_code_ok "$code"; then
+      ui_ok "centre $name http=$code $url"
     else
-      ui_warn "$unit inactive"
+      ui_warn "centre $name http=$code $url"
+      ok=0
     fi
   done
+
+  if ((ok == 1)); then
+    ui_ok "summary OK"
+  else
+    ui_warn "summary NOT OK"
+  fi
+
+  if ((strict == 1 && ok == 0)); then
+    return 1
+  fi
 }
 
 cmd_menu() {
@@ -288,6 +675,7 @@ cmd_menu() {
     "logs" \
     "centres" \
     "doctor" \
+    "config" \
     "list" \
     "quit")
 
@@ -301,6 +689,7 @@ cmd_menu() {
     logs) cmd_logs ;;
     centres) cmd_centres ;;
     doctor) cmd_doctor ;;
+    config) cmd_config ;;
     list) cmd_list ;;
     quit) exit 0 ;;
     *) exit 0 ;;
@@ -316,7 +705,8 @@ main() {
   shift || true
 
   case "$cmd" in
-    list) cmd_list ;;
+    list) cmd_list "$@" ;;
+    config) cmd_config "$@" ;;
     status) cmd_status "$@" ;;
     centres) cmd_centres "$@" ;;
     frame|freedom|focus|fire|tent) cmd_centre "$cmd" "$@" ;;
@@ -326,7 +716,7 @@ main() {
     enable) cmd_enable ;;
     disable) cmd_disable ;;
     logs) cmd_logs "$@" ;;
-    doctor) cmd_doctor ;;
+    doctor|check) cmd_doctor "$@" ;;
     menu) cmd_menu ;;
     version) cmd_version ;;
     help|-h|--help) show_help ;;

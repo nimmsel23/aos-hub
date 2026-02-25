@@ -15,7 +15,7 @@ usage() {
 freedomctl — Freedom Map CLI  (Annual Vision / IPW)
 
 Usage:
-  freedomctl new  [DOMAIN] [--year YYYY]   Neue Freedom Map (Frame Pflicht)
+  freedomctl new  [DOMAIN] [--year YYYY] [--mode domain-first|question-first]   Neue Freedom Map (default: alle Domains, question-first)
   freedomctl show [DOMAIN]                 Freedom Map anzeigen
   freedomctl list                          Alle Freedom Maps auflisten
   freedomctl edit [DOMAIN]                 Im Editor öffnen
@@ -24,13 +24,16 @@ Domain: BODY | BEING | BALANCE | BUSINESS  (optional — alle wenn weggelassen)
 EOF
 }
 
-cmd_new()  { py new  ${1:+--domain "$1"} ${2:+--year "$2"}; }
+cmd_new()  {
+  local domain="${1:-}"
+  shift || true
+  py new ${domain:+--domain "$domain"} "$@"
+}
 cmd_show() { py show ${1:+--domain "$1"}; }
 cmd_list() { py list; }
 cmd_edit() { py edit ${1:+--domain "$1"}; }
-
 case "${1:-}" in
-  new)   shift; cmd_new  "${1:-}" "${2:-}" ;;
+  new)   shift; cmd_new  "$@" ;;
   show)  shift; cmd_show "${1:-}" ;;
   list)  cmd_list ;;
   edit)  shift; cmd_edit "${1:-}" ;;

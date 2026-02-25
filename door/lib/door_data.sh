@@ -7,14 +7,16 @@ set -euo pipefail
 TASK_BIN="${TASK_BIN:-task}"
 
 # Get all doors from Taskwarrior
-# Output: JSON array of door objects
+# Output: JSON array of door objects (pending/completed/waiting; deleted excluded)
 get_doors() {
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
   command -v jq >/dev/null 2>&1 || return 1
 
-  # Get all tasks with door_name UDA, group by door
-  "$TASK_BIN" export status:pending 2>/dev/null | jq -r '
-    map(select(.door_name != null and .door_name != ""))
+  # Get all tasks with door_name UDA, group by door.
+  # Avoid deleted tasks so counts remain useful for CLI dashboards.
+  "$TASK_BIN" export 2>/dev/null | jq -r '
+    map(select((.status // "") != "deleted"))
+    | map(select(.door_name != null and .door_name != ""))
     | group_by(.door_name)
     | map({
         name: .[0].door_name,
@@ -32,12 +34,16 @@ get_doors() {
 
 # Get tasks for specific door
 # Args: door_name
-# Output: JSON array of tasks
+# Output: JSON array of tasks (deleted excluded)
 get_door_tasks() {
   local door_name="$1"
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
 
-  "$TASK_BIN" export door_name:"$door_name" status:pending 2>/dev/null
+  "$TASK_BIN" export 2>/dev/null | jq -c --arg door_name "$door_name" '
+    map(select((.status // "") != "deleted"))
+    | map(select((.door_name // "") == $door_name))
+  '
 }
 
 # Get door metadata

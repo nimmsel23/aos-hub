@@ -21,9 +21,15 @@ Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
   - `task fire` (terminal)
   - Firemap daily/weekly Telegram output
   - Index Node `/api/fire/*` Taskwarrior fallback
+- Local prototype map scaffolding in this repo uses `game/fire/firectl scaffold` and writes:
+  - `game/fire/prototypes/<YYYY-Www>/weekly.md`
+  - `game/fire/prototypes/<YYYY-Www>/daily.json`
+  - `game/fire/prototypes/<YYYY-Www>/daily.ics`
+- Prototype `weekly.md` keeps `focus_maps:` references for downstream Tent/cascade tests.
 
 ## Quick Debug Commands
 - Firemap dry output: `python game/python-firemap/firemap_bot.py print --scope daily`
 - Firemap counts: `python game/python-firemap/firemap_bot.py test --debug --scope daily`
 - Fire timers: `systemctl --user status alphaos-fire-daily.timer alphaos-fire-weekly.timer`
 - Fire logs: `journalctl --user -u alphaos-fire-daily.service -u alphaos-fire-weekly.service -n 200 --no-pager`
+- Prototype scaffold: `game/fire/firectl scaffold 2026-W09 --date 2026-02-25 --month 2026-02`

@@ -8,6 +8,33 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 source "$SCRIPT_DIR/core4-lib.sh" 2>/dev/null || true
 
+usage() {
+  cat <<'EOF'
+Usage: c4 [YYYY-MM-DD]
+       c4 [help|--help|-h]
+
+Fast Core4 status reader (ledger-only, no Bridge dependency).
+
+Examples:
+  c4
+  c4 2026-02-25
+
+Related:
+  c4d          # dashboard
+  core4 -d     # tracker score (today)
+  core4 -w     # tracker score (week)
+  wcore4       # Taskwarrior + core4 week
+  core4ctl help
+EOF
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'

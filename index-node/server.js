@@ -1252,40 +1252,64 @@ function generateInitialDomainState(domain) {
  * @returns {object|null} Map metadata or null
  */
 function scanForMap(gameDir, mapType, domain) {
+  const mapKeyCanonical = String(mapType || "").toLowerCase();
+  const singleTruth = readSingleTruthDomainArtifact(mapKeyCanonical, domain);
+  if (singleTruth) {
+    return {
+      file: path.relative(getVaultDir(), singleTruth.path),
+      title: singleTruth.meta?.title || `${String(domain || "").toUpperCase()} ${mapType} Map`,
+      status: singleTruth.meta?.status || singleTruth.meta?.frame_status || "unknown",
+      last_shift: singleTruth.meta?.last_shift || null,
+      updated_at: singleTruth.mtimeIso || new Date().toISOString(),
+    };
+  }
+
   const mapDir = path.join(gameDir, mapType);
   if (!fs.existsSync(mapDir)) {
     console.warn(`[scanForMap] Directory not found: ${mapDir}`);
     return null;
   }
 
-  // Look for {DOMAIN}_{maptype}.md (e.g., BODY_frame.md)
   const domainUpper = domain.toUpperCase();
-  const filename = `${domainUpper}_${mapType.toLowerCase()}.md`;
-  const filePath = path.join(mapDir, filename);
+  const mapKey = mapType.toLowerCase();
+  const candidates = fs.readdirSync(mapDir)
+    .filter((f) => /\.(md|ya?ml)$/i.test(f))
+    .map((f) => path.join(mapDir, f))
+    .filter((filePath) => {
+      const file = path.basename(filePath).toLowerCase();
+      return file.includes(mapKey) && file.startsWith(`${domain.toLowerCase()}_`);
+    })
+    .sort((a, b) => {
+      try {
+        return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+      } catch (_) {
+        return 0;
+      }
+    });
 
-  if (!fs.existsSync(filePath)) {
-    console.warn(`[scanForMap] Map not found: ${filePath}`);
+  if (!candidates.length) {
+    console.warn(`[scanForMap] Map not found for ${domainUpper}/${mapType} in ${mapDir}`);
     return null;
   }
 
   try {
+    const filePath = candidates[0];
     const stats = fs.statSync(filePath);
     const content = fs.readFileSync(filePath, "utf8");
 
-    // Parse YAML front matter if exists
-    const yaml = extractYamlFrontMatter(content);
+    const meta = isYamlFile(filePath) ? parseYamlSafe(content, {}) : extractYamlFrontMatter(content);
 
     const relativePath = path.relative(getVaultDir(), filePath);
 
     return {
       file: relativePath,
-      title: yaml.title || `${domainUpper} ${mapType} Map`,
-      status: yaml.status || yaml.frame_status || "unknown",
-      last_shift: yaml.last_shift || null,
+      title: meta.title || `${domainUpper} ${mapType} Map`,
+      status: meta.status || meta.frame_status || "unknown",
+      last_shift: meta.last_shift || null,
       updated_at: stats.mtime.toISOString(),
     };
   } catch (err) {
-    console.error(`[scanForMap] Error reading ${filePath}:`, err);
+    console.error(`[scanForMap] Error reading ${mapType}/${domainUpper}:`, err);
     return null;
   }
 }
@@ -1314,12 +1338,13 @@ function scanForFireMap(gameDir, domain, week) {
       const content = fs.readFileSync(filePath, "utf8");
       const yaml = extractYamlFrontMatter(content);
 
-      // Check if this file is for this domain and week
-      if (
-        yaml.domain &&
-        yaml.domain.toUpperCase() === domainUpper &&
-        yaml.week === week
-      ) {
+      const isWeeklyMatch = String(yaml.week || "").trim() === week || file.includes(week);
+      const isDomainMatch =
+        !yaml.domain ||
+        String(yaml.domain || "").toUpperCase() === domainUpper;
+
+      // Support aggregate weekly Fire maps (no domain key) and older domain-specific files.
+      if (isWeeklyMatch && isDomainMatch) {
         const stats = fs.statSync(filePath);
         const relativePath = path.relative(getVaultDir(), filePath);
 
@@ -3767,6 +3792,481 @@ function resolveGameExportDir(map) {
   return dirs[String(map || "").toLowerCase()] || null;
 }
 
+function isYamlFile(filePath) {
+  return /\.(ya?ml)$/i.test(String(filePath || ""));
+}
+
+function isMarkdownFile(filePath) {
+  return /\.md$/i.test(String(filePath || ""));
+}
+
+function parseYamlSafe(text, fallback = {}) {
+  try {
+    const parsed = yaml.load(String(text || ""));
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function dumpYamlText(value) {
+  const text = yaml.dump(value || {}, {
+    noRefs: true,
+    lineWidth: -1,
+    sortKeys: false,
+  });
+  return `${String(text || "").trimEnd()}\n`;
+}
+
+function stripYamlFrontMatter(content) {
+  return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/u, "").trim();
+}
+
+function gameDateFromIsoLike(raw) {
+  const d = raw ? new Date(raw) : new Date();
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function gameMonthKeyFromMeta(meta = {}) {
+  const phase = String(meta.phase || "").trim().toLowerCase();
+  if (/^q[1-4]$/.test(phase)) return phase;
+  const created = gameDateFromIsoLike(meta.created || meta.updated_at || meta.date);
+  return `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function gameQuarterKeyFromMeta(meta = {}) {
+  const rawQuarter = String(meta.quarter || meta.quarter_key || "").trim();
+  if (/^\d{4}-Q[1-4]$/i.test(rawQuarter)) return rawQuarter.toUpperCase();
+  if (/^Q[1-4]-\d{4}$/i.test(rawQuarter)) {
+    const [q, y] = rawQuarter.toUpperCase().split("-");
+    return `${y}-${q}`;
+  }
+  const created = gameDateFromIsoLike(meta.created || meta.updated_at || meta.date);
+  const q = Math.ceil((created.getMonth() + 1) / 3);
+  return `${created.getFullYear()}-Q${q}`;
+}
+
+function gameYearKeyFromMeta(meta = {}) {
+  if (/^\d{4}$/.test(String(meta.year || "").trim())) return String(meta.year).trim();
+  const created = gameDateFromIsoLike(meta.created || meta.updated_at || meta.date);
+  return String(created.getFullYear());
+}
+
+function gameWeekKwLabel(weekRaw) {
+  const week = sanitizeWeek(weekRaw);
+  const match = week.match(/^\d{4}-W(\d{2})$/);
+  return match ? `KW${match[1]}` : "KW00";
+}
+
+function isoWeekToMondayDateKey(weekRaw) {
+  const week = sanitizeWeek(weekRaw);
+  const match = week.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return new Date().toISOString().slice(0, 10);
+  const year = Number(match[1]);
+  const weekNum = Number(match[2]);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const monday = new Date(mondayWeek1);
+  monday.setUTCDate(mondayWeek1.getUTCDate() + (weekNum - 1) * 7);
+  return monday.toISOString().slice(0, 10);
+}
+
+function parseGameExportMeta(map, content, explicitMeta = {}) {
+  const normalizedMap = String(map || "").toLowerCase();
+  const meta = explicitMeta && typeof explicitMeta === "object" ? { ...explicitMeta } : {};
+  const text = String(content || "");
+  if (!text) return meta;
+
+  if (normalizedMap === "frame" || normalizedMap === "freedom") {
+    const parsed = parseYamlSafe(text, {});
+    return { ...parsed, ...meta };
+  }
+
+  return { ...extractYamlFrontMatter(text), ...meta };
+}
+
+function gameCanonicalFilename(map, meta = {}, format = "markdown", title = "") {
+  const m = String(map || "").toLowerCase();
+  if (m === "frame") return "annual_frame.yaml";
+  if (m === "freedom") return "quarterly_freedom.yaml";
+  if (m === "focus") return "monthly_focus.md";
+  if (m === "fire") return "weekly_fire.md";
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const base = safeFilename(title) || `${m || "map"}_${stamp}`;
+  const ext = String(format || "").toLowerCase() === "yaml" ? ".yaml" : ".md";
+  return `${base}${ext}`;
+}
+
+function gameCanonicalPath(map) {
+  const dir = resolveGameExportDir(map);
+  if (!dir) return null;
+  return path.join(dir, gameCanonicalFilename(map));
+}
+
+function gameReadArtifact(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const stats = fs.statSync(filePath);
+    let meta = {};
+    if (isYamlFile(filePath)) meta = parseYamlSafe(content, {});
+    else if (isMarkdownFile(filePath)) meta = extractYamlFrontMatter(content);
+    return {
+      ok: true,
+      path: filePath,
+      name: path.basename(filePath),
+      content,
+      meta,
+      mtimeMs: stats.mtimeMs,
+      mtimeIso: stats.mtime.toISOString(),
+    };
+  } catch (err) {
+    return { ok: false, error: String(err), path: filePath };
+  }
+}
+
+function gameListArtifacts(map, opts = {}) {
+  const dir = resolveGameExportDir(map);
+  if (!dir || !fs.existsSync(dir)) return [];
+  const domain = String(opts.domain || "").trim().toUpperCase();
+  const files = fs.readdirSync(dir)
+    .filter((f) => /\.(md|ya?ml)$/i.test(f))
+    .map((f) => gameReadArtifact(path.join(dir, f)))
+    .filter((entry) => entry.ok);
+
+  const filtered = files.filter((entry) => {
+    if (!domain) return true;
+    const metaDomain = String(entry.meta?.domain || "").trim().toUpperCase();
+    if (metaDomain && metaDomain === domain) return true;
+    return entry.name.toUpperCase().startsWith(`${domain}_`);
+  });
+
+  filtered.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return filtered;
+}
+
+function gameFindLatestArtifact(map, opts = {}) {
+  if (opts.domain && (map === "frame" || map === "freedom" || map === "focus")) {
+    const singleTruth = readSingleTruthDomainArtifact(map, opts.domain);
+    if (singleTruth) return singleTruth;
+  }
+  const list = gameListArtifacts(map, opts);
+  if (!list.length) return null;
+  if (opts.week) {
+    const targetWeek = sanitizeWeek(opts.week);
+    const exact = list.find((entry) => String(entry.meta?.week || "").trim() === targetWeek || entry.name.includes(targetWeek));
+    if (exact) return exact;
+  }
+  return list[0];
+}
+
+function gameInjectFocusCascade(markdown, meta = {}) {
+  const domain = String(meta.domain || "").trim().toUpperCase();
+  if (!domain) return markdown;
+
+  const frame = gameFindLatestArtifact("frame", { domain });
+  const freedom = gameFindLatestArtifact("freedom", { domain });
+  let headerSection = "";
+  let footerSection = "";
+
+  if (frame) {
+    headerSection = [
+      "## CASCADE HEADER · ANNUAL FRAME (YAML)",
+      "",
+      "```yaml",
+      String(frame.content || "").trim(),
+      "```",
+      "",
+    ].join("\n");
+  }
+
+  if (freedom) {
+    footerSection = [
+      "## CASCADE FOOTER · QUARTERLY FREEDOM (YAML)",
+      "",
+      "```yaml",
+      String(freedom.content || "").trim(),
+      "```",
+      "",
+    ].join("\n");
+  }
+
+  if (!headerSection && !footerSection) return markdown;
+
+  const raw = String(markdown || "").trim();
+  const body = stripYamlFrontMatter(raw);
+  const yamlBlockMatch = raw.match(/^---\n[\s\S]*?\n---\n?/u);
+  const yamlBlock = yamlBlockMatch ? yamlBlockMatch[0] : "";
+  return [
+    yamlBlock.trimEnd(),
+    yamlBlock ? "" : null,
+    headerSection ? headerSection.trim() : null,
+    body,
+    footerSection ? footerSection.trim() : null,
+  ].filter(Boolean).join("\n\n").trim() + "\n";
+}
+
+function gameInjectFireCascade(markdown, meta = {}) {
+  const week = sanitizeWeek(meta.week);
+  const chunks = [];
+  for (const domain of DOMAINS) {
+    const frame = gameFindLatestArtifact("frame", { domain });
+    const freedom = gameFindLatestArtifact("freedom", { domain });
+    const focus = gameFindLatestArtifact("focus", { domain });
+    const parts = [];
+
+    if (frame) {
+      parts.push([
+        `### ${domain} · FRAME`,
+        "",
+        "```yaml",
+        String(frame.content || "").trim(),
+        "```",
+      ].join("\n"));
+    }
+    if (freedom) {
+      parts.push([
+        `### ${domain} · FREEDOM`,
+        "",
+        "```yaml",
+        String(freedom.content || "").trim(),
+        "```",
+      ].join("\n"));
+    }
+    if (focus) {
+      parts.push([
+        `### ${domain} · FOCUS`,
+        "",
+        "```markdown",
+        String(focus.content || "").trim(),
+        "```",
+      ].join("\n"));
+    }
+    if (parts.length) {
+      chunks.push([`## CASCADE PACK · ${domain}`, "", ...parts].join("\n"));
+    }
+  }
+
+  if (!chunks.length) return markdown;
+  const raw = String(markdown || "").trim();
+  const body = stripYamlFrontMatter(raw);
+  const yamlBlockMatch = raw.match(/^---\n[\s\S]*?\n---\n?/u);
+  const yamlBlock = yamlBlockMatch ? yamlBlockMatch[0] : "";
+  const bundleHeader = [
+    "## WEEKLY CASCADE BUNDLE",
+    "",
+    `- week: ${week}`,
+    `- bundled_at: ${new Date().toISOString()}`,
+    "",
+  ].join("\n");
+
+  return [
+    yamlBlock.trimEnd(),
+    yamlBlock ? "" : null,
+    body,
+    bundleHeader.trim(),
+    ...chunks,
+  ].filter(Boolean).join("\n\n").trim() + "\n";
+}
+
+function buildWeeklyCore4ScoreCsv(weekRaw) {
+  const week = sanitizeWeek(weekRaw);
+  const dateKey = isoWeekToMondayDateKey(week);
+  const summary = core4GetWeekSummaryForDate(dateKey);
+  if (!summary?.ok) return null;
+  const totals = summary.totals || {};
+  const byDomain = totals.by_domain || {};
+  const rows = [
+    ["week", "domain", "score", "max"],
+    [week, "BODY", String(Number(byDomain.body || 0) || 0), "7"],
+    [week, "BEING", String(Number(byDomain.being || 0) || 0), "7"],
+    [week, "BALANCE", String(Number(byDomain.balance || 0) || 0), "7"],
+    [week, "BUSINESS", String(Number(byDomain.business || 0) || 0), "7"],
+    [week, "TOTAL", String(Number(totals.week_total || 0) || 0), "28"],
+  ];
+  return rows.map((row) => row.join(",")).join("\n") + "\n";
+}
+
+function appendTentBundleSeal(markdown, info = {}) {
+  const week = sanitizeWeek(info.week);
+  const kw = gameWeekKwLabel(week);
+  const fire = info.fireMap ? String(info.fireMap) : "";
+  const core4Csv = info.core4Csv ? String(info.core4Csv) : "";
+  const seal = [
+    "---",
+    "## Bundle Seal",
+    "",
+    `- week: ${week}`,
+    `- kw: ${kw}`,
+    core4Csv ? `- core4_csv: ${core4Csv}` : null,
+    fire ? `- weekly_fire: ${fire}` : null,
+    `- sealed_at: ${new Date().toISOString()}`,
+  ].filter(Boolean).join("\n");
+
+  const text = String(markdown || "").trimEnd();
+  if (/^##\s*Bundle Seal\b/m.test(text)) return `${text}\n`;
+  return `${text}\n\n${seal}\n`;
+}
+
+function writeFileWithBackup(filePath, content) {
+  const text = String(content || "");
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.writeFileSync(`${filePath}.bak`, fs.readFileSync(filePath, "utf8"), "utf8");
+    }
+  } catch (_) {}
+  fs.writeFileSync(filePath, text, "utf8");
+}
+
+function loadYamlFileObject(filePath, fallback = {}) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = parseYamlSafe(raw, fallback);
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function mergeGameCanonicalYamlByDomain(map, filePath, domain, parsedMeta = {}) {
+  const domainUpper = String(domain || "").trim().toUpperCase();
+  if (!domainUpper) {
+    return { ok: false, error: "missing domain for yaml merge" };
+  }
+  const existing = loadYamlFileObject(filePath, {});
+  const domains = existing.domains && typeof existing.domains === "object" ? { ...existing.domains } : {};
+
+  const payload = { ...parsedMeta, domain: domainUpper };
+  domains[domainUpper] = payload;
+
+  const top = {
+    type: map === "frame" ? "frame-map" : "freedom-map",
+    cadence: map === "frame" ? "annual" : "quarterly",
+    updated_at: new Date().toISOString(),
+    year: map === "frame" ? (payload.year || existing.year || new Date().getFullYear()) : undefined,
+    quarter: map === "freedom" ? (payload.quarter || existing.quarter || gameQuarterKeyFromMeta(payload)) : undefined,
+    period: map === "freedom" ? (payload.period || existing.period || null) : undefined,
+    domains,
+  };
+
+  const cleaned = Object.fromEntries(Object.entries(top).filter(([, v]) => v !== undefined && v !== null));
+  const yamlText = dumpYamlText(cleaned);
+  writeFileWithBackup(filePath, yamlText);
+  return { ok: true, content: yamlText, domains: Object.keys(domains).sort() };
+}
+
+function focusBlockMarkers(domain) {
+  const d = String(domain || "").trim().toUpperCase();
+  return {
+    begin: `<!-- AOS:FOCUS:${d}:BEGIN -->`,
+    end: `<!-- AOS:FOCUS:${d}:END -->`,
+  };
+}
+
+function extractFocusDomainBlock(content, domain) {
+  const { begin, end } = focusBlockMarkers(domain);
+  const text = String(content || "");
+  const start = text.indexOf(begin);
+  const finish = text.indexOf(end);
+  if (start === -1 || finish === -1 || finish < start) return "";
+  const bodyStart = start + begin.length;
+  return text.slice(bodyStart, finish).trim();
+}
+
+function buildFocusAggregateMarkdown(blocks, meta = {}) {
+  const nowIso = new Date().toISOString();
+  const domainsPresent = DOMAINS.filter((d) => String(blocks[d] || "").trim());
+  const front = {
+    type: "focus-map",
+    cadence: "monthly",
+    updated_at: nowIso,
+    month: meta.month || null,
+    phase: meta.phase || null,
+    domains: domainsPresent,
+  };
+  const frontYaml = `---\n${yaml.dump(Object.fromEntries(Object.entries(front).filter(([, v]) => v !== null && v !== "")), { noRefs: true, lineWidth: -1, sortKeys: false }).trimEnd()}\n---\n\n`;
+  const sections = [];
+  for (const domain of DOMAINS) {
+    const raw = String(blocks[domain] || "").trim();
+    if (!raw) continue;
+    const marks = focusBlockMarkers(domain);
+    sections.push([
+      marks.begin,
+      raw,
+      marks.end,
+    ].join("\n"));
+  }
+  return `${frontYaml}${sections.join("\n\n")}\n`;
+}
+
+function mergeFocusAggregateMarkdown(filePath, domain, domainMarkdown, meta = {}) {
+  const domainUpper = String(domain || "").trim().toUpperCase();
+  if (!domainUpper) return { ok: false, error: "missing domain for focus merge" };
+
+  let existingText = "";
+  if (fs.existsSync(filePath)) {
+    try {
+      existingText = fs.readFileSync(filePath, "utf8");
+    } catch (_) {}
+  }
+  const existingMeta = existingText ? extractYamlFrontMatter(existingText) : {};
+  const blocks = {};
+  for (const d of DOMAINS) {
+    blocks[d] = extractFocusDomainBlock(existingText, d);
+  }
+  blocks[domainUpper] = String(domainMarkdown || "").trim();
+
+  const mergedText = buildFocusAggregateMarkdown(blocks, {
+    month: meta.month || existingMeta.month || null,
+    phase: meta.phase || existingMeta.phase || null,
+  });
+  writeFileWithBackup(filePath, mergedText);
+  return { ok: true, content: mergedText, domains: DOMAINS.filter((d) => String(blocks[d] || "").trim()) };
+}
+
+function readSingleTruthDomainArtifact(map, domain) {
+  const filePath = gameCanonicalPath(map);
+  const domainUpper = String(domain || "").trim().toUpperCase();
+  if (!filePath || !domainUpper || !fs.existsSync(filePath)) return null;
+
+  if (map === "frame" || map === "freedom") {
+    const agg = loadYamlFileObject(filePath, {});
+    const entry = agg?.domains?.[domainUpper];
+    if (!entry || typeof entry !== "object") return null;
+    const domainPayload = { ...entry, domain: domainUpper };
+    return {
+      ok: true,
+      path: filePath,
+      name: path.basename(filePath),
+      content: dumpYamlText(domainPayload).trim(),
+      meta: domainPayload,
+      mtimeMs: fs.statSync(filePath).mtimeMs,
+      mtimeIso: fs.statSync(filePath).mtime.toISOString(),
+    };
+  }
+
+  if (map === "focus") {
+    const text = fs.readFileSync(filePath, "utf8");
+    const block = extractFocusDomainBlock(text, domainUpper);
+    if (!block) return null;
+    const stat = fs.statSync(filePath);
+    return {
+      ok: true,
+      path: filePath,
+      name: path.basename(filePath),
+      content: block,
+      meta: { ...extractYamlFrontMatter(block), domain: domainUpper },
+      mtimeMs: stat.mtimeMs,
+      mtimeIso: stat.mtime.toISOString(),
+    };
+  }
+
+  return null;
+}
+
 const DOC_PATHS = {
   foundation: [
     path.join(getVaultDir(), "ALPHA_OS", "AlphaOS-THE-FOUNDATION.md"),
@@ -4008,16 +4508,42 @@ app.get("/gpt/:slug", (req, res) => {
 // General's Tent report save (local markdown)
 app.post("/api/generals/report", (req, res) => {
   try {
-    const markdown = String(req.body?.markdown || "").trim();
-    if (!markdown) {
+    const markdownRaw = String(req.body?.markdown || "").trim();
+    if (!markdownRaw) {
       return res.status(400).json({ ok: false, error: "missing markdown" });
     }
     const week = sanitizeWeek(req.body?.week);
+    const kw = gameWeekKwLabel(week);
     const dir = getGeneralsDir();
     ensureDir(dir);
-    const filename = `generals_tent_${week}.md`;
+    const filename = `generalstent_${kw}.md`;
     const filepath = path.join(dir, filename);
+
+    const core4Csv = buildWeeklyCore4ScoreCsv(week);
+    const core4CsvFilename = "weekly_core4score.csv";
+    const core4CsvWeekFilename = `weekly_core4score_${kw}.csv`;
+    if (core4Csv) {
+      fs.writeFileSync(path.join(dir, core4CsvFilename), core4Csv, "utf8");
+      fs.writeFileSync(path.join(dir, core4CsvWeekFilename), core4Csv, "utf8");
+    }
+
+    const fireArtifact = gameFindLatestArtifact("fire", { week });
+    const fireRel = fireArtifact?.path ? path.relative(getVaultDir(), fireArtifact.path) : "";
+    const markdown = appendTentBundleSeal(markdownRaw, {
+      week,
+      core4Csv: core4Csv ? core4CsvFilename : "",
+      fireMap: fireRel,
+    });
+
     fs.writeFileSync(filepath, markdown + "\n", "utf8");
+
+    // Compatibility alias (old filename pattern) while migrating callers/scripts.
+    const legacyFilename = `generals_tent_${week}.md`;
+    const legacyPath = path.join(dir, legacyFilename);
+    if (legacyPath !== filepath) {
+      fs.writeFileSync(legacyPath, markdown + "\n", "utf8");
+    }
+
     // Non-blocking push to bridge for GDrive sync (Alpha_Tent folder).
     if (BRIDGE_URL) {
       fetch(`${BRIDGE_URL}/bridge/tent/summary`, {
@@ -4026,7 +4552,17 @@ app.post("/api/generals/report", (req, res) => {
         body: JSON.stringify({ week, markdown, name: filename }),
       }).catch(() => {});
     }
-    return res.json({ ok: true, week, path: filepath });
+    return res.json({
+      ok: true,
+      week,
+      kw,
+      path: filepath,
+      legacy_path: legacyPath,
+      core4_csv: core4Csv ? path.join(dir, core4CsvFilename) : null,
+      core4_csv_week: core4Csv ? path.join(dir, core4CsvWeekFilename) : null,
+      fire_map: fireRel || null,
+      sealed: true,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
@@ -4974,34 +5510,89 @@ app.get("/api/fire/week-range", (req, res) => {
 });
 
 
-// Game map export (local markdown)
+// Game map export (local YAML/Markdown with cascade bundling)
 app.post("/api/game/export", (req, res) => {
   try {
-    const markdownRaw = String(req.body?.markdown || "").trim();
-    if (!markdownRaw) {
-      return res.status(400).json({ ok: false, error: "missing markdown" });
-    }
     const map = String(req.body?.map || "").trim().toLowerCase();
     const title = String(req.body?.title || "").trim();
     const ticktick = req.body?.ticktick === true;
+    const bundleCascade = req.body?.bundleCascade !== false;
+    const explicitMeta = req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : {};
     const dir = resolveGameExportDir(map);
     if (!dir) {
       return res.status(400).json({ ok: false, error: "unknown map" });
     }
     ensureDir(dir);
 
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const base = safeFilename(title) || `${map}_${stamp}`;
-    const filename = `${base}.md`;
+    const requestedFormat = String(req.body?.format || "").trim().toLowerCase();
+    let format = "markdown";
+    let contentRaw = "";
+
+    if (typeof req.body?.yaml === "string" && String(req.body.yaml).trim()) {
+      format = "yaml";
+      contentRaw = String(req.body.yaml).trim();
+    } else if (req.body?.yaml && typeof req.body.yaml === "object") {
+      format = "yaml";
+      contentRaw = dumpYamlText(req.body.yaml);
+    } else {
+      const markdownRaw = String(req.body?.markdown || "").trim();
+      if (!markdownRaw) {
+        return res.status(400).json({ ok: false, error: "missing markdown/yaml" });
+      }
+      contentRaw = markdownRaw;
+      if (requestedFormat === "yaml" || requestedFormat === "yml") format = "yaml";
+      else format = "markdown";
+    }
+
+    let meta = parseGameExportMeta(map, contentRaw, explicitMeta);
+    let content = contentRaw;
+    if (format === "markdown" && bundleCascade && map === "focus") {
+      content = gameInjectFocusCascade(contentRaw, meta);
+      meta = parseGameExportMeta(map, content, explicitMeta);
+    } else if (format === "markdown" && bundleCascade && map === "fire") {
+      content = gameInjectFireCascade(contentRaw, meta);
+      meta = parseGameExportMeta(map, content, explicitMeta);
+    }
+
+    const filename = gameCanonicalFilename(map, meta, format, title);
     const filepath = path.join(dir, filename);
 
-    let markdown = markdownRaw;
+    let fileContent = String(content || "").trimEnd();
+    let ticktickContent = fileContent;
     let syncId = null;
     if (ticktick) {
       syncId = makeSyncId(`game-${map || "entry"}`);
-      markdown = `${markdownRaw}\n\nSYNC-ID: ${syncId}`;
+      if (format === "markdown") {
+        fileContent = `${fileContent}\n\nSYNC-ID: ${syncId}`;
+        ticktickContent = fileContent;
+      }
     }
-    fs.writeFileSync(filepath, markdown + "\n", "utf8");
+    if (map === "frame" && format === "yaml") {
+      const merged = mergeGameCanonicalYamlByDomain("frame", filepath, meta.domain, parseYamlSafe(fileContent, meta));
+      if (!merged.ok) return res.status(400).json({ ok: false, error: merged.error || "frame merge failed" });
+      fileContent = String(merged.content || "").trimEnd();
+    } else if (map === "freedom" && format === "yaml") {
+      const merged = mergeGameCanonicalYamlByDomain("freedom", filepath, meta.domain, parseYamlSafe(fileContent, meta));
+      if (!merged.ok) return res.status(400).json({ ok: false, error: merged.error || "freedom merge failed" });
+      fileContent = String(merged.content || "").trimEnd();
+    } else if (map === "focus" && format === "markdown") {
+      const merged = mergeFocusAggregateMarkdown(filepath, meta.domain, fileContent, meta);
+      if (!merged.ok) return res.status(400).json({ ok: false, error: merged.error || "focus merge failed" });
+      fileContent = String(merged.content || "").trimEnd();
+    } else {
+      writeFileWithBackup(filepath, fileContent + "\n");
+    }
+
+    if (map === "frame" || map === "freedom" || map === "focus") {
+      // merge helpers already wrote the file
+    } else {
+      // direct path already written above
+    }
+
+    if (map === "frame" || map === "freedom" || map === "focus") {
+      // Ensure merge-written canonical files end with newline in memory too.
+      fileContent = `${fileContent}\n`.trimEnd();
+    }
 
     const tickInfo = { ok: false, status: "skipped" };
     if (ticktick) {
@@ -5014,7 +5605,7 @@ app.post("/api/game/export", (req, res) => {
           .then(() =>
             ticktickCreateTask({
               title: title || `${map.toUpperCase()} Map`,
-              content: markdown,
+              content: ticktickContent,
               tags: ["game"],
             })
           )
@@ -5043,7 +5634,18 @@ app.post("/api/game/export", (req, res) => {
     return res.json({
       ok: true,
       map,
+      format,
+      filename,
       path: filepath,
+      canonical: true,
+      meta: {
+        domain: meta.domain || null,
+        year: meta.year || null,
+        quarter: meta.quarter || meta.quarter_key || null,
+        month: meta.month || null,
+        phase: meta.phase || null,
+        week: meta.week || null,
+      },
       ticktick: tickInfo,
       rclone: rcloneInfo,
     });

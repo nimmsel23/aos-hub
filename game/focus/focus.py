@@ -5,7 +5,7 @@ Monthly mission. Requires Freedom YAML (contains Frame).
 YAML = state. MD = export on demand.
 
 Usage:
-    focus.py new   [--domain BODY] [--month 2026-02]
+    focus.py new   [--domain BODY] [--month 2026-02] [--mode domain-first|question-first]
     focus.py show  [--month 2026-02]
     focus.py list
     focus.py edit
@@ -24,6 +24,7 @@ from vault import (read_yaml, read_latest_yaml, list_yamls,
 from maps import FOCUS_QUESTIONS, display_focus, export_md
 
 DOMAIN_CHOICES = DOMAIN_LIST + [d.lower() for d in DOMAIN_LIST]
+PROMPT_MODES = ("domain-first", "question-first")
 
 
 def prompt_domain(domain: str, freedom_data: dict | None) -> dict:
@@ -43,7 +44,29 @@ def prompt_domain(domain: str, freedom_data: dict | None) -> dict:
     return answers
 
 
-def cmd_new(domain: str | None, month: str | None):
+def prompt_question_first(domains: list[str], freedom_data: dict | None) -> dict[str, dict]:
+    answers_by_domain = {d: {} for d in domains}
+    for key, label, hint in FOCUS_QUESTIONS:
+        print(f"\n{'='*44}")
+        print(f"  {label}")
+        print(f"  {hint}")
+        print(f"{'='*44}")
+        for domain in domains:
+            info = DOMAINS[domain]
+            freedom_preview = ""
+            if freedom_data:
+                domain_vision = (freedom_data.get("domains") or {}).get(domain, {})
+                vision = (domain_vision or {}).get("vision", "")
+                if vision:
+                    freedom_preview = f"  🎯 Vision: {vision[:80]}{'…' if len(vision) > 80 else ''}"
+            print(f"\n  {info['emoji']}  {domain}")
+            if freedom_preview:
+                print(freedom_preview)
+            answers_by_domain[domain][key] = input("  > ").strip() or "(—)"
+    return answers_by_domain
+
+
+def cmd_new(domain: str | None, month: str | None, mode: str):
     month = month or current_month()
     freedom_result = read_latest_yaml("freedom")
     if not freedom_result:
@@ -54,10 +77,16 @@ def cmd_new(domain: str | None, month: str | None):
     domains = [domain.upper()] if domain else DOMAIN_LIST
     print(f"\n{'='*44}")
     print(f"  FOCUS MAP  –  {month}  (Freedom: {freedom_period})")
+    print(f"  Prompt mode: {mode}")
     print(f"{'='*44}")
+
+    if mode == "question-first":
+        answers_by_domain = prompt_question_first(domains, freedom_data)
+    else:
+        answers_by_domain = {d: prompt_domain(d, freedom_data) for d in domains}
+
     for d in domains:
-        answers = prompt_domain(d, freedom_data)
-        path = update_domain_yaml("focus", d, answers, period=month)
+        path = update_domain_yaml("focus", d, answers_by_domain[d], period=month)
         print(f"\n  ✔ {d} → {path.name}")
     print()
 
@@ -117,6 +146,7 @@ def main():
     p_new = sub.add_parser("new")
     p_new.add_argument("--domain", "-d", choices=DOMAIN_CHOICES)
     p_new.add_argument("--month", "-m")
+    p_new.add_argument("--mode", choices=PROMPT_MODES, default="question-first")
 
     p_show = sub.add_parser("show")
     p_show.add_argument("--month", "-m")
@@ -129,7 +159,7 @@ def main():
 
     args = parser.parse_args()
     if args.cmd == "new":
-        cmd_new(args.domain, getattr(args, "month", None))
+        cmd_new(args.domain, getattr(args, "month", None), getattr(args, "mode", "question-first"))
     elif args.cmd == "show":
         cmd_show(getattr(args, "month", None))
     elif args.cmd == "list":

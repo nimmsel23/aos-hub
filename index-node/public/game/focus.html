@@ -650,7 +650,20 @@ async function saveMission(ticktick) {
     const res = await fetch('/api/game/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ map: 'focus', title, markdown, ticktick: !!ticktick })
+      body: JSON.stringify({
+        map: 'focus',
+        title,
+        markdown,
+        ticktick: !!ticktick,
+        bundleCascade: true,
+        meta: {
+          domain: currentDomain,
+          month: monthName,
+          phase: currentMonth,
+          created: timestamp,
+          type: 'focus-map'
+        }
+      })
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'save failed');

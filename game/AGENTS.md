@@ -14,6 +14,10 @@ Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, w
 - Frontdoors:
   - Production/system view via `aosctl game ...`
   - Dev/user workflows via `hubctl game ...`
+- Local prototype scaffolding for this Codex flow:
+  - `gamectl proto-flow` (creates cascade samples in `game/*/prototypes/`)
+  - `framectl|freedomctl|focusctl ... scaffold`
+  - `game/fire/firectl scaffold`, `game/tent/tentctl scaffold`
 
 ## Coding Rules
 - Preserve center boundaries and cascade expectations across Game sub-centres.
@@ -38,3 +42,4 @@ Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, w
 ## Validation
 - Run `bash -n` for changed shell scripts.
 - Run `scripts/scripts-lint.sh` when ctl wiring changes.
+- For prototype cascade smoke checks, run `game/gamectl proto-flow --force`.

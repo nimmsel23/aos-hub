@@ -3,35 +3,247 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+GAMECTL_VERSION="0.2.0"
 
 source "$ROOT_DIR/scripts/ctl-lib.sh"       2>/dev/null || true
 source "$ROOT_DIR/scripts/lib/aos-env.sh"   2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
 
+VAULT_DIR="${AOS_VAULT_DIR:-${ALPHAOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}"
+GAME_VAULT_DIR="$VAULT_DIR/Game"
+FRAME_FILE="$GAME_VAULT_DIR/Frame/annual_frame.yaml"
+FREEDOM_FILE="$GAME_VAULT_DIR/Freedom/quarterly_freedom.yaml"
+FOCUS_FILE="$GAME_VAULT_DIR/Focus/monthly_focus.md"
+FIRE_FILE="$GAME_VAULT_DIR/Fire/weekly_fire.md"
+TENT_DIR="$GAME_VAULT_DIR/Tent"
+
+iso_week() { date +%G-W%V; }
+week_kw() {
+  local w="${1:-$(iso_week)}"
+  if [[ "$w" =~ ^[0-9]{4}-W([0-9]{2})$ ]]; then
+    printf 'KW%s\n' "${BASH_REMATCH[1]}"
+  else
+    printf 'KW00\n'
+  fi
+}
+tent_file_for_week() { local w="${1:-$(iso_week)}"; printf '%s/generalstent_%s.md\n' "$TENT_DIR" "$(week_kw "$w")"; }
+core4_csv_file() { printf '%s/weekly_core4score.csv\n' "$TENT_DIR"; }
+
+file_mtime_iso() {
+  local f="$1"
+  stat -c '%y' "$f" 2>/dev/null | cut -d'.' -f1 || stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$f" 2>/dev/null || echo "-"
+}
+file_size_bytes() {
+  local f="$1"
+  stat -c '%s' "$f" 2>/dev/null || stat -f '%z' "$f" 2>/dev/null || echo "0"
+}
+file_lines() {
+  local f="$1"
+  wc -l < "$f" 2>/dev/null || echo "0"
+}
+latest_in_dir() {
+  local dir="$1" pattern="${2:-*}"
+  [[ -d "$dir" ]] || return 1
+  local out
+  out="$(find "$dir" -maxdepth 1 -type f -name "$pattern" 2>/dev/null | sort | tail -1 || true)"
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+artifact_history_file() {
+  local key="$1"
+  case "$key" in
+    frame) latest_in_dir "$GAME_VAULT_DIR/Frame/_history" "*.yaml" || true ;;
+    freedom) latest_in_dir "$GAME_VAULT_DIR/Freedom/_history" "*.yaml" || true ;;
+    focus)
+      latest_in_dir "$GAME_VAULT_DIR/Focus/_history" "*.md" || \
+      latest_in_dir "$GAME_VAULT_DIR/Focus/_history" "*.yaml" || true
+      ;;
+    fire) latest_in_dir "$GAME_VAULT_DIR/Fire/_history" "*.md" || true ;;
+    core4score)
+      latest_in_dir "$TENT_DIR/_history" "weekly_core4score*.csv" || \
+      latest_in_dir "$TENT_DIR" "weekly_core4score_KW*.csv" || true
+      ;;
+    tent)
+      latest_in_dir "$TENT_DIR/_history" "generalstent_KW*.md" || \
+      latest_in_dir "$TENT_DIR" "generalstent_KW*.md" || true
+      ;;
+    *) true ;;
+  esac
+}
+artifact_state_word() {
+  local canonical="$1" history="${2:-}"
+  if [[ -s "$canonical" ]]; then
+    echo "ok"
+  elif [[ -e "$canonical" ]]; then
+    echo "empty"
+  elif [[ -n "$history" && -s "$history" ]]; then
+    echo "history"
+  elif [[ -n "$history" && -e "$history" ]]; then
+    echo "hist-emp"
+  else
+    echo "missing"
+  fi
+}
+print_row() {
+  local label="$1" file="$2" key="$3"
+  local hist
+  hist="$(artifact_history_file "$key")"
+  local state
+  state="$(artifact_state_word "$file" "$hist")"
+  local ref="${file}"
+  local bytes modified
+  if [[ "$state" == "history" || "$state" == "hist-emp" ]]; then
+    ref="$hist"
+  fi
+  bytes="$(file_size_bytes "$ref")"
+  modified="$(file_mtime_iso "$ref")"
+  if [[ -n "$hist" ]]; then
+    printf "%-14s %-8s %-8s %-19s %s | hist:%s\n" \
+      "$label" "$state" "$bytes" "$modified" "$file" "$(basename "$hist")"
+  else
+    printf "%-14s %-8s %-8s %-19s %s\n" \
+      "$label" "$state" "$bytes" "$modified" "$file"
+  fi
+}
+
+cmd_paths() {
+  local week="${1:-$(iso_week)}"
+  cat <<EOF
+vault:        $VAULT_DIR
+game:         $GAME_VAULT_DIR
+frame:        $FRAME_FILE
+freedom:      $FREEDOM_FILE
+focus:        $FOCUS_FILE
+fire:         $FIRE_FILE
+core4score:   $(core4_csv_file)
+tent(${week}): $(tent_file_for_week "$week")
+EOF
+}
+
+cmd_dashboard() {
+  local week="${1:-$(iso_week)}"
+  local tent_file
+  tent_file="$(tent_file_for_week "$week")"
+
+  printf "gamectl dashboard  (week=%s, %s)\n" "$week" "$(week_kw "$week")"
+  printf "vault: %s\n\n" "$VAULT_DIR"
+  printf "%-14s %-8s %-8s %-19s %s\n" "artifact" "state" "bytes" "modified" "path"
+  printf "%-14s %-8s %-8s %-19s %s\n" "--------------" "--------" "--------" "-------------------" "----"
+  print_row "annual_frame" "$FRAME_FILE" "frame"
+  print_row "quarterly_fr" "$FREEDOM_FILE" "freedom"
+  print_row "monthly_focus" "$FOCUS_FILE" "focus"
+  print_row "weekly_fire" "$FIRE_FILE" "fire"
+  print_row "core4score" "$(core4_csv_file)" "core4score"
+  print_row "generalstent" "$tent_file" "tent"
+}
+
+cmd_doctor() {
+  local week="${1:-$(iso_week)}"
+  local tent_file
+  tent_file="$(tent_file_for_week "$week")"
+
+  local failures=0
+  local -a labels=("annual_frame" "quarterly_freedom" "monthly_focus" "weekly_fire" "core4score" "generalstent")
+  local -a keys=("frame" "freedom" "focus" "fire" "core4score" "tent")
+  local -a files=("$FRAME_FILE" "$FREEDOM_FILE" "$FOCUS_FILE" "$FIRE_FILE" "$(core4_csv_file)" "$tent_file")
+  local i file hist state
+  for i in "${!files[@]}"; do
+    file="${files[$i]}"
+    hist="$(artifact_history_file "${keys[$i]}")"
+    state="$(artifact_state_word "$file" "$hist")"
+    case "$state" in
+      ok)
+        ui_ok "${labels[$i]} canonical: $file"
+        ;;
+      history)
+        ui_warn "${labels[$i]} canonical missing, using history: ${hist}"
+        ;;
+      empty|hist-emp)
+        ui_warn "${labels[$i]} empty: $file"
+        failures=$((failures + 1))
+        ;;
+      *)
+        ui_warn "${labels[$i]} missing: $file"
+        failures=$((failures + 1))
+        ;;
+    esac
+  done
+
+  # Basic immutable snapshot hint: report backup presence / accidental overwrite traces.
+  for file in "$FRAME_FILE" "$FREEDOM_FILE" "$FOCUS_FILE" "$FIRE_FILE"; do
+    if [[ -e "${file}.bak" ]]; then
+      ui_warn "backup exists (snapshot may have been overwritten): ${file}.bak"
+    fi
+  done
+
+  if ((failures > 0)); then
+    return 1
+  fi
+}
+
+cmd_history() {
+  local key="${1:-all}"
+  case "$key" in
+    all)
+      printf "frame:      %s\n"   "$(artifact_history_file frame || true)"
+      printf "freedom:    %s\n"   "$(artifact_history_file freedom || true)"
+      printf "focus:      %s\n"   "$(artifact_history_file focus || true)"
+      printf "fire:       %s\n"   "$(artifact_history_file fire || true)"
+      printf "core4score: %s\n"   "$(artifact_history_file core4score || true)"
+      printf "tent:       %s\n"   "$(artifact_history_file tent || true)"
+      ;;
+    frame|freedom|focus|fire|core4score|tent)
+      artifact_history_file "$key" || true
+      ;;
+    *)
+      ui_err "unknown history key: $key"
+      return 2
+      ;;
+  esac
+}
+
 usage() {
   cat <<EOF
-gamectl — Game Pillar CLI  (Frame → Freedom → Focus → Fire)
+gamectl — Game dashboard + delegator  (Frame → Freedom → Focus → Fire → Tent)
 
 Usage:
+  gamectl dashboard|status [YYYY-Www]
+  gamectl doctor [YYYY-Www]
+  gamectl paths [YYYY-Www]
+  gamectl history [frame|freedom|focus|fire|core4score|tent|all]
   gamectl <map> <cmd> [DOMAIN] [options]
+  gamectl version
 
 Maps & Commands:
   gamectl frame   new|show|list|edit  [DOMAIN]
   gamectl freedom new|show|list|edit  [DOMAIN]
   gamectl focus   new|show|list|edit  [DOMAIN]
-  gamectl fire    new|show|list|edit  [DOMAIN]
+  gamectl fire    <args...>
+  gamectl tent    <args...>
 
 Delegates to:
-  frame/framectl  |  freedom/freedomctl  |  focus/focusctl  |  fire/firectl
+  frame/framectl  |  freedom/freedomctl  |  focus/focusctl  |  fire/firectl | tent/tentctl
+
+Dashboard snapshots (immutable):
+  annual_frame.yaml
+  quarterly_freedom.yaml
+  monthly_focus.md
+  weekly_fire.md
+  weekly_core4score.csv
+  generalstent_KWxx.md
 EOF
 }
 
-MAP="$SCRIPT_DIR/${1:-}"
-
 case "${1:-}" in
+  ""|dashboard|status) shift || true; cmd_dashboard "${1:-}" ;;
+  doctor) shift; cmd_doctor "${1:-}" ;;
+  paths) shift; cmd_paths "${1:-}" ;;
+  history) shift; cmd_history "${1:-all}" ;;
+  version) echo "gamectl $GAMECTL_VERSION" ;;
   frame)    shift; exec "$SCRIPT_DIR/frame/framectl"     "$@" ;;
   freedom)  shift; exec "$SCRIPT_DIR/freedom/freedomctl" "$@" ;;
   focus)    shift; exec "$SCRIPT_DIR/focus/focusctl"     "$@" ;;
   fire)     shift; exec "$SCRIPT_DIR/fire/firectl"       "$@" ;;
+  tent)     shift; exec "$SCRIPT_DIR/tent/tentctl"       "$@" ;;
   help|--help|-h) usage ;;
   *) usage ;;
 esac

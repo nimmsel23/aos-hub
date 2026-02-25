@@ -58,8 +58,23 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
 - When adding, moving, or renaming commands, update `registry.tsv` in the same change.
 - Keep dispatch wiring and registry aligned:
   - `aosctl`/`hubctl` currently use explicit dispatch code (not automatic registry execution).
-  - If dispatch changes, update both code paths and `registry.tsv` together.
+- If dispatch changes, update both code paths and `registry.tsv` together.
 - Prefer extending existing entries over introducing parallel aliases with overlapping meaning.
+
+## Frontdoor Wrapping Policy (Universal)
+- Frontdoors (`aos`, `aosctl`, `hubctl`, pillar `*ctl`) should wrap user intent / domain phases first, not internal implementation names.
+- Prefer phase/task-oriented entrypoints (example: `potential`, `plan`, `production`, `profit`) while keeping implementation details behind the wrapper.
+- `aos` should expose short direct domain commands when they improve flow, even if they are implemented by a lower wrapper internally.
+- Preferred pattern: `aos <domain-subcommand> ...` -> delegated to the canonical pillar frontdoor (`doorctl`, `gamectl`, etc.), rather than forcing users to type the lower-level tool name.
+- Examples of the intended shape:
+  - `aos hot list` -> wraps/delegates to Door tooling (via `doorctl`/Door pillar)
+  - `aos frame new` -> wraps/delegates to Game Frame tooling (via `gamectl`/Frame centre)
+- Keep this pattern consistent across pillars so parallel sessions/centres feel the same at the `aos` level (Door, Game, Voice, Core4, ...).
+- Before wiring a new frontdoor command, verify the target is a real/canonical implementation (not a dummy/legacy placeholder). Do not assume wrapper scripts are authoritative.
+- If unclear, inspect the pillar-local chapters/blueprints (including local symlinked chapter files) and then map to the existing pillar scripts/automation that already implement the behavior.
+- For Door specifically, treat Chapter 26-30 (`Potential -> Plan -> Production -> Profit`) as the behavior model and wire frontdoors to the real Door automation/scripts first; keep Taskwarrior phase reports as explicit fallback (`<phase> report`), not the primary UX.
+- It is acceptable for `aos` to wrap `doorctl` internally (or for `doorctl` to wrap lower-level scripts), but the user-facing command should avoid exposing unnecessary internal tool names.
+- When replacing an assumed path with a real one during implementation, document the canonical path in help text and/or AGENTS comments so future refactors do not regress to dummy routes.
 
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.

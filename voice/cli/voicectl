@@ -132,6 +132,63 @@ cmd_dir() {
   echo "$vdir"
 }
 
+cmd_menu() {
+  if ! ctl_can_prompt; then
+    cmd_help
+    return 0
+  fi
+
+  while true; do
+    ui_title "voicectl"
+    local action
+    action="$(ui_choose "VOICE" \
+      "start session" \
+      "recent (10)" \
+      "list (20)" \
+      "stats" \
+      "search..." \
+      "show..." \
+      "edit..." \
+      "strike..." \
+      "dir" \
+      "help" \
+      "quit")" || return 0
+
+    case "$action" in
+      "start session") cmd_start ;;
+      "recent (10)") cmd_recent 10 ;;
+      "list (20)") cmd_list 20 ;;
+      "stats") cmd_stats ;;
+      "search...")
+        local q
+        q="$(ui_input "Search query" "")" || true
+        [[ -n "${q:-}" ]] && cmd_search "$q"
+        ;;
+      "show...")
+        local id
+        id="$(ui_input "Session ID" "")" || true
+        [[ -n "${id:-}" ]] && cmd_show "$id"
+        ;;
+      "edit...")
+        local id
+        id="$(ui_input "Session ID" "")" || true
+        [[ -n "${id:-}" ]] && cmd_edit "$id"
+        ;;
+      "strike...")
+        local id
+        id="$(ui_input "Session ID" "")" || true
+        [[ -n "${id:-}" ]] && cmd_strike "$id"
+        ;;
+      "dir") cmd_dir ;;
+      "help") cmd_help ;;
+      "quit") return 0 ;;
+      *) return 0 ;;
+    esac
+
+    ui_pause
+  done
+}
+
 #─────────────────────────────────────────────────────────────────────────
 # Help
 #─────────────────────────────────────────────────────────────────────────
@@ -144,6 +201,7 @@ USAGE:
   voicectl <command> [options]
 
 COMMANDS:
+  menu                        Interactive terminal menu
   start                       Start new VOICE session (interactive 4-step)
   list [limit]                List recent sessions (default: 50)
   recent [count]              Show recent sessions (default: 10)
@@ -156,6 +214,7 @@ COMMANDS:
 
 EXAMPLES:
   voicectl start              # Interactive 4-step session
+  voicectl menu               # Interactive VOICE menu
   voicectl list               # Show all sessions
   voicectl recent 5           # Last 5 sessions
   voicectl show 2026-02-09    # View specific session
@@ -188,6 +247,9 @@ main() {
   case "$cmd" in
     start)
       cmd_start "$@"
+      ;;
+    menu)
+      cmd_menu "$@"
       ;;
     list|ls)
       cmd_list "$@"
