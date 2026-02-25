@@ -17,8 +17,12 @@ async function loadStatus() {
     if (repoHintEl) {
       const repoPath = data.repo?.path || "";
       const habitsCount = Number.isFinite(data.habits?.count) ? data.habits.count : 0;
+      const envState = data.fitness_env?.exists ? "env ok" : "env missing";
+      const teleState = data.telegram?.token_configured
+        ? (data.telegram?.chat_id_configured ? "telegram ready" : "telegram token only")
+        : "telegram not configured";
       repoHintEl.innerHTML =
-        `Server repo path: <code>${repoPath}</code> · habits configured: <code>${habitsCount}</code>`;
+        `Server repo path: <code>${repoPath}</code> · habits: <code>${habitsCount}</code> · ${envState} · ${teleState}`;
     }
   } catch (err) {
     setApiStatus("server: offline");

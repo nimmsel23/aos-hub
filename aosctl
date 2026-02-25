@@ -94,10 +94,13 @@ GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
 HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
+HUBCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hubctl" || true)"
+NODECTL="$(resolve_bin "$SCRIPT_DIR/scripts/nodectl" || true)"
 DOORCTL="$(resolve_bin "$SCRIPT_DIR/door/cli/doorctl" || true)"
 GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
 VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
+MOBILEAPPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mobileappctl" || true)"
 AOS_CENTRES="${AOS_CENTRES_CMD:-$HOME/αOS/bin/aos-centres}"
 RCLONE_RC_URL="${AOS_RCLONE_RC_URL:-http://127.0.0.1:5572/}"
 
@@ -431,7 +434,7 @@ USAGE:
   aosctl gum                 # Force gum menu
   aosctl fzf                 # Force fzf menu
   aosctl dashboard [sec]     # Live dashboard (default refresh: 10s)
-  aosctl status              # Unified status (no logs) + heartbeat ping
+  aosctl status              # Unified system status + wrapped *ctl script-layer probes
   aosctl ping                # Heartbeat ping (routerctl)
   aosctl doctor              # Unified health check
   aosctl version             # Show versions
@@ -1053,6 +1056,57 @@ _index_deploy_drift() {
   fi
 }
 
+aosctl_probe_exec_quiet() {
+  local timeout_sec="${AOSCTL_STATUS_PROBE_TIMEOUT:-1}"
+  local rc=0
+  set +e
+  if have timeout; then
+    timeout "${timeout_sec}s" "$@" >/dev/null 2>&1
+    rc=$?
+  else
+    "$@" >/dev/null 2>&1
+    rc=$?
+  fi
+  set -e
+  return "$rc"
+}
+
+aosctl_status_probe_line() {
+  local label="$1"
+  local path="$2"
+  local probe_desc="$3"
+  shift 3 || true
+
+  if [[ -z "$path" ]]; then
+    printf "  %-12s [%s]  missing\n" "$label" "$(aosctl_chip err)"
+    return 0
+  fi
+  if [[ ! -x "$path" ]]; then
+    printf "  %-12s [%s]  not executable: %s\n" "$label" "$(aosctl_chip warn)" "$path"
+    return 0
+  fi
+
+  local chip note
+  if aosctl_probe_exec_quiet "$path" "$@"; then
+    chip="$(aosctl_chip ok)"
+    note="$probe_desc"
+  else
+    local rc=$?
+    case "$rc" in
+      124|137)
+        chip="$(aosctl_chip warn)"
+        note="probe timeout (${probe_desc})"
+        ;;
+      *)
+        chip="$(aosctl_chip warn)"
+        note="probe failed rc=$rc (${probe_desc})"
+        ;;
+    esac
+  fi
+
+  printf "  %-12s [%s]  %s\n" "$label" "$chip" "$note"
+}
+
 run_status() {
   local verbose=0
   for arg in "$@"; do
@@ -1174,6 +1228,20 @@ run_status() {
     fi
     printf "  %-12s [%s]  %s\n" "$ctl_name" "$ctl_chip" "${ctl_path:-not found}"
   done
+  msg ""
+
+  # ── Script Layer (frontdoors / wrapped CLIs) ─────────────────
+  msg "── Script Layer (frontdoors / wrapped CLIs) ───────────────────"
+  aosctl_status_probe_line "hubctl"      "$HUBCTL"      "--help" --help
+  aosctl_status_probe_line "bridgectl"   "$BRIDGECTL"   "health" health
+  aosctl_status_probe_line "routerctl"   "$ROUTERCTL"   "status" status
+  aosctl_status_probe_line "nodectl"     "$NODECTL"     "--help" --help
+  aosctl_status_probe_line "syncctl"     "$SYNCCTL"     "summary" summary
+  aosctl_status_probe_line "gamectl"     "$GAMECTL"     "--help" --help
+  aosctl_status_probe_line "doorctl"     "$DOORCTL"     "review" review
+  aosctl_status_probe_line "voicectl"    "$VOICECTL"    "stats" stats
+  aosctl_status_probe_line "firectl"     "$FIRECTL_BIN" "--help" --help
+  aosctl_status_probe_line "mobileappctl" "$MOBILEAPPCTL" "--help" --help
   msg ""
   msg "  (details: aosctl menu  or  aosctl <component> status)"
 }

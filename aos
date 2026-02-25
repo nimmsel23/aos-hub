@@ -33,15 +33,19 @@ resolve_bin() {
 
 AOSCTL="$(resolve_bin "$SCRIPT_DIR/aosctl" || true)"
 HUBCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hubctl" || true)"
+CORE4CTL="$(resolve_bin "$SCRIPT_DIR/core4/python-core4/core4ctl" "$SCRIPT_DIR/scripts/core4ctl" || true)"
+C4D_BIN="$(resolve_bin "c4d" "$HOME/bin/c4d" || true)"
 SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
+NODECTL="$(resolve_bin "$SCRIPT_DIR/scripts/nodectl" || true)"
 GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
 DOORCTL="$(resolve_bin "$SCRIPT_DIR/door/cli/doorctl" "$SCRIPT_DIR/scripts/doorctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
 HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
 VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
+MOBILEAPPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mobileappctl" || true)"
 GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 TELECTL="$(resolve_bin "$SCRIPT_DIR/scripts/telectl" || true)"
 FIRECTL="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
@@ -73,18 +77,20 @@ exec_or_path() {
 
 usage() {
   cat <<EOF
-$APP — αOS terminal frontdoor (dashboard + wrappers)
+$APP — αOS main terminal frontdoor (user workflows + wrappers)
 
 Usage:
   $APP dashboard                    # hotkey terminal dashboard (default in TTY)
   $APP menu                         # gum menu (legacy/simple launcher)
   $APP restart [all|index|router|bridge]
   $APP sync|vault|git ...           # syncctl/gitctl wrappers
-  $APP hub|index|bridge|router ...  # service/control wrappers
-  $APP game|door|fire|tele ...      # centre/tool wrappers
+  $APP hub|index|bridge|router ...  # aos-hub system/ops wrappers
+  $APP node|nodectl ...             # nodectl compatibility toolbox
+  $APP core4|game|door|fire|tele ...  # user/centre wrappers
   $APP potential|plan|production|profit ...  # Door 4P phase frontdoors
-  $APP backup|mount|hook|gas|voice ...
+  $APP backup|mount|hook|gas|voice|mobileapp ...
   $APP aosctl ...                   # direct aosctl passthrough
+  $APP mobileappctl|pwa ...         # mobileapp aliases (compat)
   $APP alias <subcommand> [...]     # multi-shell alias manager (aos-alias)
 
 Dashboard:
@@ -95,7 +101,7 @@ Dashboard:
 Examples:
   $APP
   $APP dashboard
-  $APP game status
+  $APP game centres
   $APP door health
   $APP potential
   $APP plan activate 1
@@ -112,36 +118,85 @@ EOF
 cmd="${1:-}"
 shift || true
 
-# ---- gum top menu ----
+# ---- launcher menu (gum/fzf/select) ----
+aos_menu_pick_select() {
+  local prompt="$1"
+  shift || true
+  local -a options=("$@")
+  [[ ${#options[@]} -gt 0 ]] || return 1
+  can_prompt || return 1
+
+  printf '%s\n' "$prompt"
+  local opt=""
+  select opt in "${options[@]}"; do
+    [[ -n "$opt" ]] || continue
+    printf '%s\n' "$opt"
+    return 0
+  done
+  return 1
+}
+
+aos_menu_pick() {
+  local prompt="$1"
+  shift || true
+  local -a options=("$@")
+  local backend="${AOS_MENU_BACKEND:-gum}"
+  [[ ${#options[@]} -gt 0 ]] || return 1
+
+  if [[ "$backend" == "fzf" ]]; then
+    if have fzf && can_prompt; then
+      printf '%s\n' "${options[@]}" | fzf --prompt="${prompt} > " --height=~60% --border
+      return 0
+    fi
+    if have gum && can_prompt; then
+      gum choose --header "$prompt" "${options[@]}"
+      return 0
+    fi
+  else
+    if have gum && can_prompt; then
+      gum choose --header "$prompt" "${options[@]}"
+      return 0
+    fi
+    if have fzf && can_prompt; then
+      printf '%s\n' "${options[@]}" | fzf --prompt="${prompt} > " --height=~60% --border
+      return 0
+    fi
+  fi
+
+  aos_menu_pick_select "$prompt" "${options[@]}"
+}
+
 menu() {
   if ! can_prompt; then
     usage
     return 0
   fi
-  if ! have gum; then
+  if ! have gum && ! have fzf; then
     if [[ -n "$AOSCTL" ]]; then
       exec "$AOSCTL" menu
     elif [[ -n "$HUBCTL" ]]; then
       exec "$HUBCTL" menu
     fi
-    die "gum not found and no aosctl/hubctl menu fallback available"
+    die "no gum/fzf found and no aosctl/hubctl menu fallback available"
   fi
 
   local choice
-  choice="$(printf "%s\n" \
-    "Dashboard: hotkey terminal dashboard" \
-    "Sync: menu (syncctl)" \
-    "Sync: list targets" \
-    "Git: status" \
-    "Vault: status" \
-    "Game: status (gamectl)" \
-    "Door: health (doorctl)" \
-    "Hub: doctor (hubctl)" \
-    "Router: control bot (routerctl)" \
-    "Aliases: manage (aos-alias)" \
-    "Help" \
-    "Quit" \
-    | gum choose --header "αOS — aos")"
+  local -a menu_options=(
+    "Dashboard: hotkey terminal dashboard"
+    "Sync: menu (syncctl)"
+    "Sync: list targets"
+    "Git: status"
+    "Vault: status"
+    "Core4: dashboard (c4d)"
+    "Game: dashboard (gamectl)"
+    "Door: dashboard (doorctl)"
+    "Hub: menu (hubctl)"
+    "Router: control bot (routerctl)"
+    "Aliases: manage (aos-alias)"
+    "Help"
+    "Quit"
+  )
+  choice="$(aos_menu_pick "αOS — aos" "${menu_options[@]}")"
 
   case "$choice" in
     "Dashboard: hotkey terminal dashboard")
@@ -171,14 +226,20 @@ menu() {
       fi
       exec syncctl vault status
       ;;
-    "Game: status (gamectl)")
-      game_cmd status
+    "Core4: dashboard (c4d)")
+      if [[ -n "$C4D_BIN" ]]; then
+        exec "$C4D_BIN"
+      fi
+      core4_cmd menu
       ;;
-    "Door: health (doorctl)")
-      door_cmd health
+    "Game: dashboard (gamectl)")
+      game_cmd dashboard
       ;;
-    "Hub: doctor (hubctl)")
-      hub_cmd doctor
+    "Door: dashboard (doorctl)")
+      door_cmd dashboard
+      ;;
+    "Hub: menu (hubctl)")
+      hub_cmd menu
       ;;
     "Router: control bot (routerctl)")
       exec_or_path "$ROUTERCTL" routerctl
@@ -299,28 +360,29 @@ dashboard_http_code() {
 dashboard_svc_state() {
   local scope="$1" unit="$2"
   if ! have systemctl; then
-    printf "n/a"
+    printf "no-systemctl"
     return 0
   fi
+  local out=""
   if [[ "$scope" == "user" ]]; then
-    systemctl --user is-active "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
   else
-    systemctl is-active "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  fi
+  if [[ -n "$out" ]]; then
+    printf "%s" "$out"
+  else
+    printf "unavail"
   fi
 }
 
-dashboard_render_local_status() {
-  local idx_http br_http
-  local idx_dev rt_dev br_dev
-  idx_http="$(dashboard_http_code "http://127.0.0.1:8799/health")"
-  br_http="$(dashboard_http_code "http://127.0.0.1:8080/health")"
-  idx_dev="$(dashboard_svc_state user "aos-index-dev.service")"
-  rt_dev="$(dashboard_svc_state user "aos-router-dev.service")"
-  br_dev="$(dashboard_svc_state user "aos-bridge-dev.service")"
-
-  printf 'Local: index(http=%s dev=%s)  router(dev=%s)  bridge(http=%s dev=%s)\n' \
-    "$idx_http" "$idx_dev" "$rt_dev" "$br_http" "$br_dev"
-  printf 'Dashboards: [c]=core4  [v]=voice  [d]=door  [g]=game\n'
+dashboard_mark() {
+  local key="$1"
+  if dashboard_command_exists "$key"; then
+    printf "ok"
+  else
+    printf "!!"
+  fi
 }
 
 dashboard_term_size() {
@@ -371,12 +433,29 @@ dashboard_print_line_fit() {
 dashboard_render_body_content() {
   local now
   now="$(date '+%Y-%m-%d %H:%M:%S')"
-  printf 'aos dashboard  |  %s\n' "$now"
-  dashboard_render_local_status
-  printf 'Extension file: %s\n' "$AOS_DASHBOARD_EXT"
+  printf 'aos  |  terminal frontdoor  |  %s\n' "$now"
   printf '\n'
+  printf '[Portals]\n'
+  printf '  [c] Core4   (%s) -> c4d (fallback: core4ctl menu)\n' "$(dashboard_mark c)"
+  printf '  [g] Game    (%s) -> gamectl dashboard\n' "$(dashboard_mark g)"
+  printf '  [d] Door    (%s) -> doorctl dashboard\n' "$(dashboard_mark d)"
+  printf '  [v] Voice   (%s) -> voicectl menu\n' "$(dashboard_mark v)"
+  printf '\n'
+  printf '[Layers]\n'
+  printf '  [h] hubctl    (%s) -> system/service layer (router/bridge/node/sync/...)\n' "$(dashboard_mark h)"
+  printf '  [a] aosctl    (%s) -> /opt/aos system service layer\n' "$(dashboard_mark a)"
+  printf '  [m] aos menu  (local launcher / command palette)\n'
+  printf '\n'
+  printf '[Principle]\n'
+  printf '  aos = frontdoor / portals. Component actions live in the wrapped *ctl CLIs.\n'
+  printf '\n'
+  printf 'Press ? for advanced keymap. Extension file: %s\n' "$AOS_DASHBOARD_EXT"
+}
 
+dashboard_help_keymap() {
   local key group prev_group="" state_mark
+  printf '\nKeymap (all registered actions)\n'
+  printf '%s\n' '------------------------------'
   for key in "${AOS_DASH_KEYS[@]}"; do
     group="${AOS_DASH_GROUP[$key]}"
     if [[ "$group" != "$prev_group" ]]; then
@@ -401,12 +480,19 @@ dashboard_register_defaults() {
     "$(pick_exec_token "$AOSCTL" "aosctl")" menu
   aos_dashboard_register "z" "Core" "aosctl dashboard" "Live aosctl dashboard (5s)" \
     "$(pick_exec_token "$AOSCTL" "aosctl")" dashboard 5
-  aos_dashboard_register "h" "Core" "hubctl doctor" "Unified hub doctor" \
-    "$(pick_exec_token "$HUBCTL" "hubctl")" doctor
-  aos_dashboard_register "c" "Core" "Core4 menu" "core4ctl menu" \
-    "$SCRIPT_DIR/core4/python-core4/core4ctl" menu
+  aos_dashboard_register "h" "Core" "hubctl menu" "System/service layer launcher" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" menu
+  aos_dashboard_register "m" "Core" "aos menu" "Launcher menu (gum/fzf/select)" \
+    "$(pick_exec_token "$SCRIPT_DIR/aos" "aos")" menu
+  if [[ -n "$C4D_BIN" ]]; then
+    aos_dashboard_register "c" "Core" "C4D" "core4 dashboard shortcut (c4d)" \
+      "$C4D_BIN"
+  else
+    aos_dashboard_register "c" "Core" "Core4 menu" "core4ctl menu" \
+      "$(pick_exec_token "$CORE4CTL" "core4ctl")" menu
+  fi
   aos_dashboard_register "C" "Core" "Core4 status" "core4ctl status" \
-    "$SCRIPT_DIR/core4/python-core4/core4ctl" status
+    "$(pick_exec_token "$CORE4CTL" "core4ctl")" status
 
   aos_dashboard_register "i" "Services" "Index status" "hubctl index status" \
     "$(pick_exec_token "$HUBCTL" "hubctl")" index status
@@ -417,12 +503,12 @@ dashboard_register_defaults() {
   aos_dashboard_register "u" "Services" "Dev status" "hubctl dev status" \
     "$(pick_exec_token "$HUBCTL" "hubctl")" dev status
 
-  aos_dashboard_register "g" "Centres" "Game menu" "gamectl menu" \
-    "$(pick_exec_token "$GAMECTL" "gamectl")" menu
-  aos_dashboard_register "G" "Centres" "Game status" "gamectl status" \
-    "$(pick_exec_token "$GAMECTL" "gamectl")" status
-  aos_dashboard_register "d" "Centres" "Door menu" "doorctl menu" \
-    "$(pick_exec_token "$DOORCTL" "doorctl")" menu
+  aos_dashboard_register "g" "Centres" "Game dashboard" "gamectl dashboard" \
+    "$(pick_exec_token "$GAMECTL" "gamectl")" dashboard
+  aos_dashboard_register "G" "Centres" "Game centres" "gamectl centres --brief" \
+    "$(pick_exec_token "$GAMECTL" "gamectl")" centres --brief
+  aos_dashboard_register "d" "Centres" "Door dashboard" "doorctl dashboard" \
+    "$(pick_exec_token "$DOORCTL" "doorctl")" dashboard
   aos_dashboard_register "D" "Centres" "Door hitlist" "doorctl hitlist" \
     "$(pick_exec_token "$DOORCTL" "doorctl")" hitlist
   aos_dashboard_register "w" "Centres" "Door health" "doorctl health" \
@@ -442,8 +528,6 @@ dashboard_register_defaults() {
     "$(pick_exec_token "$GITCTL" "gitctl")" status
   aos_dashboard_register "o" "Tools" "Backup status" "backupctl status" \
     "$(pick_exec_token "$BACKUPCTL" "backupctl")" status
-  aos_dashboard_register "m" "Tools" "Mount status" "mountctl status" \
-    "$(pick_exec_token "$MOUNTCTL" "mountctl")" status
   aos_dashboard_register "k" "Tools" "Hook status" "hookctl status" \
     "$(pick_exec_token "$HOOKCTL" "hookctl")" status
   aos_dashboard_register "T" "Tools" "Tele help" "telectl help" \
@@ -488,7 +572,7 @@ dashboard_render() {
   dashboard_move_to $((AOS_DASH_ROWS - footer_lines + 1)) 1
   printf '\033[2K'
   printf '%*s\n' "${AOS_DASH_COLS}" '' | tr ' ' '-'
-  dashboard_print_line_fit 'Hotkeys: [q] quit  [ENTER] refresh  [?] help  [c/v/d/g] dashboards  [m] mount  [a] aosctl status'
+  dashboard_print_line_fit 'Hotkeys: [c g d v] portals  [h] hubctl  [a] aosctl  [m] menu  [?] advanced  [q] quit'
   if [[ -n "$AOS_DASH_MESSAGE" ]]; then
     dashboard_print_line_fit "[$AOS_DASH_MESSAGE_LEVEL] $AOS_DASH_MESSAGE"
   else
@@ -518,6 +602,7 @@ Notes:
   - New keys append to the end of their group order (in registration order).
   - Commands run in the current terminal and return to the dashboard when they exit.
 EOF
+  dashboard_help_keymap
   printf '\nPress ENTER to return... '
   dashboard_screen_show_cursor
   IFS= read -r _
@@ -620,23 +705,33 @@ index_cmd() {
   exec_or_path "$INDEXCTL" indexctl "$sub" "$@"
 }
 
+node_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$NODECTL" nodectl "$sub" "$@"
+}
+
 hub_cmd() {
-  local sub="${1:-doctor}"; shift || true
+  local sub="${1:-menu}"; shift || true
   exec_or_path "$HUBCTL" hubctl "$sub" "$@"
 }
 
 aosctl_cmd() {
-  local sub="${1:-status}"; shift || true
+  local sub="${1:-dashboard}"; shift || true
   exec_or_path "$AOSCTL" aosctl "$sub" "$@"
 }
 
+core4_cmd() {
+  local sub="${1:-menu}"; shift || true
+  exec_or_path "$CORE4CTL" core4ctl "$sub" "$@"
+}
+
 game_cmd() {
-  local sub="${1:-status}"; shift || true
+  local sub="${1:-dashboard}"; shift || true
   exec_or_path "$GAMECTL" gamectl "$sub" "$@"
 }
 
 door_cmd() {
-  local sub="${1:-health}"; shift || true
+  local sub="${1:-dashboard}"; shift || true
   exec_or_path "$DOORCTL" doorctl "$sub" "$@"
 }
 
@@ -677,8 +772,13 @@ gas_cmd() {
 }
 
 voice_cmd() {
-  local sub="${1:-status}"; shift || true
+  local sub="${1:-menu}"; shift || true
   exec_or_path "$VOICECTL" voicectl "$sub" "$@"
+}
+
+mobileapp_cmd() {
+  local sub="${1:-help}"; shift || true
+  exec_or_path "$MOBILEAPPCTL" mobileappctl "$sub" "$@"
 }
 
 alias_cmd() {
@@ -704,7 +804,9 @@ case "$cmd" in
   vault) vault_cmd "$@" ;;
   hub) hub_cmd "$@" ;;
   aosctl) aosctl_cmd "$@" ;;
-  index|node) index_cmd "$@" ;;
+  core4) core4_cmd "$@" ;;
+  index) index_cmd "$@" ;;
+  node|nodectl) node_cmd "$@" ;;
   bridge) bridge_cmd "$@" ;;
   router) router_cmd "$@" ;;
   game) game_cmd "$@" ;;
@@ -717,6 +819,7 @@ case "$cmd" in
   hook) hook_cmd "$@" ;;
   gas) gas_cmd "$@" ;;
   voice) voice_cmd "$@" ;;
+  mobileapp|mobileappctl|pwa) mobileapp_cmd "$@" ;;
   alias) alias_cmd "$@" ;;
   help|-h|--help) usage ;;
   "")

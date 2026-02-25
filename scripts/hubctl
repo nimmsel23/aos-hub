@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# hubctl — unified CLI for aos-hub
-# Simplified architecture: group commands, delegate everything, no nested prefixes
+# hubctl — system/ops CLI for aos-hub
+# Scope: hub/system services + operational scripts (not user-facing centre frontdoors)
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/ctl-lib.sh" 2>/dev/null || true
 
 # Helpers
 hub_die() { ui_err "$*"; exit 1; }
+run_ctl() { local path="$ROOT_DIR/$1"; shift; [[ -x "$path" ]] || hub_die "not found: $path"; "$path" "$@"; }
 exec_ctl() { local path="$ROOT_DIR/$1"; shift; [[ -x "$path" ]] || hub_die "not found: $path"; exec "$path" "$@"; }
 
 # ============================================================================
@@ -28,16 +29,17 @@ exec_ctl() { local path="$ROOT_DIR/$1"; shift; [[ -x "$path" ]] || hub_die "not 
 
 usage() {
   cat <<'EOF'
-hubctl — unified CLI for aos-hub
+hubctl — aos-hub system/ops frontdoor
 
 Usage:
   hubctl <command> [args...]
+  hubctl menu
 
 Service Commands:
-  bridge <args>       Bridge control (bridgectl)
-  router <args>       Router control (routerctl)
+  bridge <args>       Bridge control
+  router <args>       Router control
   index <args>        Index Node control (indexctl)
-  node <args>         Alias for index
+  node <args>         Node toolbox
 
 Dev Mode (user services):
   dev status          Show dev service status
@@ -46,23 +48,19 @@ Dev Mode (user services):
   dev restart [target] Restart dev services
   dev logs [target]   Follow dev logs
 
-Tool Commands:
-  core4 <args>        Core4 tracker (core4ctl)
-  fire <args>         Fire Map commands
-  sync <args>         Vault sync (syncctl)
+Ops Commands:
+  fire <args>         Fire Map scheduler + sync ops
+  sync <args>         Vault sync
   git <args>          Git operations (gitctl)
   backup <args>       Backup management (backupctl)
   mount <args>        Mount control (mountctl)
   hook <args>         Hook management (hookctl)
-  tent <args>         Tent commands (tentctl)
-  gas <args>          GAS operations (gasctl)
-  door <args>         Door commands (doorctl)
-  game <args>         Game commands (gamectl)
-  voice <args>        Voice commands (voicectl)
-  tele <args>         Telegram (telectl)
-  mobileapp <args>    Mobile/PWA tooling (mobileappctl)
+
+Compat aliases (optional):
+  bridgectl, routerctl, nodectl, syncctl
 
 Utility:
+  menu                Interactive command menu (TTY)
   list                List all available commands
   status [opts]       Compact combined status (+ compressed logs)
   doctor              System health check
@@ -70,10 +68,11 @@ Utility:
 
 Examples:
   hubctl bridge health
-  hubctl status
-  hubctl status --watch 2 --logs 2
+  hubctl router status
+  hubctl node status
+  hubctl sync summary
+  hubctl menu
   hubctl dev restart bridge
-  hubctl core4 sources
   hubctl fire status
   hubctl doctor
 
@@ -87,30 +86,22 @@ EOF
 # Service delegation (direct exec)
 delegate_service() {
   case "$1" in
-    bridge) exec_ctl "bridge/bridgectl" "${@:2}" ;;
-    router) exec_ctl "router/routerctl" "${@:2}" ;;
-    index|node) exec_ctl "scripts/indexctl" "${@:2}" ;;
+    bridge|bridgectl) exec_ctl "bridge/bridgectl" "${@:2}" ;;
+    router|routerctl) exec_ctl "router/routerctl" "${@:2}" ;;
+    index) exec_ctl "scripts/indexctl" "${@:2}" ;;
+    node|nodectl) exec_ctl "scripts/nodectl" "${@:2}" ;;
     *) return 1 ;;
   esac
 }
 
-# Tool delegation (direct exec)
+# Ops delegation (direct exec)
 delegate_tool() {
   case "$1" in
-    core4) exec_ctl "core4/python-core4/core4ctl" "${@:2}" ;;
-    sync) exec_ctl "scripts/syncctl" "${@:2}" ;;
+    sync|syncctl) exec_ctl "scripts/syncctl" "${@:2}" ;;
     git) exec_ctl "scripts/gitctl" "${@:2}" ;;
     backup) exec_ctl "scripts/backupctl" "${@:2}" ;;
     mount) exec_ctl "scripts/mountctl" "${@:2}" ;;
     hook) exec_ctl "scripts/hookctl" "${@:2}" ;;
-    tent) exec_ctl "game/python-tent-bot/tentctl" "${@:2}" ;;
-    gas) exec_ctl "scripts/gasctl" "${@:2}" ;;
-    firectl) exec_ctl "scripts/firectl" "${@:2}" ;;
-    tele) exec_ctl "scripts/telectl" "${@:2}" ;;
-    door) exec_ctl "door/cli/doorctl" "${@:2}" ;;
-    game) exec_ctl "scripts/gamectl" "${@:2}" ;;
-    voice) exec_ctl "scripts/voicectl" "${@:2}" ;;
-    mobileapp|mobileappctl|pwa) exec_ctl "scripts/mobileappctl" "${@:2}" ;;
     *) return 1 ;;
   esac
 }
@@ -379,44 +370,72 @@ EOF
 # DOCTOR (simplified)
 # ============================================================================
 
-doctor() {
-  echo "=== aos-hub doctor ==="
-  echo ""
-
-  # Run full doctor if available
-  if [[ -x "$ROOT_DIR/scripts/aos-doctor" ]]; then
-    "$ROOT_DIR/scripts/aos-doctor"
+doctor_service_row() {
+  local scope="$1" unit="$2"
+  local active enabled
+  if [[ "$scope" == "user" ]]; then
+    active="$(systemctl --user is-active "$unit" 2>/dev/null || echo "n/a")"
+    enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || echo "n/a")"
   else
-    echo "aos-doctor not found, showing basic status..."
-    echo ""
+    active="$(systemctl is-active "$unit" 2>/dev/null || echo "n/a")"
+    enabled="$(systemctl is-enabled "$unit" 2>/dev/null || echo "n/a")"
+  fi
+  printf "  %-24s active=%-9s enabled=%s\n" "$unit" "$active" "$enabled"
+}
 
-    # Show production services
-    echo "Production services (system):"
-    for unit in aos-index.service aos-router.service aos-bridge.service; do
-      local active enabled
-      active=$(systemctl is-active "$unit" 2>/dev/null || echo "inactive")
-      enabled=$(systemctl is-enabled "$unit" 2>/dev/null || echo "disabled")
-      printf "  %-28s active=%-10s enabled=%s\n" "$unit" "$active" "$enabled"
-    done
-    echo ""
+doctor_http_row() {
+  local name="$1" url="$2"
+  local code="down"
+  if have_cmd curl; then
+    code="$(curl -sS -o /dev/null -m 1 -w "%{http_code}" "$url" 2>/dev/null || true)"
+    [[ -n "$code" && "$code" != "000" ]] || code="down"
+  else
+    code="curl?"
+  fi
+  printf "  %-12s http=%-6s %s\n" "$name" "$code" "$url"
+}
 
-    # Show dev services
-    dev_status all
-    echo ""
+doctor_summary_line() {
+  local prod_ok=0 dev_ok=0 http_ok=0
+  local u
+  for u in "$PROD_INDEX_UNIT" "$PROD_ROUTER_UNIT" "$PROD_BRIDGE_UNIT"; do
+    [[ "$(svc_state system "$u")" == "active" ]] && prod_ok=$((prod_ok + 1))
+  done
+  for u in "$DEV_INDEX_UNIT" "$DEV_ROUTER_UNIT" "$DEV_BRIDGE_UNIT"; do
+    [[ "$(svc_state user "$u")" == "active" ]] && dev_ok=$((dev_ok + 1))
+  done
+  [[ "$(http_probe_compact "http://127.0.0.1:8799/health")" =~ ^2|3 ]] && http_ok=$((http_ok + 1)) || true
+  [[ "$(http_probe_compact "http://127.0.0.1:8080/health")" =~ ^2|3 ]] && http_ok=$((http_ok + 1)) || true
 
-    # Quick health checks
-    echo "Health checks:"
-    if curl -fsS http://127.0.0.1:8799/health >/dev/null 2>&1; then
-      echo "  ✓ Index Node (8799)"
-    else
-      echo "  ✗ Index Node (8799) unreachable"
-    fi
+  printf "Summary: prod-active=%s/3  dev-active=%s/3  http-ok=%s/2\n" "$prod_ok" "$dev_ok" "$http_ok"
+}
 
-    if curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; then
-      echo "  ✓ Bridge (8080)"
-    else
-      echo "  ✗ Bridge (8080) unreachable"
-    fi
+doctor() {
+  printf "hubctl doctor\n"
+  printf "time: %s\n\n" "$(date '+%Y-%m-%d %H:%M:%S')"
+  doctor_summary_line
+  printf "\n"
+
+  printf "[Production services]\n"
+  doctor_service_row system "$PROD_INDEX_UNIT"
+  doctor_service_row system "$PROD_ROUTER_UNIT"
+  doctor_service_row system "$PROD_BRIDGE_UNIT"
+  printf "\n"
+
+  printf "[Dev services]\n"
+  doctor_service_row user "$DEV_INDEX_UNIT"
+  doctor_service_row user "$DEV_ROUTER_UNIT"
+  doctor_service_row user "$DEV_BRIDGE_UNIT"
+  printf "\n"
+
+  printf "[HTTP health]\n"
+  doctor_http_row "index" "http://127.0.0.1:8799/health"
+  doctor_http_row "bridge" "http://127.0.0.1:8080/health"
+
+  if [[ -x "$ROOT_DIR/scripts/aos-doctor" ]]; then
+    printf "\n[Deep checks]\n"
+    printf "  available: scripts/aos-doctor (run manually for full diagnostics)\n"
+    printf "  command: hubctl doctor-full  (planned) / %s\n" "$ROOT_DIR/scripts/aos-doctor"
   fi
 }
 
@@ -429,37 +448,120 @@ list_commands() {
 Available commands:
 
 Services:
-  bridge, router, index
+  bridge, router, index, node
 
 Dev Mode:
   dev status|start|stop|restart|logs [target]
 
-Tools:
-  core4, fire, sync, git, backup, mount, hook
-  tent, gas, door, game, voice, tele, firectl
+Ops:
+  fire, sync, git, backup, mount, hook
+
+Compat aliases:
+  bridgectl, routerctl, nodectl, syncctl
 
 Utility:
-  list, status, doctor, help
+  menu, list, status, doctor, help
 
 For details: hubctl <command> --help
 EOF
 }
 
 # ============================================================================
+# MENU
+# ============================================================================
+
+hub_menu_pick() {
+  local prompt="$1"
+  shift || true
+  local -a options=("$@")
+  local backend="${HUBCTL_MENU_BACKEND:-fzf}"
+
+  if [[ "$backend" == "gum" ]]; then
+    ui_menu_gum "$prompt" "${options[@]}" && return 0
+    ui_menu_fzf "$prompt" "${options[@]}" && return 0
+  else
+    ui_menu_fzf "$prompt" "${options[@]}" && return 0
+    ui_menu_gum "$prompt" "${options[@]}" && return 0
+  fi
+
+  ctl_choose_from_list "$prompt" "${options[@]}"
+}
+
+menu_action() {
+  if ! ctl_can_prompt; then
+    usage
+    return 0
+  fi
+
+  while true; do
+    ui_title "hubctl"
+    local choice=""
+    local -a options=(
+      "status (compact)"
+      "status (watch)"
+      "bridge"
+      "router"
+      "node"
+      "sync"
+      "dev status"
+      "dev restart bridge"
+      "dev logs (all)"
+      "doctor"
+      "fire"
+      "door"
+      "game"
+      "voice"
+      "mobileapp"
+      "list"
+      "help"
+      "quit"
+    )
+
+    choice="$(hub_menu_pick "hubctl (system/service layer)" "${options[@]}")" || return 0
+
+    case "$choice" in
+      "status (compact)") status_action ;;
+      "status (watch)") status_action --watch 2 --logs 1 ;;
+      "bridge") run_ctl "bridge/bridgectl" ;;
+      "router") run_ctl "router/routerctl" ;;
+      "node") run_ctl "scripts/nodectl" ;;
+      "sync") run_ctl "scripts/syncctl" ;;
+      "dev status") dev_status ;;
+      "dev restart bridge") dev_action restart bridge ;;
+      "dev logs (all)") dev_action logs all ;;
+      "doctor") doctor ;;
+      "fire") fire_action ;;
+      "door") run_ctl "door/cli/doorctl" menu ;;
+      "game") run_ctl "scripts/gamectl" dashboard ;;
+      "voice") run_ctl "scripts/voicectl" menu ;;
+      "mobileapp") run_ctl "scripts/mobileappctl" ;;
+      list) list_commands ;;
+      help) usage ;;
+      quit) return 0 ;;
+      *) return 0 ;;
+    esac
+
+    ui_pause
+  done
+}
+
+# ============================================================================
 # MAIN DISPATCH
 # ============================================================================
 
-cmd="${1:-help}"
-[[ "$cmd" != "help" ]] && shift || true
+cmd="${1:-}"
+[[ -n "$cmd" ]] && shift || true
 
 case "$cmd" in
+  "") if ctl_can_prompt; then menu_action; else usage; fi ;;
   -h|--help|help) usage ;;
+  menu) menu_action ;;
   list) list_commands ;;
   status) status_action "$@" ;;
   doctor) doctor ;;
 
   # Services (delegate)
-  bridge|router|index|node)
+  bridge|bridgectl|router|routerctl|index|node|nodectl)
     delegate_service "$cmd" "$@"
     ;;
 
@@ -480,7 +582,7 @@ case "$cmd" in
     ;;
 
   # Tools (delegate)
-  core4|sync|git|backup|mount|hook|tent|gas|firectl|tele|door|game|voice|mobileapp|mobileappctl|pwa)
+  sync|syncctl|git|backup|mount|hook)
     delegate_tool "$cmd" "$@"
     ;;
 

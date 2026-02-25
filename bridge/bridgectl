@@ -8,15 +8,22 @@ set -euo pipefail
 #   - bridge-tsctl      (tailscale serve/funnel/status)
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+ROOT_DIR="$APP_DIR"
+
+# If called via non-repo path/symlink, prefer the canonical repo checkout.
+if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  ROOT_DIR="$HOME/aos-hub"
+  APP_DIR="$ROOT_DIR"
+fi
+BRIDGE_DIR="$ROOT_DIR/bridge"
 
 # Codex session helper: bridgectl codex [purpose...]
 # shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh" 2>/dev/null || true
 codex_subcmd_maybe "main" "bridgectl" "$@" && exit 0
 
 # shellcheck disable=SC1090
-source "$APP_DIR/bridge-lib.sh"
+source "$BRIDGE_DIR/bridge-lib.sh"
 
 SYNCCTL_BIN="${SYNCCTL_BIN:-$ROOT_DIR/scripts/syncctl}"
 HEARTBEAT_BIN="${HEARTBEAT_BIN:-$ROOT_DIR/scripts/heartbeat}"
@@ -24,9 +31,9 @@ ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
 SYSTEMSTATUSCTL_BIN="${SYSTEMSTATUSCTL_BIN:-$ROOT_DIR/scripts/systemstatusctl}"
 ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
 
-servicectl() { exec "$APP_DIR/bridge-servicectl" "$@"; }
-apictl() { exec "$APP_DIR/bridge-apictl" "$@"; }
-tsctl() { exec "$APP_DIR/bridge-tsctl" "$@"; }
+servicectl() { exec "$BRIDGE_DIR/bridge-servicectl" "$@"; }
+apictl() { exec "$BRIDGE_DIR/bridge-apictl" "$@"; }
+tsctl() { exec "$BRIDGE_DIR/bridge-tsctl" "$@"; }
 
 syncctl_cmd() {
   if [[ -x "$SYNCCTL_BIN" ]]; then
@@ -105,7 +112,7 @@ doctor() {
   ui_title "bridgectl doctor"
 
   local rc=0
-  if ! "$APP_DIR/bridge-servicectl" status; then
+  if ! "$BRIDGE_DIR/bridge-servicectl" status; then
     rc=1
   fi
   msg ""
@@ -158,13 +165,13 @@ doctor() {
   fi
   msg ""
 
-  "$APP_DIR/bridge-tsctl" status || true
+  "$BRIDGE_DIR/bridge-tsctl" status || true
   msg ""
 
-  "$APP_DIR/bridge-apictl" health || true
+  "$BRIDGE_DIR/bridge-apictl" health || true
   msg ""
 
-  "$APP_DIR/bridge-apictl" debug || true
+  "$BRIDGE_DIR/bridge-apictl" debug || true
 
   return "$rc"
 }

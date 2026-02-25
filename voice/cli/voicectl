@@ -132,6 +132,23 @@ cmd_dir() {
   echo "$vdir"
 }
 
+voice_menu_pick() {
+  local prompt="$1"
+  shift || true
+  local -a options=("$@")
+  local backend="${VOICECTL_MENU_BACKEND:-gum}"
+
+  if [[ "$backend" == "fzf" ]]; then
+    ui_menu_fzf "$prompt" "${options[@]}" && return 0
+    ui_menu_gum "$prompt" "${options[@]}" && return 0
+  else
+    ui_menu_gum "$prompt" "${options[@]}" && return 0
+    ui_menu_fzf "$prompt" "${options[@]}" && return 0
+  fi
+
+  ctl_choose_from_list "$prompt" "${options[@]}"
+}
+
 cmd_menu() {
   if ! ctl_can_prompt; then
     cmd_help
@@ -141,7 +158,7 @@ cmd_menu() {
   while true; do
     ui_title "voicectl"
     local action
-    action="$(ui_choose "VOICE" \
+    action="$(voice_menu_pick "VOICE" \
       "start session" \
       "recent (10)" \
       "list (20)" \

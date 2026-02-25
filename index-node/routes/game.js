@@ -130,13 +130,42 @@ function defaultFreedomMarkdown(year, domain) {
   );
 }
 
+function focusSourceFrontmatter(month, domain) {
+  const upper = domain.toUpperCase();
+  const year = String(month).slice(0, 4);
+
+  const frameContent = ensureFileWithDefault(frameFile(domain), () => defaultFrameMarkdown(domain));
+  const freedomContent = ensureFileWithDefault(freedomFile(year, domain), () => defaultFreedomMarkdown(year, domain));
+
+  const { front: frameFront } = parseFrontmatter(frameContent);
+  const { front: freedomFront } = parseFrontmatter(freedomContent);
+
+  return {
+    // codex-ashharbor: Focus should carry upstream map context so the cascade is visible in the markdown itself.
+    frame: {
+      domain: String(frameFront.domain || upper),
+      updated: frameFront.updated || null,
+      type: String(frameFront.type || "frame-map"),
+    },
+    freedom: {
+      domain: String(freedomFront.domain || upper),
+      year: Number(freedomFront.year || Number(year)),
+      updated: freedomFront.updated || null,
+      horizon: String(freedomFront.horizon || "10-year"),
+      type: String(freedomFront.type || "freedom-map"),
+    },
+  };
+}
+
 function defaultFocusMarkdown(month, domain) {
   const upper = domain.toUpperCase();
+  const sources = focusSourceFrontmatter(month, domain);
   return buildMarkdown(
     {
       domain: upper,
       month,
       updated: todayISO(),
+      ...sources,
       type: "focus-map",
       tags: ["alphaos", "focus", domain, "monthly"],
     },
@@ -346,12 +375,14 @@ gameApiRouter.post("/focus/:month/:domain/save", (req, res) => {
 
     const { front, body } = parseFrontmatter(content);
     const updated = todayISO();
+    const sources = focusSourceFrontmatter(month, domain);
     const markdown = buildMarkdown(
       {
         ...front,
         domain: domain.toUpperCase(),
         month,
         updated,
+        ...sources,
         type: "focus-map",
         tags: Array.isArray(front.tags) ? front.tags : ["alphaos", "focus", domain, "monthly"],
       },
