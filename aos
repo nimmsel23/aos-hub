@@ -359,7 +359,11 @@ dashboard_print_line_fit() {
   local width="${AOS_DASH_COLS:-80}"
   (( width < 8 )) && width=8
   if ((${#line} > width)); then
-    line="${line:0:width}"
+    if (( width > 3 )); then
+      line="${line:0:width-3}..."
+    else
+      line="${line:0:width}"
+    fi
   fi
   printf '\033[2K%s\n' "$line"
 }
@@ -636,7 +640,7 @@ door_cmd() {
   exec_or_path "$DOORCTL" doorctl "$sub" "$@"
 }
 
-  fire_cmd() {
+fire_cmd() {
   local sub="${1:-status}"; shift || true
   exec_or_path "$FIRECTL" firectl "$sub" "$@"
 }
