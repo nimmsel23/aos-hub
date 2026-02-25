@@ -26,7 +26,25 @@ Das zugehörige `bridgectl`-Skript wird aktiv von Codex bzw. Claude-Code verwend
 ## Notes / Gotchas
 - `selftest.py` is the safe verification path when port bind is blocked.
 - `/bridge/queue/flush` is POST-only (GET returns 405).
-- `app.py` returns 400 JSON on invalid payloads (don’t assume 200).
+- `app.py` returns 400 JSON on invalid payloads (don't assume 200).
+
+## Performance & Architecture (2026-02-25)
+
+**Tailscale Foundation:**
+- Bridge binds to `0.0.0.0:8080` and is globally reachable at `https://ideapad.tail7a15d6.ts.net/bridge`
+- Gas HQ (cloud) can reach laptop directly via Tailscale mesh network (no port forwarding needed)
+- Bidirectional: Gas → Bridge (Core4 logs) AND Bridge → Gas (task operations via webhook)
+
+**Core4 Optimizations:**
+- Set `AOS_CORE4_MOUNT_DIR=/nonexistent` to disable legacy rclone mount (prevents 30s hangs)
+- `_core4_events_for_day()` skips /nonexistent paths early (no exists() call on hung mounts)
+- Week JSON rebuild deferred to on-demand (`/bridge/core4/week` endpoint only)
+- Day aggregate built on every log (fast: 55ms typical response time)
+
+**When modifying Core4 handlers:**
+- Don't add mount reading back (Gas HQ pushes via HTTP now)
+- Keep lock scope minimal (only hold `core4_lock` during file writes)
+- Week rebuild is expensive (reads 7 days) - avoid in hot paths
 
 ## Coding Style
 - Keep handlers small, return JSON errors on invalid input.

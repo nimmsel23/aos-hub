@@ -37,6 +37,11 @@ VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "AlphaOS-Vault")).expa
 # - Derived artifacts (`core4_week_*.json`, `core4_day_*.json`, CSV) are rebuildable snapshots and
 #   MUST NOT be treated as source-of-truth.
 # - Sync rule: we only sync `.core4/**` to/from Drive to avoid duplicate-name issues for derived files.
+#
+# Performance (2026-02-25):
+# - Set AOS_CORE4_MOUNT_DIR=/nonexistent to disable legacy rclone mount reading (prevents 30s hangs)
+# - Gas HQ now pushes events directly via HTTP (Tailscale), no mount needed
+# - _core4_events_for_day() skips /nonexistent paths early (optimization below)
 CORE4_LOCAL_DIR = Path(os.getenv("AOS_CORE4_LOCAL_DIR", VAULT_DIR / "Core4")).expanduser()
 CORE4_MOUNT_DIR = Path(os.getenv("AOS_CORE4_MOUNT_DIR", VAULT_DIR / "Alpha_Core4")).expanduser()
 FRUITS_DIR = Path(os.getenv("AOS_FRUITS_DIR", VAULT_DIR / "Alpha_Fruits")).expanduser()
@@ -1360,6 +1365,19 @@ async def handle_bridge_fire_daily(request: web.Request) -> web.Response:
 
 
 async def handle_core4_log(request: web.Request) -> web.Response:
+    """
+    Core4 event log endpoint (called by Gas HQ via Tailscale).
+
+    Flow:
+      1. Gas HQ saves to Drive (source of truth)
+      2. Gas HQ POSTs event to this endpoint (best-effort sync)
+      3. Bridge writes event file → builds day aggregate → returns total
+
+    Performance (2026-02-25):
+      - Week JSON rebuild removed (was expensive: reads all 7 days)
+      - Only day aggregate built (fast: 55ms typical)
+      - Week JSON built on-demand via /bridge/core4/week endpoint
+    """
     payload = await _read_json(request)
     domain = str(payload.get("domain", "")).strip().lower()
     task = _core4_canon_task(str(payload.get("task", "")).strip().lower())

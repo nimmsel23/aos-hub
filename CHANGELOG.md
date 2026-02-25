@@ -8,6 +8,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Documentation (2026-02-25)
+- **bridge/README.md**: Added Architecture Overview section
+  - Tailscale foundation explained (why it enables the whole system)
+  - Bidirectional communication pattern documented (Gas ↔ Bridge)
+  - Performance Notes section with optimization details
+  - Core4 mount directory deprecation (`AOS_CORE4_MOUNT_DIR=/nonexistent`)
+  - Flow diagrams for Gas → Bridge and Bridge → Gas
+
+- **bridge/AGENTS.md**: Added Performance & Architecture section
+  - Tailscale foundation notes for developers
+  - Core4 optimization guidelines (don't add mount reading back)
+  - Lock scope best practices (minimal critical sections)
+
+- **bridge/app.py**: Enhanced code comments
+  - Core4 storage model updated with performance notes
+  - handle_core4_log() documented with flow and optimizations
+  - _core4_events_for_day() optimization explained inline
+
+- **Memory (MEMORY.md)**: Complete architecture documentation
+  - Tailscale as foundation (not just "Telegram bot")
+  - Bidirectional flow examples (both directions)
+  - Key optimizations with rationale
+
 ### Added (2026-02-20)
 - **c4 command**: New bash command for fast Core4 status display
   - Location: `core4/python-core4/c4`

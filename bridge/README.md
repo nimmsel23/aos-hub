@@ -1,6 +1,30 @@
 # AOS Bridge (aiohttp)
 
-Small HTTP bridge for HQ data flow. Runs on port `8080` and can be reached via Tailscale.
+HTTP bridge for bidirectional communication between Gas HQ (cloud) and local services. Runs on port `8080` and is globally accessible via Tailscale.
+
+## Architecture Overview
+
+**Foundation: Tailscale**
+The bridge binds to `0.0.0.0:8080` and is reachable at `https://ideapad.tail7a15d6.ts.net/bridge` via Tailscale mesh network. This enables:
+- ✅ Gas HQ (cloud) can reach laptop directly (no port forwarding, works behind NAT)
+- ✅ Secure WireGuard tunnel (encrypted end-to-end)
+- ✅ Works from anywhere (mobile, public WiFi, etc.)
+- ✅ Persistent domain name (never changes)
+
+**Bidirectional Communication:**
+```
+Gas HQ (Cloud)                    Bridge (Laptop via Tailscale)
+script.google.com                 ideapad.tail7a15d6.ts.net:8080
+     │                                        │
+     ├─→ POST /bridge/core4/log ─────────────→ Save to ~/.core4/
+     │                                        │
+     ←── POST /exec (webhook) ───────────────┤ (task operations)
+```
+
+Both sides can initiate requests:
+- **Gas → Bridge**: Core4 logs, Fruits answers, Tent summaries (via Tailscale)
+- **Bridge → Gas**: Task operations, Telegram messages (via GAS webhook)
+- **Queue system**: Failed Bridge→Gas requests persist to disk and retry automatically
 
 ## Endpoints
 
@@ -27,8 +51,8 @@ Small HTTP bridge for HQ data flow. Runs on port `8080` and can be reached via T
 - `AOS_BRIDGE_PORT` (default `8080`)
 - `AOS_TZ` (default `Europe/Vienna`)
 - `AOS_VAULT_DIR` (default `~/AlphaOS-Vault`)
-- `AOS_CORE4_LOCAL_DIR` (default `<vault>/Core4`)
-- `AOS_CORE4_MOUNT_DIR` (default `<vault>/Alpha_Core4`)
+- `AOS_CORE4_LOCAL_DIR` (default `<vault>/Core4`) — Primary Core4 event storage
+- `AOS_CORE4_MOUNT_DIR` (default `<vault>/Alpha_Core4`) — **DEPRECATED: Set to `/nonexistent`** (see Performance Notes below)
 - `AOS_FRUITS_DIR` (default `<vault>/Alpha_Fruits`)
 - `AOS_TENT_DIR` (default `<vault>/Alpha_Tent`)
 - `AOS_WARSTACK_DRAFT_DIR` (optional, default `~/.local/share/warstack`)
@@ -70,6 +94,40 @@ Dry run (no changes):
 ```bash
 curl -X POST 'http://127.0.0.1:8080/bridge/sync/push?dry_run=1'
 curl -X POST 'http://127.0.0.1:8080/bridge/sync/pull?dry_run=1'
+```
+
+## Performance Notes & Optimizations
+
+**Core4 Mount Directory (Critical):**
+Set `AOS_CORE4_MOUNT_DIR=/nonexistent` in your env file to disable legacy rclone mount reading.
+
+**Why:**
+- Legacy setup read Core4 events from both local dir AND rclone mount
+- `exists()` calls on hung mounts caused 30+ second hangs
+- Gas HQ now pushes events directly via HTTP (no mount needed)
+- Bridge stores locally in `~/.core4/` (single source of truth)
+
+**Recommended config:**
+```bash
+# ~/.env/aos.env
+AOS_CORE4_LOCAL_DIR=/home/alpha/.core4
+AOS_CORE4_MOUNT_DIR=/nonexistent  # Disable mount (performance)
+```
+
+**Optimizations applied (2026-02-25):**
+1. **Skip /nonexistent early** — Don't call `exists()` on disabled mount paths (prevents hangs)
+2. **On-demand week rebuild** — Week JSON only built when requested via `/bridge/core4/week`, not on every log
+3. **Day-only aggregation** — Core4 log endpoint only rebuilds day aggregate (55ms vs 30s+)
+
+**Flow:**
+```
+Gas HQ → POST /bridge/core4/log (via Tailscale)
+  ↓
+Bridge writes event → ~/.core4/.core4/events/YYYY-MM-DD/*.json
+  ↓
+Bridge builds day aggregate → ~/.core4/core4_day_YYYY-MM-DD.json
+  ↓
+Response: {ok: true, total_today: 1.0} (55ms)
 ```
 
 ## Install (Arch, no pip)
