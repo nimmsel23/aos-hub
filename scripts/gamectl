@@ -26,6 +26,10 @@ SYSTEMCTL_USER=("$SYSTEMCTL_BIN" --user)
 JOURNALCTL_USER=("$JOURNALCTL_BIN" --user)
 
 SERVICE_GAME="${AOS_GAME_MOUNT_SERVICE:-rclone-alpha-game.service}"
+INDEX_HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+GAME_BASE_URL="${AOS_GAME_BASE_URL:-${AOS_INDEX_BASE_URL:-${INDEX_HEALTH_URL%/health}}}"
+CURL_BIN="${CURL_BIN:-curl}"
+GAME_CENTRES=(frame freedom focus fire tent)
 
 UNITS=(
   "$SERVICE_GAME"
@@ -49,7 +53,9 @@ Usage:
 
 Commands:
   list                       List managed units
-  status                     Show status for all units
+  status [--full]            Compact status (+ centres) / verbose systemctl status
+  centres [--brief]          List/check frame freedom focus fire tent routes
+  frame|freedom|focus|fire|tent [status|url|open]
   start                      Start all units
   stop                       Stop all units
   restart                    Restart all units
@@ -71,7 +77,76 @@ cmd_list() {
   get_units
 }
 
-cmd_status() {
+centre_url() {
+  local name="${1:?}"
+  printf "%s/game/%s" "${GAME_BASE_URL%/}" "$name"
+}
+
+centre_http_code() {
+  local url="$1"
+  if ! has_cmd "$CURL_BIN"; then
+    printf "curl?"
+    return 0
+  fi
+  local code
+  code="$("$CURL_BIN" -sS -o /dev/null -m 1 -w "%{http_code}" "$url" 2>/dev/null || true)"
+  if [[ -z "$code" || "$code" == "000" ]]; then
+    printf "down"
+  else
+    printf "%s" "$code"
+  fi
+}
+
+cmd_centres() {
+  local brief=0
+  if [[ "${1:-}" == "--brief" ]]; then
+    brief=1
+  fi
+
+  (( brief == 1 )) || ui_title "gamectl centres"
+  local name url code
+  for name in "${GAME_CENTRES[@]}"; do
+    url="$(centre_url "$name")"
+    code="$(centre_http_code "$url")"
+    if (( brief == 1 )); then
+      printf "  %-8s http=%-5s %s\n" "$name" "$code" "$url"
+    else
+      printf "%-8s  http=%-5s  %s\n" "$name" "$code" "$url"
+    fi
+  done
+}
+
+cmd_centre() {
+  local name="${1:?}"
+  shift || true
+  local sub="${1:-status}"
+  shift || true
+  local url
+  url="$(centre_url "$name")"
+
+  case "$sub" in
+    status|check)
+      printf "%s  http=%s\n" "$url" "$(centre_http_code "$url")"
+      ;;
+    url)
+      printf "%s\n" "$url"
+      ;;
+    open)
+      if has_cmd xdg-open; then
+        xdg-open "$url" >/dev/null 2>&1 || ui_err "Failed to open $url"
+      else
+        ui_err "xdg-open not found"
+        return 1
+      fi
+      ;;
+    *)
+      ui_err "Unknown centre action: $sub (use: status|url|open)"
+      return 2
+      ;;
+  esac
+}
+
+cmd_status_full() {
   need_cmd "$SYSTEMCTL_BIN"
   mapfile -t units < <(get_units)
   if ((${#units[@]} == 0)); then
@@ -79,6 +154,42 @@ cmd_status() {
     return 0
   fi
   "${SYSTEMCTL_USER[@]}" status "${units[@]}"
+}
+
+cmd_status() {
+  local mode="compact"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --full) mode="full" ;;
+      --compact) mode="compact" ;;
+      *)
+        ui_err "Unknown status option: $1"
+        return 2
+        ;;
+    esac
+    shift || true
+  done
+
+  if [[ "$mode" == "full" ]]; then
+    cmd_status_full
+    return
+  fi
+
+  ui_title "gamectl status"
+  need_cmd "$SYSTEMCTL_BIN"
+  mapfile -t units < <(get_units)
+  if ((${#units[@]} == 0)); then
+    ui_warn "No units configured"
+  else
+    local unit active enabled
+    for unit in "${units[@]}"; do
+      active="$("${SYSTEMCTL_USER[@]}" is-active "$unit" 2>/dev/null || echo "inactive")"
+      enabled="$("${SYSTEMCTL_USER[@]}" is-enabled "$unit" 2>/dev/null || echo "disabled")"
+      printf "unit   %-28s active=%-9s enabled=%s\n" "$unit" "$active" "$enabled"
+    done
+  fi
+  echo
+  cmd_centres --brief
 }
 
 cmd_start() {
@@ -175,6 +286,7 @@ cmd_menu() {
     "enable" \
     "disable" \
     "logs" \
+    "centres" \
     "doctor" \
     "list" \
     "quit")
@@ -187,6 +299,7 @@ cmd_menu() {
     enable) cmd_enable ;;
     disable) cmd_disable ;;
     logs) cmd_logs ;;
+    centres) cmd_centres ;;
     doctor) cmd_doctor ;;
     list) cmd_list ;;
     quit) exit 0 ;;
@@ -204,7 +317,9 @@ main() {
 
   case "$cmd" in
     list) cmd_list ;;
-    status) cmd_status ;;
+    status) cmd_status "$@" ;;
+    centres) cmd_centres "$@" ;;
+    frame|freedom|focus|fire|tent) cmd_centre "$cmd" "$@" ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;

@@ -31,49 +31,76 @@ resolve_bin() {
   return 1
 }
 
-SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
-GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 AOSCTL="$(resolve_bin "$SCRIPT_DIR/aosctl" || true)"
 HUBCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hubctl" || true)"
+SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
+GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
+INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
+GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
+DOORCTL="$(resolve_bin "$SCRIPT_DIR/door/cli/doorctl" "$SCRIPT_DIR/scripts/doorctl" || true)"
+BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
+MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
+HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
+VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
+GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
+TELECTL="$(resolve_bin "$SCRIPT_DIR/scripts/telectl" || true)"
+FIRECTL="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
+ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" || true)"
+BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
 NODE_RESTART="$SCRIPT_DIR/scripts/ctl/node-restart.sh"
+AOS_DASHBOARD_EXT="${AOS_DASHBOARD_EXT:-$HOME/.config/aos/dashboard.sh}"
+
+pick_exec_token() {
+  local resolved="$1"
+  local fallback="$2"
+  if [[ -n "$resolved" ]]; then
+    printf "%s\n" "$resolved"
+  else
+    printf "%s\n" "$fallback"
+  fi
+}
+
+exec_or_path() {
+  local resolved="$1"
+  local fallback="$2"
+  shift 2
+  if [[ -n "$resolved" ]]; then
+    exec "$resolved" "$@"
+  fi
+  have "$fallback" || die "$fallback not found in PATH"
+  exec "$fallback" "$@"
+}
 
 usage() {
   cat <<EOF
-$APP — αOS frontdoor (stable bash overview)
+$APP — αOS terminal frontdoor (dashboard + wrappers)
 
 Usage:
-  $APP menu                         # gum menu (if available)
-  $APP restart [all|index|router|bridge]  # restart running node services
-  $APP sync <subcommand> [...]      # rclone sync control (syncctl)
-  $APP git <subcommand> [...]       # git sync control (gitctl)
-  $APP vault <subcommand> [...]     # vault copy (syncctl vault)
-  $APP router <subcommand> [...]    # router bot control (routerctl)
+  $APP dashboard                    # hotkey terminal dashboard (default in TTY)
+  $APP menu                         # gum menu (legacy/simple launcher)
+  $APP restart [all|index|router|bridge]
+  $APP sync|vault|git ...           # syncctl/gitctl wrappers
+  $APP hub|index|bridge|router ...  # service/control wrappers
+  $APP game|door|fire|tele ...      # centre/tool wrappers
+  $APP backup|mount|hook|gas|voice ...
+  $APP aosctl ...                   # direct aosctl passthrough
   $APP alias <subcommand> [...]     # multi-shell alias manager (aos-alias)
 
-Sync subcommands (syncctl):
-  $APP sync menu
-  $APP sync list
-  $APP sync run <target> [...]
-  $APP sync enable <target> --at HH:MM
-  $APP sync disable <target>
-  $APP sync status <target>
-  $APP sync logs <target>
-  $APP sync doctor <target>
-
-Git subcommands (gitctl):
-  $APP git status
-  $APP git sync
-  $APP git vault status
+Dashboard:
+  - Hotkeys launch common status/doctor/menu flows (gamectl, doorctl, hubctl, ...)
+  - Extend/override keys via: ${AOS_DASHBOARD_EXT}
+    API in extension file: aos_dashboard_register <key> <group> <label> <desc> <cmd> [args...]
 
 Examples:
+  $APP
+  $APP dashboard
+  $APP game status
+  $APP door health
+  $APP hub doctor
   $APP menu
-  $APP sync menu
-  $APP sync list
-  $APP sync enable voice --at 03:30
-  $APP git status
+  $APP sync summary
   $APP vault status
-  $APP router status
-  $APP alias ui
+  $APP aosctl status
 EOF
 }
 
@@ -97,10 +124,14 @@ menu() {
 
   local choice
   choice="$(printf "%s\n" \
+    "Dashboard: hotkey terminal dashboard" \
     "Sync: menu (syncctl)" \
     "Sync: list targets" \
     "Git: status" \
     "Vault: status" \
+    "Game: status (gamectl)" \
+    "Door: health (doorctl)" \
+    "Hub: doctor (hubctl)" \
     "Router: control bot (routerctl)" \
     "Aliases: manage (aos-alias)" \
     "Help" \
@@ -108,6 +139,9 @@ menu() {
     | gum choose --header "αOS — aos")"
 
   case "$choice" in
+    "Dashboard: hotkey terminal dashboard")
+      dashboard
+      ;;
     "Sync: menu (syncctl)")
       if [[ -n "$SYNCCTL" ]]; then
         exec "$SYNCCTL" menu
@@ -132,8 +166,17 @@ menu() {
       fi
       exec syncctl vault status
       ;;
+    "Game: status (gamectl)")
+      game_cmd status
+      ;;
+    "Door: health (doorctl)")
+      door_cmd health
+      ;;
+    "Hub: doctor (hubctl)")
+      hub_cmd doctor
+      ;;
     "Router: control bot (routerctl)")
-      exec routerctl
+      exec_or_path "$ROUTERCTL" routerctl
       ;;
     "Aliases: manage (aos-alias)")
       exec aos-alias ui
@@ -144,39 +187,334 @@ menu() {
   esac
 }
 
-# ---- sync wrapper ----
+# ---- dashboard registry ----
+declare -a AOS_DASH_KEYS=()
+declare -A AOS_DASH_GROUP=()
+declare -A AOS_DASH_LABEL=()
+declare -A AOS_DASH_DESC=()
+declare -A AOS_DASH_CMD=()
+AOS_DASH_SEP=$'\037'
+AOS_DASH_READY=0
+AOS_DASH_MESSAGE=""
+AOS_DASH_MESSAGE_LEVEL="info"
+
+aos_dashboard_register() {
+  local key="${1:-}"
+  local group="${2:-General}"
+  local label="${3:-}"
+  local desc="${4:-}"
+  shift 4 || true
+
+  [[ -n "$key" ]] || die "dashboard register: missing key"
+  [[ ${#key} -eq 1 ]] || die "dashboard register: key must be 1 char ($key)"
+  [[ -n "$label" ]] || die "dashboard register: missing label for key $key"
+  [[ $# -ge 1 ]] || die "dashboard register: missing command for key $key"
+
+  local packed="$1"
+  shift || true
+  local arg
+  for arg in "$@"; do
+    packed+="${AOS_DASH_SEP}${arg}"
+  done
+
+  if [[ -z "${AOS_DASH_LABEL[$key]+x}" ]]; then
+    AOS_DASH_KEYS+=("$key")
+  fi
+  AOS_DASH_GROUP[$key]="$group"
+  AOS_DASH_LABEL[$key]="$label"
+  AOS_DASH_DESC[$key]="$desc"
+  AOS_DASH_CMD[$key]="$packed"
+}
+
+dashboard_unpack_cmd() {
+  local key="$1"
+  local packed="${AOS_DASH_CMD[$key]:-}"
+  AOS_DASH_CMDV=()
+  [[ -n "$packed" ]] || return 1
+  IFS="$AOS_DASH_SEP" read -r -a AOS_DASH_CMDV <<<"$packed"
+  [[ ${#AOS_DASH_CMDV[@]} -gt 0 ]]
+}
+
+dashboard_command_exists() {
+  local key="$1"
+  dashboard_unpack_cmd "$key" || return 1
+  local bin="${AOS_DASH_CMDV[0]}"
+  if [[ "$bin" == */* ]]; then
+    [[ -x "$bin" ]]
+  else
+    have "$bin"
+  fi
+}
+
+dashboard_set_message() {
+  AOS_DASH_MESSAGE_LEVEL="${1:-info}"
+  AOS_DASH_MESSAGE="${2:-}"
+}
+
+dashboard_register_defaults() {
+  aos_dashboard_register "a" "Core" "aosctl status" "Unified status + heartbeat ping" \
+    "$(pick_exec_token "$AOSCTL" "aosctl")" status
+  aos_dashboard_register "A" "Core" "aosctl menu" "Interactive aosctl menu" \
+    "$(pick_exec_token "$AOSCTL" "aosctl")" menu
+  aos_dashboard_register "z" "Core" "aosctl dashboard" "Live aosctl dashboard (5s)" \
+    "$(pick_exec_token "$AOSCTL" "aosctl")" dashboard 5
+  aos_dashboard_register "h" "Core" "hubctl doctor" "Unified hub doctor" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" doctor
+
+  aos_dashboard_register "i" "Services" "Index status" "hubctl index status" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" index status
+  aos_dashboard_register "r" "Services" "Router status" "hubctl router status" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" router status
+  aos_dashboard_register "b" "Services" "Bridge health" "hubctl bridge health" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" bridge health
+  aos_dashboard_register "u" "Services" "Dev status" "hubctl dev status" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" dev status
+
+  aos_dashboard_register "g" "Centres" "Game status" "gamectl status" \
+    "$(pick_exec_token "$GAMECTL" "gamectl")" status
+  aos_dashboard_register "G" "Centres" "Game menu" "gamectl menu" \
+    "$(pick_exec_token "$GAMECTL" "gamectl")" menu
+  aos_dashboard_register "d" "Centres" "Door health" "doorctl health" \
+    "$(pick_exec_token "$DOORCTL" "doorctl")" health
+  aos_dashboard_register "D" "Centres" "Door hitlist" "doorctl hitlist" \
+    "$(pick_exec_token "$DOORCTL" "doorctl")" hitlist
+  aos_dashboard_register "w" "Centres" "Door menu" "doorctl menu" \
+    "$(pick_exec_token "$DOORCTL" "doorctl")" menu
+  aos_dashboard_register "f" "Centres" "Fire status" "hubctl fire status" \
+    "$(pick_exec_token "$HUBCTL" "hubctl")" fire status
+
+  aos_dashboard_register "s" "Tools" "Sync summary" "syncctl summary" \
+    "$(pick_exec_token "$SYNCCTL" "syncctl")" summary
+  aos_dashboard_register "v" "Tools" "Vault status" "syncctl vault status" \
+    "$(pick_exec_token "$SYNCCTL" "syncctl")" vault status
+  aos_dashboard_register "x" "Tools" "Git status" "gitctl status" \
+    "$(pick_exec_token "$GITCTL" "gitctl")" status
+  aos_dashboard_register "o" "Tools" "Backup status" "backupctl status" \
+    "$(pick_exec_token "$BACKUPCTL" "backupctl")" status
+  aos_dashboard_register "m" "Tools" "Mount status" "mountctl status" \
+    "$(pick_exec_token "$MOUNTCTL" "mountctl")" status
+  aos_dashboard_register "k" "Tools" "Hook status" "hookctl status" \
+    "$(pick_exec_token "$HOOKCTL" "hookctl")" status
+  aos_dashboard_register "y" "Tools" "Voice status" "voicectl status" \
+    "$(pick_exec_token "$VOICECTL" "voicectl")" status
+  aos_dashboard_register "T" "Tools" "Tele help" "telectl help" \
+    "$(pick_exec_token "$TELECTL" "telectl")" help
+}
+
+dashboard_load_extensions() {
+  if [[ -r "$AOS_DASHBOARD_EXT" ]]; then
+    # shellcheck disable=SC1090
+    source "$AOS_DASHBOARD_EXT"
+    dashboard_set_message info "Loaded dashboard extensions: $AOS_DASHBOARD_EXT"
+  fi
+}
+
+dashboard_init() {
+  [[ "$AOS_DASH_READY" == "1" ]] && return 0
+  dashboard_register_defaults
+  dashboard_load_extensions
+  AOS_DASH_READY=1
+}
+
+dashboard_render() {
+  local now
+  now="$(date '+%Y-%m-%d %H:%M:%S')"
+  printf '\033[2J\033[H'
+  printf 'aos dashboard  |  %s\n' "$now"
+  printf 'Hotkeys: [q] quit  [ENTER] refresh  [?] help  [g] game  [d] door health  [w] door menu  [m] mount  [a] aosctl status\n'
+  printf 'Extension file: %s\n' "$AOS_DASHBOARD_EXT"
+  printf '\n'
+
+  local key group prev_group="" state_mark
+  for key in "${AOS_DASH_KEYS[@]}"; do
+    group="${AOS_DASH_GROUP[$key]}"
+    if [[ "$group" != "$prev_group" ]]; then
+      [[ -n "$prev_group" ]] && printf '\n'
+      printf '[%s]\n' "$group"
+      prev_group="$group"
+    fi
+    if dashboard_command_exists "$key"; then
+      state_mark="ok"
+    else
+      state_mark="!!"
+    fi
+    printf '  [%s] %-18s  (%s) %s\n' \
+      "$key" "${AOS_DASH_LABEL[$key]}" "$state_mark" "${AOS_DASH_DESC[$key]}"
+  done
+
+  if [[ -n "$AOS_DASH_MESSAGE" ]]; then
+    printf '\n[%s] %s\n' "$AOS_DASH_MESSAGE_LEVEL" "$AOS_DASH_MESSAGE"
+  fi
+}
+
+dashboard_help_overlay() {
+  printf '\033[2J\033[H'
+  cat <<EOF
+aos dashboard help
+
+Built-ins:
+  q         Quit dashboard
+  ENTER     Refresh dashboard
+  ?         This help
+
+Extension API:
+  Add file: ${AOS_DASHBOARD_EXT}
+  Function: aos_dashboard_register <key> <group> <label> <desc> <cmd> [args...]
+
+Example:
+  aos_dashboard_register "w" "Custom" "watchdog" "Trigger local systemstatus" watchdog
+
+Notes:
+  - Reuse an existing key to override an entry.
+  - New keys append to the end of their group order (in registration order).
+  - Commands run in the current terminal and return to the dashboard when they exit.
+EOF
+  printf '\nPress ENTER to return... '
+  IFS= read -r _
+}
+
+dashboard_run_key() {
+  local key="$1"
+  if ! dashboard_unpack_cmd "$key"; then
+    dashboard_set_message err "No command registered for key '$key'"
+    return 1
+  fi
+
+  local cmdline=""
+  local token
+  for token in "${AOS_DASH_CMDV[@]}"; do
+    printf -v token '%q' "$token"
+    cmdline+="${cmdline:+ }${token}"
+  done
+
+  printf '\033[2J\033[H'
+  printf 'aos dashboard -> [%s] %s\n' "$key" "${AOS_DASH_LABEL[$key]}"
+  printf '%s\n' "${AOS_DASH_DESC[$key]}"
+  printf '\n$ %s\n\n' "$cmdline"
+
+  set +e
+  "${AOS_DASH_CMDV[@]}"
+  local rc=$?
+  set -e
+
+  dashboard_set_message info "Key '$key' finished with exit code $rc"
+  printf '\n[exit=%d] Press ENTER to return... ' "$rc"
+  IFS= read -r _
+  return 0
+}
+
+dashboard() {
+  if ! can_prompt; then
+    usage
+    return 0
+  fi
+
+  dashboard_init
+
+  while true; do
+    dashboard_render
+    IFS= read -rsn1 key || break
+    case "${key:-}" in
+      q) break ;;
+      "") dashboard_set_message info "Refreshed dashboard" ;;
+      "?") dashboard_help_overlay ;;
+      $'\e')
+        IFS= read -rsn2 -t 0.02 _ || true
+        dashboard_set_message info "Use dashboard hotkeys (single key) or ? for help"
+        ;;
+      *)
+        dashboard_run_key "$key" || true
+        ;;
+    esac
+  done
+
+  printf '\033[2J\033[H'
+}
+
+# ---- wrappers ----
 sync_cmd() {
   local sub="${1:-menu}"; shift || true
-  if [[ -n "$SYNCCTL" ]]; then
-    exec "$SYNCCTL" "$sub" "$@"
-  fi
-  have syncctl || die "syncctl not found in PATH"
-  exec syncctl "$sub" "$@"
+  exec_or_path "$SYNCCTL" syncctl "$sub" "$@"
 }
 
-# ---- git wrapper ----
 git_cmd() {
   local sub="${1:-status}"; shift || true
-  if [[ -n "$GITCTL" ]]; then
-    exec "$GITCTL" "$sub" "$@"
-  fi
-  have gitctl || die "gitctl not found in PATH"
-  exec gitctl "$sub" "$@"
+  exec_or_path "$GITCTL" gitctl "$sub" "$@"
 }
 
-# ---- vault wrapper ----
 vault_cmd() {
   local sub="${1:-status}"; shift || true
-  if [[ -n "$SYNCCTL" ]]; then
-    exec "$SYNCCTL" vault "$sub" "$@"
-  fi
-  have syncctl || die "syncctl not found in PATH"
-  exec syncctl vault "$sub" "$@"
+  exec_or_path "$SYNCCTL" syncctl vault "$sub" "$@"
 }
 
 router_cmd() {
-  have routerctl || die "routerctl not found in PATH"
-  exec routerctl "$@"
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$ROUTERCTL" routerctl "$sub" "$@"
+}
+
+bridge_cmd() {
+  local sub="${1:-health}"; shift || true
+  exec_or_path "$BRIDGECTL" bridgectl "$sub" "$@"
+}
+
+index_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$INDEXCTL" indexctl "$sub" "$@"
+}
+
+hub_cmd() {
+  local sub="${1:-doctor}"; shift || true
+  exec_or_path "$HUBCTL" hubctl "$sub" "$@"
+}
+
+aosctl_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$AOSCTL" aosctl "$sub" "$@"
+}
+
+game_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$GAMECTL" gamectl "$sub" "$@"
+}
+
+door_cmd() {
+  local sub="${1:-health}"; shift || true
+  exec_or_path "$DOORCTL" doorctl "$sub" "$@"
+}
+
+fire_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$FIRECTL" firectl "$sub" "$@"
+}
+
+tele_cmd() {
+  local sub="${1:-help}"; shift || true
+  exec_or_path "$TELECTL" telectl "$sub" "$@"
+}
+
+backup_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$BACKUPCTL" backupctl "$sub" "$@"
+}
+
+mount_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$MOUNTCTL" mountctl "$sub" "$@"
+}
+
+hook_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$HOOKCTL" hookctl "$sub" "$@"
+}
+
+gas_cmd() {
+  local sub="${1:-help}"; shift || true
+  exec_or_path "$GASCTL" gasctl "$sub" "$@"
+}
+
+voice_cmd() {
+  local sub="${1:-status}"; shift || true
+  exec_or_path "$VOICECTL" voicectl "$sub" "$@"
 }
 
 alias_cmd() {
@@ -194,15 +532,35 @@ restart_cmd() {
 }
 
 case "$cmd" in
+  dashboard|dash|ui) dashboard ;;
   menu) menu ;;
   restart) restart_cmd "$@" ;;
   sync) sync_cmd "$@" ;;
   git) git_cmd "$@" ;;
   vault) vault_cmd "$@" ;;
+  hub) hub_cmd "$@" ;;
+  aosctl) aosctl_cmd "$@" ;;
+  index|node) index_cmd "$@" ;;
+  bridge) bridge_cmd "$@" ;;
   router) router_cmd "$@" ;;
+  game) game_cmd "$@" ;;
+  door) door_cmd "$@" ;;
+  fire) fire_cmd "$@" ;;
+  tele) tele_cmd "$@" ;;
+  backup) backup_cmd "$@" ;;
+  mount) mount_cmd "$@" ;;
+  hook) hook_cmd "$@" ;;
+  gas) gas_cmd "$@" ;;
+  voice) voice_cmd "$@" ;;
   alias) alias_cmd "$@" ;;
   help|-h|--help) usage ;;
-  "") menu ;;
+  "")
+    if can_prompt; then
+      dashboard
+    else
+      usage
+    fi
+    ;;
   *)
     echo "[$APP] Unknown command: $cmd" >&2
     usage

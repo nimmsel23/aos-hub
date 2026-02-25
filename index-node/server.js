@@ -10,11 +10,12 @@ import * as pty from "node-pty";
 import { execFile, execFileSync } from "child_process";
 
 // Routers
-import gameRouter    from "./routes/game.js";
+import gameRouter, { gameApiRouter } from "./routes/game.js";
 import fireRouter    from "./routes/fire.js";
 import focusRouter   from "./routes/focus.js";
 import freedomRouter from "./routes/freedom.js";
 import frameRouter   from "./routes/frame.js";
+import doorRouter    from "./routes/door.js";
 
 const app = express();
 
@@ -3961,10 +3962,12 @@ app.get("/api/aos/registry", (req, res) => {
 
 // Mount routers
 app.use("/game", gameRouter);
+app.use("/api/game", gameApiRouter);
 app.use("/api/fire",    fireRouter);
 app.use("/api/focus",   focusRouter);
 app.use("/api/freedom", freedomRouter);
 app.use("/api/frame",   frameRouter);
+app.use("/api/door",    doorRouter);
 
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));

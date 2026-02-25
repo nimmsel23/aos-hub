@@ -38,6 +38,358 @@ source "$DOOR_DIR/lib/door_format.sh"
 VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
 STALLED_DAYS="${AOS_DOOR_STALLED_DAYS:-7}"
 TASK_BIN="${TASK_BIN:-task}"
+HOT_PY="$DOOR_DIR/python-hot/hot.py"
+
+#───────────────────────────────────────────────────────────────────────────────
+# Helpers / Flow Views
+#───────────────────────────────────────────────────────────────────────────────
+
+have_task() {
+  command -v "$TASK_BIN" >/dev/null 2>&1
+}
+
+cmd_phase_report() {
+  local phase="${1:?}"
+  local status_filter="${2:-pending}"
+
+  ui_title "Door Phase: ${phase^}"
+
+  if ! have_task; then
+    ui_err "Taskwarrior not found: $TASK_BIN"
+    return 1
+  fi
+
+  # Tag-based phase view keeps this portable across older setups while UDA migration settles.
+  "$TASK_BIN" "+$phase" "status:$status_filter"
+}
+
+phase_count() {
+  local phase="${1:?}"
+  if ! have_task || ! command -v jq >/dev/null 2>&1; then
+    printf "?"
+    return 0
+  fi
+  local out count
+  out="$("$TASK_BIN" "+$phase" status:pending export 2>/dev/null || true)"
+  count="$(printf "%s" "$out" | jq 'length' 2>/dev/null || echo '?')"
+  printf "%s" "$count"
+}
+
+cmd_hotlist() {
+  local sub="${1:-list}"
+  shift || true
+
+  case "$sub" in
+    list|show)
+      if [[ -f "$HOT_PY" ]] && command -v python3 >/dev/null 2>&1; then
+        python3 "$HOT_PY" list
+      else
+        cmd_phase_report potential pending
+      fi
+      ;;
+    open)
+      if [[ -f "$HOT_PY" ]] && command -v python3 >/dev/null 2>&1; then
+        python3 "$HOT_PY" open "$@"
+      else
+        ui_err "hot open requires $HOT_PY"
+        return 1
+      fi
+      ;;
+    add)
+      [[ $# -gt 0 ]] || { ui_err "Usage: doorctl hotlist add <idea...>"; return 1; }
+      if [[ -f "$HOT_PY" ]] && command -v python3 >/dev/null 2>&1; then
+        python3 "$HOT_PY" "$@"
+      else
+        ui_err "hot add requires $HOT_PY"
+        return 1
+      fi
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl hotlist
+
+Usage:
+  doorctl hotlist [list]
+  doorctl hotlist open <task-number>
+  doorctl hotlist add <idea...>
+EOF
+      ;;
+    *)
+      ui_err "Unknown hotlist command: $sub"
+      return 2
+      ;;
+  esac
+}
+
+cmd_doorwar() {
+  local sub="${1:-list}"
+  shift || true
+  case "$sub" in
+    list|show|status) cmd_phase_report plan pending ;;
+    review) cmd_phase_report plan pending ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl doorwar
+
+Terminal plan-phase view (Door War / 2-Plan).
+
+Usage:
+  doorctl doorwar [list|status|review]
+EOF
+      ;;
+    *)
+      # Allow convenience: `doorctl doorwar <door>` opens war stack file if a door name is given.
+      cmd_war "$sub" "$@"
+      ;;
+  esac
+}
+
+cmd_warstack() {
+  if [[ $# -eq 0 ]]; then
+    ui_info "No door name provided. Showing production phase instead."
+    cmd_phase_report production pending
+    return 0
+  fi
+  cmd_war "$@"
+}
+
+cmd_review() {
+  ui_title "Door Review"
+  printf "Counts (pending): potential=%s  plan=%s  production=%s  profit=%s\n" \
+    "$(phase_count potential)" \
+    "$(phase_count plan)" \
+    "$(phase_count production)" \
+    "$(phase_count profit)"
+  echo
+  cmd_health || true
+  echo
+  ui_info "Focus (Top 3 pending hits):"
+  cmd_focus || true
+}
+
+menu_prompt_door() {
+  ui_input "Door name" ""
+}
+
+menu_prompt_task_ref() {
+  ui_input "Task ID / UUID prefix" ""
+}
+
+cmd_menu_phase() {
+  local phase="${1:?}"
+
+  if ! ctl_can_prompt; then
+    cmd_phase_report "$phase" pending
+    return 0
+  fi
+
+  while true; do
+    local prompt action
+    case "$phase" in
+      potential)
+        prompt="Potential (Hot List)"
+        action="$(ui_choose "$prompt" \
+          "list hotlist" \
+          "add hotlist idea..." \
+          "open hotlist item..." \
+          "phase report (potential)" \
+          "review dashboard" \
+          "back")" || return 0
+        case "$action" in
+          "list hotlist") cmd_hotlist list ;;
+          "add hotlist idea...")
+            local idea
+            idea="$(ui_input "Idea" "")" || true
+            [[ -n "${idea:-}" ]] && cmd_hotlist add "$idea"
+            ;;
+          "open hotlist item...")
+            local ref
+            ref="$(ui_input "Hotlist task number" "")" || true
+            [[ -n "${ref:-}" ]] && cmd_hotlist open "$ref"
+            ;;
+          "phase report (potential)") cmd_phase_report potential pending ;;
+          "review dashboard") cmd_review ;;
+          "back") return 0 ;;
+        esac
+        ;;
+
+      plan)
+        prompt="Plan (Door War)"
+        action="$(ui_choose "$prompt" \
+          "doorwar list" \
+          "phase report (plan)" \
+          "show warstack..." \
+          "edit warstack..." \
+          "review dashboard" \
+          "back")" || return 0
+        case "$action" in
+          "doorwar list") cmd_doorwar list ;;
+          "phase report (plan)") cmd_phase_report plan pending ;;
+          "show warstack...")
+            local door
+            door="$(menu_prompt_door)" || true
+            [[ -n "${door:-}" ]] && cmd_war "$door" show
+            ;;
+          "edit warstack...")
+            local door
+            door="$(menu_prompt_door)" || true
+            [[ -n "${door:-}" ]] && cmd_war "$door" edit
+            ;;
+          "review dashboard") cmd_review ;;
+          "back") return 0 ;;
+        esac
+        ;;
+
+      production)
+        prompt="Production (Hits)"
+        action="$(ui_choose "$prompt" \
+          "phase report (production)" \
+          "hitlist" \
+          "focus (top 3)" \
+          "next hit" \
+          "mark hit done..." \
+          "edit hit..." \
+          "open hit..." \
+          "show warstack..." \
+          "review dashboard" \
+          "back")" || return 0
+        case "$action" in
+          "phase report (production)") cmd_phase_report production pending ;;
+          "hitlist") cmd_hitlist ;;
+          "focus (top 3)") cmd_focus ;;
+          "next hit")
+            local door
+            door="$(ui_input "Door name (optional)" "")" || true
+            if [[ -n "${door:-}" ]]; then
+              cmd_next "$door"
+            else
+              cmd_next
+            fi
+            ;;
+          "mark hit done...")
+            local ref
+            ref="$(menu_prompt_task_ref)" || true
+            [[ -n "${ref:-}" ]] && cmd_done "$ref"
+            ;;
+          "edit hit...")
+            local ref
+            ref="$(menu_prompt_task_ref)" || true
+            [[ -n "${ref:-}" ]] && cmd_edit "$ref"
+            ;;
+          "open hit...")
+            local ref
+            ref="$(menu_prompt_task_ref)" || true
+            [[ -n "${ref:-}" ]] && cmd_open "$ref"
+            ;;
+          "show warstack...")
+            local door
+            door="$(menu_prompt_door)" || true
+            [[ -n "${door:-}" ]] && cmd_war "$door" show
+            ;;
+          "review dashboard") cmd_review ;;
+          "back") return 0 ;;
+        esac
+        ;;
+
+      profit)
+        prompt="Profit"
+        action="$(ui_choose "$prompt" \
+          "phase report (profit)" \
+          "review dashboard" \
+          "list doors" \
+          "health" \
+          "back")" || return 0
+        case "$action" in
+          "phase report (profit)") cmd_phase_report profit pending ;;
+          "review dashboard") cmd_review ;;
+          "list doors") cmd_list ;;
+          "health") cmd_health ;;
+          "back") return 0 ;;
+        esac
+        ;;
+
+      *)
+        ui_err "Unknown phase menu: $phase"
+        return 2
+        ;;
+    esac
+
+    ui_pause
+  done
+}
+
+cmd_menu() {
+  if ! ctl_can_prompt; then
+    show_help
+    return 0
+  fi
+
+  while true; do
+    ui_title "doorctl"
+    local action
+    action="$(ui_choose "Door Flow" \
+      "phase > potential" \
+      "phase > plan" \
+      "phase > production" \
+      "phase > profit" \
+      "review" \
+      "hotlist" \
+      "doorwar" \
+      "production" \
+      "profit" \
+      "health" \
+      "focus" \
+      "hitlist" \
+      "list doors" \
+      "show door..." \
+      "warstack show..." \
+      "warstack edit..." \
+      "note..." \
+      "help" \
+      "quit")" || return 0
+
+    case "$action" in
+      "phase > potential") cmd_menu_phase potential ;;
+      "phase > plan") cmd_menu_phase plan ;;
+      "phase > production") cmd_menu_phase production ;;
+      "phase > profit") cmd_menu_phase profit ;;
+      "review") cmd_review ;;
+      "hotlist") cmd_hotlist list ;;
+      "doorwar") cmd_doorwar list ;;
+      "production") cmd_phase_report production pending ;;
+      "profit") cmd_phase_report profit pending ;;
+      "health") cmd_health ;;
+      "focus") cmd_focus ;;
+      "hitlist") cmd_hitlist ;;
+      "list doors") cmd_list ;;
+      "show door...")
+        local door
+        door="$(ui_input "Door name" "")" || true
+        [[ -n "${door:-}" ]] && cmd_show "$door"
+        ;;
+      "warstack show...")
+        local door
+        door="$(ui_input "Door name" "")" || true
+        [[ -n "${door:-}" ]] && cmd_war "$door" show
+        ;;
+      "warstack edit...")
+        local door
+        door="$(ui_input "Door name" "")" || true
+        [[ -n "${door:-}" ]] && cmd_war "$door" edit
+        ;;
+      "note...")
+        local door
+        door="$(ui_input "Door name" "")" || true
+        [[ -n "${door:-}" ]] && cmd_note "$door"
+        ;;
+      "help") show_help ;;
+      "quit") return 0 ;;
+      *) return 0 ;;
+    esac
+
+    ui_pause
+  done
+}
 
 #───────────────────────────────────────────────────────────────────────────────
 # Commands
@@ -408,6 +760,13 @@ Usage:
 Commands:
   list                    List all active doors with status
   show <door>             Show detail view for specific door
+  hotlist [subcmd]        Potential/Hot List flow (list/open/add)
+  doorwar [subcmd]        Plan-phase terminal view (Door War)
+  warstack <door> [...]   Alias for war (or production view if no door)
+  review                  Compact phase review + health + focus
+  menu                    Interactive terminal menu (default in TTY when no args)
+  potential|plan|production|profit
+                          Phase reports in terminal (Taskwarrior)
   hits [door] [status]    List hits for door (default: pending)
   next [door]             Show next hit to work on
   done <uuid>             Mark hit as completed
@@ -425,6 +784,12 @@ Commands:
 
 Examples:
   doorctl list
+  doorctl hotlist
+  doorctl hotlist add "Idea ..."
+  doorctl doorwar
+  doorctl production
+  doorctl review
+  doorctl menu
   doorctl show Ausbildung
   doorctl hits Ausbildung
   doorctl next
@@ -458,12 +823,26 @@ EOF
 }
 
 main() {
-  local cmd="${1:-help}"
-  shift || true
+  local cmd="${1:-}"
+  if [[ -z "$cmd" ]]; then
+    if ctl_can_prompt; then
+      cmd="menu"
+    else
+      cmd="help"
+    fi
+  else
+    shift || true
+  fi
 
   case "$cmd" in
+    menu) cmd_menu ;;
     list|ls) cmd_list ;;
     show) cmd_show "$@" ;;
+    hotlist) cmd_hotlist "$@" ;;
+    doorwar) cmd_doorwar "$@" ;;
+    warstack) cmd_warstack "$@" ;;
+    review) cmd_review ;;
+    potential|plan|production|profit) cmd_phase_report "$cmd" "${1:-pending}" ;;
     hits) cmd_hits "$@" ;;
     next) cmd_next "$@" ;;
     done) cmd_done "$@" ;;

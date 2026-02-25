@@ -45,6 +45,13 @@ def _display_habit(habit: str) -> str:
     return DISPLAY_HABIT.get(habit, habit)
 
 
+def _normalize_habit_or_none(raw: Any) -> str | None:
+    try:
+        return normalize_habit(str(raw or "").strip().lower())
+    except Exception:
+        return None
+
+
 def day_total_from_week(data: Dict[str, Any], day: date) -> float:
     date_key = day.isoformat()
     total = 0.0
@@ -54,6 +61,8 @@ def day_total_from_week(data: Dict[str, Any], day: date) -> float:
             continue
         if str(entry.get("date") or "").strip() != date_key:
             continue
+        if not _normalize_habit_or_none(entry.get("task")):
+            continue
         done = bool(entry.get("done", True))
         points = _safe_float(entry.get("points"), 0.5 if done else 0.0)
         if done:
@@ -62,13 +71,12 @@ def day_total_from_week(data: Dict[str, Any], day: date) -> float:
 
 
 def week_total_from_week(data: Dict[str, Any]) -> float:
-    totals = data.get("totals") or {}
-    if isinstance(totals, dict) and "week_total" in totals:
-        return _safe_float(totals.get("week_total"), 0.0)
     total = 0.0
     entries = data.get("entries") or []
     for entry in entries:
         if not isinstance(entry, dict):
+            continue
+        if not _normalize_habit_or_none(entry.get("task")):
             continue
         done = bool(entry.get("done", True))
         points = _safe_float(entry.get("points"), 0.5 if done else 0.0)
@@ -100,7 +108,9 @@ def _day_done_list(data: Dict[str, Any], day: date) -> list[tuple[str, str]]:
         if str(entry.get("date") or "").strip() != date_key:
             continue
         domain = str(entry.get("domain") or "").strip().lower()
-        habit = normalize_habit(str(entry.get("task") or "").strip().lower())
+        habit = _normalize_habit_or_none(entry.get("task"))
+        if not habit:
+            continue
         out.append((domain, _display_habit(habit)))
     dom_idx = {d: i for i, d in enumerate(DOMAIN_ORDER)}
     hab_idx = {h: i for i, h in enumerate([_display_habit(h) for h in HABIT_ORDER])}
@@ -124,7 +134,9 @@ def _week_done_by_day(data: Dict[str, Any], week: str) -> Dict[str, list[str]]:
         date_key = str(entry.get("date") or "").strip()
         if not date_key:
             continue
-        habit = normalize_habit(str(entry.get("task") or "").strip().lower())
+        habit = _normalize_habit_or_none(entry.get("task"))
+        if not habit:
+            continue
         by_day.setdefault(date_key, set()).add(_display_habit(habit))
     hab_idx = {h: i for i, h in enumerate([_display_habit(h) for h in HABIT_ORDER])}
     return {day: sorted(list(hs), key=lambda h: hab_idx.get(h, 999)) for day, hs in by_day.items()}

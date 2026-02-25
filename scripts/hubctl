@@ -7,6 +7,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Codex session helper
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh" 2>/dev/null || true
+codex_subcmd_maybe "main" "hubctl" "$@" && exit 0
+
 # Load env
 source "$ROOT_DIR/scripts/lib/aos-env.sh" 2>/dev/null || true
 aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
@@ -15,8 +19,8 @@ aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
 source "$SCRIPT_DIR/ctl-lib.sh" 2>/dev/null || true
 
 # Helpers
-die() { echo "ERROR: $*" >&2; exit 1; }
-exec_ctl() { local path="$ROOT_DIR/$1"; shift; [[ -x "$path" ]] || die "not found: $path"; exec "$path" "$@"; }
+hub_die() { ui_err "$*"; exit 1; }
+exec_ctl() { local path="$ROOT_DIR/$1"; shift; [[ -x "$path" ]] || hub_die "not found: $path"; exec "$path" "$@"; }
 
 # ============================================================================
 # USAGE
@@ -33,6 +37,7 @@ Service Commands:
   bridge <args>       Bridge control (bridgectl)
   router <args>       Router control (routerctl)
   index <args>        Index Node control (indexctl)
+  node <args>         Alias for index
 
 Dev Mode (user services):
   dev status          Show dev service status
@@ -55,14 +60,18 @@ Tool Commands:
   game <args>         Game commands (gamectl)
   voice <args>        Voice commands (voicectl)
   tele <args>         Telegram (telectl)
+  mobileapp <args>    Mobile/PWA tooling (mobileappctl)
 
 Utility:
   list                List all available commands
+  status [opts]       Compact combined status (+ compressed logs)
   doctor              System health check
   help                Show this help
 
 Examples:
   hubctl bridge health
+  hubctl status
+  hubctl status --watch 2 --logs 2
   hubctl dev restart bridge
   hubctl core4 sources
   hubctl fire status
@@ -89,7 +98,7 @@ delegate_service() {
 delegate_tool() {
   case "$1" in
     core4) exec_ctl "core4/python-core4/core4ctl" "${@:2}" ;;
-    sync) exec_ctl "scripts/aos-syncctl" "${@:2}" ;;
+    sync) exec_ctl "scripts/syncctl" "${@:2}" ;;
     git) exec_ctl "scripts/gitctl" "${@:2}" ;;
     backup) exec_ctl "scripts/backupctl" "${@:2}" ;;
     mount) exec_ctl "scripts/mountctl" "${@:2}" ;;
@@ -101,6 +110,7 @@ delegate_tool() {
     door) exec_ctl "door/cli/doorctl" "${@:2}" ;;
     game) exec_ctl "scripts/gamectl" "${@:2}" ;;
     voice) exec_ctl "scripts/voicectl" "${@:2}" ;;
+    mobileapp|mobileappctl|pwa) exec_ctl "scripts/mobileappctl" "${@:2}" ;;
     *) return 1 ;;
   esac
 }
@@ -112,6 +122,173 @@ delegate_tool() {
 DEV_INDEX_UNIT="${AOS_INDEX_DEV_UNIT:-aos-index-dev.service}"
 DEV_ROUTER_UNIT="${AOS_ROUTER_DEV_UNIT:-aos-router-dev.service}"
 DEV_BRIDGE_UNIT="${AOS_BRIDGE_DEV_UNIT:-aos-bridge-dev.service}"
+PROD_INDEX_UNIT="${AOS_INDEX_SERVICE:-aos-index.service}"
+PROD_ROUTER_UNIT="${AOS_ROUTER_SERVICE:-aos-router.service}"
+PROD_BRIDGE_UNIT="${AOS_BRIDGE_SERVICE:-aos-bridge.service}"
+
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+svc_state() {
+  local scope="$1" unit="$2"
+  if [[ "$scope" == "user" ]]; then
+    systemctl --user is-active "$unit" 2>/dev/null || echo "n/a"
+  else
+    systemctl is-active "$unit" 2>/dev/null || echo "n/a"
+  fi
+}
+
+svc_enabled() {
+  local scope="$1" unit="$2"
+  if [[ "$scope" == "user" ]]; then
+    systemctl --user is-enabled "$unit" 2>/dev/null || echo "n/a"
+  else
+    systemctl is-enabled "$unit" 2>/dev/null || echo "n/a"
+  fi
+}
+
+http_probe_compact() {
+  local url="$1"
+  if ! have_cmd curl; then
+    printf "curl?"
+    return 0
+  fi
+  local code
+  code="$(curl -sS -o /dev/null -m 1 -w "%{http_code}" "$url" 2>/dev/null || true)"
+  if [[ -z "$code" || "$code" == "000" ]]; then
+    printf "down"
+  else
+    printf "%s" "$code"
+  fi
+}
+
+compact_journal_tail() {
+  local scope="$1" unit="$2" lines="${3:-1}"
+  have_cmd journalctl || { printf "-"; return 0; }
+
+  local -a cmd=(journalctl --no-pager -n "$lines" -o short-iso)
+  [[ "$scope" == "user" ]] && cmd+=(--user)
+  cmd+=(-u "$unit")
+
+  local out
+  out="$("${cmd[@]}" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+  [[ -n "$out" ]] || { printf "-"; return 0; }
+
+  local joined
+  joined="$(printf "%s\n" "$out" | awk 'NF{printf "%s%s", (n++?" || ":""), $0} END{if (n==0) printf "-"}')"
+  if ((${#joined} > 140)); then
+    joined="${joined:0:137}..."
+  fi
+  printf "%s" "$joined"
+}
+
+pick_log_scope_unit() {
+  local prod_unit="$1" dev_unit="$2"
+  local prod_state dev_state
+  prod_state="$(svc_state system "$prod_unit")"
+  dev_state="$(svc_state user "$dev_unit")"
+
+  if [[ "$dev_state" == "active" ]]; then
+    printf "user|%s" "$dev_unit"
+  elif [[ "$prod_state" == "active" ]]; then
+    printf "system|%s" "$prod_unit"
+  elif [[ "$dev_state" != "n/a" ]]; then
+    printf "user|%s" "$dev_unit"
+  else
+    printf "system|%s" "$prod_unit"
+  fi
+}
+
+status_row() {
+  local name="$1" prod_unit="$2" dev_unit="$3" health_url="${4:-}" log_lines="${5:-1}"
+  local prod_state dev_state health="-"
+  prod_state="$(svc_state system "$prod_unit")"
+  dev_state="$(svc_state user "$dev_unit")"
+  if [[ -n "$health_url" ]]; then
+    health="$(http_probe_compact "$health_url")"
+  fi
+
+  local picked scope unit logline
+  picked="$(pick_log_scope_unit "$prod_unit" "$dev_unit")"
+  scope="${picked%%|*}"
+  unit="${picked#*|}"
+  logline="$(compact_journal_tail "$scope" "$unit" "$log_lines")"
+
+  printf "%-7s  prod=%-9s dev=%-9s health=%-6s log[%s]=%s\n" \
+    "$name" "$prod_state" "$dev_state" "$health" "$scope" "$logline"
+}
+
+render_compact_status() {
+  local log_lines="${1:-1}"
+  printf "hubctl status (compact)\n"
+  printf "time: %s\n\n" "$(date '+%Y-%m-%d %H:%M:%S')"
+  status_row "index"  "$PROD_INDEX_UNIT"  "$DEV_INDEX_UNIT"  "http://127.0.0.1:8799/health" "$log_lines"
+  status_row "router" "$PROD_ROUTER_UNIT" "$DEV_ROUTER_UNIT" ""                               "$log_lines"
+  status_row "bridge" "$PROD_BRIDGE_UNIT" "$DEV_BRIDGE_UNIT" "http://127.0.0.1:8080/health" "$log_lines"
+}
+
+status_action() {
+  local watch=0
+  local interval=2
+  local log_lines=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -w|--watch)
+        watch=1
+        if [[ -n "${2:-}" && "${2:-}" =~ ^[0-9]+$ ]]; then
+          interval="$2"
+          shift
+        fi
+        ;;
+      --watch=*)
+        watch=1
+        interval="${1#*=}"
+        ;;
+      --logs)
+        log_lines="${2:-1}"
+        shift
+        ;;
+      --logs=*)
+        log_lines="${1#*=}"
+        ;;
+      --no-logs)
+        log_lines=0
+        ;;
+      -h|--help|help)
+        cat <<'EOF'
+hubctl status — compact combined status
+
+Usage:
+  hubctl status [--watch [SEC]] [--logs N|--no-logs]
+
+Examples:
+  hubctl status
+  hubctl status --logs 2
+  hubctl status --watch 2 --logs 1
+EOF
+        return 0
+        ;;
+      *)
+        hub_die "unknown status option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  [[ "$interval" =~ ^[0-9]+$ ]] || interval=2
+  [[ "$log_lines" =~ ^[0-9]+$ ]] || log_lines=1
+
+  if [[ "$watch" == "1" ]]; then
+    while true; do
+      printf '\033[2J\033[H'
+      render_compact_status "$log_lines"
+      printf "\nwatch: %ss  ctrl-c to exit\n" "$interval"
+      sleep "$interval"
+    done
+  fi
+
+  render_compact_status "$log_lines"
+}
 
 get_dev_units() {
   local target="${1:-all}"
@@ -120,7 +297,7 @@ get_dev_units() {
     index) echo "$DEV_INDEX_UNIT" ;;
     router) echo "$DEV_ROUTER_UNIT" ;;
     bridge) echo "$DEV_BRIDGE_UNIT" ;;
-    *) die "unknown target: $target (use: index|router|bridge|all)" ;;
+    *) hub_die "unknown target: $target (use: index|router|bridge|all)" ;;
   esac
 }
 
@@ -153,7 +330,7 @@ dev_action() {
       journalctl --user "${args[@]}" -n 100 -f
       ;;
     *)
-      die "unknown dev action: $action"
+      hub_die "unknown dev action: $action"
       ;;
   esac
 }
@@ -194,7 +371,7 @@ Commands:
   logs          Follow weekly sync logs
 EOF
       ;;
-    *) die "unknown fire command: $cmd" ;;
+    *) hub_die "unknown fire command: $cmd" ;;
   esac
 }
 
@@ -262,7 +439,7 @@ Tools:
   tent, gas, door, game, voice, tele, firectl
 
 Utility:
-  list, doctor, help
+  list, status, doctor, help
 
 For details: hubctl <command> --help
 EOF
@@ -278,6 +455,7 @@ cmd="${1:-help}"
 case "$cmd" in
   -h|--help|help) usage ;;
   list) list_commands ;;
+  status) status_action "$@" ;;
   doctor) doctor ;;
 
   # Services (delegate)
@@ -292,7 +470,7 @@ case "$cmd" in
     case "$sub" in
       status) dev_status "$@" ;;
       start|stop|restart|logs) dev_action "$sub" "$@" ;;
-      *) die "unknown dev command: $sub (use: status|start|stop|restart|logs)" ;;
+      *) hub_die "unknown dev command: $sub (use: status|start|stop|restart|logs)" ;;
     esac
     ;;
 
@@ -302,7 +480,7 @@ case "$cmd" in
     ;;
 
   # Tools (delegate)
-  core4|sync|git|backup|mount|hook|tent|gas|firectl|tele|door|game|voice)
+  core4|sync|git|backup|mount|hook|tent|gas|firectl|tele|door|game|voice|mobileapp|mobileappctl|pwa)
     delegate_tool "$cmd" "$@"
     ;;
 

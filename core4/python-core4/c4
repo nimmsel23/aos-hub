@@ -39,10 +39,8 @@ declare -A habits=(
   [fitness]=0
   [fuel]=0
   [discover]=0
+  [declare]=0
 )
-
-# Extract totals and entries
-total=$(jq -r '.totals.week_total // 0' "$DAY_FILE" 2>/dev/null || echo "0")
 
 # Parse entries and mark completed habits
 while IFS= read -r entry; do
@@ -51,13 +49,15 @@ while IFS= read -r entry; do
 
   # Map task names to habit keys
   case "$task" in
-    person1|person2) habit="partner" ;;
+    person1|partner) habit="partner" ;;
+    person2|posterity) habit="posterity" ;;
     posterity) habit="posterity" ;;
     memoirs) habit="memoirs" ;;
     meditation) habit="meditation" ;;
     fitness) habit="fitness" ;;
     fuel) habit="fuel" ;;
     discover) habit="discover" ;;
+    declare|action) habit="declare" ;;
     *) habit="" ;;
   esac
 
@@ -66,6 +66,15 @@ while IFS= read -r entry; do
   fi
 done < <(jq -c '.entries[]' "$DAY_FILE" 2>/dev/null || echo "")
 
+# Day total from recognized Core4 habits only (ignores test/probe events)
+done_count=0
+for habit in memoirs partner posterity meditation fitness fuel discover declare; do
+  if [[ "${habits[$habit]}" == "1" ]]; then
+    ((done_count+=1))
+  fi
+done
+total=$(awk "BEGIN { printf \"%.1f\", $done_count * 0.5 }")
+
 # Output
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${BLUE}  Core4 Status${RESET} — ${GRAY}$TODAY ($WEEK)${RESET}"
@@ -73,7 +82,7 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Habit status
-for habit in memoirs partner posterity meditation fitness fuel discover; do
+for habit in memoirs partner posterity meditation fitness fuel discover declare; do
   if [[ "${habits[$habit]}" == "1" ]]; then
     echo -e "  ${GREEN}✓${RESET} $habit"
   else
@@ -83,7 +92,7 @@ done
 
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "  Total: ${GREEN}$total${RESET} / 7.0"
+echo -e "  Total: ${GREEN}$total${RESET} / 4.0"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 # Optional: Bridge health check

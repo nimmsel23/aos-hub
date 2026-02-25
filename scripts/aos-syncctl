@@ -398,4 +398,34 @@ main_menu() {
   done
 }
 
-main_menu
+show_help() {
+  cat <<EOF
+aos-syncctl — interactive sync target editor (gum)
+
+Usage:
+  aos-syncctl [menu]
+  aos-syncctl help
+
+Notes:
+  - This tool is primarily interactive and requires a TTY + gum.
+  - For scriptable/non-interactive sync workflows use: syncctl
+EOF
+}
+
+main() {
+  local cmd="${1:-menu}"
+  shift || true
+
+  case "$cmd" in
+    ""|menu) main_menu "$@" ;;
+    help|-h|--help) show_help ;;
+    *)
+      echo "aos-syncctl: unknown command: $cmd" >&2
+      echo "" >&2
+      show_help >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

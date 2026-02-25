@@ -4,6 +4,33 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SYNCCTL="$SCRIPT_DIR/syncctl"
 
+show_help() {
+  cat <<'EOF'
+syncvaultctl — compatibility wrapper (deprecated)
+
+This command forwards to `syncctl`.
+
+Usage:
+  syncvaultctl <args...>
+  syncvaultctl help
+
+Examples:
+  syncvaultctl status        # forwarded to syncctl status (if supported)
+  syncvaultctl vault status  # forwarded to syncctl vault status
+EOF
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    if [[ -x "$SYNCCTL" ]] || command -v syncctl >/dev/null 2>&1; then
+      :
+    else
+      show_help
+      exit 0
+    fi
+    ;;
+esac
+
 if [[ -t 1 ]]; then
   echo "syncvaultctl: deprecated; forwarding to syncctl" >&2
 fi
@@ -17,4 +44,8 @@ if command -v syncctl >/dev/null 2>&1; then
 fi
 
 echo "syncvaultctl: syncctl not found" >&2
+if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "" >&2
+  show_help >&2
+fi
 exit 1

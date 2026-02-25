@@ -6,5 +6,31 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TARGET="$ROOT_DIR/voice/cli/voicectl"
 
-exec "$ROOT_DIR/voice/cli/voicectl" "$@"
+show_help() {
+  cat <<EOF
+voicectl (wrapper) — delegates to:
+  $TARGET
+
+Usage:
+  voicectl <command> [args...]
+  voicectl help
+
+Examples:
+  voicectl start
+  voicectl list
+  voicectl stats
+EOF
+}
+
+if [[ ! -x "$TARGET" ]]; then
+  if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then
+    show_help
+    exit 0
+  fi
+  echo "voicectl wrapper: target not found: $TARGET" >&2
+  exit 1
+fi
+
+exec "$TARGET" "$@"

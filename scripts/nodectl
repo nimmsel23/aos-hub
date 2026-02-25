@@ -148,12 +148,12 @@ Dev helpers:
   dev                   run npm dev server with auto-reload disabled
   autoreload on|off|status
   mode-dev/mode-prod    switch between user dev and system prod services
-  mode-status          show current mode via indexctl (if available)
+  mode-status           show current mode via indexctl (if available)
 
 Integrations:
-  routerctl            pass through to ${ROUTERCTL_BIN}
-  bridgectl            pass through to ${BRIDGECTL_BIN}
-  indexctl             pass through to ${INDEXCTL_BIN}
+  routerctl             pass through to routerctl
+  bridgectl             pass through to bridgectl
+  indexctl              pass through to indexctl
 
 URLs:
   open                 open best URL (tailscale preferred)
@@ -166,7 +166,7 @@ Tooling:
   edit [file]          open file relative to index-node root (default server.js)
   help, -h, --help     show this message
 
-See also: ${INDEXCTL_BIN} --help, ${BRIDGECTL_BIN} status, ${ROUTERCTL_BIN} doctor
+See also: indexctl --help, bridgectl status, routerctl doctor
 USAGE
 }
 
