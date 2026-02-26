@@ -255,68 +255,99 @@ menu() {
 }
 
 usage() {
-  cat <<EOF
-Usage: bridgectl <command>
+  cat <<'EOF'
+bridgectl — CLI for AOS Bridge (aiohttp on :8080)
 
-Core:
-  menu                            Interactive menu
-  doctor                          Full system diagnosis
-  diagnose                        Systemd unit diagnosis
-  fix [--yes]                     Fix systemd unit + restart
+The Bridge is the bidirectional HTTP layer between Gas HQ (cloud) and local
+services. Reachable via Tailscale at ideapad.tail7a15d6.ts.net/bridge.
 
-Service:
-  status|enable|start|stop|restart|logs|env
+USAGE
+  bridgectl <command> [args...]
+  bridgectl                       (opens interactive menu)
 
-Health & Info:
-  health                          Bridge health check
-  debug                           Debug info + RPC test
-  version                         Version & deployment info
+QUICK START
+  bridgectl health                Check if bridge is online
+  bridgectl status                Show systemd service state (both scopes)
+  bridgectl doctor                Full system diagnosis
+  bridgectl core4-today           Today's Core4 habits + total
 
-Core4:
-  core4-today                     Today's totals & habits
-  core4-week [YYYY-Wxx]           Weekly data
-  core4-log <domain> <task> [--undo]
-  core4-pull                      Pull from cloud
+SERVICE MANAGEMENT
+  status                          Service state (system + user scope)
+  start|stop|restart              Control bridge service
+  enable                          Link + enable + start service
+  logs                            Follow journal logs
+  env                             Edit ~/.env/aos.env
+  diagnose                        Systemd unit file diagnosis
+  fix [--yes]                     Fix unit symlink + restart
 
-Tent:
+HEALTH & DEBUG
+  health                          Bridge /health endpoint
+  debug                           /debug endpoint + RPC test
+  doctor                          Full diagnosis (service + tailscale + API)
+  version                         Bridge version + git rev
+
+CORE4 (Habit Tracking)
+  core4-today                     Today's totals + habits
+  core4-week [YYYY-Wxx]           Weekly aggregate (default: current week)
+  core4-log <domain> <task>       Log habit completion
+  core4-log <domain> <task> --undo   Undo habit completion
+  core4-pull                      Pull Core4 from Google Drive
+
+TENT (Weekly Review)
   tent-fetch [YYYY-Wxx]           Fetch Tent report
-  tent-sync [YYYY-Wxx]            Sync to GAS
-  tent-summary <md> [YYYY-Wxx]    Save weekly summary
+  tent-sync [YYYY-Wxx]            Sync Tent to GAS
+  tent-summary <md> [YYYY-Wxx]    Save weekly summary markdown
 
-Fire:
+FIRE (Execution Tracking)
   fire-daily [--send] [--scope daily|weekly] [--days N]
-  fire-review                     Daily review data
-  fire-trigger                    Trigger weekly Fire Map
+  fire-review                     Daily review data (tasks + sessions)
+  fire-trigger                    Trigger weekly Fire Map generation
 
-Tasks:
+TASKS (Taskwarrior ↔ GAS)
   task-add <desc> [--tag T] [--project P] [--due D] [--priority H|M|L]
   task-modify <uuid> [--tag-add T] [--tag-rm T] [--project P] [--due D]
-  task-op <JSON>                  Forward raw op to GAS
+  task-op <JSON>                  Forward raw operation to GAS
 
-Warstack:
-  warstack-draft <JSON>           Save/clear draft
+WARSTACK
+  warstack-draft <JSON>           Save/clear War Stack draft for /resume
 
-Telegram:
-  tele-send <text> [--chat-id ID]
+TELEGRAM
+  tele-send <text> [--chat-id ID] Send message via GAS webhook
 
-RPC:
-  test-rpc                        Test RPC endpoint
-  rpc <action> [JSON-args]        Arbitrary GAS Tent RPC
+RPC (Gas HQ Remote Procedure Call)
+  test-rpc                        Test RPC with health action
+  rpc <action> [JSON-args]        Send arbitrary RPC to GAS Tent
 
-Sync:
-  sync-push|sync-pull [--dry-run]
-  sync-status|sync-abort
+SYNC (rclone via Bridge)
+  sync-push [--dry-run]           Push vault to Google Drive
+  sync-pull [--dry-run]           Pull vault from Google Drive
+  sync-status                     Current sync operation status
+  sync-abort                      Abort running sync
 
-Tailscale:
-  tailscale|serve|funnel
+TAILSCALE
+  tailscale                       Show Tailscale serve status
+  serve                           Configure tailscale serve
+  funnel                          Configure tailscale funnel
 
-Other:
-  syncctl <args...>
-  heartbeat <cmd>
-  systemstatus
+OTHER
+  syncctl <args...>               Delegate to syncctl
+  heartbeat <cmd>                 Router heartbeat management
+  systemstatus                    Trigger GAS system status update
 
-Env:
-  AOS_ENV_FILE (default: ~/.env/aos.env)
+SECURITY
+  Bridge requires X-Bridge-Token header when AOS_BRIDGE_TOKEN is set.
+  NEVER use 'tailscale funnel' — exposes bridge to public internet.
+  Use 'tailscale serve' only (tailnet-only access).
+
+ENV
+  AOS_ENV_FILE          ~/.env/aos.env (bridge + all services)
+  AOS_BRIDGE_TOKEN      Auth token (required for production)
+  AOS_BRIDGE_URL        Override bridge URL (default: http://127.0.0.1:8080)
+
+SEE ALSO
+  bridge/ARCHITECTURE.md    Full architecture documentation
+  bridge/README.md          Endpoint reference + config
+  bridge/AGENTS.md          Developer guidelines
 EOF
 }
 
