@@ -1,3 +1,4 @@
+Ich habe in alle AGENTS.md in den pillar Ordnern /core4 /voice /door /game die original AlphaOS Pillar Texte angehängt, das sollte Klarheit ins Development bringen.
 # Repository Guidelines
 
 Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.

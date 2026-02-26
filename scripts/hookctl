@@ -166,11 +166,43 @@ _status_one() {
   fi
 }
 
+_status_extra_hooks() {
+  local phase_prefix="$1"
+  local canonical="$2"
+  local found=0
+  local path base
+
+  shopt -s nullglob
+  for path in "$HOOK_DIR"/"${phase_prefix}"*; do
+    [[ -e "$path" ]] || continue
+    [[ -x "$path" ]] || continue
+    base="$(basename "$path")"
+    [[ "$base" == "$canonical" ]] && continue
+    found=1
+    ui_warn "extra ${phase_prefix} hook active: ${base}"
+  done
+  shopt -u nullglob
+
+  return "$found"
+}
+
 cmd_status() {
   ui_title "Hook Status"
   _status_one "on-add" "$HOOK_SRC_DIR/on-add.alphaos.py" "$HOOK_DIR/on-add.99-alphaos.py"
   _status_one "on-modify" "$HOOK_SRC_DIR/on-modify.alphaos.py" "$HOOK_DIR/on-modify.99-alphaos.py"
   _status_one "on-exit" "$HOOK_SRC_DIR/on-exit.alphaos.py" "$HOOK_DIR/on-exit.99-alphaos.py"
+
+  echo
+  ui_info "Collision scan ($HOOK_DIR)"
+  local extra=0
+  _status_extra_hooks "on-add" "on-add.99-alphaos.py" && extra=1 || true
+  _status_extra_hooks "on-modify" "on-modify.99-alphaos.py" && extra=1 || true
+  _status_extra_hooks "on-exit" "on-exit.99-alphaos.py" && extra=1 || true
+  if [[ "$extra" == "0" ]]; then
+    ui_ok "no extra executable hooks detected"
+  else
+    ui_warn "multiple hooks are active; duplicate side effects are possible"
+  fi
 
   ensure_env_file
   echo
