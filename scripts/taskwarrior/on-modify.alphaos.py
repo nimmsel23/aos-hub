@@ -42,16 +42,17 @@ def _is_true(value: str | None) -> bool:
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def parse_last_task(raw: str) -> dict | None:
+def parse_task_objects(raw: str) -> list[dict]:
     raw = (raw or "").strip()
     if not raw:
-        return None
+        return []
     try:
-        return json.loads(raw)
+        obj = json.loads(raw)
+        return [obj] if isinstance(obj, dict) else []
     except json.JSONDecodeError:
         decoder = json.JSONDecoder()
         idx = 0
-        last = None
+        out: list[dict] = []
         while True:
             while idx < len(raw) and raw[idx].isspace():
                 idx += 1
@@ -59,8 +60,17 @@ def parse_last_task(raw: str) -> dict | None:
                 break
             obj, idx = decoder.raw_decode(raw, idx)
             if isinstance(obj, dict):
-                last = obj
-        return last
+                out.append(obj)
+        return out
+
+
+def parse_modify_old_new(raw: str) -> tuple[dict | None, dict | None]:
+    objs = parse_task_objects(raw)
+    if not objs:
+        return None, None
+    if len(objs) == 1:
+        return None, objs[0]
+    return objs[-2], objs[-1]
 
 
 def _format_due(value: object) -> str:
@@ -400,7 +410,7 @@ def main() -> int:
     hook_env_path = Path(os.environ.get("AOS_HOOK_ENV_FILE") or str(ENV_PATH)).expanduser()
     load_env(hook_env_path)
     raw = sys.stdin.read()
-    task = parse_last_task(raw)
+    old_task, task = parse_modify_old_new(raw)
     if not task:
         return 0
 
@@ -410,6 +420,8 @@ def main() -> int:
     habit = detect_habit(tags)
     alphatype = detect_alphatype(tags)
     status = str(task.get("status", "")).lower()
+    old_status = str((old_task or {}).get("status", "")).lower()
+    completed_transition = status == "completed" and old_status != "completed"
 
     data = {
         "uuid": task.get("uuid"),
@@ -421,11 +433,11 @@ def main() -> int:
         "end": task.get("end"),
         "door_name": task.get("door_name") or "",
         "alphatype": alphatype,
-        "changes": {"status": {"new": status}},
+        "changes": {"status": {"old": old_status, "new": status}},
     }
 
     if habit:
-        if status == "completed" and os.environ.get("AOS_CORE4_LOG", "1") == "1":
+        if completed_transition and os.environ.get("AOS_CORE4_LOG", "1") == "1":
             core4_payload = {
                 "domain": domain or "",
                 "task": habit,
@@ -445,7 +457,7 @@ def main() -> int:
                 )
                 send_tele_text(done_text)
         if status == "completed":
-            if os.environ.get("AOS_CORE4_TICKTICK", "1") == "1":
+            if completed_transition and os.environ.get("AOS_CORE4_TICKTICK", "1") == "1":
                 send_ticktick_done(domain, habit, tags)
             payload = {
                 "type": "core4_task_done",

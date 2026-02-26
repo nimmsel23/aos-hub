@@ -116,6 +116,7 @@ print_command_catalog() {
   cat <<'EOF'
 menu	menu	Interactive terminal menu (TTY default when no args)
 dashboard	dashboard	Compact Door dashboard (hotlist + focus + health)
+chapters	chapters [blueprints|alphaos]	Door chapter reader/list (offline, local vault)
 list	list	List all active doors with status
 show	show <door>	Show detail view for a specific door
 hotlist	hotlist [list|json|open|add]	Potential / Hot List flow (JSON source supported)
@@ -1494,6 +1495,43 @@ cmd_dashboard_chapters() {
   done
 }
 
+# Public CLI command wrapper for the dashboard chapter reader/list.
+# Keeps the reader reusable outside the dashboard hotkey loop (`doorctl chapters`,
+# `door c`) and provides a simple JSON listing mode for scripting.
+cmd_chapters() {
+  local source="${1:-blueprints}"
+  case "$source" in
+    blueprints|alphaos) ;;
+    alpha)
+      source="alphaos"
+      ;;
+    *)
+      ui_err "Unknown chapter source: $source (use blueprints|alphaos)"
+      return 2
+      ;;
+  esac
+
+  if json_mode; then
+    require_jq || return 1
+    door_chapter_catalog "$source" | jq -R -s --arg source "$source" '
+      split("\n")
+      | map(select(length > 0))
+      | map(split("\t"))
+      | {
+          source: $source,
+          chapters: map({
+            index: (.[0] | tonumber),
+            path: .[1],
+            title: .[2]
+          })
+        }
+    '
+    return 0
+  fi
+
+  cmd_dashboard_chapters "$source"
+}
+
 # Dashboard command:
 # - JSON mode returns a structured snapshot
 # - non-TTY prints a one-shot snapshot
@@ -2194,6 +2232,7 @@ Commands:
   show <door>             Show detail view for specific door
   hot [subcmd]            Hot List frontdoor (TTY UI by default)
   hotlist [subcmd]        Potential/Hot List flow (list/open/add)
+  chapters [source]       Door chapter reader/list (blueprints|alphaos)
   doorwar [subcmd]        Plan-phase terminal view (Door War)
   warstack <door> [...]   Alias for war (or production view if no door)
   review                  Compact phase review + health + focus
@@ -2224,6 +2263,8 @@ Examples:
   doorctl list
   doorctl --json list
   doorctl dashboard
+  doorctl chapters
+  doorctl chapters alphaos
   doorctl hot
   doorctl hot "Idea ..."
   doorctl hotlist json active
@@ -2335,6 +2376,7 @@ main() {
     show) cmd_show "$@" ;;
     hot) cmd_hot "$@" ;;
     hotlist) cmd_hotlist "$@" ;;
+    chapters|chapter) cmd_chapters "$@" ;;
     doorwar) cmd_doorwar "$@" ;;
     warstack) cmd_warstack "$@" ;;
     review) cmd_review ;;
