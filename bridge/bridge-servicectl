@@ -243,26 +243,117 @@ PY
   return "$rc"
 }
 
-logs() { journalctl --user -u "$SERVICE_NAME" -n 200 -f; }
+# Detect which scope the bridge is actually running in
+# Returns: "system", "user", or "none"
+active_scope() {
+  local sys_a="inactive" user_a="inactive"
+  if has_cmd systemctl; then
+    sys_a="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+  fi
+  if systemd_user_available; then
+    user_a="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
+  fi
+  if [[ "$sys_a" == "active" ]]; then
+    echo "system"
+  elif [[ "$user_a" == "active" ]]; then
+    echo "user"
+  else
+    echo "none"
+  fi
+}
+
+# Scope-aware service control
+svc_restart() {
+  local scope
+  scope="$(active_scope)"
+  case "$scope" in
+    system)
+      msg "Restarting system service: aos-bridge.service"
+      sudo systemctl restart "aos-bridge.service"
+      ;;
+    user)
+      msg "Restarting user service: $SERVICE_NAME"
+      systemctl_user restart "$SERVICE_NAME"
+      ;;
+    none)
+      ui_warn "Bridge not running in either scope. Starting user service..."
+      systemctl_user start "$SERVICE_NAME"
+      ;;
+  esac
+}
+
+svc_start() {
+  local scope
+  scope="$(active_scope)"
+  if [[ "$scope" == "system" ]]; then
+    msg "System service already active: aos-bridge.service"
+  elif [[ "$scope" == "user" ]]; then
+    msg "User service already active: $SERVICE_NAME"
+  else
+    msg "Starting user service: $SERVICE_NAME"
+    systemctl_user start "$SERVICE_NAME"
+  fi
+}
+
+svc_stop() {
+  local scope
+  scope="$(active_scope)"
+  case "$scope" in
+    system)
+      msg "Stopping system service: aos-bridge.service"
+      sudo systemctl stop "aos-bridge.service"
+      ;;
+    user)
+      msg "Stopping user service: $SERVICE_NAME"
+      systemctl_user stop "$SERVICE_NAME"
+      ;;
+    none)
+      msg "Bridge not running."
+      ;;
+  esac
+}
+
+logs() {
+  local scope
+  scope="$(active_scope)"
+  case "$scope" in
+    system)
+      journalctl -u "aos-bridge.service" -n 200 -f
+      ;;
+    user)
+      journalctl --user -u "$SERVICE_NAME" -n 200 -f
+      ;;
+    none)
+      ui_warn "Bridge not running. Showing system logs (if any):"
+      journalctl -u "aos-bridge.service" -n 50 --no-pager 2>/dev/null || \
+        journalctl --user -u "$SERVICE_NAME" -n 50 --no-pager 2>/dev/null || \
+        msg "No logs found."
+      ;;
+  esac
+}
 
 env_edit() { "${EDITOR:-nano}" "$AOS_ENV_FILE"; }
 
 usage() {
   cat <<'__HELP__'
-bridge-servicectl
+bridge-servicectl — Manage AOS Bridge systemd service
+
+Automatically detects whether the bridge runs as system or user service.
 
 Usage: bridge-servicectl <command>
 
 Commands:
-  status
-  install-deps
-  link-service [--force]
-  diagnose
-  fix [--yes]
-  enable
-  start|stop|restart
-  logs
-  env
+  status              Show service status (both scopes)
+  start               Start bridge (auto-detect scope)
+  stop                Stop bridge (auto-detect scope, sudo for system)
+  restart             Restart bridge (auto-detect scope, sudo for system)
+  logs                Follow logs (auto-detect scope)
+  enable              Link + enable + start user service
+  env                 Edit ~/.env/aos.env
+  install-deps        Install python-aiohttp (Arch)
+  link-service [-f]   Symlink unit file to ~/.config/systemd/user/
+  diagnose            Systemd unit diagnosis
+  fix [--yes]         Fix unit symlink + restart
 
 Env:
   AOS_ENV_FILE (default: ~/.env/aos.env)
@@ -280,9 +371,9 @@ case "$cmd" in
   diagnose) diagnose_systemd ;;
   fix) fix_systemd "${1:-}" ;;
   enable) link_service --force; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
-  start) systemctl_user start "$SERVICE_NAME" ;;
-  stop) systemctl_user stop "$SERVICE_NAME" ;;
-  restart) systemctl_user restart "$SERVICE_NAME" ;;
+  start) svc_start ;;
+  stop) svc_stop ;;
+  restart) svc_restart ;;
   logs) logs ;;
   env) env_edit ;;
   *) usage; exit 1 ;;

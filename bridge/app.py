@@ -118,10 +118,15 @@ SYNC_STATUS: dict[str, dict[str, Any]] = {
 async def auth_middleware(request: web.Request, handler):
     if not BRIDGE_TOKEN:
         return await handler(request)
+    # Exempt localhost from token requirement (local CLI tools, c4, bridgectl)
+    remote = request.remote or ""
+    if remote in ("127.0.0.1", "::1", "localhost"):
+        return await handler(request)
     supplied = request.headers.get(BRIDGE_TOKEN_HEADER, "")
     if not supplied:
         supplied = request.query.get("token", "")
     if supplied != BRIDGE_TOKEN:
+        LOGGER.warning("auth rejected: remote=%s path=%s", remote, request.path)
         return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     return await handler(request)
 
