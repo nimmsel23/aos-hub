@@ -34,7 +34,7 @@ Nutze diese Frontdoors:
 - `telectl`
 
 Regel:
-- Shared libs nutzen (`codex-subcmd.sh`, `aos-env.sh`, `ctl-lib.sh`)
+- Shared libs nutzen (`aos-env.sh`, `ctl-lib.sh`)
 - Keine lokalen Redefinitionen der Common-Helper
 
 ### Legacy CTL (Migration offen)
@@ -48,6 +48,7 @@ Regel:
 ### Wrapper CTL (nur Weiterleitung)
 - `voicectl`
 - `syncvaultctl` (deprecated -> `syncctl`)
+- `pwactl` (wrapper -> `mobileappctl`)
 
 ## Wichtige Non-CTL Tools
 - `heartbeat`

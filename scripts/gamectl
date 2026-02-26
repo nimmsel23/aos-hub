@@ -13,8 +13,6 @@ PILLAR_GAMECTL="${GAME_PILLARCTL_BIN:-$ROOT_DIR/game/gamectl}"
 
 # Codex session helper: gamectl codex [purpose...]
 # shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh" 2>/dev/null || true
-codex_subcmd_maybe "game" "gamectl" "$@" && exit 0
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/aos-env.sh" 2>/dev/null || true

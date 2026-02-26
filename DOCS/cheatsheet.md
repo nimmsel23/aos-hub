@@ -120,7 +120,7 @@ Bridge env (systemd):
 | `scripts/indexctl` | Index Node unit control |
 | `scripts/setup-alpha-hooks.sh` | Task + git hooks |
 | `scripts/setup-task-export.sh` | Taskwarrior export snapshot timer |
-| `scripts/setup-fire-map.sh` | Fire Map bootstrap |
+| `game/fire/setup-fire-map.sh` | Fire Map bootstrap (canonical; `scripts/setup-fire-map.sh` compat wrapper) |
 | `scripts/syncvaultctl` | Unified sync CLI |
 | `scripts/taskwarrior/` | Taskwarrior hooks |
 | `scripts/taskwarrior/export-snapshot.sh` | Write `task export` JSON snapshot |

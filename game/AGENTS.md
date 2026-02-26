@@ -22,7 +22,12 @@ Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, w
 ## Coding Rules
 - Preserve center boundaries and cascade expectations across Game sub-centres.
 - Prefer canonical paths in this pillar over wrapper indirections in `scripts/`.
-- Reuse shared helper libs for ctl-style scripts (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`, `scripts/lib/codex-subcmd.sh`).
+- Reuse shared helper libs for ctl-style scripts (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`).
+
+## Cross-Pillar Boundary (Tent vs Door/Profit)
+- `game/tent` owns the **General's Tent weekly synthesis/sealed review session** (strategic reflection, course correction, next targets).
+- **Profit / execution review** is a **Door** concern (see Door/Profit blueprint semantics) and is an upstream input to Tent, not Tent-owned source-of-truth logic.
+- Tent artifacts may include Profit-derived values and sealed snapshots, but those are derived session outputs/history, not the canonical Profit record.
 
 ## Blueprint-First Rule
 - Game development should start from local chapter/blueprint files inside this pillar.

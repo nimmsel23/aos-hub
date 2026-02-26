@@ -1,1 +1,1 @@
-# stdlib-only (no dependencies)
+-r ../fire/requirements.txt

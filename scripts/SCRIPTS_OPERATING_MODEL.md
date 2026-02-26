@@ -7,7 +7,6 @@ This directory has three explicit tiers. The goal is to make ownership and behav
 ### `strict ctl` (policy-enforced)
 - Location: `scripts/*ctl` (selected set)
 - Must use shared helpers:
-  - `scripts/lib/codex-subcmd.sh`
   - `scripts/lib/aos-env.sh`
   - `scripts/ctl-lib.sh`
 - Must not redefine common helper functions locally.
@@ -47,7 +46,7 @@ Current wrappers:
 
 ## 2) Directory Map
 
-- `lib/`: shared shell libraries (`aos-env.sh`, `codex-subcmd.sh`)
+- `lib/`: shared shell libraries (for example `aos-env.sh`)
 - `ctl-lib.sh`: shared UI/system helpers for strict ctls
 - `sync-utils/`: canonical sync helper scripts
 - `utils/`: legacy duplicates/fallbacks (migration target: consolidate into `sync-utils/`)

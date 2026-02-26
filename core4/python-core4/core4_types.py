@@ -69,7 +69,21 @@ HABIT_PROMPTS = {
 DEFAULT_VAULT_DIR = Path.home() / "vault"
 BRIDGE_URL = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
 TZ = ZoneInfo(os.environ.get("AOS_TZ", "Europe/Vienna"))
-CORE4CTL = Path(os.environ.get("AOS_CORE4CTL", str(Path(__file__).resolve().parent / "core4ctl"))).expanduser()
+
+
+def _resolve_core4ctl_path() -> Path:
+    default_path = (Path(__file__).resolve().parent / "core4ctl").expanduser()
+    env_value = os.environ.get("AOS_CORE4CTL", "").strip()
+    if not env_value:
+        return default_path
+    env_path = Path(env_value).expanduser()
+    # Be tolerant of stale shell env vars after path refactors.
+    if env_path.exists():
+        return env_path
+    return default_path if default_path.exists() else env_path
+
+
+CORE4CTL = _resolve_core4ctl_path()
 CORE4_JOURNAL_DIR = Path(
     os.environ.get("CORE4_JOURNAL_DIR")
     or os.environ.get("AOS_CORE4_JOURNAL_DIR")

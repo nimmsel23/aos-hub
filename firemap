@@ -22,9 +22,9 @@ NC='\033[0m'
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SYNC_SCRIPT_DEFAULT="$SCRIPT_DIR/scripts/utils/fire-to-tasks.sh"
+SYNC_SCRIPT_DEFAULT="$SCRIPT_DIR/game/fire/fire-to-tasks.sh"
 SYNC_SCRIPT="${AOS_FIRE_TO_TASKS:-$SYNC_SCRIPT_DEFAULT}"
-FIREBOT_PY_DEFAULT="$SCRIPT_DIR/game/python-firemap/firemap_bot.py"
+FIREBOT_PY_DEFAULT="$SCRIPT_DIR/game/fire/firemap_bot.py"
 FIREBOT_PY="${AOS_FIREBOT_SCRIPT:-$FIREBOT_PY_DEFAULT}"
 PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
 
@@ -74,7 +74,7 @@ COMMANDS:
     list                List all Fire Maps
     status              Show current week Fire Map status
     print daily|weekly  Print Fire bot output (same grouping as Telegram)
-    send  daily|weekly  Send Fire bot output (sender configured in game/python-firemap)
+    send  daily|weekly  Send Fire bot output (sender configured in game/fire)
     test [text]         Send a test message via the Fire bot sender
     help                Show this help
 
@@ -114,7 +114,7 @@ get_current_week() {
 }
 
 get_current_year() {
-    date +%Y
+    date +%G
 }
 
 cmd_sync() {
@@ -169,13 +169,16 @@ cmd_list() {
         exit 1
     fi
 
-    local MAPS=($(ls -t "$FIRE_DIR"/FIRE_MAP_*.md 2>/dev/null))
+    shopt -s nullglob
+    local MAPS=("$FIRE_DIR"/FIRE_MAP_*.md)
+    shopt -u nullglob
 
     if [[ ${#MAPS[@]} -eq 0 ]]; then
         log_warn "No Fire Maps found"
         exit 0
     fi
 
+    local map
     for map in "${MAPS[@]}"; do
         local FILENAME=$(basename "$map")
         local DOMAIN=$(echo "$FILENAME" | sed -E 's/FIRE_MAP_([A-Z]+)_KW([0-9]+)_([0-9]+)\.md/\1/')

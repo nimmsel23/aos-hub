@@ -9,9 +9,19 @@ Component for Door lifecycle, War Stacks, Hit tracking, and 4P Flow.
 - Door development must start from local chapter/blueprint artifacts in this pillar before adding new logic.
 - Treat chapter files as intent/behavior reference, then map changes into canonical Door code paths (`door/lib/*`, `door/cli/doorctl`, `door/api/*`).
 - Keep this alignment explicit in PR/commit notes when behavior changes.
-- Primary chapter references are local symlinks in `door/` (e.g. `25 - Door.md` ... `31 - Door Summary.md`) pointing to `AlphaOS-blueprints/`.
+- Primary chapter references are local symlinks in `door/` (e.g. `25 - Door.md` ... `31 - Door Summary.md`, including `30 - Profit.md`) pointing to `AlphaOS-blueprints/`.
 - Additional chapter source: `door/gas-door-dev/Door_Chapters.html`.
 - If additional blueprint files are added, keep them in `door/` and extend this section instead of scattering rules elsewhere.
+
+## Door/Profit Boundary (important)
+
+- Blueprint alignment:
+  - `30 - Profit.md` defines **Profit** as the final Door stage ("Achieved & Done" / weekly yield review).
+- Therefore:
+  - Profit/execution review belongs to the **Door** domain (not Tent).
+  - Door/Profit outputs are the canonical source for weekly execution/profit status.
+- General's Tent consumes Profit as an input signal for weekly synthesis, but should not become the canonical owner of Profit scoring logic.
+- If Tent stores a session snapshot of Profit values, treat that as derived/session history only.
 
 ## Lint In Plain Language
 
@@ -550,4 +560,3 @@ The Door is more than just a productivity tool; it’s a shift in how you live y
 It helps you move from scattered efforts to focused achievements, from vague intentions to clear results.
 By integrating Potential, Plan, Production, and Profit, The Door ensures that every action you take is a step towards a greater purpose, transforming the ordinary into the extraordinary.
 Embrace The Door, and unlock a life of unparalleled productivity and fulfillment.
-

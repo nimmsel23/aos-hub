@@ -360,7 +360,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due     # Date fields to check
 #### Fire Map Bot
 
 **Location:**
-- `game/python-firemap/firemap_bot.py`
+- `game/fire/firemap_bot.py`
 
 **Purpose:**
 - Sends daily/weekly Fire Map snapshots from Taskwarrior to Telegram
@@ -384,7 +384,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due     # Date fields to check
 
 #### Fire Output (Terminal)
 
-Fire tasks come from Taskwarrior (`+fire`). Terminal output uses the same engine as Telegram (`game/python-firemap/firemap.py`).
+Fire tasks come from Taskwarrior (`+fire`). Terminal output uses the same engine as Telegram (`game/fire/firemap.py`).
 
 ```bash
 firemap print daily
@@ -405,7 +405,7 @@ firemap sync (legacy)
 ```
 
 **Script:**
-- `scripts/utils/fire-to-tasks.sh`
+- `game/fire/fire-to-tasks.sh` (canonical; compat wrapper at `scripts/utils/fire-to-tasks.sh`)
 
 **What It Does:**
 1. Reads Fire Map markdown files from Vault
@@ -605,7 +605,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due
 
 ```bash
 # Ensure fire-to-tasks.sh is executable
-chmod +x ~/aos-hub/scripts/utils/fire-to-tasks.sh
+chmod +x ~/aos-hub/game/fire/fire-to-tasks.sh
 
 # Add to PATH (if not already)
 export PATH="$PATH:~/aos-hub/scripts/utils"

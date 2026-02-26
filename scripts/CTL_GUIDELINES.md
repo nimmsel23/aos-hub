@@ -7,9 +7,6 @@ This file defines the contract for `aos-hub/scripts/*ctl`.
 Every strict `*ctl` script must source:
 
 ```bash
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
-codex_subcmd_maybe "<centre>" "<tool>" "$@" && exit 0
-
 source "$SCRIPT_DIR/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 

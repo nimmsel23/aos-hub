@@ -17,14 +17,13 @@ INDEX_ROOT="${AOS_INDEX_ROOT:-$ROOT_DIR/index-node}"
 NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
 NODE_PORT="${AOS_INDEX_PORT:-8799}"
 INDEXCTL_BIN="${INDEXCTL_BIN:-$ROOT_DIR/scripts/indexctl}"
+PWACTL_BIN="${PWACTL_BIN:-$ROOT_DIR/scripts/pwactl}"
 
 [[ -d "$INDEX_ROOT" ]] || { echo "ERROR: index-node not found: $INDEX_ROOT" >&2; exit 1; }
 
 # ============================================================================
 # HELPERS
 # ============================================================================
-
-has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 health_check() {
   if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
@@ -35,7 +34,7 @@ health_check() {
 }
 
 ts_url() {
-  has_cmd tailscale && tailscale serve status 2>/dev/null | awk '/^https:\/\//{print $1; exit}' || true
+  command -v tailscale >/dev/null 2>&1 && tailscale serve status 2>/dev/null | awk '/^https:\/\//{print $1; exit}' || true
 }
 
 best_url() {
@@ -50,7 +49,7 @@ best_url() {
 
 open_url() {
   local url="$1"
-  if has_cmd xdg-open; then
+  if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$url" >/dev/null 2>&1 &
   else
     echo "$url"
@@ -62,6 +61,17 @@ delegate_indexctl() {
     exec "$INDEXCTL_BIN" "$@"
   else
     echo "ERROR: indexctl not found: $INDEXCTL_BIN" >&2
+    exit 1
+  fi
+}
+
+delegate_pwactl() {
+  if [[ -x "$PWACTL_BIN" ]]; then
+    exec "$PWACTL_BIN" "$@"
+  elif [[ -x "$ROOT_DIR/scripts/mobileappctl" ]]; then
+    exec "$ROOT_DIR/scripts/mobileappctl" "$@"
+  else
+    echo "ERROR: pwactl/mobileappctl not found" >&2
     exit 1
   fi
 }
@@ -90,6 +100,9 @@ Development:
   menu                Quick health check (curl /menu)
   warm                Warm up index by hitting / and /menu
 
+PWA:
+  pwa <args>          Delegate to pwactl (mobileappctl wrapper)
+
 URLs:
   open                Open best URL (tailscale if available)
   local               Open http://localhost:8799
@@ -106,6 +119,7 @@ Service Mode:
 
 Delegation:
   indexctl <args>     Delegate to indexctl
+  pwactl <args>       Delegate to pwactl (PWA tooling)
   routerctl <args>    Delegate to routerctl
   bridgectl <args>    Delegate to bridgectl
 
@@ -117,6 +131,7 @@ Examples:
   nodectl status
   nodectl dev
   nodectl open
+  nodectl pwa list
   nodectl indexctl doctor
   nodectl edit server.js
 
@@ -195,21 +210,21 @@ cmd_serve() {
   local action="${1:-status}"
   case "$action" in
     on)
-      if ! has_cmd tailscale; then
+      if ! command -v tailscale >/dev/null 2>&1; then
         echo "ERROR: tailscale not installed" >&2
         exit 1
       fi
       tailscale serve --bg "${NODE_PORT}"
       ;;
     off)
-      if ! has_cmd tailscale; then
+      if ! command -v tailscale >/dev/null 2>&1; then
         echo "ERROR: tailscale not installed" >&2
         exit 1
       fi
       tailscale serve off
       ;;
     status)
-      if has_cmd tailscale; then
+      if command -v tailscale >/dev/null 2>&1; then
         tailscale serve status
       else
         echo "tailscale: not installed"
@@ -274,6 +289,9 @@ case "$cmd" in
   # Pass-through delegation
   indexctl)
     delegate_indexctl "$@"
+    ;;
+  pwa|pwactl)
+    delegate_pwactl "$@"
     ;;
   routerctl)
     exec "$ROOT_DIR/router/routerctl" "$@"

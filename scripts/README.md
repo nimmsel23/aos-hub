@@ -129,12 +129,12 @@ nodectl open            # open best URL (tailscale preferred)
 
 ### Fire tooling ✅
 
-**Engine:** `game/python-firemap/firemap.py` (Taskwarrior → Markdown-formatted text messages)
+**Engine:** `game/fire/firemap.py` (Taskwarrior → Markdown-formatted text messages)
 
-**Bot:** `game/python-firemap/firemap_bot.py` (sends `/fire` style snapshots)
+**Bot:** `game/fire/firemap_bot.py` (sends `/fire` style snapshots)
 
 **Wrappers:**
-- `scripts/firectl` — wrapper + installers: `doctor`, `fix`, `status/logs`, `setup-reports`, `setup-systemd`
+- `scripts/firectl` — compatibility wrapper to `game/fire/firectl` (same commands: `doctor`, `status/logs`, `setup-systemd`, ...)
 - `firemap` (repo root) — legacy sync (`firemap sync`) + new `firemap print/send` for the same output as the bot
 
 ---

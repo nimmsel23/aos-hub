@@ -5,10 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/ctl-lib.sh"
 # shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
-codex_subcmd_maybe "pwa" "mobileappctl" "$@" && exit 0
-# shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
 
 BASE_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799}"
 BASE_URL="${BASE_URL%/health}"
@@ -21,7 +19,9 @@ usage() {
 Usage: mobileappctl <command> [args]
 Commands:
   list           show registry table for available PWAs
-  health         curl /pwa/<name>/ for each PWA and report HTTP status
+  health [target] curl /pwa/<name>/ for each PWA and report HTTP status
+                 target: local (default) | tailnet | all
+  serve-status   show tailscale serve status + check PWA endpoints via tailnet URL
   open [name]    xdg-open the named PWA (all if omitted)
   check          verify index.html, app.js, style.css in each PWA
   changelog      show index-node/public/pwa/CHANGELOG.md
@@ -40,6 +40,67 @@ pwa_dir() {
 pwa_route() {
   local name="${1?}"
   printf "/pwa/%s/" "$name"
+}
+
+tailscale_serve_status_text() {
+  has_cmd tailscale || return 1
+  tailscale serve status 2>/dev/null
+}
+
+tailscale_serve_url_from_status() {
+  local status_text="${1:-}"
+  [[ -n "$status_text" ]] || return 1
+
+  printf "%s\n" "$status_text" | awk '
+    /^https:\/\// {
+      current=$1
+      if (first == "") first=$1
+      next
+    }
+    /^\|--/ {
+      if (current != "" && $0 ~ /\/pwa\/[[:space:]]+proxy[[:space:]]+http:\/\/127\.0\.0\.1:8799/) {
+        print current
+        found=1
+        exit
+      }
+    }
+    END {
+      if (!found && first != "") print first
+    }
+  '
+}
+
+tailscale_serve_url() {
+  local status_text
+  status_text="$(tailscale_serve_status_text || true)"
+  tailscale_serve_url_from_status "$status_text"
+}
+
+health_for_base() {
+  local label="${1:-health}"
+  local base="${2:-}"
+  local failures=0
+  local name route url status location
+
+  [[ -n "$base" ]] || return 2
+  base="${base%/}"
+
+  for name in "${PWA_NAMES[@]}"; do
+    route="$(pwa_route "$name")"
+    url="$base$route"
+    status="$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)"
+    if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+      msg "[$label] $name -> $status ($url)"
+    elif [[ "$status" =~ ^3[0-9][0-9]$ ]]; then
+      location="$(curl -sSI "$url" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"",$2); print $2; exit}' || true)"
+      warn "[$label] $name -> redirect ($status) ${location:-<no-location>} ($url)"
+      failures=$((failures + 1))
+    else
+      warn "[$label] $name -> fail (${status:-?}) ($url)"
+      failures=$((failures + 1))
+    fi
+  done
+  return $failures
 }
 
 list_cmd() {
@@ -61,20 +122,91 @@ list_cmd() {
 }
 
 health_cmd() {
-  local failures=0
-  for name in "${PWA_NAMES[@]}"; do
-    local route url status
-    route="$(pwa_route "$name")"
-    url="$BASE_URL$route"
-    status="$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)"
-    if curl -fsS -o /dev/null "$url"; then
-      msg "[health] $name -> $status"
-    else
-      warn "[health] $name -> fail (${status:-?})"
-      failures=$((failures + 1))
+  local target="${1:-local}"
+  local ts_url=""
+  local rc=0
+
+  case "$target" in
+    ""|local)
+      health_for_base "local" "$BASE_URL"
+      return $?
+      ;;
+    tailnet|ts)
+      ts_url="$(tailscale_serve_url || true)"
+      [[ -n "$ts_url" ]] || { warn "tailscale serve URL not found (tailscale serve status)"; return 2; }
+      health_for_base "tailnet" "$ts_url"
+      return $?
+      ;;
+    all)
+      set +e
+      health_for_base "local" "$BASE_URL"; local_rc=$?
+      ts_url="$(tailscale_serve_url || true)"
+      if [[ -n "$ts_url" ]]; then
+        health_for_base "tailnet" "$ts_url"; tailnet_rc=$?
+      else
+        warn "[tailnet] tailscale serve URL not found"
+        tailnet_rc=2
+      fi
+      set -e
+      (( local_rc == 0 && tailnet_rc == 0 )) || rc=1
+      return "$rc"
+      ;;
+    *)
+      die "Usage: mobileappctl health [local|tailnet|all]"
+      ;;
+  esac
+}
+
+serve_status_cmd() {
+  local ts_url=""
+  local status_text=""
+  local has_pwa_proxy=0
+  local sample_name=""
+  local sample_route=""
+  local sample_url=""
+  local sample_status=""
+  local sample_location=""
+
+  if ! has_cmd tailscale; then
+    die "tailscale not installed"
+  fi
+
+  msg "tailscale serve status:"
+  status_text="$(tailscale_serve_status_text)" || return $?
+  printf "%s\n" "$status_text"
+  echo ""
+
+  ts_url="$(tailscale_serve_url_from_status "$status_text" || true)"
+  if [[ -z "$ts_url" ]]; then
+    warn "No tailscale serve HTTPS URL found."
+    warn "PWAs under /pwa/* will not be reachable from tailnet until serve publishes the index-node route."
+    warn "Hint: nodectl serve on  (or tailscale serve --bg 8799)"
+    return 1
+  fi
+
+  if printf "%s\n" "$status_text" | rg -q '^\|--[[:space:]]+/pwa/[[:space:]]+proxy[[:space:]]+http://127\.0\.0\.1:8799'; then
+    has_pwa_proxy=1
+  fi
+
+  msg "Detected tailnet URL: $ts_url"
+  echo ""
+  health_for_base "tailnet" "$ts_url" || true
+
+  sample_name="${PWA_NAMES[0]}"
+  sample_route="$(pwa_route "$sample_name")"
+  sample_url="${ts_url%/}${sample_route}"
+  sample_status="$(curl -s -o /dev/null -w "%{http_code}" "$sample_url" || true)"
+  sample_location="$(curl -sSI "$sample_url" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"",$2); print $2; exit}' || true)"
+
+  if [[ "$sample_status" =~ ^3[0-9][0-9]$ && "$sample_location" == "$sample_route" ]]; then
+    echo ""
+    warn "Detected redirect loop candidate on tailnet: $sample_route -> $sample_location (HTTP $sample_status)"
+    if (( has_pwa_proxy )); then
+      warn "Likely cause: tailscale serve '/pwa/' proxy strips the /pwa prefix before forwarding to index-node."
+      warn "Recommended fix: remove '/pwa/' serve mapping and keep only '/' -> http://127.0.0.1:8799 (plus other API/bridge mappings as needed)."
     fi
-  done
-  return $failures
+    return 1
+  fi
 }
 
 open_cmd() {
@@ -256,18 +388,21 @@ EOF
 
 doctor_cmd() {
   local check_status=0
-  local health_status=0
+  local local_health_status=0
+  local tailnet_health_status=0
   set +e
   check_cmd
   check_status=$?
-  health_cmd
-  health_status=$?
+  health_cmd local
+  local_health_status=$?
+  health_cmd tailnet
+  tailnet_health_status=$?
   set -e
-  if [[ $check_status -eq 0 && $health_status -eq 0 ]]; then
+  if [[ $check_status -eq 0 && $local_health_status -eq 0 && $tailnet_health_status -eq 0 ]]; then
     msg "doctor: all checks passed"
     return 0
   fi
-  warn "doctor: check=$check_status health=$health_status"
+  warn "doctor: check=$check_status local=$local_health_status tailnet=$tailnet_health_status"
   return 1
 }
 
@@ -275,7 +410,8 @@ cmd="${1:-help}"
 shift || true
 case "$cmd" in
   list) list_cmd ;; 
-  health) health_cmd ;; 
+  health) health_cmd "$@" ;; 
+  serve-status|ts-status) serve_status_cmd ;;
   open) open_cmd "$@" ;; 
   check) check_cmd ;; 
   changelog) changelog_cmd ;; 

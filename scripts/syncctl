@@ -16,8 +16,6 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
 # Codex session helper: syncctl codex [purpose...]
 # shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
-codex_subcmd_maybe "main" "syncctl" "$@" && exit 0
 
 # Load global env (optional).
 # shellcheck disable=SC1091

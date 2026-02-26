@@ -11,11 +11,6 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 DOOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT_DIR="$(cd "$DOOR_DIR/.." && pwd)"
 
-# Codex session helper
-# shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
-codex_subcmd_maybe "door" "doorctl" "$@" && exit 0
-
 # Load global env
 DOORCTL_PRESET_AOS_VAULT_DIR="${AOS_VAULT_DIR-}"
 # shellcheck disable=SC1091
@@ -44,7 +39,7 @@ VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
 STALLED_DAYS="${AOS_DOOR_STALLED_DAYS:-7}"
 ATTENTION_DAYS="${AOS_DOOR_ATTENTION_DAYS:-3}"
 TASK_BIN="${TASK_BIN:-task}"
-HOT_PY="$DOOR_DIR/python-hot/hot.py"
+HOT_PY="$DOOR_DIR/python-potential/hot.py"
 HOT_TO_MD_SH="$DOOR_DIR/hot_to_md.sh"
 CREATE_WARSTACK_SH="$DOOR_DIR/create_warstack.sh"
 DOOR_FILE_WATCHER_SH="$DOOR_DIR/door_file_watcher.sh"
@@ -1396,6 +1391,27 @@ door_chapter_catalog() {
   done < <(door_chapter_paths "$source")
 }
 
+# Resolve one chapter row by numeric index from `door_chapter_catalog`.
+# Prints the same TSV shape as the catalog (`index<TAB>path<TAB>title`).
+#
+# We intentionally do not early-break the loop because `doorctl` runs with
+# `set -o pipefail`, and an early consumer exit can trigger noisy SIGPIPE
+# warnings in the producer on some shells/process-substitution paths.
+door_chapter_row_by_index() {
+  local source="${1:?}"
+  local wanted="${2:?}"
+  local row=""
+
+  while IFS=$'\t' read -r idx path title; do
+    if [[ "$idx" == "$wanted" ]]; then
+      row="$(printf "%s\t%s\t%s" "$idx" "$path" "$title")"
+    fi
+  done < <(door_chapter_catalog "$source")
+
+  [[ -n "$row" ]] || return 1
+  printf "%s\n" "$row"
+}
+
 # Minimal markdown/text reader used by the dashboard. Preference order:
 # glow -> bat -> less -> cat. It returns to the dashboard after the pager exits.
 door_read_file() {
@@ -1499,12 +1515,65 @@ cmd_dashboard_chapters() {
 # Keeps the reader reusable outside the dashboard hotkey loop (`doorctl chapters`,
 # `door c`) and provides a simple JSON listing mode for scripting.
 cmd_chapters() {
-  local source="${1:-blueprints}"
-  case "$source" in
-    blueprints|alphaos) ;;
+  # Supported forms:
+  #   doorctl chapters
+  #   doorctl chapters alphaos
+  #   doorctl chapters 3
+  #   doorctl chapters 3 alphaos
+  #   doorctl chapters open 3 [blueprints|alphaos]
+  # `door c 3` maps into this and opens the chapter immediately.
+  local mode="${1:-}"
+  local source="blueprints"
+  local chapter_idx=""
+
+  case "$mode" in
+    "" )
+      ;;
+    help|-h|--help)
+      cat <<'EOF'
+doorctl chapters
+
+Usage:
+  doorctl chapters                      # list / interactive reader (blueprints)
+  doorctl chapters blueprints           # list / interactive reader (blueprints)
+  doorctl chapters alphaos              # list / interactive reader (ALPHA_OS source)
+  doorctl chapters <index>              # open chapter by number (blueprints)
+  doorctl chapters <index> <source>     # open chapter by number
+  doorctl chapters open <index> [source]
+
+Examples:
+  doorctl chapters
+  doorctl chapters 3
+  doorctl chapters open 1 alphaos
+  doorctl --json chapters
+EOF
+      return 0
+      ;;
+    open|show|read)
+      chapter_idx="${2:-}"
+      source="${3:-blueprints}"
+      ;;
     alpha)
       source="alphaos"
       ;;
+    alphaos|blueprints)
+      source="$mode"
+      ;;
+    *)
+      if [[ "$mode" =~ ^[0-9]+$ ]]; then
+        chapter_idx="$mode"
+        source="${2:-blueprints}"
+      else
+        ui_err "Unknown chapters mode/source: $mode"
+        ui_info "Use: doorctl chapters [blueprints|alphaos|<index>|open <index> [source]]"
+        return 2
+      fi
+      ;;
+  esac
+
+  case "$source" in
+    blueprints|alphaos) ;;
+    alpha) source="alphaos" ;;
     *)
       ui_err "Unknown chapter source: $source (use blueprints|alphaos)"
       return 2
@@ -1513,20 +1582,53 @@ cmd_chapters() {
 
   if json_mode; then
     require_jq || return 1
-    door_chapter_catalog "$source" | jq -R -s --arg source "$source" '
-      split("\n")
-      | map(select(length > 0))
-      | map(split("\t"))
-      | {
-          source: $source,
-          chapters: map({
-            index: (.[0] | tonumber),
-            path: .[1],
-            title: .[2]
-          })
-        }
-    '
+
+    if [[ -n "$chapter_idx" ]]; then
+      local row idx path title
+      if ! row="$(door_chapter_row_by_index "$source" "$chapter_idx")"; then
+        ui_err "No chapter with number: $chapter_idx (source: $source)"
+        return 1
+      fi
+      IFS=$'\t' read -r idx path title <<< "$row"
+      jq -n \
+        --arg source "$source" \
+        --argjson index "$idx" \
+        --arg path "$path" \
+        --arg title "$title" \
+        '{source:$source, chapter:{index:$index, path:$path, title:$title}}'
+    else
+      door_chapter_catalog "$source" | jq -R -s --arg source "$source" '
+        split("\n")
+        | map(select(length > 0))
+        | map(split("\t"))
+        | {
+            source: $source,
+            chapters: map({
+              index: (.[0] | tonumber),
+              path: .[1],
+              title: .[2]
+            })
+          }
+      '
+    fi
     return 0
+  fi
+
+  if [[ -n "$chapter_idx" ]]; then
+    local row idx path title
+    if ! row="$(door_chapter_row_by_index "$source" "$chapter_idx")"; then
+      ui_err "No chapter with number: $chapter_idx (source: $source)"
+      return 1
+    fi
+    IFS=$'\t' read -r idx path title <<< "$row"
+    if ctl_can_prompt; then
+      printf '\033c'
+    fi
+    ui_title "Reader: $title"
+    printf "Source: %s\n" "$source"
+    printf "Path: %s\n\n" "$path"
+    door_read_file "$path"
+    return $?
   fi
 
   cmd_dashboard_chapters "$source"

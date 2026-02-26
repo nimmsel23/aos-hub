@@ -11,7 +11,14 @@ ROOT_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 if [[ -f "$SCRIPTS_DIR/lib/aos-env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$SCRIPTS_DIR/lib/aos-env.sh"
-  aos_env_load "" "$ROOT_DIR" || true
+  if aos_env_load "" "$ROOT_DIR"; then
+    :
+  else
+    __aos_env_load_rc=$?
+    if [[ "${AOS_ENV_REQUIRE:-0}" == "1" ]]; then
+      return "$__aos_env_load_rc" 2>/dev/null || exit "$__aos_env_load_rc"
+    fi
+  fi
 fi
 
 RED='\033[0;31m'

@@ -44,20 +44,33 @@ pause_screen() {
 }
 
 run_allow_fail() {
+    local had_errexit=0
+    [[ "$-" == *e* ]] && had_errexit=1
     set +e
     "$@"
     local rc=$?
-    set -e
+    if (( had_errexit )); then
+        set -e
+    fi
     return "$rc"
 }
 
 confirm_action() {
     local prompt="$1"
+    if [[ "${CTL_ASSUME_YES:-0}" == "1" ]]; then
+        return 0
+    fi
+    if [[ "${CTL_ASSUME_NO:-0}" == "1" ]]; then
+        return 1
+    fi
     if have_gum && have_tty; then
         gum confirm "$prompt"
-    else
+    elif [ -t 0 ] && [ -t 1 ]; then
+        local ans=""
         read -r -p "$prompt [y/N] " ans
         [[ "$ans" =~ ^[Yy]$ ]]
+    else
+        return 1
     fi
 }
 

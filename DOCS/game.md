@@ -319,15 +319,15 @@ GET /api/generals/latest?type=frame|freedom|focus|fire|voice  # Get latest Map
 
 #### Fire Map Bot (Telegram)
 
-**Location:** `game/python-firemap/firemap_bot.py`
+**Location:** `game/fire/firemap_bot.py`
 **Commands:** `/fire` (daily), `/fireweek` (weekly)
 **Data Source:** Taskwarrior (`+fire` tasks)
-**Engine:** `game/python-firemap/firemap.py` (prints Markdown-formatted text; overdue separate; grouped per project)
+**Engine:** `game/fire/firemap.py` (prints Markdown-formatted text; overdue separate; grouped per project)
 
 #### Fire Map Sync (CLI)
 
 **Command:** `firemap sync`
-**Script:** `scripts/utils/fire-to-tasks.sh`
+**Script (canonical):** `game/fire/fire-to-tasks.sh`
 **Flow (legacy):** Fire Map markdown → Taskwarrior tasks → TickTick (via hooks) → GCal (via ICS)
 
 #### Fire Output (Terminal)
@@ -471,7 +471,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due
 
 ```bash
 # Fire Map sync
-chmod +x ~/aos-hub/scripts/utils/fire-to-tasks.sh
+chmod +x ~/aos-hub/game/fire/fire-to-tasks.sh
 ```
 
 ---

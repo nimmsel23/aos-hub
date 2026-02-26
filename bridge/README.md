@@ -74,7 +74,7 @@ Both sides can initiate requests:
 - `AOS_FIREMAP_TRIGGER_ARGS` (optional, default `sync`)
 - `AOS_FIRE_DAILY_SEND` (optional, `1` to auto-send via `AOS_TELE_BIN`)
 - `AOS_FIRE_DAILY_MODE` (optional, default `firectl`; `firectl` calls the local Fire bot/engine; legacy modes: `report`, `due_export`)
-- `AOS_FIRECTL_BIN` (optional, default `<repo>/scripts/firectl`) — wrapper around the local Fire bot (`game/python-firemap/firemap_bot.py`)
+- `AOS_FIRECTL_BIN` (optional, default `<repo>/game/fire/firectl`; compat wrapper `<repo>/scripts/firectl`) — wrapper around the local Fire bot (`game/fire/firemap_bot.py`)
 - `AOS_TASK_EXPORT_PATH` (optional, overrides `<vault>/.alphaos/task_export.json` for `/bridge/daily-review-data`)
 - `AOS_BRIDGE_TOKEN` (optional, require `X-Bridge-Token` header)
 - `AOS_BRIDGE_TOKEN_HEADER` (optional, default `X-Bridge-Token`)

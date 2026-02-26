@@ -1,5 +1,26 @@
 # Core4 Pipeline — 28-or-Die System
 
+## Status / Reality Check (2026-02-26)
+
+Core4 ist im Alltag vor allem ein **Habit Tracker** (8 Habits, 4 Domains, 0.5 Punkte pro Habit).
+
+Bevorzugte Daily-Commands:
+- `core4` (Dashboard + Tracker-Pass-through)
+- `c4` (schneller Ledger-Status, read-only)
+- `c4d` (expliziter Dashboard-Shortcut)
+- `wcore4` (Taskwarrior-Wochenansicht + Core4-Wochenscore)
+
+`core4ctl` ist aktuell primär ein **Kompatibilitäts-/Ops-Shim** (legacy + Admin/Sync/Systemd).
+Mount-Commands sind legacy und nicht mehr normaler Workflow.
+
+Aktuelle Pfade (lokal):
+- Lokaler Tracker/Cache: `~/.core4/`
+- Vault root (kanonisch): `~/vault`
+
+Hinweis:
+- Diese Datei enthält historisch gewachsene Architektur-/Alias-Notizen und ist teilweise veraltet.
+- Für aktuelle CLI-Nutzung zuerst: `core4/CHEATSHEET.md` und `core4 --help` / `c4 --help`.
+
 **Pillar:** THE CORE (αOS Pillar #2)
 **Goal:** Daily investment in all 4 Domains (BODY/BEING/BALANCE/BUSINESS)
 **Mechanics:** 8 habits × 7 days = 56 tasks/week. Each done = 0.5 points. 28+ points = week won.

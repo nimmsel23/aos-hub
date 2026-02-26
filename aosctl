@@ -83,10 +83,10 @@ AOS_DOCTOR="$(resolve_bin "$SCRIPT_DIR/scripts/aos-doctor" || true)"
 ALIASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/aos-aliasctl" || true)"
 ENVCTL="$(resolve_bin "envctl" || true)"
 FIREMAP_BIN="$(resolve_bin "$SCRIPT_DIR/firemap" || true)"
-FIREMAP_SETUP="$(resolve_bin "$SCRIPT_DIR/scripts/setup-fire-map.sh" || true)"
-FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
+FIREMAP_SETUP="$(resolve_bin "$SCRIPT_DIR/game/fire/setup-fire-map.sh" "$SCRIPT_DIR/scripts/setup-fire-map.sh" || true)"
+FIRECTL_BIN="$(resolve_bin "$SCRIPT_DIR/game/fire/firectl" "$SCRIPT_DIR/scripts/firectl" || true)"
 CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/core4/python-core4/core4ctl" || true)"
-FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/game/python-firemap/firemap_bot.py" || true)"
+FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/game/fire/firemap_bot.py" "$SCRIPT_DIR/game/python-firemap/firemap_bot.py" || true)"
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
 TENTCTL="$(resolve_bin "$SCRIPT_DIR/game/python-tent-bot/tentctl" || true)"
@@ -187,7 +187,7 @@ hook|$SCRIPT_DIR/scripts/hookctl||AOS_HOOK_DIR AOS_HOOK_ENV_DIR AOS_HOOK_ENV_FIL
 door|$SCRIPT_DIR/door/cli/doorctl||AOS_VAULT_DIR AOS_DOOR_STALLED_DAYS
 game|$SCRIPT_DIR/scripts/gamectl||AOS_GAME_MOUNT_SERVICE
 voice|$SCRIPT_DIR/scripts/voicectl||AOS_VOICE_MOUNT_SERVICE
-firectl|$SCRIPT_DIR/scripts/firectl||AOS_TASK_BIN AOS_PYTHON_BIN AOS_TASKRC AOS_VAULT_DIR AOS_FIRE_DIR AOS_FIREBOT_SCRIPT AOS_FIRE_ENV_FILE AOS_FIRE_GIT_DIR
+firectl|$SCRIPT_DIR/game/fire/firectl||AOS_TASK_BIN AOS_PYTHON_BIN AOS_TASKRC AOS_VAULT_DIR AOS_FIRE_DIR AOS_FIREBOT_SCRIPT AOS_FIRE_ENV_FILE AOS_FIRE_GIT_DIR
 gas|$SCRIPT_DIR/scripts/gasctl||AOS_GAS_WEBHOOK_URL AOS_GAS_TENT_DIR
 EOF
 }

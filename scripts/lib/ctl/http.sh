@@ -34,5 +34,5 @@ curl_json_post_data() {
   local connect_timeout="${CTL_CURL_CONNECT_TIMEOUT:-5}"
   local max_time="${CTL_CURL_MAX_TIME:-30}"
   need_cmd curl
-  curl -fsS --connect-timeout "$connect_timeout" --max-time "$max_time" -X POST -H "Content-Type: application/json" -d "$data" "$url" 2>&1 || return 1
+  curl -fsS --connect-timeout "$connect_timeout" --max-time "$max_time" -X POST -H "Content-Type: application/json" --data-raw "$data" "$url" 2>&1 || return 1
 }

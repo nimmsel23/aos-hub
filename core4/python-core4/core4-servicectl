@@ -44,15 +44,15 @@ usage() {
   cat <<EOF
 Usage: core4-servicectl <command>
 
-Mount:
+Systemd:
+  install-timers
+
+Legacy mount (usually unused now):
   mount-status
   mount-enable
   mount-disable
   mount-restart
   mount-logs
-
-Systemd:
-  install-timers
 EOF
 }
 
@@ -69,4 +69,3 @@ case "$cmd" in
   install-timers) install_timers ;;
   *) usage; exit 1 ;;
 esac
-

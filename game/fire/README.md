@@ -11,10 +11,14 @@ This folder is the documentation home for everything Fire-related in `aos-hub`.
 
 ## Where The Code Lives
 
-- Terminal report setup: `scripts/setup-fire-map.sh`
-- Fire tooling CLI: `scripts/firectl`
-- Firemap engine: `game/python-firemap/firemap.py`
-- Firemap sender: `game/python-firemap/firemap_bot.py`
+- Terminal report setup (canonical): `game/fire/setup-fire-map.sh`
+- Fire report installer (canonical): `game/fire/setup-fire-reports.sh`
+- Fire Map -> Taskwarrior sync parser (canonical): `game/fire/fire-to-tasks.sh`
+- Fire tooling CLI (canonical): `game/fire/firectl`
+- Compatibility wrapper: `scripts/firectl` (delegates to `game/fire/firectl`)
+- Firemap engine: `game/fire/firemap.py`
+- Firemap sender: `game/fire/firemap_bot.py`
+- Python requirements placeholder: `game/fire/requirements.txt` (stdlib-only)
 - Index Node endpoints: `index-node/server.js` (`/api/fire/day`, `/api/fire/week`)
 - Router trigger extension: `router/extensions/firemap_commands.py`
 
@@ -35,16 +39,19 @@ scripts/taskwarrior/export-snapshot.sh
 ## Systemd Units (User)
 
 Common units (host user):
-- `alphaos-fire-daily.timer` → `alphaos-fire-daily.service` → `scripts/firectl send daily`
-- `alphaos-fire-weekly.timer` → `alphaos-fire-weekly.service` → `scripts/firectl send weekly`
+- `alphaos-fire-daily.timer` → `alphaos-fire-daily.service` → `game/fire/firectl send daily`
+- `alphaos-fire-weekly.timer` → `alphaos-fire-weekly.service` → `game/fire/firectl send weekly`
 
 Router `/fire` and `/fireweek` prefers `systemctl --user start` on these units (same logs/env).
 
 ## Environment (No Secrets In Git)
 
-Firemap sender reads env (recommended: shared file) and also auto-loads `game/python-firemap/.env` as a fallback:
+Firemap sender reads env (recommended: shared file) and also auto-loads local env files:
+- canonical: `game/fire/.env`
+- legacy fallback (compat): `game/python-firemap/.env`
 - Shared env (preferred): `~/.env/fire.env` (or set `AOS_FIRE_ENV_FILE=/path/to/fire.env`)
-- Repo-local (untracked) option: `fire/fire.env` (useful for local Codex sessions in this repo)
+- Committed template: `game/fire/fire.env.example`
+- Repo-local (untracked) option: `game/fire/fire.env` (useful for local Codex sessions in this repo)
 - `AOS_FIREMAP_BOT_TOKEN`, `AOS_FIREMAP_CHAT_ID` (Telegram API)
 - `AOS_FIREMAP_SENDER=api|tele|auto`
 - `AOS_FIREMAP_TAGS=production,hit,fire` (undated inclusion tags)
@@ -64,7 +71,7 @@ Index Node Fire Taskwarrior fallback can be tuned via:
 If the daily Telegram Firemap suddenly shows too few overdue tasks:
 - Check whether overdue tasks in Taskwarrior actually have `due|scheduled|wait` set.
 - Verify the Firemap engine isn’t accidentally tag-filtering dated tasks (it shouldn’t).
-- Use `firectl doctor` and `python game/python-firemap/firemap_bot.py test --debug --scope daily` for counts.
+- Use `firectl doctor` and `python game/fire/firemap_bot.py test --debug --scope daily` for counts.
 
 ## Fire Git (Vault)
 

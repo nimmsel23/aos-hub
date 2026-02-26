@@ -19,9 +19,40 @@ servicectl() { exec "$APP_DIR/core4-servicectl" "$@"; }
 clinctl() { exec "$APP_DIR/core4-clinctl" "$@"; }
 menuctl() { exec "$APP_DIR/core4-menuctl" "$@"; }
 
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+shim_notice() {
+  [[ -t 1 ]] || return 0
+  cat >&2 <<'EOF'
+[core4ctl] compatibility shim
+  Daily use: `core4`, `c4`, `c4d`, `wcore4`
+  Ops/admin: `core4ctl ...` (legacy-compatible)
+EOF
+}
+
+exec_frontdoor() {
+  local bin="$1"
+  shift || true
+  if have_cmd "$bin"; then
+    exec "$bin" "$@"
+  fi
+  return 1
+}
+
+legacy_mount_notice() {
+  [[ -t 1 ]] || return 0
+  cat >&2 <<'EOF'
+[core4ctl] legacy mount command
+  Core4 mounts are no longer part of the normal workflow.
+  Kept only for backward compatibility.
+EOF
+}
+
 usage() {
   cat <<EOF
 Usage: core4ctl <command>
+
+Compatibility shim (preferred daily commands: \`core4\`, \`c4\`, \`c4d\`, \`wcore4\`)
 
 Frontdoor (daily use):
   core4               # live dashboard (or tracker pass-through)
@@ -65,8 +96,10 @@ Sync:
   core4ctl probe [all|today|week [YYYY-Www]]
 
 Systemd:
-  core4ctl mount-status|mount-enable|mount-disable|mount-restart|mount-logs
   core4ctl install-timers
+
+Legacy (rarely needed):
+  core4ctl mount-status|mount-enable|mount-disable|mount-restart|mount-logs
 EOF
 }
 
@@ -82,9 +115,61 @@ else
 fi
 
 case "$cmd" in
-  -h|--help|help) usage ;;
-  help) usage ;;
-  menu) menuctl menu ;;
+  -h|--help|help)
+    shim_notice
+    usage
+    ;;
+  help)
+    shim_notice
+    usage
+    ;;
+  menu)
+    case "${1:-}" in
+      help|-h|--help)
+        shim_notice
+        usage
+        ;;
+      *)
+        shim_notice
+        exec_frontdoor core4 || menuctl menu
+        ;;
+    esac
+    ;;
+  dashboard|dash)
+    case "${1:-}" in
+      help|-h|--help)
+        shim_notice
+        usage
+        ;;
+      *)
+        shim_notice
+        exec_frontdoor core4 "$@" || menuctl menu
+        ;;
+    esac
+    ;;
+  # Explicit shim frontdoors
+  fast)
+    shim_notice
+    exec_frontdoor c4 "$@" || trackctl status
+    ;;
+  score|score-day)
+    shim_notice
+    exec_frontdoor core4 -d "$@" || trackctl status
+    ;;
+  score-week)
+    shim_notice
+    exec_frontdoor core4 -w "$@" || trackctl status
+    ;;
+  weekview|week-score)
+    shim_notice
+    exec_frontdoor wcore4 "$@" || trackctl status
+    ;;
+
+  # Habit passthrough for users still typing core4ctl fitness, etc.
+  fitness|fuel|meditation|memoirs|partner|posterity|discover|declare)
+    shim_notice
+    exec_frontdoor core4 "$cmd" "$@" || trackctl status
+    ;;
 
   doctor) clinctl doctor ;;
   install-cli) clinctl install-cli "${1:-}" ;;
@@ -102,6 +187,9 @@ case "$cmd" in
     ;;
 
   mount-status|mount-enable|mount-disable|mount-restart|mount-logs|install-timers)
+    if [[ "$cmd" == mount-* ]]; then
+      legacy_mount_notice
+    fi
     servicectl "$cmd" "$@"
     ;;
 

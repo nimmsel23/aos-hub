@@ -9,6 +9,12 @@ if [[ "$SCRIPT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
   SCRIPT_DIR="$HOME/aos-hub"
 fi
 
+# Pillar roots (explicit, stable paths inside aos-hub)
+PILLAR_CORE4_DIR="$SCRIPT_DIR/core4"
+PILLAR_VOICE_DIR="$SCRIPT_DIR/voice"
+PILLAR_DOOR_DIR="$SCRIPT_DIR/door"
+PILLAR_GAME_DIR="$SCRIPT_DIR/game"
+
 have() { command -v "$1" >/dev/null 2>&1; }
 die() { echo "[$APP] $*" >&2; exit 1; }
 can_prompt() {
@@ -33,22 +39,22 @@ resolve_bin() {
 
 AOSCTL="$(resolve_bin "$SCRIPT_DIR/aosctl" || true)"
 HUBCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hubctl" || true)"
-CORE4CTL="$(resolve_bin "$SCRIPT_DIR/core4/python-core4/core4ctl" "$SCRIPT_DIR/scripts/core4ctl" || true)"
+CORE4CTL="$(resolve_bin "$PILLAR_CORE4_DIR/python-core4/core4ctl" "$SCRIPT_DIR/scripts/core4ctl" || true)"
 C4D_BIN="$(resolve_bin "c4d" "$HOME/bin/c4d" || true)"
 SYNCCTL="$(resolve_bin "$SCRIPT_DIR/scripts/syncctl" || true)"
 GITCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gitctl" || true)"
 INDEXCTL="$(resolve_bin "$SCRIPT_DIR/scripts/indexctl" || true)"
 NODECTL="$(resolve_bin "$SCRIPT_DIR/scripts/nodectl" || true)"
-GAMECTL="$(resolve_bin "$SCRIPT_DIR/scripts/gamectl" || true)"
-DOORCTL="$(resolve_bin "$SCRIPT_DIR/door/cli/doorctl" "$SCRIPT_DIR/scripts/doorctl" || true)"
+GAMECTL="$(resolve_bin "$PILLAR_GAME_DIR/gamectl" "$SCRIPT_DIR/scripts/gamectl" || true)"
+DOORCTL="$(resolve_bin "$PILLAR_DOOR_DIR/cli/doorctl" "$SCRIPT_DIR/scripts/doorctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
 HOOKCTL="$(resolve_bin "$SCRIPT_DIR/scripts/hookctl" || true)"
-VOICECTL="$(resolve_bin "$SCRIPT_DIR/scripts/voicectl" || true)"
+VOICECTL="$(resolve_bin "$PILLAR_VOICE_DIR/voicectl" "$SCRIPT_DIR/scripts/voicectl" || true)"
 MOBILEAPPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mobileappctl" || true)"
 GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 TELECTL="$(resolve_bin "$SCRIPT_DIR/scripts/telectl" || true)"
-FIRECTL="$(resolve_bin "$SCRIPT_DIR/scripts/firectl" || true)"
+FIRECTL="$(resolve_bin "$PILLAR_GAME_DIR/fire/firectl" "$SCRIPT_DIR/scripts/firectl" || true)"
 ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" || true)"
 BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
 NODE_RESTART="$SCRIPT_DIR/scripts/ctl/node-restart.sh"
@@ -87,6 +93,8 @@ Usage:
   $APP hub|index|bridge|router ...  # aos-hub system/ops wrappers
   $APP node|nodectl ...             # nodectl compatibility toolbox
   $APP core4|game|door|fire|tele ...  # user/centre wrappers
+  $APP hot ...                        # Door Hot List direct frontdoor (via doorctl)
+  $APP frame|freedom|focus|tent ...   # Game centre direct frontdoors (via gamectl)
   $APP potential|plan|production|profit ...  # Door 4P phase frontdoors
   $APP backup|mount|hook|gas|voice|mobileapp ...
   $APP aosctl ...                   # direct aosctl passthrough
@@ -102,7 +110,11 @@ Examples:
   $APP
   $APP dashboard
   $APP game centres
+  $APP frame new
+  $APP focus list
   $APP door health
+  $APP hot list
+  $APP hot add "Idea ..."
   $APP potential
   $APP plan activate 1
   $APP production focus
@@ -730,9 +742,34 @@ game_cmd() {
   exec_or_path "$GAMECTL" gamectl "$sub" "$@"
 }
 
+frame_cmd() {
+  local sub="${1:-help}"; shift || true
+  game_cmd frame "$sub" "$@"
+}
+
+freedom_cmd() {
+  local sub="${1:-help}"; shift || true
+  game_cmd freedom "$sub" "$@"
+}
+
+focus_centre_cmd() {
+  local sub="${1:-help}"; shift || true
+  game_cmd focus "$sub" "$@"
+}
+
+tent_centre_cmd() {
+  local sub="${1:-help}"; shift || true
+  game_cmd tent "$sub" "$@"
+}
+
 door_cmd() {
   local sub="${1:-dashboard}"; shift || true
   exec_or_path "$DOORCTL" doorctl "$sub" "$@"
+}
+
+hot_cmd() {
+  local sub="${1:-list}"; shift || true
+  door_cmd hot "$sub" "$@"
 }
 
 fire_cmd() {
@@ -810,7 +847,12 @@ case "$cmd" in
   bridge) bridge_cmd "$@" ;;
   router) router_cmd "$@" ;;
   game) game_cmd "$@" ;;
+  frame) frame_cmd "$@" ;;
+  freedom) freedom_cmd "$@" ;;
+  focus) focus_centre_cmd "$@" ;;
+  tent) tent_centre_cmd "$@" ;;
   door) door_cmd "$@" ;;
+  hot) hot_cmd "$@" ;;
   potential|plan|production|profit) door_phase_cmd "$cmd" "$@" ;;
   fire) fire_cmd "$@" ;;
   tele) tele_cmd "$@" ;;

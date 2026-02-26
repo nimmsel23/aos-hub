@@ -17,11 +17,6 @@ if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
 fi
 BRIDGE_DIR="$ROOT_DIR/bridge"
 
-# Codex session helper: bridgectl codex [purpose...]
-# shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh" 2>/dev/null || true
-codex_subcmd_maybe "main" "bridgectl" "$@" && exit 0
-
 # shellcheck disable=SC1090
 source "$BRIDGE_DIR/bridge-lib.sh"
 

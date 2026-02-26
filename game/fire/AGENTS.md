@@ -8,9 +8,12 @@ Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 
 ## Key Entry Points
 - Taskwarrior (terminal): `task fire` (custom report in `~/.taskrc`)
-- Fire tooling: `scripts/firectl` (send to Telegram, export markdown, setup timers)
-- Firemap engine: `game/python-firemap/firemap.py`
-- Firemap sender CLI: `game/python-firemap/firemap_bot.py`
+- Fire tooling (canonical): `game/fire/firectl` (send to Telegram, export markdown, setup timers)
+- Fire setup scripts (canonical): `game/fire/setup-fire-map.sh`, `game/fire/setup-fire-reports.sh`
+- Fire sync parser (canonical): `game/fire/fire-to-tasks.sh`
+- Compatibility wrapper: `scripts/firectl`
+- Firemap engine: `game/fire/firemap.py`
+- Firemap sender CLI: `game/fire/firemap_bot.py`
 - Index Node Fire API/UI: `index-node/server.js` (`/api/fire/day`, `/api/fire/week`, `/game/fire`)
 - Router trigger: `router/extensions/firemap_commands.py` (triggers systemd units first)
 
@@ -28,8 +31,8 @@ Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 - Prototype `weekly.md` keeps `focus_maps:` references for downstream Tent/cascade tests.
 
 ## Quick Debug Commands
-- Firemap dry output: `python game/python-firemap/firemap_bot.py print --scope daily`
-- Firemap counts: `python game/python-firemap/firemap_bot.py test --debug --scope daily`
+- Firemap dry output: `python game/fire/firemap_bot.py print --scope daily`
+- Firemap counts: `python game/fire/firemap_bot.py test --debug --scope daily`
 - Fire timers: `systemctl --user status alphaos-fire-daily.timer alphaos-fire-weekly.timer`
 - Fire logs: `journalctl --user -u alphaos-fire-daily.service -u alphaos-fire-weekly.service -n 200 --no-pager`
 - Prototype scaffold: `game/fire/firectl scaffold 2026-W09 --date 2026-02-25 --month 2026-02`

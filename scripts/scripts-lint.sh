@@ -30,6 +30,7 @@ LEGACY_CTLS=(
 )
 
 WRAPPER_CTLS=(
+  pwactl
   syncvaultctl
   voicectl
 )
@@ -92,7 +93,6 @@ check_ctl_contract_strict() {
   local file="$SCRIPT_DIR/$ctl"
   check_file_exists_exec "$file" || return
 
-  file_contains "$file" "codex-subcmd.sh" || err "$ctl: missing codex-subcmd sourcing"
   file_contains "$file" "aos-env.sh" || err "$ctl: missing aos-env sourcing"
   file_contains "$file" "ctl-lib.sh" || err "$ctl: missing ctl-lib sourcing"
 
@@ -107,9 +107,6 @@ check_ctl_contract_legacy() {
   local file="$SCRIPT_DIR/$ctl"
   check_file_exists_exec "$file" || return
 
-  if ! file_contains "$file" "codex-subcmd.sh"; then
-    warn "$ctl: no codex-subcmd wiring (migration pending)"
-  fi
   if ! file_contains "$file" "aos-env.sh"; then
     warn "$ctl: no aos-env wiring (migration pending)"
   fi

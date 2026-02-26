@@ -14,7 +14,7 @@ Scripts live in `aos-hub/scripts/` unless stated otherwise.
 - `scripts/aos-doctor`
   - System sanity checker (bridge/router/node/tailscale).
 
-- `scripts/setup-fire-map.sh`
+- `scripts/setup-fire-map.sh` (compat wrapper; canonical: `game/fire/setup-fire-map.sh`)
   - Fire Map bootstrap (arch-friendly, no pip).
 
 ## External CLIs

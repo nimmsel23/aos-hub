@@ -13,8 +13,6 @@ source "$ROOT_DIR/scripts/ctl-lib.sh"
 
 # Codex session helper: indexctl codex [purpose...]
 # shellcheck disable=SC1091
-source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
-codex_subcmd_maybe "node" "indexctl" "$@" && exit 0
 
 # Load global env (optional).
 # shellcheck disable=SC1091

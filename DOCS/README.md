@@ -748,7 +748,7 @@ Pushes Vault and Dokumente into Drive.
 | `scripts/aos-doctor` | Health report (router/bridge/index) | Single status snapshot. |
 | `scripts/indexctl` | Index Node unit control | `install`, `restart`, `logs`, `env`. |
 | `scripts/setup-alpha-hooks.sh` | Task hooks + git hooks | Taskwarrior → Bridge/GAS. |
-| `scripts/setup-fire-map.sh` | Fire Map bootstrap | No pip, arch-friendly. |
+| `game/fire/setup-fire-map.sh` | Fire Map bootstrap | Canonical path (compat wrapper exists at `scripts/setup-fire-map.sh`); no pip, arch-friendly. |
 | `scripts/core4_done_wrapper.py` | Core4 done helper | Marks today's Core4 task done. |
 | `scripts/core4_score.py` | Core4 weekly score | Pulls Bridge JSON and writes `core4_score_<week>.json`. |
 | `scripts/gen_firemap_canvas.sh` | Fire Map weekly canvas | Uses template file. |

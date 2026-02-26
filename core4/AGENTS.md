@@ -1,6 +1,12 @@
 # Core4 Guidelines
 
-Das zugehörige `core4ctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
+Core4 ist im Kern ein **Habit Tracker** (8 Habits / 4 Domains) mit mehreren UIs und Sync-/Export-Integrationen.
+
+Wichtig für Änderungen:
+- **Habit-tracker-first:** Daily logging/status/weekly score hat Vorrang vor Ops-/Mount-/Export-Komplexität.
+- **Frontdoors zuerst:** Bevorzugte Daily-Commands sind `core4`, `c4`, `c4d`, `wcore4`.
+- **`core4ctl` ist Kompatibilitäts-/Ops-Shim:** nicht als primäre Daily-UX behandeln.
+- **AGENTS.md knapp halten:** Arbeitsregeln hier, lange Blueprint-/Kapiteltexte lieber in `CORE4.md` / `DOCS/core4.md`.
 
 ## Scope
 - `core4/` owns Core4 domain logic, data flow, and tooling behavior.
@@ -8,7 +14,12 @@ Das zugehörige `core4ctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 - `scripts/` may orchestrate Core4 actions but must not host Core4 business logic.
 
 ## Entrypoints
-- Primary CLI: `core4/python-core4/core4ctl`
+- Primary daily frontdoors:
+  - `core4` (dashboard + tracker pass-through)
+  - `c4` (fast ledger-only status)
+  - `c4d` (explicit dashboard shortcut)
+  - `wcore4` (Taskwarrior week + core4 week score)
+- Compatibility / ops shim: `core4/python-core4/core4ctl`
 - Frontdoors:
   - Production overview via `aosctl core4 ...`
   - Dev/operator usage via `hubctl core4 ...`
@@ -18,7 +29,7 @@ Das zugehörige `core4ctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
   - `core4ctl probe all`
 
 ## Coding Rules
-- Reuse shared ctl helpers where applicable (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`, `scripts/lib/codex-subcmd.sh`).
+- Reuse shared ctl helpers where applicable (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`).
 - Avoid duplicate wrappers for Core4 commands; keep one canonical command path.
 - Keep paths and env names explicit (`AOS_*`) and documented near usage.
 
@@ -305,4 +316,3 @@ When immersed in The Core daily, it’s crucial to stay aligned with this Code, 
 Consistent tracking amplifies commitment.   
 Every point you earn in The Core symbolizes personal growth, progress, and alignment with your life’s vision.   
 It’s a journey of evolution—are you ready to take it on?
-

@@ -120,7 +120,7 @@ Ohne `ensure_ascii=False` werden Umlaute zu `u00e4` (statt ae) escaped und so in
 ### Task-Erstellung
 
 ```bash
-~/.dotfiles/scripts/utils/fire-to-tasks.sh <FIRE_MAP_FILE> [--dry-run]
+~/aos-hub/game/fire/fire-to-tasks.sh <FIRE_MAP_FILE> [--dry-run]
 ```
 
 Erstellt pro Hit:

@@ -27,6 +27,12 @@ const FRAME_DIR = path.join(AOS_DIR, "frame");
 const FREEDOM_DIR = path.join(AOS_DIR, "freedom");
 const FOCUS_DIR = path.join(AOS_DIR, "focus");
 const VALID_DOMAINS = ["body", "being", "balance", "business"];
+const DOMAIN_META = {
+  body: { label: "BODY", lens: "Fitness + Fuel" },
+  being: { label: "BEING", lens: "Meditation + Memoirs" },
+  balance: { label: "BALANCE", lens: "Partner + Posterity" },
+  business: { label: "BUSINESS", lens: "Discover + Declare" },
+};
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -47,6 +53,13 @@ function currentMonthKey() {
 
 function isValidDomain(domain) {
   return VALID_DOMAINS.includes(String(domain || "").toLowerCase());
+}
+
+function domainMeta(domain) {
+  return DOMAIN_META[String(domain || "").toLowerCase()] || {
+    label: String(domain || "").toUpperCase(),
+    lens: "",
+  };
 }
 
 function isValidYear(year) {
@@ -102,31 +115,61 @@ function focusFile(month, domain) {
   return path.join(FOCUS_DIR, String(month), `${domain}.md`);
 }
 
+function frameSourceRef(domain) {
+  return `~/.aos/frame/${domain}.md`;
+}
+
+function freedomSourceRef(year, domain) {
+  return `~/.aos/freedom/${year}/${domain}.md`;
+}
+
+function monthLabel(month) {
+  const m = String(month || "");
+  const match = /^(\d{4})-(\d{2})$/.exec(m);
+  if (!match) return m;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const date = new Date(Date.UTC(year, monthIndex, 1));
+  if (Number.isNaN(date.getTime())) return m;
+  return date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 function defaultFrameMarkdown(domain) {
-  const upper = domain.toUpperCase();
+  const meta = domainMeta(domain);
+  const upper = meta.label;
   return buildMarkdown(
     {
       domain: upper,
       updated: todayISO(),
+      period: "current",
       type: "frame-map",
+      source_refs: {
+        chapter: "Game Chapter 32 - Frame",
+      },
       tags: ["alphaos", "frame", domain],
     },
-    `# ${upper} Frame\n\n## Current Reality\n\n- \n`
+    `# FRAME: ${upper}\n\n> Starting line, not finish line. Tell the truth about where you are now.\n\n## Domain Lens\n\n- ${meta.lens}\n- Why this domain matters now:\n\n## Current Reality (Facts)\n\n- Current state:\n- Measurable signals:\n- Environment / context:\n\n## Story (How I Got Here)\n\n- Decisions and patterns that created this frame:\n- Recent events that changed the situation:\n\n## Working (Strengths / Assets)\n\n- \n\n## Not Working (Constraints / Friction)\n\n- \n\n## Emotional Reality (How It Feels)\n\n- \n\n## Resources (People / Tools / Time / Money)\n\n- \n\n## Truth Statement\n\n- The clearest truth in this domain right now is:\n\n## Bridge To Freedom\n\n- If I accept this frame fully, the next strategic question becomes:\n`
   );
 }
 
 function defaultFreedomMarkdown(year, domain) {
-  const upper = domain.toUpperCase();
+  const meta = domainMeta(domain);
+  const upper = meta.label;
   return buildMarkdown(
     {
       domain: upper,
       year: Number(year),
       updated: todayISO(),
+      period: String(year),
       horizon: "10-year",
       type: "freedom-map",
+      source_refs: {
+        frame: frameSourceRef(domain),
+        chapter: "Game Chapter 33 - Freedom",
+      },
       tags: ["alphaos", "freedom", domain, "ipw"],
     },
-    `# ${upper} Freedom ${year}\n\n## Ideal Parallel World\n\n- \n`
+    `# FREEDOM: ${upper} (${year})\n\n> Direction over drift. Use truth from Frame to define the next year toward your Ideal Parallel World.\n\n## Domain Lens\n\n- ${meta.lens}\n- This year's arena of dominion:\n\n## Truth Anchors From Frame\n\n- What is true right now (no lies, no excuses):\n- What must be accepted before expansion:\n\n## Ideal Parallel World (10-Year Horizon)\n\n- If anything were possible in 10 years, what does ${upper} look like?\n- Who have I become in this domain?\n- How does life feel there?\n\n## ${year} Freedom Vision (12-Month Direction)\n\n- What does progress toward IPW look like this year?\n- What must be fundamentally different by year-end?\n\n## Key Milestones (Q1-Q4)\n\n- Q1:\n- Q2:\n- Q3:\n- Q4:\n\n## Domino Doors (Leverage Moves)\n\n- Door 1:\n- Door 2:\n- Door 3:\n\n## Identity / Standards / Non-Negotiables\n\n- The man I choose to be in this domain:\n- Standards I will hold:\n\n## Additions / Eliminations / Sacrifices\n\n- Add:\n- Remove:\n- Sacrifice:\n\n## Direction Check\n\n- If I stay aligned with this Freedom Map, the next monthly Focus mission should begin with:\n`
   );
 }
 
@@ -142,6 +185,11 @@ function focusSourceFrontmatter(month, domain) {
 
   return {
     // codex-ashharbor: Focus should carry upstream map context so the cascade is visible in the markdown itself.
+    source_refs: {
+      frame: frameSourceRef(domain),
+      freedom: freedomSourceRef(year, domain),
+      chapter: "Game Chapter 34 - Focus",
+    },
     frame: {
       domain: String(frameFront.domain || upper),
       updated: frameFront.updated || null,
@@ -158,18 +206,21 @@ function focusSourceFrontmatter(month, domain) {
 }
 
 function defaultFocusMarkdown(month, domain) {
-  const upper = domain.toUpperCase();
+  const meta = domainMeta(domain);
+  const upper = meta.label;
   const sources = focusSourceFrontmatter(month, domain);
+  const monthTitle = monthLabel(month);
   return buildMarkdown(
     {
       domain: upper,
       month,
       updated: todayISO(),
+      period: String(month),
       ...sources,
       type: "focus-map",
       tags: ["alphaos", "focus", domain, "monthly"],
     },
-    `# ${upper} Focus ${month}\n\n## Monthly Mission\n\n- \n`
+    `# FOCUS: ${upper} (${monthTitle})\n\n> Shrink the journey. Bridge truth (Frame) and vision (Freedom) into one winnable monthly mission.\n\n## Domain Lens\n\n- ${meta.lens}\n- Why this month matters in ${upper}:\n\n## Monthly Mission\n\n- One sentence mission for this month:\n- What \"done\" looks like by month-end:\n\n## Freedom Bridge (Why This Mission)\n\n- Freedom target this mission serves:\n- Which domino door does it move?\n- What happens if I do not execute this month?\n\n## Foundation Layer (Habits / Routines / Resources)\n\n### Habits\n- \n\n### Routines\n- \n\n### Additions\n- \n\n### Eliminations\n- \n\n## Weekly Fire Handoffs (4 Waves)\n\n- Week 1 Fire focus:\n- Week 2 Fire focus:\n- Week 3 Fire focus:\n- Week 4 Fire focus:\n\n## Constraints / Risks / Resistance\n\n- Likely friction:\n- Anti-pattern to avoid:\n- Recovery move if I drift:\n\n## Scoreboard (Proof Of Progress)\n\n- Metric 1:\n- Metric 2:\n- Metric 3:\n\n## First 72 Hours (Set Sail)\n\n- First action:\n- Calendar block:\n- Support / accountability:\n`
   );
 }
 

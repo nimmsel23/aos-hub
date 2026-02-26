@@ -1,4 +1,10 @@
-# αOS Fire Bot (Firemap)
+# αOS Fire Bot (Firemap) [Legacy Path]
+
+Compatibility folder. Canonical Fire bot + engine now live in `game/fire/`:
+- `game/fire/firemap_bot.py`
+- `game/fire/firemap.py`
+- `game/fire/requirements.txt`
+- `game/fire/fire.env.example`
 
 Telegram sender for Fire snapshots (Taskwarrior -> Markdown-formatted text -> Telegram).
 Designed to run on demand (not as a daemon).
@@ -10,7 +16,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-No extra deps required (uses stdlib). Firemap logic lives in `game/python-firemap/firemap.py`.
+No extra deps required (uses stdlib). Firemap logic lives in `game/fire/firemap.py`.
 
 ## Environment
 
