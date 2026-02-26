@@ -2,6 +2,12 @@
 
 Das zugehörige `bridgectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
 
+**See also:**
+- `CLAUDE.md` — Development guidelines and workflows
+- `TODO.md` — Pending tasks and technical debt
+- `CHANGELOG.md` — Component change history
+- `~/aos-hub/CHANGELOG.md` — Repository-wide changelog (update before committing!)
+
 ## Project Structure & Purpose
 - `app.py` is the aiohttp service on port `8080` (Core4/Fruits/Tent + task routing).
 - `bridgectl` is a thin CLI entrypoint (kept stable), dispatching into:

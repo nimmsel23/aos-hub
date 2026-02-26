@@ -1,129 +1,51 @@
-# Changelog - aos-hub
+# aos-hub — Changelog
 
-All notable changes to the AOS Hub infrastructure will be documented in this file.
+All notable changes to the aos-hub repository.
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+## Format
 
----
+Each entry should include:
+- **Component** (bridge/router/index/scripts/core4)
+- **Type** (feat/fix/refactor/docs)
+- **Description**
 
-## [Unreleased]
+## Unreleased
 
-### Documentation (2026-02-25)
-- **bridge/README.md**: Added Architecture Overview section
-  - Tailscale foundation explained (why it enables the whole system)
-  - Bidirectional communication pattern documented (Gas ↔ Bridge)
-  - Performance Notes section with optimization details
-  - Core4 mount directory deprecation (`AOS_CORE4_MOUNT_DIR=/nonexistent`)
-  - Flow diagrams for Gas → Bridge and Bridge → Gas
+### 2026-02-26
 
-- **bridge/AGENTS.md**: Added Performance & Architecture section
-  - Tailscale foundation notes for developers
-  - Core4 optimization guidelines (don't add mount reading back)
-  - Lock scope best practices (minimal critical sections)
+**bridge:**
+- feat: Desktop notifications via notify-send when Core4 events logged (AOS_CORE4_DESKTOP_NOTIFY=1)
+- feat: Systemd drop-in for DISPLAY/DBUS env vars (/etc/systemd/system/aos-bridge.service.d/notifications.conf)
+- feat: Helper script lib/setup-notifications.sh for notification setup
+- docs: Add CLAUDE.md with development guidelines
 
-- **bridge/app.py**: Enhanced code comments
-  - Core4 storage model updated with performance notes
-  - handle_core4_log() documented with flow and optimizations
-  - _core4_events_for_day() optimization explained inline
+**core4:**
+- feat: core4ctl sources shows latest event (date, habit, timestamp) per source directory
+- feat: Support both ISO timestamp formats (dashes and compact)
+- refactor: AlphaOS-Vault → vault path migration (core4_types.py, core4_paths.py)
+- docs: Update CHANGELOG.md
 
-- **Memory (MEMORY.md)**: Complete architecture documentation
-  - Tailscale as foundation (not just "Telegram bot")
-  - Bidirectional flow examples (both directions)
-  - Key optimizations with rationale
+**scripts:**
+- refactor: hubctl simplified (465→315 lines, grouped commands, cleaner output)
+- refactor: nodectl simplified (430→291 lines, delegation to indexctl)
+- docs: Both scripts now have cleaner help and grouped command structure
 
-### Added (2026-02-20)
-- **c4 command**: New bash command for fast Core4 status display
-  - Location: `core4/python-core4/c4`
-  - Reads directly from `~/.core4/core4_day_YYYY-MM-DD.json`
-  - No bridge dependency, instant response
-  - Shows: habits status (✓/○), daily total, bridge health
-  - Symlinked to `~/bin/c4`
+**gas:**
+- feat: terminal.gs drivepull/localpull commands for manual Drive→local sync
 
-### Fixed (2026-02-20)
-- **Bridge "offline" issue**: Core4 was showing bridge as offline despite bridge running
-  - Root cause: `CORE4_MOUNT_DIR` pointing to hung rclone mount (`/home/alpha/gdrive/Alpha_HQ`)
-  - Fix: Set `AOS_CORE4_MOUNT_DIR=/nonexistent` in `~/.env/aos.env`
-  - Result: Bridge response time 30s → 13ms
-  - Requires: `sudo systemctl restart aos-bridge.service`
+**env:**
+- fix: Bridge rclone sync config (AOS_RCLONE_REMOTE=eldanioo:Alpha_HQ)
+- fix: Core4 paths updated for vault migration
 
-- **syncctl menu broken**: Menu exited after every action
-  - Root cause: Helper functions used `exec` which replaces process
-  - Fix: Added `SYNCCTL_IN_MENU=1` flag pattern
-  - Changed: `run_vault`, `run_domains`, `run_vitaltrainer`, `run_fadaro`, `run_hub_live`, `run_aos_sync`
-  - Location: `scripts/syncctl`
+## 2026-02-20
 
-- **bridgectl status incomplete**: Only showed user scope service
-  - Root cause: Only checked `systemctl --user`
-  - Fix: Check system scope first (`aos-bridge.service`), then user scope
-  - Added: "Active mode" verdict (system|user|none)
-  - Location: `bridge/bridge-servicectl`
+**bridge:**
+- fix: Bridge deployment changed to symlink (/opt/aos/bridge → ~/aos-hub/bridge)
+- fix: Auth token support for external requests (local requests no token needed)
 
-### Changed (2026-02-20)
-- **aosctl status redesigned**: Compact overview instead of wall-of-text
-  - Helper functions: `_status_unit_line`, `_status_timer_line`, `_index_deploy_drift`
-  - CTL tools: One line per tool (17 tools) with path
-  - Sections: Core Services → Dev Units → Deploy Drift → Sync Timers → Other Timers → CTL Tools
-  - Location: `aosctl`
+## Earlier Changes
 
-- **aosctl hub deploy added**: Deploy Index Node from repo to production
-  - Function: `index_deploy_cmd()`
-  - Syncs `~/aos-hub/index-node/` → `/opt/aos/index/` with rsync
-  - Restarts `aos-index.service` (system scope)
-  - Flags: `--dry-run`, `--src=`, `--dst=`
-  - Usage: `aosctl hub deploy`
-  - Location: `aosctl`
-
-### Environment (2026-02-20)
-- **~/.env/aos.env** updated:
-  ```bash
-  # Disabled legacy Alpha_Core4 mount (was causing 30s hangs)
-  AOS_CORE4_MOUNT_DIR=/nonexistent
-  CORE4_MOUNT_DIR=/nonexistent
-  ```
-
-### Known Issues (2026-02-20)
-- **Core4 path chaos**: Multiple event directories found
-  - Active: `~/.core4/.core4/events/` (currently used)
-  - Legacy: `~/vault/Core4/.core4/events/`, `~/vault/Alpha_Core4/.core4/events/`,
-    `~/vault/Alpha_HQ/.core4/events/`, `~/business/Alpha_Core4/.core4/events/`
-  - Status: Working but messy, documented in memory
-  - Action: Use `core4ctl` and `c4` carefully, avoid unnecessary token waste
-
-- **core4ctl install-cli bug**: Parses `--help` as target instead of using default
-  - Non-critical, workaround: Call with explicit target
-  - Location: `core4/python-core4/core4-clinctl`
-
----
-
-## Session Context (2026-02-19 → 2026-02-20)
-
-**Primary Goals:**
-1. ✅ Fix Index Node version drift (system vs repo)
-2. ✅ Reduce `aosctl status` verbosity
-3. ✅ Fix `syncctl menu` broken behavior
-4. ✅ Fix `bridgectl status` scope check
-5. ✅ Fix Core4 bridge "offline" issue
-6. ✅ Create `c4` bash command for fast Core4 status
-
-**Architecture Context:**
-- **Hub-and-Spoke**: Index Node (:8799) + Bridge (:8080) + Router Bot (Telegram)
-- **Dual-scope systemd**: System services (`aos-*.service`) + User services (`alphaos-*.service`)
-- **Deploy pattern**: `~/aos-hub/*/` (repo) → `/opt/aos/*/` (production)
-- **Env source of truth**: `~/.env/aos.env` (symlinked from `/etc/aos/aos.env`)
-
-**Files Modified:**
-- `aosctl` (status redesign + hub deploy)
-- `scripts/syncctl` (menu fix)
-- `bridge/bridge-servicectl` (dual-scope check)
-- `~/.env/aos.env` (Core4 mount disabled)
-- `core4/python-core4/c4` (new file)
-- `~/bin/c4` (symlink created)
-
-**Memory Updated:**
-- `/home/alpha/.claude/projects/-home-alpha/memory/MEMORY.md`
-  - Gas HQ Control Center ping flow
-  - Bridge health endpoints
-  - Event ledger location
-  - core4ctl warning (messy, use carefully)
-  - aos-hub architecture quick reference
-  - Key fixes done (2026-02-19)
+See component-specific CHANGELOGs:
+- `bridge/CHANGELOG.md`
+- `core4/CHANGELOG.md`
+- `router/CHANGELOG.md`
