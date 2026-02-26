@@ -13,6 +13,7 @@ BASE_URL="${BASE_URL%/health}"
 PWA_BASE_DIR="$ROOT_DIR/index-node/public/pwa"
 PWA_NAMES=(core4 fire focus)
 PWA_FILES=(index.html app.js style.css)
+PWA_TAILNET_URL_OVERRIDE="${AOS_PWA_TAILNET_URL:-${MOBILEAPPCTL_TAILNET_URL:-}}"
 
 usage() {
   cat <<EOF
@@ -29,6 +30,10 @@ Commands:
   new <name>     scaffold a new PWA stub (index/app/style)
   doctor         run check + health and summarize results
   help           show this message
+
+Optional env:
+  AOS_PWA_TAILNET_URL / MOBILEAPPCTL_TAILNET_URL
+                 force a specific tailnet/funnel base URL (e.g. https://ideapad.tail... )
 EOF
 }
 
@@ -47,14 +52,43 @@ tailscale_serve_status_text() {
   tailscale serve status 2>/dev/null
 }
 
+normalized_https_base_url() {
+  local raw="${1:-}"
+  raw="$(printf "%s" "$raw" | tr -d '\r' | xargs 2>/dev/null || true)"
+  [[ -n "$raw" ]] || return 1
+  case "$raw" in
+    http://*|https://*) ;;
+    *) raw="https://$raw" ;;
+  esac
+  printf "%s\n" "${raw%/}"
+}
+
+tailscale_self_dns_url() {
+  has_cmd tailscale || return 1
+  local dns=""
+
+  if has_cmd jq; then
+    dns="$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty | sub("\\.$"; "")' 2>/dev/null | head -n 1)"
+  else
+    dns="$(tailscale status --json 2>/dev/null | sed -n 's/^[[:space:]]*"DNSName": "\([^"]*\)\\.",$/\1/p' | head -n 1)"
+  fi
+
+  [[ -n "$dns" ]] || return 1
+  printf "https://%s\n" "$dns"
+}
+
 tailscale_serve_url_from_status() {
   local status_text="${1:-}"
+  local preferred_url="${2:-}"
+  local preferred_self_url="${3:-}"
   [[ -n "$status_text" ]] || return 1
 
-  printf "%s\n" "$status_text" | awk '
+  printf "%s\n" "$status_text" | awk -v preferred="$preferred_url" -v preferred_self="$preferred_self_url" '
     /^https:\/\// {
       current=$1
       if (first == "") first=$1
+      if (current == preferred) preferred_seen=1
+      if (current == preferred_self) preferred_self_seen=1
       next
     }
     /^\|--/ {
@@ -63,8 +97,23 @@ tailscale_serve_url_from_status() {
         found=1
         exit
       }
+      if (current != "" && root_index == "" && $0 ~ /^\|--[[:space:]]+\/[[:space:]]+proxy[[:space:]]+http:\/\/127\.0\.0\.1:8799([[:space:]]|$)/) {
+        root_index=current
+      }
     }
     END {
+      if (!found && preferred != "" && preferred_seen) {
+        print preferred
+        exit
+      }
+      if (!found && preferred_self != "" && preferred_self_seen) {
+        print preferred_self
+        exit
+      }
+      if (!found && root_index != "") {
+        print root_index
+        exit
+      }
       if (!found && first != "") print first
     }
   '
@@ -72,8 +121,12 @@ tailscale_serve_url_from_status() {
 
 tailscale_serve_url() {
   local status_text
+  local preferred_url=""
+  local preferred_self_url=""
   status_text="$(tailscale_serve_status_text || true)"
-  tailscale_serve_url_from_status "$status_text"
+  preferred_url="$(normalized_https_base_url "$PWA_TAILNET_URL_OVERRIDE" || true)"
+  preferred_self_url="$(tailscale_self_dns_url || true)"
+  tailscale_serve_url_from_status "$status_text" "$preferred_url" "$preferred_self_url"
 }
 
 health_for_base() {
@@ -176,7 +229,11 @@ serve_status_cmd() {
   printf "%s\n" "$status_text"
   echo ""
 
-  ts_url="$(tailscale_serve_url_from_status "$status_text" || true)"
+  local preferred_url=""
+  local preferred_self_url=""
+  preferred_url="$(normalized_https_base_url "$PWA_TAILNET_URL_OVERRIDE" || true)"
+  preferred_self_url="$(tailscale_self_dns_url || true)"
+  ts_url="$(tailscale_serve_url_from_status "$status_text" "$preferred_url" "$preferred_self_url" || true)"
   if [[ -z "$ts_url" ]]; then
     warn "No tailscale serve HTTPS URL found."
     warn "PWAs under /pwa/* will not be reachable from tailnet until serve publishes the index-node route."
@@ -188,7 +245,13 @@ serve_status_cmd() {
     has_pwa_proxy=1
   fi
 
-  msg "Detected tailnet URL: $ts_url"
+  if [[ -n "$preferred_url" && "$ts_url" == "$preferred_url" ]]; then
+    msg "Detected tailnet URL (env override): $ts_url"
+  elif [[ -n "$preferred_self_url" && "$ts_url" == "$preferred_self_url" ]]; then
+    msg "Detected tailnet URL (Self.DNSName): $ts_url"
+  else
+    msg "Detected tailnet URL: $ts_url"
+  fi
   echo ""
   health_for_base "tailnet" "$ts_url" || true
 

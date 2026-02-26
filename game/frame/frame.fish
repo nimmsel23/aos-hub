@@ -1,9 +1,23 @@
 #!/usr/bin/env fish
-# Frame Map Dashboard – Fish Interface
-# Wraps framectl/frame.py mit gum UI
+# Frame Map Fish UI (thin wrapper around framectl)
 
-set -l FRAMECTL (dirname (status filename))/framectl
 set -l DOMAINS BODY BEING BALANCE BUSINESS
+
+function _frame_script_dir
+    set -l f (status filename)
+    if test -z "$f"
+        set f (status current-filename)
+    end
+    if test -n "$f"
+        dirname -- "$f"
+    else
+        pwd
+    end
+end
+
+function _frame_can_gum
+    type -q gum; and test -t 0; and test -t 1
+end
 
 function _frame_header
     echo ""
@@ -11,30 +25,30 @@ function _frame_header
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 end
 
+function _frame_usage
+    printf '%s\n' \
+        'Usage: frame.fish [new|show|list|edit|help]' \
+        'Default (no args): dashboard + optional gum actions'
+end
+
 function _frame_pick_domain
-    if type -q gum
+    if _frame_can_gum
         gum choose --header "Domain wählen:" $DOMAINS ALL
     else
         echo "Domain [BODY/BEING/BALANCE/BUSINESS/ALL]:"
         read -l choice
-        echo $choice
+        echo (string upper -- (string trim -- "$choice"))
     end
+end
+
+function _frame_run
+    set -l framectl (_frame_script_dir)/framectl
+    bash "$framectl" $argv
 end
 
 function frame_dashboard
     _frame_header
-
-    # Zeige Status aller 4 Domains
-    set -l vault $HOME/AlphaOS-Vault/Game/Frame
-    for domain in $DOMAINS
-        set -l file $vault/{$domain}_frame.md
-        if test -f $file
-            set -l mtime (date -r $file "+%Y-%m-%d" 2>/dev/null; or stat -c "%y" $file 2>/dev/null | cut -d' ' -f1)
-            echo "  ✔ $domain  ($mtime)"
-        else
-            echo "  ✘ $domain  (kein Frame)"
-        end
-    end
+    _frame_run list
     echo ""
 end
 
@@ -42,9 +56,9 @@ function frame_new
     _frame_header
     set -l domain (_frame_pick_domain)
     if test "$domain" = ALL
-        bash $FRAMECTL new
+        _frame_run new
     else
-        bash $FRAMECTL new $domain
+        _frame_run new $domain
     end
 end
 
@@ -52,33 +66,54 @@ function frame_show
     _frame_header
     set -l domain (_frame_pick_domain)
     if test "$domain" = ALL
-        bash $FRAMECTL show
+        _frame_run show
     else
-        bash $FRAMECTL show $domain
+        _frame_run show $domain
     end
 end
 
-# Main
+function frame_edit
+    _frame_header
+    set -l domain (_frame_pick_domain)
+    if test "$domain" = ALL
+        _frame_run edit
+    else
+        _frame_run edit $domain
+    end
+end
+
 switch "$argv[1]"
     case new
         frame_new
     case show
         frame_show
     case list
-        bash $FRAMECTL list
+        _frame_run list
+    case edit
+        frame_edit
+    case help --help -h
+        _frame_usage
     case ""
         frame_dashboard
-        if type -q gum
-            set -l action (gum choose --header "Was tun?" "new — Frame anlegen" "show — Frame anzeigen" "list — Alle auflisten" "exit")
+        if _frame_can_gum
+            set -l action (gum choose --header "Was tun?" \
+                "new — Frame anlegen" \
+                "show — Frame anzeigen" \
+                "edit — Frame öffnen" \
+                "list — Alle auflisten" \
+                "exit")
             switch $action
                 case "new*"
                     frame_new
                 case "show*"
                     frame_show
+                case "edit*"
+                    frame_edit
                 case "list*"
-                    bash $FRAMECTL list
+                    _frame_run list
             end
         end
     case "*"
-        echo "Usage: frame.fish [new|show|list]"
+        _frame_usage
+        exit 2
 end
