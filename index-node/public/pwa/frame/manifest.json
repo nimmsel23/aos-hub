@@ -6,7 +6,7 @@
   "display": "standalone",
   "theme_color": "#0d0e11",
   "background_color": "#0d0e11",
-  "description": "Current reality map — αOS ecosystem",
+  "description": "Frame Map — αOS ",
   "icons": [
     {
       "src": "/pwa/frame/icon-192.svg",
