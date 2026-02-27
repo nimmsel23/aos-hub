@@ -143,6 +143,11 @@ sudo pacman -S python-aiohttp
 - `bridge-apictl` (HTTP endpoints)
 - `bridge-tsctl` (tailscale)
 
+Canonical service mode:
+- `bridgectl` and `bridge-servicectl` manage only the user unit (`systemctl --user`).
+- System unit (`aos-bridge.service`) is treated as unmanaged drift and should stay inactive.
+- Do not run user + system unit in parallel (port 8080 conflict risk).
+
 ```bash
 ./bridgectl            # interactive menu (gum)
 ./bridgectl status
@@ -162,9 +167,13 @@ If `AOS_BRIDGE_TOKEN` is set in your shell env, `bridgectl` will send the header
 ### systemd (user, recommended)
 
 If you want the bridge to start at boot without an interactive login, use a systemd *user* unit with lingering:
-- `sudo loginctl enable-linger alpha`
+- Ensure lingering is enabled for your user (one-time host setup).
 - Put `AOS_HUB_DIR` into `~/.env/aos.env` (recommended single env file)
 - Then run `./bridgectl enable`
+
+Operational policy:
+- Use `./bridgectl start|stop|restart|status|logs` for service control.
+- Do not use sudo/system scope for bridge lifecycle in normal operation.
 
 ## Run (manual)
 
