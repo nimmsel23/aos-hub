@@ -60,6 +60,10 @@ Supported mode values:
 - `AOS_PWA_RUN_MODE=dev` -> `npm run pwa:dev`
 - `AOS_PWA_RUN_MODE=normal` -> `npm run pwa`
 
+Template:
+
+- `systemd/user/pwa.env.example`
+
 ## Installation
 
 ### User Services (No Root Required)
