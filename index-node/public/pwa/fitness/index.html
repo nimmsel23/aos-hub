@@ -7,51 +7,26 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>AOS Fitness Centre</title>
+    <title>Fitness Centre</title>
     <link rel="manifest" href="/pwa/fitness/manifest.json" />
     <link rel="apple-touch-icon" href="/pwa/fitness/icon-192.svg" />
     <link rel="stylesheet" href="./_shared/styles.css" />
   </head>
   <body>
-    <div class="bg"></div>
+    <style>
+      body { margin:0; display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0f14; color:#f5f7fb; font:16px/1.5 "Inter", system-ui, -apple-system, sans-serif; }
+      .card { padding:24px 28px; border-radius:14px; background:#111927; border:1px solid #1f2b3a; max-width:520px; text-align:center; box-shadow:0 12px 32px rgba(0,0,0,0.3); }
+      h1 { margin:0 0 8px; font-size:22px; }
+      p { margin:6px 0; color:#a5b4c3; }
+      a { color:#5eead4; font-weight:700; text-decoration:none; }
+    </style>
     <main class="shell">
-      <header class="top reveal" style="--delay: 30ms;">
-        <div>
-          <div class="kicker">core4-fitness-centre</div>
-          <h1>Journal + Habits</h1>
-          <p class="lead">Local-first pages that read and write files under <code>personal/</code>.</p>
-        </div>
-      </header>
-
-      <section class="grid">
-        <a class="card reveal" style="--delay: 120ms;" href="./journal/">
-          <div class="card-title">Journal</div>
-          <div class="card-desc">Daily free-text entries (Day One style).</div>
-        </a>
-        <a class="card reveal" style="--delay: 180ms;" href="./habits/">
-          <div class="card-title">Habits</div>
-          <div class="card-desc">Circle tracker (Awesome Habit Tracker style).</div>
-        </a>
-      </section>
-
-      <section class="panel reveal" style="--delay: 220ms; margin-top: 14px; padding: 14px;">
-        <div class="row" style="justify-content: space-between; gap: 8px;">
-          <strong>Node Integration</strong>
-          <span class="mono" id="apiStatus">loading...</span>
-        </div>
-        <p class="lead" style="margin-top: 8px;">
-          Endpoint: <code>/api/fitness-centre/status</code>
-        </p>
-        <p class="lead" id="repoHint" style="margin-top: 6px;">
-          Checking server-side repo visibility...
-        </p>
-      </section>
-
-      <footer class="foot">
-        <span class="muted">Open in Chromium, then use "Connect Folder" to select <code>~/core4-fitness-centre</code>.</span>
-      </footer>
+      <div class="card">
+        <h1>Fitness Centre ist umgezogen</h1>
+        <p>Bitte nutze die neue App:</p>
+        <p><a href="http://127.0.0.1:8788">http://127.0.0.1:8788</a></p>
+        <p>UI + API laufen gemeinsam auf Port 8788 (PWA-fähig).<br/>Diese alte PWA bleibt nur als Hinweis bestehen.</p>
+      </div>
     </main>
-
-    <script type="module" src="./app.js"></script>
   </body>
 </html>

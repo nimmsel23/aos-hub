@@ -43,13 +43,13 @@ node server.js                    # Direct invocation
 
 **Running as systemd Service:**
 ```bash
-# User service (recommended):
-systemctl --user status alphaos-index.service
-systemctl --user start alphaos-index.service
-systemctl --user stop alphaos-index.service
-systemctl --user restart alphaos-index.service
-systemctl --user enable alphaos-index.service   # Auto-start on login
-journalctl --user -u alphaos-index -f           # Follow logs
+# User service:
+systemctl --user status aos-index-dev.service
+systemctl --user start aos-index-dev.service
+systemctl --user stop aos-index-dev.service
+systemctl --user restart aos-index-dev.service
+systemctl --user enable aos-index-dev.service   # Auto-start on login
+journalctl --user -u aos-index-dev.service -f   # Follow logs
 
 # OR using indexctl wrapper:
 ./scripts/indexctl status
@@ -58,16 +58,11 @@ journalctl --user -u alphaos-index -f           # Follow logs
 ./scripts/indexctl restart
 ./scripts/indexctl logs           # Follow logs
 ./scripts/indexctl doctor         # Health check
-./scripts/indexctl env            # Edit env file (~/.env/aos.env)
-
-# System-wide service (if installed):
-sudo systemctl status aos-index.service
-./scripts/indexctl install        # Install system service
 ```
 
 **Service Configuration:**
-- Service file: `~/.config/systemd/user/alphaos-index.service`
-- Env file: `~/.env/aos.env` (auto-created by indexctl)
+- Service file: `~/.config/systemd/user/aos-index-dev.service`
+- Env file: `~/.env/aos.env` (loaded via `scripts/lib/aos-env.sh`)
 - Working dir: `~/aos-hub/index-node`
 - Command: `npm run dev` (nodemon with auto-reload)
 - Port: 8799 (configurable via `PORT` env var)
@@ -276,9 +271,8 @@ systemctl --user status alphaos-router.service
 systemctl --user status aos-bridge.service
 ```
 
-**System Units** (optional):
+**System Units** (optional, non-index components):
 ```bash
-sudo systemctl status aos-index.service
 sudo systemctl status aos-router.service
 sudo systemctl status aos-bridge.service
 ```

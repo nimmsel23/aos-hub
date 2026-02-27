@@ -12,6 +12,7 @@ import re
 import shutil
 import shlex
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -59,6 +60,9 @@ GAS_USER_ID = os.getenv("AOS_GAS_USER_ID", "").strip()
 GAS_MODE = os.getenv("AOS_GAS_MODE", "direct").strip().lower()
 FALLBACK_TELE = os.getenv("AOS_BRIDGE_FALLBACK_TELE", "0").strip() == "1"
 TELE_BIN = os.getenv("AOS_TELE_BIN", "tele").strip()
+BRIDGE_HEARTBEAT_ENABLED = os.getenv("AOS_BRIDGE_HEARTBEAT_ENABLED", "1").strip() == "1"
+BRIDGE_HEARTBEAT_INTERVAL_SEC = int(os.getenv("AOS_BRIDGE_HEARTBEAT_INTERVAL_SEC", "300") or "300")
+BRIDGE_HEARTBEAT_HOST = os.getenv("AOS_BRIDGE_HEARTBEAT_HOST", "").strip()
 CORE4_NOTIFY = os.getenv("AOS_CORE4_NOTIFY", "0").strip() == "1"
 CORE4_NOTIFY_SILENT = os.getenv("AOS_CORE4_NOTIFY_SILENT", "0").strip() == "1"
 CORE4_NOTIFY_MODE = os.getenv("AOS_CORE4_NOTIFY_MODE", "tele").strip().lower()
@@ -112,6 +116,75 @@ SYNC_STATUS: dict[str, dict[str, Any]] = {
     "pull": {"direction": "pull", "running": False, "pids": []},
     "push": {"direction": "push", "running": False, "pids": []},
 }
+
+
+def _bridge_hb_host() -> str:
+    if BRIDGE_HEARTBEAT_HOST:
+        return BRIDGE_HEARTBEAT_HOST
+    try:
+        return socket.gethostname() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+async def _send_bridge_heartbeat_once(source: str = "bridge") -> tuple[bool, str]:
+    if not GAS_WEBHOOK_URL:
+        return False, "AOS_GAS_WEBHOOK_URL not set"
+
+    payload = {
+        "kind": "bridge_heartbeat",
+        "status": "online",
+        "source": source,
+        "timestamp": _now().isoformat(),
+        "host": _bridge_hb_host(),
+    }
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(GAS_WEBHOOK_URL, json=payload) as resp:
+                if resp.status >= 300:
+                    body = await resp.text()
+                    return False, f"GAS HTTP {resp.status}: {body[:200]}"
+    except Exception as exc:
+        return False, str(exc)
+
+    return True, ""
+
+
+async def _bridge_heartbeat_loop() -> None:
+    interval = max(30, int(BRIDGE_HEARTBEAT_INTERVAL_SEC or 300))
+    while True:
+        ok, err = await _send_bridge_heartbeat_once("bridge-loop")
+        if not ok:
+            LOGGER.warning("bridge heartbeat failed: %s", err)
+        await asyncio.sleep(interval)
+
+
+async def _on_startup(app: web.Application) -> None:
+    if not BRIDGE_HEARTBEAT_ENABLED:
+        LOGGER.info("Bridge heartbeat disabled (AOS_BRIDGE_HEARTBEAT_ENABLED=0)")
+        return
+    if not GAS_WEBHOOK_URL:
+        LOGGER.info("Bridge heartbeat skipped: AOS_GAS_WEBHOOK_URL not configured")
+        return
+    ok, err = await _send_bridge_heartbeat_once("bridge-startup")
+    if ok:
+        LOGGER.info("Bridge startup heartbeat sent")
+    else:
+        LOGGER.warning("Bridge startup heartbeat failed: %s", err)
+    app["bridge_heartbeat_task"] = asyncio.create_task(_bridge_heartbeat_loop())
+
+
+async def _on_cleanup(app: web.Application) -> None:
+    task = app.get("bridge_heartbeat_task")
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 @web.middleware
@@ -2589,6 +2662,8 @@ async def handle_doctor(_request: web.Request) -> web.Response:
 
 def create_app() -> web.Application:
     app = web.Application(middlewares=[auth_middleware, request_log_middleware])
+    app.on_startup.append(_on_startup)
+    app.on_cleanup.append(_on_cleanup)
     app.add_routes(
         [
             web.get("/health", handle_health),

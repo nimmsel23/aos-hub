@@ -1,8 +1,9 @@
-const CACHE = "fitness-centre-v1";
+const CACHE = "fitness-centre-v2";
 const STATIC = [
   "/pwa/fitness/",
   "/pwa/fitness/index.html",
   "/pwa/fitness/app.js",
+  "/pwa/gas-fallback.js",
   "/pwa/fitness/manifest.json",
   "/pwa/fitness/icon-192.svg",
   "/pwa/fitness/icon-512.svg",

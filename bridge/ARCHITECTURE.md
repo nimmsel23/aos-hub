@@ -172,7 +172,6 @@ CONSUMERS:
 │                                                              │
 │  System Scope (production):                                  │
 │    aos-bridge.service    → /opt/aos/bridge/app.py            │
-│    aos-index.service     → /opt/aos/index/server.js          │
 │    aos-router.service    → /opt/aos/router/router_bot.py     │
 │                                                              │
 │  User Scope (development):                                   │

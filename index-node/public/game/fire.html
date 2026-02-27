@@ -315,11 +315,140 @@
       margin: 12px 0;
     }
 
+    .gcal-panel {
+      max-width: 1400px;
+      margin: 20px auto 28px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      backdrop-filter: blur(10px);
+    }
+
+    .gcal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .gcal-head h3 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 1px;
+      color: var(--text);
+      opacity: 0.92;
+    }
+
+    .gcal-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 120, 80, 0.45);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #ffcfbf;
+      background: rgba(255, 94, 0, 0.12);
+    }
+
+    .gcal-iframe {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      height: 560px;
+      background: rgba(0,0,0,0.2);
+    }
+
+    /* modern refresh */
+    body {
+      font-family: "Space Grotesk","Avenir Next","Segoe UI",sans-serif;
+      padding: 18px;
+      background-image: radial-gradient(circle at 10% 10%, rgba(255,120,90,0.08), transparent 35%),
+                        radial-gradient(circle at 85% 0%, rgba(255,80,30,0.08), transparent 38%),
+                        linear-gradient(180deg, #090a0d 0%, #0f1218 100%);
+    }
+
+    .hero {
+      margin: 0 auto 24px;
+      max-width: 1400px;
+      padding: 22px 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+    }
+
+    .hero-title {
+      font-size: clamp(2.2rem, 6vw, 3.4rem);
+      letter-spacing: 3px;
+      color: #ff6f4a;
+      text-shadow: 0 0 20px rgba(255, 94, 0, 0.25);
+    }
+
+    .hero-subtitle {
+      font-size: 0.95rem;
+      opacity: 0.8;
+      letter-spacing: 1.6px;
+    }
+
+    .tab {
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.04);
+      border-radius: 999px;
+      color: rgba(255,255,255,0.88);
+      font-size: 0.84rem;
+      padding: 10px 18px;
+    }
+
+    .tab.active {
+      color: #1e1008;
+      background: linear-gradient(90deg, #ff9a66, #ff5e00);
+      border-color: transparent;
+      box-shadow: 0 8px 28px rgba(255,94,0,0.28);
+    }
+
+    .controls {
+      border: 1px solid var(--border);
+      border-left: 0;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.012));
+    }
+
+    button {
+      border-radius: 11px;
+      color: #210f06;
+      background: linear-gradient(90deg, #ff9a66, #ff5e00);
+      box-shadow: 0 8px 24px rgba(255,94,0,0.25);
+      font-size: 13px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 10px 30px rgba(255,94,0,0.28);
+    }
+
+    .domain-card,
+    .capture-panel,
+    .day-card,
+    .capture-section,
+    .fire-rite {
+      border: 1px solid var(--border);
+      background: linear-gradient(170deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+      box-shadow: none;
+    }
+
     @media (max-width: 768px) {
       .hero-title { font-size: 2.5rem; }
       .domain-grid { grid-template-columns: 1fr; }
       .weekly-calendar { grid-template-columns: repeat(2, 1fr); }
       .capture-grid { grid-template-columns: 1fr; }
+      .gcal-iframe { height: 420px; }
+      .gcal-head { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
@@ -349,6 +478,14 @@
     </div>
   </div>
 
+  <div id="gcal-panel" class="gcal-panel" style="display:none;">
+    <div class="gcal-head">
+      <h3 id="gcal-title">📅 FIRE CALENDAR</h3>
+      <span id="gcal-mode-badge" class="gcal-mode-badge">WEEKLY</span>
+    </div>
+    <iframe id="gcal-iframe" class="gcal-iframe" frameborder="0" scrolling="no"></iframe>
+  </div>
+
   <!-- DAILY VIEW -->
   <div id="view-daily" class="view active">
     <div class="week-info" id="daily-date">Loading...</div>
@@ -361,16 +498,6 @@
   <!-- WEEKLY VIEW -->
   <div id="view-weekly" class="view">
     <div class="week-info" id="weekly-range">Loading...</div>
-
-    <!-- GCal Embed (Source of Truth) -->
-    <div id="gcal-container" style="margin: 24px auto; max-width: 1400px; display: none;">
-      <h3 style="color: var(--accent); text-align: center; margin-bottom: 16px;">📅 FIRE MAP CALENDAR (Source of Truth)</h3>
-      <iframe id="gcal-iframe"
-        style="border: 2px solid var(--border); border-radius: 12px; width: 100%; height: 600px;"
-        frameborder="0"
-        scrolling="no">
-      </iframe>
-    </div>
 
     <div id="weekly-calendar" class="weekly-calendar"></div>
     <div id="weekly-content" class="domain-grid"></div>
@@ -459,6 +586,46 @@
   let currentWeekOffset = 0; // 0 = current, 1 = next
   let currentWeekData = null;
 
+  function hideGcalPanel() {
+    const panel = document.getElementById('gcal-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  function gcalUrlWithMode(rawUrl, mode) {
+    const url = String(rawUrl || '').trim();
+    if (!url) return '';
+    try {
+      const parsed = new URL(url, window.location.origin);
+      parsed.searchParams.set('mode', mode);
+      return parsed.toString();
+    } catch {
+      if (url.includes('mode=')) {
+        return url.replace(/mode=[^&]*/g, `mode=${mode}`);
+      }
+      return `${url}${url.includes('?') ? '&' : '?'}mode=${mode}`;
+    }
+  }
+
+  function showGcalPanel(baseUrl, view) {
+    const panel = document.getElementById('gcal-panel');
+    const frame = document.getElementById('gcal-iframe');
+    const title = document.getElementById('gcal-title');
+    const badge = document.getElementById('gcal-mode-badge');
+    const safeUrl = String(baseUrl || '').trim();
+
+    if (!panel || !frame || !title || !badge || !safeUrl) {
+      hideGcalPanel();
+      return;
+    }
+
+    const isDaily = view === 'daily';
+    const mode = isDaily ? 'AGENDA' : 'WEEK';
+    frame.src = gcalUrlWithMode(safeUrl, mode);
+    title.textContent = isDaily ? '📅 FIRE CALENDAR · DAILY' : '📅 FIRE CALENDAR · WEEKLY';
+    badge.textContent = isDaily ? 'DAILY' : 'WEEKLY';
+    panel.style.display = 'block';
+  }
+
   async function switchTab(tab) {
     currentView = tab;
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -471,6 +638,8 @@
       await loadDaily();
     } else if (tab === 'weekly') {
       await loadWeekly();
+    } else {
+      hideGcalPanel();
     }
   }
 
@@ -518,6 +687,7 @@
       const data = await res.json();
 
       document.getElementById('daily-date').textContent = data.date || 'Today';
+      showGcalPanel(data.gcal_url, 'daily');
 
       if (!data.tasks || data.tasks.length === 0) {
         document.getElementById('daily-content').innerHTML = '';
@@ -549,14 +719,7 @@
       document.getElementById('weekly-range').textContent =
         `${rangeData.week} (${rangeData.rangeLabel})`;
       document.getElementById('week-info').textContent = rangeData.week;
-
-      // Show GCal embed if available (Source of Truth)
-      if (tasksData.gcal_url) {
-        document.getElementById('gcal-iframe').src = tasksData.gcal_url;
-        document.getElementById('gcal-container').style.display = 'block';
-      } else {
-        document.getElementById('gcal-container').style.display = 'none';
-      }
+      showGcalPanel(tasksData.gcal_url, 'weekly');
 
       if (!tasksData.tasks || tasksData.tasks.length === 0) {
         document.getElementById('weekly-calendar').innerHTML = '';

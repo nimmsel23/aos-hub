@@ -1,4 +1,5 @@
 "use strict";
+window.aosGasFallback?.init?.("core4");
 
 const ICONS = {
   body:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11m-11 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21v-8m6-8v17m6-9v9"/></svg>',
@@ -34,7 +35,10 @@ let state = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 async function fetchJsonOrThrow(url, init) {
-  const res = await fetch(url, init);
+  const netFetch = window.aosGasFallback?.fetch
+    ? window.aosGasFallback.fetch
+    : fetch;
+  const res = await netFetch(url, init, { app: "core4" });
   const raw = await res.text();
   let data = null;
 

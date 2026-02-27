@@ -21,13 +21,12 @@ Services that run under your user account, don't require root.
 - User services only use user-owned env files (e.g. `~/.env/*.env`). They must not depend on `/etc/*`.
 - User services require a user session (login) to be started.
 
-### System Services (Production)
+### System Services (Optional / Infra)
 Services that run as system services, require root installation.
 
 **Location:** `/etc/systemd/system/`
 
 **Available:**
-- `aos-index.service` - Index Node (system-wide)
 - `aos-router.service` - Router Bot (system-wide)
 - `aos-bridge.service` - Bridge (system-wide)
 - `aos-vault-push-eldanioo.service` + `.timer` - Vault sync
@@ -37,18 +36,12 @@ Services that run as system services, require root installation.
 - System services use `/etc/aos/*` for EnvironmentFile entries.
 - System services can run without any user logged in (ideal for always-on services).
 
-## Dev vs Prod Modes (Index Node)
+## Index Node Runtime Mode
 
-The Index Node has two modes:
+The Index Node is operated as a user service:
 
-- **DEV (user service)**: runs as a user unit and starts when the user logs in.
-- **PROD (system service)**: runs as a system unit and can stay active without a user session.
-
-Mode switching is handled by `scripts/indexctl`:
-
-- `scripts/indexctl mode-dev` stops the system service and starts the user service.
-- `scripts/indexctl mode-prod` stops the user service and starts the system service.
-- `scripts/indexctl mode-status` shows which one is active.
+- `aos-index-dev.service` (systemd user scope)
+- `scripts/indexctl` and `index-node/nodectl` are user-service-only for index control.
 
 Note: If your user service name differs (legacy installs), set:
 
@@ -84,11 +77,11 @@ sudo mkdir -p /etc/aos
 sudo cp systemd/aos.env.example /etc/aos/aos.env
 sudo nano /etc/aos/aos.env  # Edit paths
 
-# Install services
+# Install services (router/bridge/sync)
 sudo cp systemd/aos-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable aos-index.service
-sudo systemctl start aos-index.service
+sudo systemctl enable aos-router.service aos-bridge.service
+sudo systemctl start aos-router.service aos-bridge.service
 ```
 
 ## Configuration
@@ -174,7 +167,7 @@ systemctl --user status aos-router-dev.service
 systemctl --user status aos-bridge-dev.service
 
 # System services
-sudo systemctl status aos-index.service
+sudo systemctl status aos-router.service aos-bridge.service
 
 # Health check
 ./scripts/aos-doctor
@@ -188,7 +181,8 @@ journalctl --user -u aos-index-dev.service -f
 journalctl --user -u aos-router-dev.service -f
 
 # System services
-sudo journalctl -u aos-index.service -f
+sudo journalctl -u aos-router.service -f
+sudo journalctl -u aos-bridge.service -f
 
 # Recent errors
 journalctl --user -u aos-index-dev.service --since "1 hour ago" | grep -i error
@@ -203,7 +197,7 @@ systemctl --user restart aos-index-dev.service
 
 # System services
 sudo systemctl daemon-reload
-sudo systemctl restart aos-index.service
+sudo systemctl restart aos-router.service aos-bridge.service
 ```
 
 ### Enable/Disable Services
@@ -310,7 +304,6 @@ ProtectSystem=full  # Instead of 'strict'
 systemd/
 ├── README.md                           # This file
 ├── aos.env.example             # Example system env
-├── aos-index.service                   # System service
 ├── aos-router.service                  # System service
 ├── aos-bridge.service                  # System service
 ├── alphaos-vault-sync-pull.service     # Vault pull on boot

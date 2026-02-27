@@ -1,4 +1,5 @@
 "use strict";
+window.aosGasFallback?.init?.("fitness");
 
 const apiStatusEl = document.getElementById("apiStatus");
 const repoHintEl = document.getElementById("repoHint");
@@ -9,7 +10,10 @@ function setApiStatus(text) {
 
 async function loadStatus() {
   try {
-    const res = await fetch("/api/fitness-centre/status", { cache: "no-store" });
+    const netFetch = window.aosGasFallback?.fetch
+      ? window.aosGasFallback.fetch
+      : fetch;
+    const res = await netFetch("/api/fitness-centre/status", { cache: "no-store" }, { app: "fitness" });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
 

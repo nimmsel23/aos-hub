@@ -1,6 +1,7 @@
-import { pickRepoDir, getSubdir, listFilenames, readTextFile, writeTextFile } from "../_shared/fs.js";
 import { isoToday, toast } from "../_shared/util.js";
 import { renderMarkdown } from "../_shared/markdown.js";
+
+const API_BASE = "http://127.0.0.1:8789"; // local fitness-api
 
 const els = {
   connectBtn: document.getElementById("connectBtn"),
@@ -18,9 +19,6 @@ const els = {
 };
 
 const state = {
-  root: null,
-  journalDir: null,
-  templatesDir: null,
   template: null,
   date: isoToday(),
   preview: false,
@@ -32,36 +30,24 @@ function setStatus(msg) {
 
 function setConnected(on) {
   els.saveBtn.disabled = !on;
-  els.editor.placeholder = on ? "Write your entry..." : "Connect folder to edit and save...";
+  els.editor.placeholder = on ? "Write your entry..." : "API offline";
 }
 
 async function getTemplate() {
   if (state.template) return state.template;
-  const text = await readTextFile(state.templatesDir, "journal-entry.md");
-  state.template = text;
-  return text;
-}
-
-async function connect() {
-  try {
-    state.root = await pickRepoDir();
-    state.journalDir = await getSubdir(state.root, ["personal", "journal"], true);
-    state.templatesDir = await getSubdir(state.root, ["templates"], false);
-    setStatus(`connected: ${state.root.name}`);
-    setConnected(true);
-    await refreshList();
-    await loadEntry(state.date, { fallbackToTemplate: true });
-  } catch (err) {
-    toast(err.message || "Failed to connect.");
-  }
+  // Minimal built-in template; server provides storage.
+  state.template = `# Journal — YYYY-MM-DD\n\nWorkout:\n- \n\nNotes:\n- \n`;
+  return state.template;
 }
 
 async function refreshList() {
-  const names = await listFilenames(state.journalDir, { suffix: ".md" });
-  const sorted = names.slice().sort().reverse();
+  const res = await fetch(`${API_BASE}/journal/list`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const sorted = (data.entries || []).slice();
   els.list.innerHTML = "";
-  for (const name of sorted.slice(0, 40)) {
-    const date = name.replace(".md", "");
+  for (const entry of sorted.slice(0, 40)) {
+    const date = entry.date;
     const item = document.createElement("button");
     item.type = "button";
     item.className = "item";
@@ -81,19 +67,16 @@ function setActiveListItem(date) {
   }
 }
 
-async function readIfExists(filename) {
-  try {
-    return await readTextFile(state.journalDir, filename);
-  } catch (err) {
-    if (err && err.name === "NotFoundError") return null;
-    throw err;
-  }
+async function fetchEntry(date) {
+  const res = await fetch(`${API_BASE}/journal?date=${encodeURIComponent(date)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data.content || "";
 }
 
 async function loadEntry(date, { fallbackToTemplate } = {}) {
-  if (!state.journalDir) return;
-  const filename = `${date}.md`;
-  let text = await readIfExists(filename);
+  let text = await fetchEntry(date);
   if (!text && fallbackToTemplate) {
     const template = await getTemplate();
     text = template.replaceAll("YYYY-MM-DD", date);
@@ -109,7 +92,6 @@ async function loadEntry(date, { fallbackToTemplate } = {}) {
 }
 
 async function newEntry() {
-  if (!state.journalDir) return;
   const date = els.dateInput.value || isoToday();
   const template = await getTemplate();
   state.date = date;
@@ -120,10 +102,13 @@ async function newEntry() {
 }
 
 async function saveEntry() {
-  if (!state.journalDir) return;
   const date = els.dateInput.value || isoToday();
-  const filename = `${date}.md`;
-  await writeTextFile(state.journalDir, filename, els.editor.value);
+  const res = await fetch(`${API_BASE}/journal`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date, content: els.editor.value }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   state.date = date;
   toast("Saved.");
   await refreshList();
@@ -144,7 +129,7 @@ function togglePreview() {
 
 function bind() {
   els.dateInput.value = state.date;
-  els.connectBtn.addEventListener("click", connect);
+  els.connectBtn.addEventListener("click", () => loadEntry(state.date, { fallbackToTemplate: true }));
   els.loadBtn.addEventListener("click", () => loadEntry(els.dateInput.value, { fallbackToTemplate: true }));
   els.newBtn.addEventListener("click", newEntry);
   els.saveBtn.addEventListener("click", saveEntry);
@@ -155,4 +140,5 @@ function bind() {
 }
 
 bind();
-setConnected(false);
+setConnected(true);
+refreshList().catch(() => setStatus("API offline"));

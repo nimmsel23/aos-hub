@@ -1,11 +1,12 @@
 "use strict";
 
-const CACHE  = "freedom-v1";
+const CACHE  = "freedom-v2";
 const STATIC = [
   "/pwa/freedom/",
   "/pwa/freedom/index.html",
   "/pwa/freedom/style.css",
   "/pwa/freedom/app.js",
+  "/pwa/gas-fallback.js",
   "/pwa/freedom/manifest.json",
   "/pwa/freedom/icon-192.svg",
 ];

@@ -7145,6 +7145,33 @@ function loadFitnessCentreEnv(repoDir) {
   };
 }
 
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+function safeIsoDate(value) {
+  const v = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  return v;
+}
+
+function readTextIfExists(p) {
+  if (!fs.existsSync(p)) return null;
+  return fs.readFileSync(p, "utf8");
+}
+
+function writeTextFile(p, content) {
+  ensureDir(path.dirname(p));
+  fs.writeFileSync(p, content, "utf8");
+}
+
+function writeJsonFile(p, obj) {
+  ensureDir(path.dirname(p));
+  fs.writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf8");
+}
+
 app.get("/api/fitness-centre/status", (_req, res) => {
   try {
     const repoDir = getFitnessCentreRepoDir();
@@ -7203,6 +7230,11 @@ app.get("/api/fitness-centre/status", (_req, res) => {
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
+});
+
+// Redirect legacy PWA routes to the unified UI on 8788 (fitnessctx)
+app.get(["/pwa/fitness", "/pwa/fitness/*"], (_req, res) => {
+  res.redirect(302, "http://127.0.0.1:8788");
 });
 
 app.post("/api/fitness-centre/tele/test", async (req, res) => {

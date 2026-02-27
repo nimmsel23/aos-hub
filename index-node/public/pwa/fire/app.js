@@ -1,4 +1,5 @@
 "use strict";
+window.aosGasFallback?.init?.("fire");
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const DOMAINS = [
@@ -22,7 +23,10 @@ const escHtml = (s) => String(s)
 const taskText = (task) => String(task?.description || task?.title || "(ohne Titel)");
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, opts);
+  const netFetch = window.aosGasFallback?.fetch
+    ? window.aosGasFallback.fetch
+    : fetch;
+  const res = await netFetch(path, opts, { app: "fire" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

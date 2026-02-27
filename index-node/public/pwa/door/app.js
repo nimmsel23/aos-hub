@@ -1,4 +1,5 @@
 "use strict";
+window.aosGasFallback?.init?.("door");
 
 // ── Config ────────────────────────────────────────────────────────────────────
 

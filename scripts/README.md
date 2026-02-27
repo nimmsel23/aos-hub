@@ -58,27 +58,25 @@ Other env files (still used in some flows):
 
 ### nodectl ✅
 
-**Purpose:** Index Node operator (status, health, open, autoreload, dev helpers)
+**Purpose:** Index Node operator (status, health, open/pwa, dev + user-service helpers)
 
 **Notes:**
 - `+nodectl` is a convenience symlink to `aos-hub/scripts/nodectl`
 - `nodectl dev` runs in the foreground (Ctrl+C to stop)
-- `nodectl` or `nodectl all` prints a full summary (monitor + doctor)
+- `nodectl status` shows service status + health + URLs
 
 **Use Cases:**
 - Monitor Index Node service + logs
 - Start/stop/restart UI node
 - Open local/Tailscale UI quickly
-- Toggle autoreload watchers (menu/public)
 - Run foreground dev (nodemon) outside systemd
 
 **Examples:**
 ```bash
-nodectl                 # full status + doctor summary
-nodectl monitor         # service + logs + health + tailscale
+nodectl status          # service + health + tailscale URLs
 nodectl dev             # foreground npm run dev (no systemd)
-nodectl autoreload on   # enable menu/public watchers
-nodectl fix             # kill port 8799 + restart service
+nodectl restart         # restart user service (aos-index-dev.service)
+nodectl logs            # follow user service logs
 nodectl open            # open best URL (tailscale preferred)
 ```
 

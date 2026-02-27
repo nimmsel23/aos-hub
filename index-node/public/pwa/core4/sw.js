@@ -1,9 +1,10 @@
-const CACHE = "core4-v2";
+const CACHE = "core4-v3";
 const STATIC = [
   "/pwa/core4/",
   "/pwa/core4/index.html",
   "/pwa/core4/style.css",
   "/pwa/core4/app.js",
+  "/pwa/gas-fallback.js",
   "/pwa/core4/manifest.json",
   "/pwa/core4/icon-192.svg",
   "/pwa/core4/icon-512.svg",

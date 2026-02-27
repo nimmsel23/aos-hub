@@ -194,21 +194,20 @@ PY
   local rc=0
   msg ""
 
-  # System scope (aos-bridge.service — production)
+  # System scope is reported only for drift detection.
   if has_cmd systemctl; then
     local sys_active sys_enabled
     sys_active="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
     sys_enabled="$(systemctl is-enabled "aos-bridge.service" 2>/dev/null || true)"
     [[ -z "$sys_active" ]]  && sys_active="-"
     [[ -z "$sys_enabled" ]] && sys_enabled="-"
-    msg "Systemd (system): active=$sys_active enabled=$sys_enabled"
+    msg "Systemd (system, unmanaged): active=$sys_active enabled=$sys_enabled"
     if [[ "$sys_active" == "active" ]]; then
-      systemctl status "aos-bridge.service" --no-pager -l --lines=3 2>/dev/null || true
-      msg ""
+      ui_warn "System bridge is active; canonical mode is user service only ($SERVICE_NAME)."
     fi
   fi
 
-  # User scope (aos-bridge-dev.service — dev)
+  # User scope (canonical)
   if systemd_user_available; then
     local active enabled
     active="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
@@ -222,72 +221,72 @@ PY
     fi
   else
     ui_warn "systemctl --user not available (no user bus)."
+    return 2
   fi
 
-  # Determine effective mode
+  # Enforce canonical mode: user service must be active.
   local sys_a dev_a
   sys_a="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
   dev_a="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
   if [[ "$sys_a" == "active" && "$dev_a" == "active" ]]; then
-    ui_warn "Both system and user bridge are active — double-run risk"
+    ui_warn "Both system and user bridge are active — stop system unit to avoid port conflicts."
     rc=1
-  elif [[ "$sys_a" == "active" ]]; then
-    ui_ok "Active mode: system (aos-bridge.service)"
-  elif [[ "$dev_a" == "active" ]]; then
+  fi
+  if [[ "$dev_a" == "active" ]]; then
     ui_ok "Active mode: user ($SERVICE_NAME)"
   else
-    ui_warn "Bridge not active in either scope"
+    if [[ "$sys_a" == "active" ]]; then
+      ui_warn "User bridge is inactive while system bridge is active (unsupported mode)."
+    else
+      ui_warn "User bridge is inactive."
+    fi
     rc=1
   fi
 
   return "$rc"
 }
 
-# Detect which scope the bridge is actually running in
-# Returns: "system", "user", or "none"
-active_scope() {
-  local sys_a="inactive" user_a="inactive"
-  if has_cmd systemctl; then
-    sys_a="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+system_active_state() {
+  if ! has_cmd systemctl; then
+    echo "unknown"
+    return 0
   fi
-  if systemd_user_available; then
-    user_a="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
-  fi
+  local state
+  state="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+  [[ -n "$state" ]] || state="inactive"
+  echo "$state"
+}
+
+warn_if_system_active() {
+  local sys_a
+  sys_a="$(system_active_state)"
   if [[ "$sys_a" == "active" ]]; then
-    echo "system"
-  elif [[ "$user_a" == "active" ]]; then
-    echo "user"
-  else
-    echo "none"
+    ui_warn "System bridge is active (aos-bridge.service). bridgectl controls only user service: $SERVICE_NAME."
   fi
 }
 
-# Scope-aware service control
+ensure_user_scope() {
+  if ! systemd_user_available; then
+    die "systemctl --user not available (no user bus)."
+  fi
+}
+
 svc_restart() {
-  local scope
-  scope="$(active_scope)"
-  case "$scope" in
-    system)
-      msg "Restarting system service: aos-bridge.service"
-      sudo systemctl restart "aos-bridge.service"
-      ;;
-    user)
-      msg "Restarting user service: $SERVICE_NAME"
-      systemctl_user restart "$SERVICE_NAME"
-      ;;
-    none)
-      ui_warn "Bridge not running in either scope. Starting user service..."
-      systemctl_user start "$SERVICE_NAME"
-      ;;
-  esac
+  ensure_user_scope
+  warn_if_system_active
+  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
+    msg "Restarting user service: $SERVICE_NAME"
+    systemctl_user restart "$SERVICE_NAME"
+  else
+    ui_warn "User service inactive. Starting: $SERVICE_NAME"
+    systemctl_user start "$SERVICE_NAME"
+  fi
 }
 
 svc_start() {
-  local scope
-  scope="$(active_scope)"
-  if [[ "$scope" == "system" ]]; then
-    msg "System service already active: aos-bridge.service"
-  elif [[ "$scope" == "user" ]]; then
+  ensure_user_scope
+  warn_if_system_active
+  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
     msg "User service already active: $SERVICE_NAME"
   else
     msg "Starting user service: $SERVICE_NAME"
@@ -296,40 +295,20 @@ svc_start() {
 }
 
 svc_stop() {
-  local scope
-  scope="$(active_scope)"
-  case "$scope" in
-    system)
-      msg "Stopping system service: aos-bridge.service"
-      sudo systemctl stop "aos-bridge.service"
-      ;;
-    user)
-      msg "Stopping user service: $SERVICE_NAME"
-      systemctl_user stop "$SERVICE_NAME"
-      ;;
-    none)
-      msg "Bridge not running."
-      ;;
-  esac
+  ensure_user_scope
+  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
+    msg "Stopping user service: $SERVICE_NAME"
+    systemctl_user stop "$SERVICE_NAME"
+  else
+    msg "User service not running: $SERVICE_NAME"
+  fi
+  warn_if_system_active
 }
 
 logs() {
-  local scope
-  scope="$(active_scope)"
-  case "$scope" in
-    system)
-      journalctl -u "aos-bridge.service" -n 200 -f
-      ;;
-    user)
-      journalctl --user -u "$SERVICE_NAME" -n 200 -f
-      ;;
-    none)
-      ui_warn "Bridge not running. Showing system logs (if any):"
-      journalctl -u "aos-bridge.service" -n 50 --no-pager 2>/dev/null || \
-        journalctl --user -u "$SERVICE_NAME" -n 50 --no-pager 2>/dev/null || \
-        msg "No logs found."
-      ;;
-  esac
+  ensure_user_scope
+  warn_if_system_active
+  journalctl --user -u "$SERVICE_NAME" -n 200 -f
 }
 
 env_edit() { "${EDITOR:-nano}" "$AOS_ENV_FILE"; }
@@ -338,16 +317,16 @@ usage() {
   cat <<'__HELP__'
 bridge-servicectl — Manage AOS Bridge systemd service
 
-Automatically detects whether the bridge runs as system or user service.
+Canonical mode is systemd user service only (user+linger). No sudo paths.
 
 Usage: bridge-servicectl <command>
 
 Commands:
-  status              Show service status (both scopes)
-  start               Start bridge (auto-detect scope)
-  stop                Stop bridge (auto-detect scope, sudo for system)
-  restart             Restart bridge (auto-detect scope, sudo for system)
-  logs                Follow logs (auto-detect scope)
+  status              Show bridge status (user service canonical; system shown as warning)
+  start               Start user bridge service
+  stop                Stop user bridge service
+  restart             Restart user bridge service (or start if inactive)
+  logs                Follow user bridge journal logs
   enable              Link + enable + start user service
   env                 Edit ~/.env/aos.env
   install-deps        Install python-aiohttp (Arch)

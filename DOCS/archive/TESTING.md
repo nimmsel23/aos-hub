@@ -219,7 +219,7 @@ curl -X POST .../api/door/hotlist -d '{"text":"Test1\nTest2"}'
 **Fix:**
 ```bash
 echo 'TICKTICK_PROJECT_ID=<your-project-id>' >> ~/.alpha_os/tick.env
-systemctl --user restart alphaos-index.service
+systemctl --user restart aos-index-dev.service
 ```
 
 ### 3. Game Chapters Empty ⚠️

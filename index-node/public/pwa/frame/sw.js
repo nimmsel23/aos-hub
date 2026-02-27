@@ -1,11 +1,12 @@
 "use strict";
 
-const CACHE  = "frame-v1";
+const CACHE  = "frame-v2";
 const STATIC = [
   "/pwa/frame/",
   "/pwa/frame/index.html",
   "/pwa/frame/style.css",
   "/pwa/frame/app.js",
+  "/pwa/gas-fallback.js",
   "/pwa/frame/manifest.json",
   "/pwa/frame/icon-192.svg",
 ];

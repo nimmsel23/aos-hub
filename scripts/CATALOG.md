@@ -5,7 +5,7 @@ Schnelle Orientierung fuer `aos-hub/scripts/`.
 ## Wenn du nicht nachdenken willst
 
 Nutze diese Frontdoors:
-- `aosctl` (Production/system scope)
+- `aosctl` (Unified ops frontdoor)
 - `hubctl` (Dev/user scope)
 - `nodectl` / `indexctl` (Index Node)
 - `syncctl` (Sync)
@@ -14,7 +14,7 @@ Nutze diese Frontdoors:
 
 ## Runtime Scope Policy
 
-- Production: `aosctl` + systemd **system** units (`aos-index.service`, `aos-router.service`, `aos-bridge.service`).
+- Production: `aosctl` (for index: user-service path via `aos-index-dev.service`).
 - Dev: `hubctl dev ...` + systemd **user** units (`aos-index-dev.service`, `aos-router-dev.service`, `aos-bridge-dev.service`).
 - Legacy `alphaos-*` Units sind Migrationsfaelle und nicht mehr der primäre Sollzustand.
 

@@ -1,5 +1,6 @@
-import { pickRepoDir, getSubdir, listFilenames, readJsonFile, writeJsonFile } from "../_shared/fs.js";
 import { isoToday, toast } from "../_shared/util.js";
+
+const API_BASE = "http://127.0.0.1:8789"; // local fitness-api
 
 const els = {
   connectBtn: document.getElementById("connectBtn"),
@@ -15,9 +16,6 @@ const els = {
 };
 
 const state = {
-  root: null,
-  habitsDir: null,
-  dataDir: null,
   defs: [],
   day: null,
   date: isoToday(),
@@ -32,24 +30,11 @@ function setConnected(on) {
   els.notes.disabled = !on;
 }
 
-async function connect() {
-  try {
-    state.root = await pickRepoDir();
-    state.habitsDir = await getSubdir(state.root, ["personal", "habits"], true);
-    state.dataDir = await getSubdir(state.root, ["data"], false);
-    await loadDefs();
-    setStatus(`connected: ${state.root.name}`);
-    setConnected(true);
-    await refreshList();
-    await loadDay(state.date, { fallbackToTemplate: true });
-  } catch (err) {
-    toast(err.message || "Failed to connect.");
-  }
-}
-
 async function loadDefs() {
-  const data = await readJsonFile(state.dataDir, "habits.json");
-  state.defs = Array.isArray(data.habits) ? data.habits : [];
+  const res = await fetch(`${API_BASE}/data`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  state.defs = Array.isArray(data.data?.habits?.habits) ? data.data.habits.habits : [];
 }
 
 function buildDay(date) {
@@ -90,19 +75,16 @@ function mergeDayWithDefs(day) {
   };
 }
 
-async function readIfExists(filename) {
-  try {
-    return await readJsonFile(state.habitsDir, filename);
-  } catch (err) {
-    if (err && err.name === "NotFoundError") return null;
-    throw err;
-  }
+async function fetchDay(date) {
+  const res = await fetch(`${API_BASE}/habits?date=${encodeURIComponent(date)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data.data || null;
 }
 
 async function loadDay(date, { fallbackToTemplate } = {}) {
-  if (!state.habitsDir) return;
-  const filename = `${date}.json`;
-  let day = await readIfExists(filename);
+  let day = await fetchDay(date);
   if (!day && fallbackToTemplate) {
     day = buildDay(date);
     toast("Template loaded. Save to create the day file.");
@@ -118,7 +100,6 @@ async function loadDay(date, { fallbackToTemplate } = {}) {
 }
 
 async function newDay() {
-  if (!state.habitsDir) return;
   const date = els.dateInput.value || isoToday();
   state.day = buildDay(date);
   state.date = date;
@@ -129,22 +110,29 @@ async function newDay() {
 }
 
 async function saveDay() {
-  if (!state.habitsDir || !state.day) return;
+  if (!state.day) return;
   const date = els.dateInput.value || isoToday();
   state.day.date = date;
   state.day.notes = els.notes.value;
-  await writeJsonFile(state.habitsDir, `${date}.json`, state.day);
+  const res = await fetch(`${API_BASE}/habits`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date, habits: state.day.habits, notes: state.day.notes }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   toast("Saved.");
   await refreshList();
   setActiveListItem(date);
 }
 
 async function refreshList() {
-  const names = await listFilenames(state.habitsDir, { suffix: ".json" });
-  const sorted = names.slice().sort().reverse();
+  const res = await fetch(`${API_BASE}/habits/list`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const sorted = (data.entries || []).slice();
   els.list.innerHTML = "";
-  for (const name of sorted.slice(0, 40)) {
-    const date = name.replace(".json", "");
+  for (const entry of sorted.slice(0, 40)) {
+    const date = entry.date;
     const item = document.createElement("button");
     item.type = "button";
     item.className = "item";
@@ -236,7 +224,7 @@ function renderHabits() {
 
 function bind() {
   els.dateInput.value = state.date;
-  els.connectBtn.addEventListener("click", connect);
+  els.connectBtn.addEventListener("click", () => loadDay(state.date, { fallbackToTemplate: true }));
   els.loadBtn.addEventListener("click", () => loadDay(els.dateInput.value, { fallbackToTemplate: true }));
   els.newBtn.addEventListener("click", newDay);
   els.saveBtn.addEventListener("click", saveDay);
@@ -246,4 +234,5 @@ function bind() {
 }
 
 bind();
-setConnected(false);
+setConnected(true);
+loadDefs().then(() => refreshList().then(() => loadDay(state.date, { fallbackToTemplate: true })).catch(() => setStatus("API offline"))).catch(() => setStatus("API offline"));

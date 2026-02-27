@@ -112,25 +112,22 @@ doctor() {
   fi
   msg ""
 
-  local sys_active="unknown"
   local dev_unit="${AOS_BRIDGE_USER_SERVICE:-aos-bridge-dev.service}"
   local user_active="unknown"
   local legacy_user_active="unknown"
+  local sys_active="unknown"
   if has_cmd systemctl; then
-    if systemctl -q is-active "aos-bridge.service" 2>/dev/null; then
-      sys_active="active"
-    else
-      sys_active="inactive"
-    fi
+    sys_active="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
+    [[ -n "$sys_active" ]] || sys_active="inactive"
   fi
   if systemctl --user show-environment >/dev/null 2>&1; then
     user_active="$(systemctl --user is-active "$dev_unit" 2>/dev/null || true)"
     legacy_user_active="$(systemctl --user is-active "aos-bridge.service" 2>/dev/null || true)"
   fi
 
-  msg "Systemd mode:"
+  msg "Systemd checks:"
   if [[ "$sys_active" == "active" ]]; then
-    ui_ok "system service active: aos-bridge.service"
+    ui_warn "system service active (unmanaged): aos-bridge.service"
   elif [[ "$sys_active" == "inactive" ]]; then
     ui_info "system service inactive"
   else
@@ -150,13 +147,16 @@ doctor() {
   fi
 
   if [[ "$sys_active" == "active" && "$user_active" == "active" ]]; then
-    ui_warn "both system and user services are active (double-run risk)"
+    ui_warn "double-run risk: both system and user services are active"
+  fi
+  if [[ "$user_active" == "active" ]]; then
+    ui_ok "mode: user (canonical)"
   elif [[ "$sys_active" == "active" ]]; then
-    ui_ok "mode: system"
-  elif [[ "$user_active" == "active" ]]; then
-    ui_ok "mode: user"
+    ui_warn "unsupported mode: system-only active"
+    rc=1
   else
     ui_warn "mode: none (bridge not active)"
+    rc=1
   fi
   msg ""
 
@@ -262,15 +262,15 @@ USAGE
 
 QUICK START
   bridgectl health                Check if bridge is online
-  bridgectl status                Show systemd service state (both scopes)
+  bridgectl status                Show user service state (canonical mode)
   bridgectl doctor                Full system diagnosis
   bridgectl core4-today           Today's Core4 habits + total
 
 SERVICE MANAGEMENT
-  status                          Service state (system + user scope)
-  start|stop|restart              Control bridge service
-  enable                          Link + enable + start service
-  logs                            Follow journal logs
+  status                          Service state (user scope; system shown as warning)
+  start|stop|restart              Control user bridge service
+  enable                          Link + enable + start user service
+  logs                            Follow user journal logs
   env                             Edit ~/.env/aos.env
   diagnose                        Systemd unit file diagnosis
   fix [--yes]                     Fix unit symlink + restart

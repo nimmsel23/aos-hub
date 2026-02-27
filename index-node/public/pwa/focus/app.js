@@ -2,6 +2,7 @@
 
 const $       = (id) => document.getElementById(id);
 const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+window.aosGasFallback?.init?.("focus");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,10 @@ function formatEditorDate(dateStr) {
 // ── API ────────────────────────────────────────────────────────────────────────
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, opts);
+  const netFetch = window.aosGasFallback?.fetch
+    ? window.aosGasFallback.fetch
+    : fetch;
+  const res = await netFetch(path, opts, { app: "focus" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

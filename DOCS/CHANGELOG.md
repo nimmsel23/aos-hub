@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - GAS HQ: `gas/hotlist_client.html` for modular Hot List UI handlers.
 
 ### Changed
-- `nodectl`: restructure service/doctor helpers, refresh CLI grouping, and simplify dev pass-throughs while keeping the system index service as the default focus; help text now calls out routerctl/bridgectl/indexctl usage.
+- `nodectl`: restructure service/doctor helpers, refresh CLI grouping, and simplify dev/user-service pass-throughs; help text now calls out routerctl/bridgectl/indexctl usage.
 
 ### Fixed - 2026-01-01
 
@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Taskwarrior uses SQLite WAL (Write-Ahead Logging) mode which requires write permissions
 
 **Solution:**
-- Added `ReadWritePaths` directives to `~/.config/systemd/user/alphaos-index.service`:
+- Added `ReadWritePaths` directives to `~/.config/systemd/user/aos-index-dev.service`:
   ```systemd
   ReadWritePaths=%h/.task                    # Taskwarrior database
   ReadWritePaths=%h/.local/share/alphaos     # Task export file
@@ -47,7 +47,7 @@ curl http://127.0.0.1:8799/api/taskwarrior/tasks | jq '.ok, .count'
 ```
 
 **Files Changed:**
-- `~/.config/systemd/user/alphaos-index.service` - Added ReadWritePaths
+- `~/.config/systemd/user/aos-index-dev.service` - Added ReadWritePaths
 
 **Related Issues:**
 - Door Centre: War Stack creation → Taskwarrior

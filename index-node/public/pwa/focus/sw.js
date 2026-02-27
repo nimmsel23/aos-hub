@@ -1,11 +1,12 @@
 "use strict";
 
-const CACHE  = "focus-v1";
+const CACHE  = "focus-v2";
 const STATIC = [
   "/pwa/focus/",
   "/pwa/focus/index.html",
   "/pwa/focus/style.css",
   "/pwa/focus/app.js",
+  "/pwa/gas-fallback.js",
   "/pwa/focus/manifest.json",
   "/pwa/focus/icon-192.svg",
 ];

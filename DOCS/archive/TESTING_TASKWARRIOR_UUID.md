@@ -11,11 +11,11 @@
 **Required Services:**
 ```bash
 # Bridge must be running
-systemctl --user status alphaos-bridge.service
+systemctl --user status aos-bridge-dev.service
 # Expected: Active (running)
 
 # Index Node must be running
-systemctl --user status alphaos-index.service
+systemctl --user status aos-index-dev.service
 # Expected: Active (running)
 
 # Environment variables

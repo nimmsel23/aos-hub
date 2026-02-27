@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# indexctl is intentionally user-service only (aos-index-dev.service).
+
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then

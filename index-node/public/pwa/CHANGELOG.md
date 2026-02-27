@@ -88,6 +88,13 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 - Weekly Fire cascade now injects a dedicated **FOCUS HEADER** (monthly mission context).
 - Applies in both route stacks for focus: `/api/focus/*` and `/api/game/focus/*`.
 
+### gas fallback (node offline -> GAS /exec)
+- Added server endpoint: `GET /api/pwa/gas-fallback[?app=...]` reading URL config from `~/.env/gas.env` (or `AOS_GAS_ENV_FILE`).
+- Added shared client helper: `public/pwa/gas-fallback.js`.
+- PWAs `core4/door/fire/focus/frame/freedom/game/fitness` now bootstrap fallback and use fallback-aware fetch wrappers where applicable.
+- Added `/pwa/gas-fallback.js` to service-worker static caches for `core4/frame/focus/freedom/fitness` (cache versions bumped).
+- codex-mapguard -> codex-neighbor: keep GAS URLs in `~/.env/gas.env`; do not hardcode `/exec` links in PWA JS.
+
 ---
 
 ## Format
