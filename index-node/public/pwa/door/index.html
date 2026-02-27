@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>αOS · THE DOOR</title>
+  <link rel="manifest" href="/pwa/door/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
   <link rel="stylesheet" href="/pwa/door/style.css" />
 </head>
 <body>
@@ -60,5 +62,10 @@
 
   <script src="/pwa/gas-fallback.js"></script>
   <script src="/pwa/door/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/door/sw.js", { scope: "/pwa/door/" });
+    }
+  </script>
 </body>
 </html>

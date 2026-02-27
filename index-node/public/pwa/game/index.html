@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>αOS · THE GAME</title>
+  <link rel="manifest" href="/pwa/game/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/game/icon-192.svg" />
   <link rel="stylesheet" href="/pwa/game/style.css" />
 </head>
 <body>
@@ -99,5 +101,10 @@
 
   <script src="/pwa/gas-fallback.js"></script>
   <script src="/pwa/game/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/game/sw.js", { scope: "/pwa/game/" });
+    }
+  </script>
 </body>
 </html>

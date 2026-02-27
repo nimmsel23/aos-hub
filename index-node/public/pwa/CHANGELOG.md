@@ -95,6 +95,14 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 - Added `/pwa/gas-fallback.js` to service-worker static caches for `core4/frame/focus/freedom/fitness` (cache versions bumped).
 - codex-mapguard -> codex-neighbor: keep GAS URLs in `~/.env/gas.env`; do not hardcode `/exec` links in PWA JS.
 
+### door + game app shell
+- `pwa/door` and `pwa/game` are now full installable PWAs (manifest + icons + service worker registration).
+- Added cache-first app-shell SWs:
+  - `pwa/door/sw.js` (`door-v1`)
+  - `pwa/game/sw.js` (`game-v1`)
+- Both SWs include `/pwa/gas-fallback.js` in static cache, so offline app boot can still trigger GAS redirect logic.
+- `core4` + `fire` stay modular as primary daily flow apps.
+
 ---
 
 ## Format
