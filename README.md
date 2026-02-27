@@ -6,8 +6,8 @@ Single control surface for αOS services, scripts, and centres.
 
 - `aosctl` — unified dispatcher (menu + status + doctor + component routing)
 - `hubctl` — alias to `aosctl`
-- `nodectl` — Index Node operator (status/health/open/dev/autoreload)
-- `indexctl` — Index Node systemd install/env/health
+- `nodectl` — Index Node operator (status/health/open/pwa/dev + user-service control)
+- `indexctl` — Index Node user-service control (`systemctl --user`)
 - `routerctl` — Router bot control
 - `bridgectl` — Bridge service control
 - `syncctl` — Rclone sync control (targets + vault copy)
@@ -134,16 +134,9 @@ systemctl --user status aos-index-dev-menu.path aos-index-dev-public.path
 - Menu: `http://127.0.0.1:8799/menu`
 - Service runs `npm run dev` (nodemon) for live reload
 
-Hot‑reload control:
-
-```bash
-nodectl autoreload on
-nodectl autoreload off
-```
-
 Dev vs service:
 - `nodectl dev` runs `npm run dev` in the foreground (no systemd)
-- `nodectl start|stop|restart` controls the systemd service
+- `nodectl start|stop|restart` controls the user service (`aos-index-dev.service`)
 
 ## Env Management (`envctl`)
 
@@ -178,7 +171,7 @@ aos-aliasctl ui
 
 ## Troubleshooting
 
-- Port 8799 stuck: `nodectl fix`
+- Index logs: `nodectl logs`
 - Index unit: `indexctl status`
 - Full health: `aosctl doctor`
 - Quick status: `aosctl status`
@@ -189,7 +182,7 @@ aos-aliasctl ui
 
 - `aosctl` defaults to Gum menu when available; otherwise prints help.
 - `hubctl` is intentionally the same as `aosctl` so either name works.
-- `nodectl` is index‑only, but can surface router/bridge/index doctors in `nodectl all`.
+- `nodectl` is index-only.
 - `aosctl status` performs a heartbeat ping via `routerctl heartbeat ping`.
 
 

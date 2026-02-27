@@ -602,24 +602,26 @@ Central infrastructure for the αOS ecosystem. Primary HQ runs on the laptop (No
 Local web HQ + API for centres, exports, and data flow.
 
 **Location:** `index-node/`
-**Service:** `aos-index.service`
+**Service:** `aos-index-dev.service` (systemd user unit)
 **Port:** `8799`
 
 **Start:**
 ```bash
 cd ~/aos-hub/index-node
-node server.js
+npm run dev
 ```
 
 **UI routes:**
 - `/` (HQ UI), `/door`, `/game`, `/tent`, `/game/frame`, `/game/freedom`, `/game/focus`, `/game/fire`
+- `/pwa/core4` (canonical Core4 PWA), `/core4` (legacy redirect)
 
 **Key APIs (selected):**
 - `/menu`, `/api/centres`
 - Door flow: `/api/door/flow`, `/api/door/hotlist` (GET/POST), `/api/door/doorwar`, `/api/door/warstack/start`, `/api/door/warstack/answer`, `/api/door/warstack/:id`, `/api/door/export`
 - Game/Voice exports: `/api/game/export`, `/api/voice/export`
 - Fruits: `/api/fruits`, `/api/fruits/next`, `/api/fruits/answer`, `/api/fruits/export`
-- Core4: `/api/core4`, `/api/core4/today`
+- Core4 canonical: `/api/core4/day-state`, `/api/core4/week-summary`, `/api/core4/log`, `/api/core4/journal`
+- Core4 legacy compat: `/api/core4`, `/api/core4/today`
 - Taskwarrior bridge: `/api/taskwarrior/tasks`, `/api/taskwarrior/add`, `/api/taskwarrior/push`
 - Voice history: `/api/voice/history`, `/api/voice/file`, `/api/voice/autosave`
 
@@ -641,7 +643,7 @@ node server.js
 - `FRUITS_QUESTIONS`, `FRUITS_DIR`, `FRUITS_STORE`
 - `RCLONE_RC_URL`, `RCLONE_TARGET`, `RCLONE_FLAGS`, `RCLONE_BACKUP_TARGET`
 
-**CLI:** `scripts/indexctl` (install/start/stop/restart/status/logs/env/doctor)
+**CLI:** `scripts/indexctl` (user-service only: start/stop/restart/status/logs/doctor)
 
 ---
 
@@ -729,7 +731,7 @@ Pushes Vault and Dokumente into Drive.
 - `hubctl doctor` (unified wrapper)
 
 **Index Node control:**
-- `scripts/indexctl` (systemd user unit + env + logs)
+- `scripts/indexctl` (systemd user unit + logs)
 
 **Router control:**
 - `router/routerctl` (install, unit management, heartbeat)
@@ -746,7 +748,7 @@ Pushes Vault and Dokumente into Drive.
 | --- | --- | --- |
 | `scripts/alphaos.zsh` | Shell helpers / aliases | Source in your shell rc. |
 | `scripts/aos-doctor` | Health report (router/bridge/index) | Single status snapshot. |
-| `scripts/indexctl` | Index Node unit control | `install`, `restart`, `logs`, `env`. |
+| `scripts/indexctl` | Index Node user-service control | `restart`, `logs`, `doctor`. |
 | `scripts/setup-alpha-hooks.sh` | Task hooks + git hooks | Taskwarrior → Bridge/GAS. |
 | `game/fire/setup-fire-map.sh` | Fire Map bootstrap | Canonical path (compat wrapper exists at `scripts/setup-fire-map.sh`); no pip, arch-friendly. |
 | `scripts/core4_done_wrapper.py` | Core4 done helper | Marks today's Core4 task done. |

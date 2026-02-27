@@ -66,5 +66,29 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 
 ---
 
+## 2026-02-27
+
+### frame
+- Storage switched from markdown docs to YAML state files: `~/.aos/frame/{domain}.yaml` (no `.md` writes for new saves).
+- `/api/frame/*` now reads/writes YAML state objects with stable `questions.*` keys.
+- Legacy fallback: existing `~/.aos/frame/{domain}.md` is read and migrated to `.yaml` on first domain load.
+- `/api/game/frame/*` compatibility endpoints now also persist YAML state (same backend shape).
+- `pwa/frame` remains markdown-first in the editor; YAML stays backend-only state.
+- codex-mapguard -> codex-neighbor: FRAME SSOT is YAML state in `routes/frame.js`; keep editor UX markdown-only.
+
+### freedom + focus editor flow
+- `pwa/freedom` edits body markdown only; route composes YAML frontmatter on save (`index-node/routes/freedom.js`).
+- `pwa/focus` mission/entries now load as editor-body markdown (no frontmatter/cascade blocks in textarea).
+- `routes/focus.js` preserves frontmatter + managed cascade bundles server-side on save.
+
+### cascade headers
+- Focus map generation now uses managed cascade blocks:
+  - **FREEDOM HEADER** (quarterly direction)
+  - **FRAME FOOTER** (annual YAML truth)
+- Weekly Fire cascade now injects a dedicated **FOCUS HEADER** (monthly mission context).
+- Applies in both route stacks for focus: `/api/focus/*` and `/api/game/focus/*`.
+
+---
+
 ## Format
 Each entry: date → what changed → why (if non-obvious) → commit ref if known.

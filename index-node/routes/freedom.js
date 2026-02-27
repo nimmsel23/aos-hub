@@ -17,12 +17,19 @@ import express from "express";
 import fs      from "fs";
 import path    from "path";
 import os      from "os";
+import yaml    from "js-yaml";
 
 const router = express.Router();
 
 const FREEDOM_DIR = process.env.FREEDOM_DIR || path.join(os.homedir(), ".aos", "freedom");
 
 const VALID_DOMAINS = ["body", "being", "balance", "business"];
+const DOMAIN_META = {
+  body: { label: "BODY", lens: "Fitness + Fuel" },
+  being: { label: "BEING", lens: "Meditation + Memoirs" },
+  balance: { label: "BALANCE", lens: "Partner + Posterity" },
+  business: { label: "BUSINESS", lens: "Discover + Declare" },
+};
 
 // ── File helpers ─────────────────────────────────────────────────────────────
 
@@ -47,110 +54,101 @@ function writeText(fp, txt) {
   fs.writeFileSync(fp, txt, "utf8");
 }
 
+function quarterFromDate(date = new Date()) {
+  return `Q${Math.ceil((date.getMonth() + 1) / 3)}`;
+}
+
+function quarterKeyForYear(year) {
+  const y = String(year || new Date().getFullYear());
+  return `${quarterFromDate()}-${y}`;
+}
+
+function parseFrontmatter(md) {
+  const text = String(md || "");
+  const m = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (!m) return { front: {}, body: text };
+  let front = {};
+  try { front = yaml.load(m[1]) || {}; } catch { front = {}; }
+  return { front, body: text.slice(m[0].length) };
+}
+
+function buildMarkdown(frontmatter, body) {
+  const frontYaml = yaml.dump(frontmatter, { lineWidth: 120, sortKeys: false });
+  return `---\n${frontYaml}---\n\n${String(body || "").trimEnd()}\n`;
+}
+
+function stripFrontmatter(md) {
+  return parseFrontmatter(md).body.trim();
+}
+
+function normalizeEditorBody(content) {
+  const raw = String(content || "");
+  // Backward-compat: if full markdown doc is sent, keep only editable body.
+  if (/^---\s*\n[\s\S]*?\n---\s*\n?/m.test(raw)) {
+    return stripFrontmatter(raw);
+  }
+  return raw.trim();
+}
+
+function defaultEditorBody(domain, year) {
+  const meta = DOMAIN_META[domain] || { label: String(domain || "").toUpperCase(), lens: "" };
+  return `# FREEDOM: ${meta.label} (${year})
+
+## Domain Lens
+
+- ${meta.lens}
+
+## Chapter 33 Core Prompts
+
+- If anything were possible, what would I want my life to look like in 10 years from now?
+- What kind of man do I choose to be in this domain?
+- What kind of life do I choose to live in this domain?
+- What does my Ideal Parallel World look like in this domain?
+
+## Ideal Parallel World (10-Year)
+
+-
+
+## Who I choose to be
+
+-
+
+## ${year} Direction
+
+-
+
+## Q1-Q4 Milestones
+
+- Q1:
+- Q2:
+- Q3:
+- Q4:`.trim();
+}
+
+function composeFreedomMarkdown(domain, year, editorBody, existingFront = {}) {
+  const meta = DOMAIN_META[domain] || { label: String(domain || "").toUpperCase() };
+  const today = new Date().toISOString().slice(0, 10);
+  const front = {
+    ...existingFront,
+    domain: meta.label,
+    year: Number(year),
+    updated: today,
+    period: String(year),
+    type: "freedom-map",
+    cadence: "quarterly",
+    quarter: String(existingFront.quarter || quarterKeyForYear(year)),
+    source_refs: {
+      chapter: "Game Chapter 33 - Freedom",
+      ...(existingFront.source_refs && typeof existingFront.source_refs === "object" ? existingFront.source_refs : {}),
+    },
+  };
+  return buildMarkdown(front, editorBody);
+}
+
 // ── Default template ──────────────────────────────────────────────────────────
 
 function defaultTemplate(domain, year) {
-  const today = new Date().toISOString().slice(0, 10);
-  const domainTitle = domain.charAt(0).toUpperCase() + domain.slice(1).toUpperCase();
-  return `---
-domain: ${domain}
-year: ${year}
-updated: ${today}
----
-
-# ${domainTitle} · Freedom Vision ${year}
-
-## Who I Am in My Ideal Parallel World
-
-## Physical Reality
-
-## Daily Practice
-
-## Health & Longevity
-
-## Notes
-- \n`;
-}
-
-// Domain-specific template headers
-function domainTemplate(domain, year) {
-  const today = new Date().toISOString().slice(0, 10);
-  const domainUpper = domain.toUpperCase();
-  const templates = {
-    body: `---
-domain: body
-year: ${year}
-updated: ${today}
----
-
-# BODY · Freedom Vision ${year}
-
-## Who I Am in My Ideal Parallel World
-
-## Physical Reality
-
-## Daily Practice
-
-## Health & Longevity
-
-## Notes
-- \n`,
-    being: `---
-domain: being
-year: ${year}
-updated: ${today}
----
-
-# BEING · Freedom Vision ${year}
-
-## Who I Am in My Ideal Parallel World
-
-## Inner Life & Consciousness
-
-## Daily Practice
-
-## Spiritual Connection
-
-## Notes
-- \n`,
-    balance: `---
-domain: balance
-year: ${year}
-updated: ${today}
----
-
-# BALANCE · Freedom Vision ${year}
-
-## Who I Am in My Ideal Parallel World
-
-## Relationships & Connection
-
-## Family & Partnership
-
-## Community & Legacy
-
-## Notes
-- \n`,
-    business: `---
-domain: business
-year: ${year}
-updated: ${today}
----
-
-# BUSINESS · Freedom Vision ${year}
-
-## Who I Am in My Ideal Parallel World
-
-## Professional Reality
-
-## Financial Freedom
-
-## Impact & Teaching
-
-## Notes
-- \n`,
-  };
-  return templates[domain] || defaultTemplate(domain, year);
+  return composeFreedomMarkdown(domain, year, defaultEditorBody(domain, year), {});
 }
 
 // ── Validation helpers ─────────────────────────────────────────────────────────
@@ -181,7 +179,7 @@ router.get("/year", (req, res) => {
     for (const domain of VALID_DOMAINS) {
       const fp      = domainPath(year, domain);
       const exists  = fs.existsSync(fp);
-      const content = exists ? readText(fp) : null;
+      const content = exists ? stripFrontmatter(readText(fp)) : null;
       const updated = exists ? fileMtime(fp) : null;
       domains[domain] = { content, updated };
     }
@@ -208,7 +206,7 @@ router.get("/domain", (req, res) => {
 
     const fp      = domainPath(year, domain);
     const exists  = fs.existsSync(fp);
-    const content = exists ? readText(fp) : domainTemplate(domain, year);
+    const content = exists ? stripFrontmatter(readText(fp)) : defaultEditorBody(domain, year);
     const updated = exists ? fileMtime(fp) : null;
 
     res.json({ ok: true, domain, year, content, exists, updated });
@@ -234,7 +232,9 @@ router.post("/domain/save", (req, res) => {
 
     const fp = domainPath(year, domain);
     ensureDir(path.dirname(fp));
-    writeText(fp, content);
+    const current = fs.existsSync(fp) ? parseFrontmatter(readText(fp)).front : {};
+    const next = composeFreedomMarkdown(domain, year, normalizeEditorBody(content), current);
+    writeText(fp, next);
 
     res.json({ ok: true });
   } catch (err) {

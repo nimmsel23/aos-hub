@@ -321,9 +321,11 @@ function detectFireDomain(task) {
 
 function normalizeFireTask(task, referenceDate) {
   const date = fireTaskPrimaryDate(task);
+  const title = task.description || "(ohne Titel)";
   return {
     id: task.id || task.uuid,
-    title: task.description || "(ohne Titel)",
+    title,
+    description: title,
     tags: task.tags || [],
     project: task.project || "",
     due: task.due || "",
@@ -389,9 +391,11 @@ router.get("/tasks", async (req, res) => {
       .filter((task) => taskInRange(task, start, end))
       .map((task) => {
         const due = parseTickTickDue(task);
+        const title = task.title || "(no title)";
         return {
           id: task.id,
-          title: task.title || "(no title)",
+          title,
+          description: title,
           tags: task.tags || [],
           due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
           date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),

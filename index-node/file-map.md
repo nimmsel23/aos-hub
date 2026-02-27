@@ -38,7 +38,8 @@ Purpose: make the `index-node` folder navigable without opening random files.
 | `public/game/tent.html` | `/game/tent` |
 | `public/voice/index.html` | `/voice` |
 | `public/facts.html` | `/facts` |
-| `public/core4.html` | `/core4` |
+| `public/pwa/core4/index.html` | `/pwa/core4/` |
+| `public/core4.html` | `/core4` (legacy redirect/TTY bridge page) |
 | `public/tele.html` | `/tele` |
 
 ## Code Ownership Map

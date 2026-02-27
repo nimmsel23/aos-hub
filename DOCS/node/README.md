@@ -798,10 +798,13 @@ Terminal:
 
 - `WS /ws/terminal` - embedded terminal websocket
 
-## systemd env file
+## systemd user service
 
-If you run the index node via systemd (`aos-index.service`), it reads an env file at `~/.env/aos.env`.
-An example file is provided at `scripts/aos.env.example`.
+If you run the index node via the user service (`aos-index-dev.service`), use:
+- `systemctl --user status aos-index-dev.service`
+- `systemctl --user restart aos-index-dev.service`
+
+Environment is loaded from `~/.env/aos.env` via `scripts/lib/aos-env.sh`.
 
 ---
 

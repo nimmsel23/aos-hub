@@ -7,13 +7,13 @@ Operational commands and checks for `index-node`.
 ```bash
 cd /home/alpha/aos-hub/index-node
 npm install
-npm start
+npm run dev
 ```
 
-Dev mode:
+Production-style (without nodemon):
 
 ```bash
-npm run dev
+npm start
 ```
 
 Core4 TTY:
@@ -44,7 +44,8 @@ curl -I http://127.0.0.1:8799/voice
 
 ```bash
 curl -fsS http://127.0.0.1:8799/api/fire/day | jq .
-curl -fsS http://127.0.0.1:8799/api/core4/today | jq .
+curl -fsS "http://127.0.0.1:8799/api/core4/day-state?date=$(date +%F)" | jq .
+curl -fsS "http://127.0.0.1:8799/api/core4/week-summary?date=$(date +%F)" | jq .
 curl -fsS "http://127.0.0.1:8799/api/voice/history?limit=5" | jq .
 ```
 
@@ -90,12 +91,33 @@ Core4 and terminal:
 4. Re-run failing endpoint with `curl` and inspect JSON error.
 5. Confirm target vault paths exist and are writable.
 
+Core4/PWA quick path (dev service):
+1. `systemctl --user restart aos-index-dev.service`
+2. `systemctl --user status aos-index-dev.service --no-pager`
+3. `nodectl pin status`
+4. If needed for local debug: `nodectl pin off` and restart again
+5. `journalctl --user -u aos-index-dev.service -n 120 --no-pager`
+
 ## Change Checklist
 
 1. If menu links changed, update `menu.yaml` only.
-2. If endpoints changed, update `docs/api-map.md`.
-3. If files moved, update `docs/file-map.md`.
+2. If endpoints changed, update `api-map.md`.
+3. If files moved, update `file-map.md`.
 4. Keep responses JSON and avoid HTML stack traces.
+
+## Template SSOT Policy (AlphaOS)
+
+- Für alle Stages/Phases/Maps (Frame/Freedom/Focus/Fire/Tent/...) sollen zentrale Templates als SSOT gepflegt werden.
+- Diese Templates müssen von sämtlichen Frontends und Tools genutzt werden (`aos`, `hubctl`, PWA/UI, API-Routen, CLI-Wrappers).
+- Verboten sind auseinanderlaufende Inline-Template-Varianten in einzelnen UIs/Routen, außer explizit dokumentierter Kompatibilitätsschicht.
+
+## Cadence Matrix (User-Truth)
+
+- `Freedom`: quarterly
+- `Focus`: monthly
+- `Fire`: weekly
+- `Core4`: daily
+- Hinweis: diese Cadences sind als getrennte Themen/Pipelines zu behandeln, nicht als ein vermischtes Template.
 
 ## Tailscale PWA Access (Serve/Funnel)
 

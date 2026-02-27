@@ -14,13 +14,15 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
   - `public/facts.html` is the local Fruits UI (`/facts`).
   - `public/voice/` contains Voice Centre pages.
   - `public/core4.html` is the Core4 TTY bridge page (legacy terminal view).
-  - `public/core4/` is the **mobile-first Core4 PWA** — served at `/core4/` (redirect from `/core4`).
+  - `public/pwa/core4/` is the **mobile-first Core4 PWA** — served at `/pwa/core4/`.
+  - `/core4` is legacy and redirects to `/pwa/core4/`.
 - Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
 - Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
 ## Build, Test, and Development Commands
 - `npm install` installs server and frontend dependencies.
-- `npm start` (or `node server.js`) starts the local router at `http://127.0.0.1:8799`.
+- `npm run dev` is the default local runtime (`nodemon`, port `8799`).
+- `npm start` (or `node server.js`) runs the plain production-style node process.
 - `npm run core4` launches the Core4 TTY in the terminal.
 
 ## Coding Style & Naming Conventions
@@ -31,13 +33,13 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 
 ## Testing Guidelines
 - No automated test suite is configured.
-- Manual checks: run `node server.js`, open `/`, `/game`, `/game/tent`, and `/door`.
+- Manual checks: run `npm run dev`, open `/`, `/game`, `/game/tent`, and `/door`.
 
 ## Quick Smoke Checks
 - Click every card in `/game` to confirm routes open.
 - In `/door`, generate Hot List, Door War, War Stack, Hit List, Profit, then export each to `/Door/` and confirm the files are written under `~/AlphaOS-Vault/Door`.
 - Verify chapters load in `/door` (they should come from `/api/door/chapters`).
-- Open `/core4` (redirects to `/core4/`) — mobile PWA, 4 domain cards, `.5/.5` toggles.
+- Open `/pwa/core4/` (or `/core4` legacy redirect) — mobile PWA, 4 domain cards, `.5/.5` toggles.
   - Uses canonical: `GET /api/core4/day-state`, `GET /api/core4/week-summary`, `POST /api/core4/log`
   - Do **not** use legacy `POST /api/core4` or `GET /api/core4/today` in new UI code.
 
@@ -72,9 +74,9 @@ See `api-map.md` for full reference. Short version:
   - `nodectl pin off` (writes `~/.aos/pin.disabled`)
   - `nodectl pin on`
   - `nodectl pin clear-sessions`
+- `nodectl`/`indexctl` service control is **user-service only** (`aos-index-dev.service` via `systemctl --user`).
 - After changing PIN flag/config, restart index-node (`nodectl restart` / service restart) before retesting PWA.
 - If restart crashes, collect logs first:
-  - `sudo journalctl -u aos-index.service -n 120 --no-pager`
   - `journalctl --user -u aos-index-dev.service -n 120 --no-pager`
 
 ## Documentation Locations

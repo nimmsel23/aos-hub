@@ -236,9 +236,9 @@
         <textarea id="body_how"></textarea>
         <label>3. How do I feel about where I am?</label>
         <textarea id="body_feel"></textarea>
-        <label>4. What is working?</label>
+        <label>4. What is working about where I am now?</label>
         <textarea id="body_working"></textarea>
-        <label>5. What is not working?</label>
+        <label>5. What is not working about where I am?</label>
         <textarea id="body_not"></textarea>
         <button onclick="save('Body', false)">BODY speichern</button>
         <button onclick="save('Body', true)">BODY → TickTick</button>
@@ -250,9 +250,9 @@
         <h2>BEING</h2>
         <label>1. Where am I now?</label><textarea id="being_where"></textarea>
         <label>2. How did I get here?</label><textarea id="being_how"></textarea>
-        <label>3. How do I feel?</label><textarea id="being_feel"></textarea>
-        <label>4. What is working?</label><textarea id="being_working"></textarea>
-        <label>5. What is not working?</label><textarea id="being_not"></textarea>
+        <label>3. How do I feel about where I am?</label><textarea id="being_feel"></textarea>
+        <label>4. What is working about where I am now?</label><textarea id="being_working"></textarea>
+        <label>5. What is not working about where I am?</label><textarea id="being_not"></textarea>
         <button onclick="save('Being', false)">BEING speichern</button>
         <button onclick="save('Being', true)">BEING → TickTick</button>
       </div>
@@ -263,9 +263,9 @@
         <h2>BALANCE</h2>
         <label>1. Where am I now?</label><textarea id="balance_where"></textarea>
         <label>2. How did I get here?</label><textarea id="balance_how"></textarea>
-        <label>3. How do I feel?</label><textarea id="balance_feel"></textarea>
-        <label>4. What is working?</label><textarea id="balance_working"></textarea>
-        <label>5. What is not working?</label><textarea id="balance_not"></textarea>
+        <label>3. How do I feel about where I am?</label><textarea id="balance_feel"></textarea>
+        <label>4. What is working about where I am now?</label><textarea id="balance_working"></textarea>
+        <label>5. What is not working about where I am?</label><textarea id="balance_not"></textarea>
         <button onclick="save('Balance', false)">BALANCE speichern</button>
         <button onclick="save('Balance', true)">BALANCE → TickTick</button>
       </div>
@@ -276,9 +276,9 @@
         <h2>BUSINESS</h2>
         <label>1. Where am I now?</label><textarea id="business_where"></textarea>
         <label>2. How did I get here?</label><textarea id="business_how"></textarea>
-        <label>3. How do I feel?</label><textarea id="business_feel"></textarea>
-        <label>4. What is working?</label><textarea id="business_working"></textarea>
-        <label>5. What is not working?</label><textarea id="business_not"></textarea>
+        <label>3. How do I feel about where I am?</label><textarea id="business_feel"></textarea>
+        <label>4. What is working about where I am now?</label><textarea id="business_working"></textarea>
+        <label>5. What is not working about where I am?</label><textarea id="business_not"></textarea>
         <button onclick="save('Business', false)">BUSINESS speichern</button>
         <button onclick="save('Business', true)">BUSINESS → TickTick</button>
       </div>
@@ -331,9 +331,9 @@ function buildFrameYaml(domain, answers, now) {
     `questions:`,
     yamlBlock('where_am_i_now', answers.whereNow, 2),
     yamlBlock('how_did_i_get_here', answers.howGotHere, 2),
-    yamlBlock('how_do_i_feel', answers.howFeel, 2),
-    yamlBlock('what_is_working', answers.whatWorking, 2),
-    yamlBlock('what_is_not_working', answers.whatNotWorking, 2),
+    yamlBlock('how_do_i_feel_about_where_i_am', answers.howFeel, 2),
+    yamlBlock('what_is_working_about_where_i_am_now', answers.whatWorking, 2),
+    yamlBlock('what_is_not_working_about_where_i_am', answers.whatNotWorking, 2),
   ].join('\n');
 }
 

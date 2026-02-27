@@ -19,81 +19,22 @@ source "$ROOT_DIR/scripts/ctl-lib.sh"
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
-SERVICE_NAME="aos-index.service"
 USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
-UNIT_SRC="$ROOT_DIR/systemd/$SERVICE_NAME"
-UNIT_DST="/etc/systemd/system/$SERVICE_NAME"
-# Keep this aligned with `systemd/aos-index.service` which reads from `/etc/aos/aos.env`.
-ENV_FILE="${AOS_INDEX_ENV_FILE:-/etc/aos/aos.env}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
 
-write_env_file() {
-  if [[ -d "$ENV_FILE" ]]; then
-    die "env file path points to a directory (must be a file): $ENV_FILE"
-  fi
-  if [[ -f "$ENV_FILE" ]]; then
+ensure_user_runtime_dir() {
+  if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
     return 0
   fi
-  sudo_cmd mkdir -p "$(dirname -- "$ENV_FILE")"
-  sudo_cmd tee "$ENV_FILE" >/dev/null <<'EOF'
-# αOS Index Node env (systemd reads: /etc/aos/aos.env)
-
-# Bind / listen
-HOST=0.0.0.0
-PORT=8799
-
-# Menu SSOT (relative to index-node WorkingDirectory)
-MENU_YAML=./menu.yaml
-
-# Optional: Bridge integration for Core4 logging
-# AOS_BRIDGE_URL=http://127.0.0.1:8080
-
-# Optional: Telegram CLI path used by /api/tele/send
-# TELE_BIN=/home/alpha/bin/utils/tele
-
-# Optional: UI basic auth (recommended when exposed via Funnel)
-# AOS_UI_BASIC_AUTH=1
-# AOS_UI_BASIC_USER=alpha
-# AOS_UI_BASIC_PASS=change-me
-# AOS_UI_BASIC_REALM=AlphaOS Hub
-# AOS_UI_BASIC_AUTH_PROTECT_API=0
-EOF
-  sudo_cmd chmod 600 "$ENV_FILE" || true
-  msg "✅ Created env file: $ENV_FILE"
-}
-
-sudo_cmd() {
-  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    sudo "$@"
-  else
-    "$@"
+  local uid runtime_dir
+  uid="$(id -u)"
+  runtime_dir="/run/user/${uid}"
+  if [[ -d "$runtime_dir" ]]; then
+    export XDG_RUNTIME_DIR="$runtime_dir"
   fi
 }
-
-readonly_cmd() {
-  # Prefer non-sudo for read-only calls; fallback to sudo on permission issues.
-  if "$@"; then
-    return 0
-  fi
-  sudo_cmd "$@"
-}
-
-install_unit() {
-  [[ -f "$UNIT_SRC" ]] || die "missing unit: $UNIT_SRC"
-  write_env_file
-  sudo_cmd cp "$UNIT_SRC" "$UNIT_DST"
-  sudo_cmd systemctl daemon-reload
-  msg "✅ Installed unit: $UNIT_DST"
-}
-
-start_svc() { sudo_cmd systemctl start "$SERVICE_NAME"; }
-stop_svc() { sudo_cmd systemctl stop "$SERVICE_NAME"; }
-restart_svc() { sudo_cmd systemctl restart "$SERVICE_NAME"; }
-status_svc() { readonly_cmd systemctl status "$SERVICE_NAME" --no-pager; }
-enable_svc() { sudo_cmd systemctl enable "$SERVICE_NAME"; }
-disable_svc() { sudo_cmd systemctl disable "$SERVICE_NAME"; }
-logs_svc() { readonly_cmd journalctl -u "$SERVICE_NAME" -f; }
+ensure_user_runtime_dir
 
 user_bus_ok() {
   systemctl --user --version >/dev/null 2>&1 && systemctl --user is-active default.target >/dev/null 2>&1 || {
@@ -101,40 +42,28 @@ user_bus_ok() {
   }
 }
 
-start_user_svc() {
-  if user_bus_ok; then
-    systemctl --user start "$USER_SERVICE_NAME"
-  else
-    die "systemctl --user not available (no user bus)"
-  fi
+require_user_bus() {
+  user_bus_ok || die "systemctl --user not available (no user bus). linger is required for persistent user service."
 }
 
-stop_user_svc() {
-  if user_bus_ok; then
-    systemctl --user stop "$USER_SERVICE_NAME" || true
-  else
-    warn "systemctl --user not available (no user bus)"
-  fi
-}
+start_user_svc() { require_user_bus; systemctl --user start "$USER_SERVICE_NAME"; }
+stop_user_svc() { require_user_bus; systemctl --user stop "$USER_SERVICE_NAME"; }
+restart_user_svc() { require_user_bus; systemctl --user restart "$USER_SERVICE_NAME"; }
+status_user_svc() { require_user_bus; systemctl --user status "$USER_SERVICE_NAME" --no-pager; }
+enable_user_svc() { require_user_bus; systemctl --user enable "$USER_SERVICE_NAME"; }
+disable_user_svc() { require_user_bus; systemctl --user disable "$USER_SERVICE_NAME"; }
+logs_user_svc() { require_user_bus; journalctl --user -u "$USER_SERVICE_NAME" -f; }
 
-status_user_svc() {
-  if user_bus_ok; then
-    systemctl --user status "$USER_SERVICE_NAME" --no-pager
-  else
-    warn "systemctl --user not available (no user bus)"
-  fi
-}
-
-env_edit() {
-  write_env_file
-  # `/etc/...` needs sudo; `sudoedit` keeps editor UX consistent.
-  if [[ "$ENV_FILE" == /etc/* ]] && has_cmd sudoedit; then
-    sudoedit "$ENV_FILE"
+user_state() {
+  if ! user_bus_ok; then
+    printf "unknown\n"
     return 0
   fi
-  sudo_cmd "${EDITOR:-nano}" "$ENV_FILE"
+  local state
+  state="$(systemctl --user is-active "$USER_SERVICE_NAME" 2>/dev/null || true)"
+  [[ -n "$state" ]] || state="unknown"
+  printf "%s\n" "$state"
 }
-env_show() { [[ -f "$ENV_FILE" ]] && sudo_cmd cat "$ENV_FILE" || warn "missing env: $ENV_FILE"; }
 
 health_check() {
   if ! has_cmd curl; then
@@ -149,59 +78,36 @@ health_check() {
 }
 
 doctor() {
-  msg "Indexctl doctor"
-  msg "Unit src : $UNIT_SRC"
-  msg "Unit dst : $UNIT_DST"
-  msg "Env file : $ENV_FILE"
-  msg "Health   : $HEALTH_URL"
+  msg "Indexctl doctor (user-service only)"
+  msg "User service: $USER_SERVICE_NAME"
+  msg "Health URL  : $HEALTH_URL"
   msg ""
-  if [[ -f "$UNIT_DST" ]]; then
-    msg "Unit installed: yes"
-  else
-    warn "Unit installed: no"
-  fi
-  if [[ -f "$ENV_FILE" ]]; then
-    msg "Env file exists: yes"
-  else
-    warn "Env file exists: no"
-  fi
+  msg "User state  : $(user_state)"
   health_check
 }
 
 mode_status() {
   msg "Index mode status"
-  msg "System service: $SERVICE_NAME"
-  if readonly_cmd systemctl -q is-active "$SERVICE_NAME"; then
-    msg "  active: yes"
-  else
-    msg "  active: no"
-  fi
+  msg "Service scope: user"
   msg "User service: $USER_SERVICE_NAME"
-  if user_bus_ok && systemctl --user -q is-active "$USER_SERVICE_NAME"; then
-    msg "  active: yes"
-  elif user_bus_ok; then
-    msg "  active: no"
-  else
+  local ustate
+  ustate="$(user_state)"
+  if [[ "$ustate" == "unknown" ]]; then
     msg "  active: unknown (no user bus)"
+  else
+    msg "  active: $ustate"
   fi
 }
 
 mode_dev() {
   msg "Switching to DEV mode (user service: $USER_SERVICE_NAME)"
-  msg "Stopping system service: $SERVICE_NAME"
-  stop_svc || warn "could not stop system service"
-  msg "Starting user service: $USER_SERVICE_NAME"
   start_user_svc
   mode_status
 }
 
-mode_prod() {
-  msg "Switching to PROD mode (system service: $SERVICE_NAME)"
-  msg "Stopping user service: $USER_SERVICE_NAME"
-  stop_user_svc
-  msg "Starting system service: $SERVICE_NAME"
-  start_svc
-  mode_status
+legacy_system_cmd() {
+  local cmd="$1"
+  die "system-service path removed: '$cmd' is no longer supported in indexctl (user-service only: $USER_SERVICE_NAME)"
 }
 
 hub_doctor() {
@@ -221,25 +127,21 @@ hub_doctor() {
 
 usage() {
   cat <<EOF
-indexctl - manage αOS index-node service
+indexctl - manage αOS index-node user service
 
 Compatibility note:
-  - Production-first control: aosctl index ...
-  - Dev/user control:         hubctl index ...
-  - indexctl remains for compatibility during migration.
+  - indexctl is now user-service only (systemd --user).
+  - System-service workflow was removed from this tool.
 
 Usage:
-  scripts/indexctl install
   scripts/indexctl start|stop|restart|status|logs
   scripts/indexctl enable|disable
   scripts/indexctl user-start|user-stop|user-status
-  scripts/indexctl mode-dev|mode-prod|mode-status
-  scripts/indexctl env|env-show
+  scripts/indexctl mode-dev|mode-status
   scripts/indexctl doctor
   scripts/indexctl hub-doctor
 
 Env:
-  AOS_INDEX_ENV_FILE=/etc/aos/aos.env
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
   AOS_INDEX_USER_SERVICE=aos-index-dev.service
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor
@@ -248,24 +150,23 @@ EOF
 
 cmd="${1:-}"
 case "$cmd" in
-  install) install_unit ;;
-  start) start_svc ;;
-  stop) stop_svc ;;
-  restart) restart_svc ;;
-  status) status_svc ;;
-  enable) enable_svc ;;
-  disable) disable_svc ;;
-  logs) logs_svc ;;
+  start) start_user_svc ;;
+  stop) stop_user_svc ;;
+  restart) restart_user_svc ;;
+  status) status_user_svc ;;
+  enable) enable_user_svc ;;
+  disable) disable_user_svc ;;
+  logs) logs_user_svc ;;
   user-start) start_user_svc ;;
   user-stop) stop_user_svc ;;
   user-status) status_user_svc ;;
   mode-dev|dev-mode|switch-dev) mode_dev ;;
-  mode-prod|prod-mode|switch-prod) mode_prod ;;
   mode-status) mode_status ;;
-  env) env_edit ;;
-  env-show) env_show ;;
   doctor) doctor ;;
   hub-doctor|aos-doctor) hub_doctor ;;
+  install|env|env-show)
+    legacy_system_cmd "$cmd"
+    ;;
   -h|--help|help|"") usage ;;
   *) usage; exit 1 ;;
 esac

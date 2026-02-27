@@ -18,6 +18,14 @@ import path from "path";
 import os from "os";
 import yaml from "js-yaml";
 import tentRouter from "./game.tent.js";
+import {
+  frameDefaultTemplate,
+  frameFilePath,
+  framePreviewFromState,
+  frameStateToYaml,
+  normalizeFrameState,
+  parseFrameStateContent,
+} from "./frame.js";
 
 const uiRouter = express.Router();
 export const gameApiRouter = express.Router();
@@ -33,6 +41,10 @@ const DOMAIN_META = {
   balance: { label: "BALANCE", lens: "Partner + Posterity" },
   business: { label: "BUSINESS", lens: "Discover + Declare" },
 };
+const FOCUS_CASCADE_HEADER_BEGIN = "<!-- AOS:FOCUS:CASCADE:FREEDOM:HEADER:BEGIN -->";
+const FOCUS_CASCADE_HEADER_END = "<!-- AOS:FOCUS:CASCADE:FREEDOM:HEADER:END -->";
+const FOCUS_CASCADE_FOOTER_BEGIN = "<!-- AOS:FOCUS:CASCADE:FRAME:FOOTER:BEGIN -->";
+const FOCUS_CASCADE_FOOTER_END = "<!-- AOS:FOCUS:CASCADE:FRAME:FOOTER:END -->";
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -103,10 +115,6 @@ function previewFromMarkdown(md) {
   return body.replace(/\s+/g, " ").trim().slice(0, 100);
 }
 
-function frameFile(domain) {
-  return path.join(FRAME_DIR, `${domain}.md`);
-}
-
 function freedomFile(year, domain) {
   return path.join(FREEDOM_DIR, String(year), `${domain}.md`);
 }
@@ -116,7 +124,7 @@ function focusFile(month, domain) {
 }
 
 function frameSourceRef(domain) {
-  return `~/.aos/frame/${domain}.md`;
+  return `~/.aos/frame/${domain}.yaml`;
 }
 
 function freedomSourceRef(year, domain) {
@@ -134,22 +142,76 @@ function monthLabel(month) {
   return date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-function defaultFrameMarkdown(domain) {
-  const meta = domainMeta(domain);
-  const upper = meta.label;
-  return buildMarkdown(
-    {
-      domain: upper,
-      updated: todayISO(),
-      period: "current",
-      type: "frame-map",
-      source_refs: {
-        chapter: "Game Chapter 32 - Frame",
-      },
-      tags: ["alphaos", "frame", domain],
-    },
-    `# FRAME: ${upper}\n\n> Starting line, not finish line. Tell the truth about where you are now.\n\n## Domain Lens\n\n- ${meta.lens}\n- Why this domain matters now:\n\n## Current Reality (Facts)\n\n- Current state:\n- Measurable signals:\n- Environment / context:\n\n## Story (How I Got Here)\n\n- Decisions and patterns that created this frame:\n- Recent events that changed the situation:\n\n## Working (Strengths / Assets)\n\n- \n\n## Not Working (Constraints / Friction)\n\n- \n\n## Emotional Reality (How It Feels)\n\n- \n\n## Resources (People / Tools / Time / Money)\n\n- \n\n## Truth Statement\n\n- The clearest truth in this domain right now is:\n\n## Bridge To Freedom\n\n- If I accept this frame fully, the next strategic question becomes:\n`
-  );
+function quarterFromDate(date = new Date()) {
+  return `Q${Math.ceil((date.getMonth() + 1) / 3)}`;
+}
+
+function quarterKeyForYear(year) {
+  return `${quarterFromDate()}-${String(year || currentYearString())}`;
+}
+
+function frameStateYamlForDomain(domain) {
+  const filePath = frameFilePath(domain);
+  const content = ensureFileWithDefault(filePath, () => frameDefaultTemplate(domain));
+  const parsed = parseFrameStateContent(content);
+  if (!parsed) return frameDefaultTemplate(domain).trim();
+  return frameStateToYaml(normalizeFrameState(parsed, domain)).trim();
+}
+
+function stripFocusCascadeBlocks(body) {
+  const text = String(body || "");
+  const headerBegin = FOCUS_CASCADE_HEADER_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const headerEnd = FOCUS_CASCADE_HEADER_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const footerBegin = FOCUS_CASCADE_FOOTER_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const footerEnd = FOCUS_CASCADE_FOOTER_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const noHeader = text.replace(new RegExp(`${headerBegin}[\\s\\S]*?${headerEnd}\\n?`, "g"), "");
+  return noHeader.replace(new RegExp(`${footerBegin}[\\s\\S]*?${footerEnd}\\n?`, "g"), "").trim();
+}
+
+function freedomMarkdownForDomain(year, domain) {
+  const filePath = freedomFile(year, domain);
+  const content = ensureFileWithDefault(filePath, () => defaultFreedomMarkdown(year, domain));
+  return String(content || "").trim();
+}
+
+function buildFocusFreedomHeaderBlock(year, domain) {
+  return [
+    FOCUS_CASCADE_HEADER_BEGIN,
+    "## FREEDOM HEADER · QUARTERLY DIRECTION (MARKDOWN)",
+    "",
+    `- cadence: quarterly`,
+    `- quarter: ${quarterKeyForYear(year)}`,
+    "",
+    "```markdown",
+    freedomMarkdownForDomain(year, domain),
+    "```",
+    FOCUS_CASCADE_HEADER_END,
+    "",
+  ].join("\n");
+}
+
+function buildFocusFrameFooterBlock(domain) {
+  return [
+    FOCUS_CASCADE_FOOTER_BEGIN,
+    "## FRAME FOOTER · ANNUAL TRUTH (YAML)",
+    "",
+    "```yaml",
+    frameStateYamlForDomain(domain),
+    "```",
+    FOCUS_CASCADE_FOOTER_END,
+    "",
+  ].join("\n");
+}
+
+function upsertFocusCascadeForDomain(content, year, domain) {
+  const { front, body } = parseFrontmatter(content);
+  const cleanBody = stripFocusCascadeBlocks(body);
+  const withCascade = [
+    buildFocusFreedomHeaderBlock(year, domain).trim(),
+    cleanBody,
+    buildFocusFrameFooterBlock(domain).trim(),
+  ].filter(Boolean).join("\n\n").trim() + "\n";
+  return buildMarkdown(front, withCascade);
 }
 
 function defaultFreedomMarkdown(year, domain) {
@@ -161,6 +223,8 @@ function defaultFreedomMarkdown(year, domain) {
       year: Number(year),
       updated: todayISO(),
       period: String(year),
+      cadence: "quarterly",
+      quarter: quarterKeyForYear(year),
       horizon: "10-year",
       type: "freedom-map",
       source_refs: {
@@ -169,7 +233,7 @@ function defaultFreedomMarkdown(year, domain) {
       },
       tags: ["alphaos", "freedom", domain, "ipw"],
     },
-    `# FREEDOM: ${upper} (${year})\n\n> Direction over drift. Use truth from Frame to define the next year toward your Ideal Parallel World.\n\n## Domain Lens\n\n- ${meta.lens}\n- This year's arena of dominion:\n\n## Truth Anchors From Frame\n\n- What is true right now (no lies, no excuses):\n- What must be accepted before expansion:\n\n## Ideal Parallel World (10-Year Horizon)\n\n- If anything were possible in 10 years, what does ${upper} look like?\n- Who have I become in this domain?\n- How does life feel there?\n\n## ${year} Freedom Vision (12-Month Direction)\n\n- What does progress toward IPW look like this year?\n- What must be fundamentally different by year-end?\n\n## Key Milestones (Q1-Q4)\n\n- Q1:\n- Q2:\n- Q3:\n- Q4:\n\n## Domino Doors (Leverage Moves)\n\n- Door 1:\n- Door 2:\n- Door 3:\n\n## Identity / Standards / Non-Negotiables\n\n- The man I choose to be in this domain:\n- Standards I will hold:\n\n## Additions / Eliminations / Sacrifices\n\n- Add:\n- Remove:\n- Sacrifice:\n\n## Direction Check\n\n- If I stay aligned with this Freedom Map, the next monthly Focus mission should begin with:\n`
+    `# FREEDOM: ${upper} (${year})\n\n## Domain Lens\n\n- ${meta.lens}\n\n## Chapter 33 Core Prompts\n\n- If anything were possible, what would I want my life to look like in 10 years from now?\n- What kind of man do I choose to be in this domain?\n- What kind of life do I choose to live in this domain?\n- What does my Ideal Parallel World look like in this domain?\n\n## Ideal Parallel World (10-Year)\n\n- \n\n## Who I choose to be\n\n- \n\n## ${year} Direction\n\n- \n\n## Q1-Q4 Milestones\n\n- Q1:\n- Q2:\n- Q3:\n- Q4:\n`
   );
 }
 
@@ -177,10 +241,11 @@ function focusSourceFrontmatter(month, domain) {
   const upper = domain.toUpperCase();
   const year = String(month).slice(0, 4);
 
-  const frameContent = ensureFileWithDefault(frameFile(domain), () => defaultFrameMarkdown(domain));
+  const frameContent = ensureFileWithDefault(frameFilePath(domain), () => frameDefaultTemplate(domain));
   const freedomContent = ensureFileWithDefault(freedomFile(year, domain), () => defaultFreedomMarkdown(year, domain));
 
-  const { front: frameFront } = parseFrontmatter(frameContent);
+  const frameRaw = parseFrameStateContent(frameContent) || {};
+  const frameState = normalizeFrameState(frameRaw, domain);
   const { front: freedomFront } = parseFrontmatter(freedomContent);
 
   return {
@@ -191,9 +256,9 @@ function focusSourceFrontmatter(month, domain) {
       chapter: "Game Chapter 34 - Focus",
     },
     frame: {
-      domain: String(frameFront.domain || upper),
-      updated: frameFront.updated || null,
-      type: String(frameFront.type || "frame-map"),
+      domain: String(frameState.domain || upper),
+      updated: frameState.updated || null,
+      type: String(frameState.type || "frame-map"),
     },
     freedom: {
       domain: String(freedomFront.domain || upper),
@@ -210,7 +275,8 @@ function defaultFocusMarkdown(month, domain) {
   const upper = meta.label;
   const sources = focusSourceFrontmatter(month, domain);
   const monthTitle = monthLabel(month);
-  return buildMarkdown(
+  const year = String(month).slice(0, 4);
+  const base = buildMarkdown(
     {
       domain: upper,
       month,
@@ -220,8 +286,9 @@ function defaultFocusMarkdown(month, domain) {
       type: "focus-map",
       tags: ["alphaos", "focus", domain, "monthly"],
     },
-    `# FOCUS: ${upper} (${monthTitle})\n\n> Shrink the journey. Bridge truth (Frame) and vision (Freedom) into one winnable monthly mission.\n\n## Domain Lens\n\n- ${meta.lens}\n- Why this month matters in ${upper}:\n\n## Monthly Mission\n\n- One sentence mission for this month:\n- What \"done\" looks like by month-end:\n\n## Freedom Bridge (Why This Mission)\n\n- Freedom target this mission serves:\n- Which domino door does it move?\n- What happens if I do not execute this month?\n\n## Foundation Layer (Habits / Routines / Resources)\n\n### Habits\n- \n\n### Routines\n- \n\n### Additions\n- \n\n### Eliminations\n- \n\n## Weekly Fire Handoffs (4 Waves)\n\n- Week 1 Fire focus:\n- Week 2 Fire focus:\n- Week 3 Fire focus:\n- Week 4 Fire focus:\n\n## Constraints / Risks / Resistance\n\n- Likely friction:\n- Anti-pattern to avoid:\n- Recovery move if I drift:\n\n## Scoreboard (Proof Of Progress)\n\n- Metric 1:\n- Metric 2:\n- Metric 3:\n\n## First 72 Hours (Set Sail)\n\n- First action:\n- Calendar block:\n- Support / accountability:\n`
+    `# FOCUS: ${upper} (${monthTitle})\n\n## Domain Lens\n\n- ${meta.lens}\n\n## Chapter 34 Core Prompts\n\n- What is my Monthly Mission that bridges where I am now and where I want to be?\n- What habits must I build this month?\n- What routines keep me on course?\n- What do I need to add?\n- What do I need to eliminate?\n- What is my first action to set sail?\n\n## Monthly Mission\n\n- \n\n## Habits\n\n- \n\n## Routines\n\n- \n\n## Additions\n\n- \n\n## Eliminations\n\n- \n\n## Set Sail (First Action)\n\n- \n`
   );
+  return upsertFocusCascadeForDomain(base, year, domain);
 }
 
 function ensureFileWithDefault(filePath, buildDefault) {
@@ -270,10 +337,23 @@ uiRouter.use("/tent", tentRouter);
 gameApiRouter.get("/frame/domains", (_req, res) => {
   try {
     ensureDir(FRAME_DIR);
-    const domains = listDomainsSummary((domain) => ({
-      filePath: frameFile(domain),
-      defaultFront: { updated: null },
-    }));
+    const domains = VALID_DOMAINS.map((domain) => {
+      const filePath = frameFilePath(domain);
+      if (!fs.existsSync(filePath)) {
+        return { domain, preview: "", updated: null };
+      }
+      const content = readText(filePath);
+      const parsed = parseFrameStateContent(content);
+      if (!parsed) {
+        return { domain, preview: "", updated: null };
+      }
+      const state = normalizeFrameState(parsed, domain);
+      return {
+        domain,
+        preview: framePreviewFromState(state),
+        updated: state.updated || null,
+      };
+    });
     return jsonOk(res, { domains }, { domains });
   } catch (err) {
     return jsonErr(res, 500, String(err));
@@ -284,9 +364,10 @@ gameApiRouter.get("/frame/:domain", (req, res) => {
   try {
     const domain = String(req.params.domain || "").toLowerCase();
     if (!isValidDomain(domain)) return jsonErr(res, 400, "invalid_domain");
-    const filePath = frameFile(domain);
-    const content = ensureFileWithDefault(filePath, () => defaultFrameMarkdown(domain));
-    const { front } = parseFrontmatter(content);
+    const filePath = frameFilePath(domain);
+    const content = ensureFileWithDefault(filePath, () => frameDefaultTemplate(domain));
+    const parsed = parseFrameStateContent(content);
+    const front = parsed ? normalizeFrameState(parsed, domain) : null;
     return jsonOk(res, { domain, content, front }, { domain, content, front });
   } catch (err) {
     return jsonErr(res, 500, String(err));
@@ -300,21 +381,11 @@ gameApiRouter.post("/frame/:domain/save", (req, res) => {
     const content = req.body?.content;
     if (typeof content !== "string") return jsonErr(res, 400, "invalid_content");
 
-    const { front, body } = parseFrontmatter(content);
-    const updated = todayISO();
-    const markdown = buildMarkdown(
-      {
-        ...front,
-        domain: domain.toUpperCase(),
-        updated,
-        type: "frame-map",
-        tags: Array.isArray(front.tags) ? front.tags : ["alphaos", "frame", domain],
-      },
-      body
-    );
-
-    writeText(frameFile(domain), markdown);
-    return jsonOk(res, { domain, updated }, { domain, updated });
+    const parsed = parseFrameStateContent(content);
+    if (!parsed) return jsonErr(res, 400, "invalid_yaml");
+    const state = normalizeFrameState(parsed, domain, todayISO());
+    writeText(frameFilePath(domain), frameStateToYaml(state));
+    return jsonOk(res, { domain, updated: state.updated }, { domain, updated: state.updated });
   } catch (err) {
     return jsonErr(res, 500, String(err));
   }
@@ -370,6 +441,8 @@ gameApiRouter.post("/freedom/:year/:domain/save", (req, res) => {
         domain: domain.toUpperCase(),
         year: Number(year),
         updated,
+        cadence: "quarterly",
+        quarter: String(front.quarter || quarterKeyForYear(year)),
         horizon: "10-year",
         type: "freedom-map",
         tags: Array.isArray(front.tags) ? front.tags : ["alphaos", "freedom", domain, "ipw"],
@@ -407,7 +480,11 @@ gameApiRouter.get("/focus/:month/:domain", (req, res) => {
     if (!isValidDomain(domain)) return jsonErr(res, 400, "invalid_domain");
 
     const filePath = focusFile(month, domain);
-    const content = ensureFileWithDefault(filePath, () => defaultFocusMarkdown(month, domain));
+    const content = upsertFocusCascadeForDomain(
+      ensureFileWithDefault(filePath, () => defaultFocusMarkdown(month, domain)),
+      month.slice(0, 4),
+      domain
+    );
     const { front } = parseFrontmatter(content);
     return jsonOk(res, { month, domain, content, front }, { month, domain, content, front });
   } catch (err) {
@@ -424,7 +501,8 @@ gameApiRouter.post("/focus/:month/:domain/save", (req, res) => {
     const content = req.body?.content;
     if (typeof content !== "string") return jsonErr(res, 400, "invalid_content");
 
-    const { front, body } = parseFrontmatter(content);
+    const withHeader = upsertFocusCascadeForDomain(content, month.slice(0, 4), domain);
+    const { front, body } = parseFrontmatter(withHeader);
     const updated = todayISO();
     const sources = focusSourceFrontmatter(month, domain);
     const markdown = buildMarkdown(

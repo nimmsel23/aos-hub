@@ -384,6 +384,9 @@ app.use("/vendor/marked", express.static("node_modules/marked"));
 
 
 const MENU_PATH = process.env.MENU_YAML || "./menu.yaml";
+const GAS_ENV_FILE = String(
+  process.env.AOS_GAS_ENV_FILE || path.join(os.homedir(), ".env", "gas.env")
+).trim();
 const AOS_REGISTRY_PATH =
   process.env.AOS_REGISTRY_PATH || path.join(os.homedir(), ".aos", "registry.tsv");
 const TICK_ENV_PATH =
@@ -485,6 +488,67 @@ const FIRE_TASK_DATE_FIELDS = String(process.env.FIRE_TASK_DATE_FIELDS || "sched
   .split(",")
   .map((field) => field.trim())
   .filter(Boolean);
+
+function readSimpleEnvFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return {};
+  try {
+    const out = {};
+    const raw = fs.readFileSync(filePath, "utf8");
+    const lines = String(raw || "").split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = String(line || "").trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const m = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (!m) continue;
+      const key = m[1];
+      let value = String(m[2] || "").trim();
+      if (
+        (value.startsWith("\"") && value.endsWith("\"")) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      out[key] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function composeGamePageUrl(baseUrl, page) {
+  const base = String(baseUrl || "").trim();
+  const p = String(page || "").trim();
+  if (!base || !p) return "";
+  try {
+    const url = new URL(base);
+    url.searchParams.set("page", p);
+    return url.toString();
+  } catch {
+    return `${base}${base.includes("?") ? "&" : "?"}page=${encodeURIComponent(p)}`;
+  }
+}
+
+function buildPwaGasFallbackRoutes() {
+  const gasEnv = readSimpleEnvFile(GAS_ENV_FILE);
+  const fromEnv = (key) => String(process.env[key] || gasEnv[key] || "").trim();
+
+  const game = fromEnv("GAME_URL");
+  const frame = fromEnv("FRAME_WEBAPP_URL") || composeGamePageUrl(game, "frame");
+  const freedom = fromEnv("FREEDOM_WEBAPP_URL") || composeGamePageUrl(game, "freedom");
+  const focus = fromEnv("FOCUS_WEBAPP_URL") || composeGamePageUrl(game, "focus");
+  const fire = fromEnv("FIRE_WEBAPP_URL") || composeGamePageUrl(game, "fire");
+
+  return {
+    core4: fromEnv("CORE4_WEBAPP_URL"),
+    door: fromEnv("DOOR_WEBAPP_URL"),
+    game,
+    frame,
+    freedom,
+    focus,
+    fire,
+  };
+}
 
 let TASK_CACHE = { ts: 0, tasks: [], error: null };
 let CORE4_STORAGE_DIR_CACHE = "";
@@ -3989,23 +4053,23 @@ function gameInjectFocusCascade(markdown, meta = {}) {
   let headerSection = "";
   let footerSection = "";
 
-  if (frame) {
+  if (freedom) {
     headerSection = [
-      "## CASCADE HEADER · ANNUAL FRAME (YAML)",
+      "## CASCADE HEADER · QUARTERLY FREEDOM (YAML)",
       "",
       "```yaml",
-      String(frame.content || "").trim(),
+      String(freedom.content || "").trim(),
       "```",
       "",
     ].join("\n");
   }
 
-  if (freedom) {
+  if (frame) {
     footerSection = [
-      "## CASCADE FOOTER · QUARTERLY FREEDOM (YAML)",
+      "## CASCADE FOOTER · ANNUAL FRAME (YAML)",
       "",
       "```yaml",
-      String(freedom.content || "").trim(),
+      String(frame.content || "").trim(),
       "```",
       "",
     ].join("\n");
@@ -4028,6 +4092,7 @@ function gameInjectFocusCascade(markdown, meta = {}) {
 
 function gameInjectFireCascade(markdown, meta = {}) {
   const week = sanitizeWeek(meta.week);
+  const focusHeaderChunks = [];
   const chunks = [];
   for (const domain of DOMAINS) {
     const frame = gameFindLatestArtifact("frame", { domain });
@@ -4054,6 +4119,13 @@ function gameInjectFireCascade(markdown, meta = {}) {
       ].join("\n"));
     }
     if (focus) {
+      focusHeaderChunks.push([
+        `### ${domain} · FOCUS`,
+        "",
+        "```markdown",
+        String(focus.content || "").trim(),
+        "```",
+      ].join("\n"));
       parts.push([
         `### ${domain} · FOCUS`,
         "",
@@ -4072,6 +4144,16 @@ function gameInjectFireCascade(markdown, meta = {}) {
   const body = stripYamlFrontMatter(raw);
   const yamlBlockMatch = raw.match(/^---\n[\s\S]*?\n---\n?/u);
   const yamlBlock = yamlBlockMatch ? yamlBlockMatch[0] : "";
+  const focusHeader = focusHeaderChunks.length
+    ? [
+        "## FOCUS HEADER · MONTHLY MISSION",
+        "",
+        `- cadence: monthly`,
+        `- week: ${week}`,
+        "",
+        ...focusHeaderChunks,
+      ].join("\n")
+    : "";
   const bundleHeader = [
     "## WEEKLY CASCADE BUNDLE",
     "",
@@ -4083,6 +4165,7 @@ function gameInjectFireCascade(markdown, meta = {}) {
   return [
     yamlBlock.trimEnd(),
     yamlBlock ? "" : null,
+    focusHeader ? focusHeader.trim() : null,
     body,
     bundleHeader.trim(),
     ...chunks,
@@ -4486,6 +4569,25 @@ app.use("/api/focus",   focusRouter);
 app.use("/api/freedom", freedomRouter);
 app.use("/api/frame",   frameRouter);
 app.use("/api/door",    doorRouter);
+
+// GAS fallback map for PWA clients
+app.get("/api/pwa/gas-fallback", (req, res) => {
+  try {
+    const appKey = String(req.query.app || "").trim().toLowerCase();
+    const routes = buildPwaGasFallbackRoutes();
+    const url = appKey ? String(routes[appKey] || "") : "";
+    return res.json({
+      ok: true,
+      app: appKey || null,
+      url,
+      routes,
+      gas_env_file: GAS_ENV_FILE,
+      gas_env_exists: fs.existsSync(GAS_ENV_FILE),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));

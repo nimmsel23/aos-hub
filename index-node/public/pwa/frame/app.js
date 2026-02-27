@@ -2,6 +2,7 @@
 
 const $       = (id) => document.getElementById(id);
 const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+window.aosGasFallback?.init?.("frame");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,22 +45,14 @@ function getStalenessClass(isoStr) {
 }
 
 /**
- * Extract preview from content (first line after frontmatter)
+ * Extract preview from markdown content (first non-heading text line).
  */
 function extractPreview(content) {
   if (!content) return "";
-  const lines = content.split("\n");
-  let inFrontmatter = false;
-  for (const line of lines) {
-    if (line.trim() === "---") {
-      inFrontmatter = !inFrontmatter;
-      continue;
-    }
-    if (inFrontmatter) continue;
+  for (const line of String(content).split("\n")) {
     const text = line.trim();
-    if (text && !text.startsWith("#")) {
-      return text.slice(0, 60);
-    }
+    if (!text || text.startsWith("#")) continue;
+    return text.slice(0, 60);
   }
   return "";
 }
@@ -67,7 +60,10 @@ function extractPreview(content) {
 // ── API ────────────────────────────────────────────────────────────────────────
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, opts);
+  const netFetch = window.aosGasFallback?.fetch
+    ? window.aosGasFallback.fetch
+    : fetch;
+  const res = await netFetch(path, opts, { app: "frame" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

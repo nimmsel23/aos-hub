@@ -131,7 +131,8 @@ Each task = 0.5 pts → domain max 1.0 → daily max 4.0 → weekly max 28.0
 
 **Storage:** `~/.local/share/alphaos/core4/.core4/events/` (event ledger, append-only)
 
-**UI:** `/core4/` — mobile-first PWA, uses canonical endpoints only.
+**UI:** `/pwa/core4/` — mobile-first PWA, uses canonical endpoints only.
+Legacy route: `/core4` redirects to `/pwa/core4/`.
 
 ## Taskwarrior, Tele
 
@@ -147,4 +148,4 @@ Each task = 0.5 pts → domain max 1.0 → daily max 4.0 → weekly max 28.0
 
 - Keep JSON errors for invalid payloads.
 - Keep `menu.yaml` as SSOT for menu link discovery.
-- If adding new route families, document them here and in `docs/file-map.md`.
+- If adding new route families, document them here and in `file-map.md`.

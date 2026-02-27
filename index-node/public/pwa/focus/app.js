@@ -151,7 +151,14 @@ function renderEntryList() {
 
 function updateMissionPreview(text) {
   const el = $("missionPreview");
-  const preview = (text || "").trim().split("\n")[0] || "No mission set yet…";
+  const lines = String(text || "").split("\n");
+  let preview = "No mission set yet…";
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    preview = t;
+    break;
+  }
   el.textContent = preview;
 }
 

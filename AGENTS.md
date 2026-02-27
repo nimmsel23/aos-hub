@@ -90,6 +90,10 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
 - Commit messages are short and imperative (e.g., “Fix Door Hot List title parsing”).
 - PRs should include a concise summary, affected components/routes, and screenshots for UI changes.
 
+## Ops Notes
+- Sessionübergreifende Ops-Feststellungen stehen in `FINDINGS.md`.
+- Übergabe-/Betriebsstatus für die nächste Session steht in `HANDOFF.md`.
+
 ## Codex Sessions & Branch Hygiene
 - Prefer one git branch per Codex session (so `resume` shows the correct branch context).
 - Base branches live under `centre/*` (e.g. `centre/game-standalone`, `centre/index-node-game`).

@@ -11,8 +11,12 @@ UI routes:
 
 Core APIs:
 - `POST /api/hotlist`
-- `POST /api/core4`
-- `GET /api/core4/today`
+- `GET /api/core4/day-state`
+- `GET /api/core4/week-summary`
+- `POST /api/core4/log`
+- `GET /api/core4/journal`
+- `POST /api/core4/journal`
+- Legacy: `POST /api/core4`, `GET /api/core4/today`
 - `POST /api/tele/send`
 
 Fruits:
@@ -52,9 +56,10 @@ Health:
 - `GET /health`
 
 indexctl:
-- `scripts/indexctl install`
 - `scripts/indexctl start|stop|restart|status|logs`
-- `scripts/indexctl env`
+- `scripts/indexctl enable|disable`
+- `scripts/indexctl mode-dev|mode-status`
+- user-service only (`systemctl --user`)
 
 hubctl:
 - `hubctl doctor`
@@ -117,7 +122,7 @@ Bridge env (systemd):
 | --- | --- |
 | `scripts/alphaos.zsh` | Shell helpers / aliases |
 | `scripts/aos-doctor` | Health report (router/bridge/index) |
-| `scripts/indexctl` | Index Node unit control |
+| `scripts/indexctl` | Index Node user-service control |
 | `scripts/setup-alpha-hooks.sh` | Task + git hooks |
 | `scripts/setup-task-export.sh` | Taskwarrior export snapshot timer |
 | `game/fire/setup-fire-map.sh` | Fire Map bootstrap (canonical; `scripts/setup-fire-map.sh` compat wrapper) |

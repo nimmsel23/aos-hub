@@ -19,6 +19,7 @@ let pendingTask = null;   // task selected for slot assignment
 const $       = (id) => document.getElementById(id);
 const escHtml = (s) => String(s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const taskText = (task) => String(task?.description || task?.title || "(ohne Titel)");
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(path, opts);
@@ -207,7 +208,7 @@ function showTaskList() {
 
 function showSlotPicker(task) {
   pendingTask = task;
-  $("sheetTitle").textContent = "→ " + task.description.slice(0, 30);
+  $("sheetTitle").textContent = "→ " + taskText(task).slice(0, 30);
   $("taskPool").hidden   = true;
   $("slotPicker").hidden = false;
 
@@ -227,7 +228,7 @@ function showSlotPicker(task) {
       btn.textContent = isPlaceholder ? `Slot ${idx + 1}` : s.title.slice(0, 24);
       if (isPlaceholder) btn.classList.add("empty");
       if (s.done) btn.classList.add("done");
-      btn.addEventListener("click", () => assignTask(d.key, idx, task.description));
+      btn.addEventListener("click", () => assignTask(d.key, idx, taskText(task)));
       section.appendChild(btn);
     });
 
@@ -266,9 +267,10 @@ function renderTaskPool() {
   taskPool.forEach((task) => {
     const item = document.createElement("div");
     item.className = "pool-item";
+    const title = taskText(task);
     item.innerHTML = `
       <div class="pool-item-main">
-        <div class="pool-item-title">${escHtml(task.description)}</div>
+        <div class="pool-item-title">${escHtml(title)}</div>
         ${task.project ? `<div class="pool-item-meta">${escHtml(task.project)}</div>` : ""}
       </div>
       <button class="pool-item-assign" title="Assign to slot">→</button>

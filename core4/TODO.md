@@ -27,5 +27,16 @@
 - [ ] Non-interactive Semantik für `core4` vereinheitlichen (bash/fish) oder klar dokumentieren
 - [ ] `~/.config/bash/core4-aliases` ausmisten / in kleinere, getestete Aliasset-Dateien splitten
 
-- [ ] `weekly_core4score.csv` exportieren (Tent-wochenbezogen) — nach General's Tent triggern, analog zur monatlichen CSV (aktuell bevorzugt im Tent-Centre Route/Service)
-- [ ] Sealed Tent-Bundle schreiben: `generalstent_KW**.md` (Core4-Wochenscore + Tent-Synthese gebuendelt; aktuell bevorzugt in `index-node/routes/game.tent.js` / `index-node/services/tent.service.js`)
+- [x] Local Tent prototype: `weekly_core4score.csv` wird im General's-Tent-Run erzeugt und aus `core4_week_YYYY-Www.json` geladen (manuell nur Fallback)
+- [x] Local Tent prototype: sealed Bundle-Datei `generalstent_YYYY-KW**.md` + `generals_tent/generalstent_YYYY-Www.json`
+- [ ] Index-Node Tent-Centre parity: gleiche Export-/Seal-Logik in `index-node/routes/game.tent.js` / `index-node/services/tent.service.js` umsetzen
+
+## Session Findings (2026-02-27) - Storage / Archiv
+
+- [ ] Core4 JSON storage policy finalisieren: klare Schreib-/Lese-Priorität fuer `core4_week_*.json` und `core4_day_*.json` (lokal vs Vault vs HQ) dokumentieren und im Code erzwingen
+- [ ] Core4 archive hygiene: Retention/Prune fuer abgeleitete JSON/CSV-Dateien definieren (nicht nur Event-Ledger)
+- [ ] Tent archive hygiene: `Game/Tent/_history/` und `Game/Tent/generals_tent/_history/` Retention/Rotation einführen
+- [ ] Tent write safety: atomische Writes + einfache Locking-Strategie gegen parallele Runs (`tentctl weekly` mehrfach)
+- [ ] Tent bundle traceability: Metadaten erweitern (welche Core4-Datei wurde genutzt, `habit` vs `domain` fallback, optional Hash/mtime)
+- [ ] Naming parity fixieren: lokales `generalstent_YYYY-KW**.md` vs bestehende Index-Node-Namen (`generals_tent_YYYY-Www.md`, `tent_YYYY-Www.md`) auf eine dokumentierte Linie bringen
+- [ ] Source coverage prüfen: Voice-/Door-Teile im Tent-Run sind weiterhin manuell; entscheiden ob APIs/Dateiquellen angebunden werden oder bewusst manuell bleiben

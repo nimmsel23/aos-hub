@@ -23,6 +23,12 @@ Index-node internal docs:
 ```bash
 cd /home/alpha/aos-hub/index-node
 npm install
+npm run dev
+```
+
+Production-style run (without nodemon):
+
+```bash
 npm start
 ```
 
@@ -47,7 +53,8 @@ curl -fsS http://127.0.0.1:8799/health
 - `/door`, `/door/*`
 - `/game`, `/game/frame`, `/game/freedom`, `/game/focus`, `/game/fire`, `/game/tent`
 - `/voice`
-- `/core4`
+- `/pwa/core4` (canonical)
+- `/core4` (legacy redirect to `/pwa/core4/`)
 - `/facts`
 - `/tele`
 
