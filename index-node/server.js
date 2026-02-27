@@ -7145,12 +7145,6 @@ function loadFitnessCentreEnv(repoDir) {
   };
 }
 
-function ensureDir(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-}
-
 function safeIsoDate(value) {
   const v = String(value || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
@@ -7165,11 +7159,6 @@ function readTextIfExists(p) {
 function writeTextFile(p, content) {
   ensureDir(path.dirname(p));
   fs.writeFileSync(p, content, "utf8");
-}
-
-function writeJsonFile(p, obj) {
-  ensureDir(path.dirname(p));
-  fs.writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf8");
 }
 
 app.get("/api/fitness-centre/status", (_req, res) => {

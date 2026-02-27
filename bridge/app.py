@@ -85,11 +85,26 @@ FIRE_DAILY_FALLBACK_FILTER = os.getenv("AOS_FIRE_DAILY_FALLBACK_FILTER", "+fire 
 FIRE_DAILY_SEND = os.getenv("AOS_FIRE_DAILY_SEND", "0").strip() == "1"
 FIRE_DAILY_MODE = os.getenv("AOS_FIRE_DAILY_MODE", "firectl").strip().lower()
 FIRECTL_BIN = os.getenv("AOS_FIRECTL_BIN", str((Path(__file__).resolve().parents[1] / "scripts" / "firectl"))).strip()
+FIRE_STATE_DIR = Path(os.getenv("AOS_FIRE_DIR", Path.home() / ".aos" / "fire")).expanduser()
+FIRE_ALLOWED_DOMAINS = {"body", "being", "balance", "business"}
+FIRE_INCLUDE_UNDATED = os.getenv("AOS_FIRE_INCLUDE_UNDATED", "1").strip() != "0"
+FIRE_TASK_TAGS_MODE = os.getenv("AOS_FIRE_TASK_TAGS_MODE", "any").strip().lower()
+FIRE_TASK_TAGS = [
+    t.strip().lower()
+    for t in os.getenv("AOS_FIRE_TASK_TAGS", "production,hit,fire").split(",")
+    if t.strip()
+]
+FIRE_TASK_DATE_FIELDS = [
+    f.strip() for f in os.getenv("AOS_FIRE_TASK_DATE_FIELDS", "scheduled,due,wait").split(",") if f.strip()
+]
+FIRE_TASK_EXPORT_FILTER = os.getenv("AOS_FIRE_TASK_EXPORT_FILTER", "status:pending export").strip()
 
 TASK_BIN = os.getenv("AOS_TASK_BIN", "task").strip()
 TASK_EXEC_ENABLED = os.getenv("AOS_TASK_EXECUTE", "0").strip() == "1"
 TASK_ID_RE = re.compile(r"created task (\d+)", re.IGNORECASE)
 TASK_UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+PWA_ROOT_DIR = (Path(__file__).resolve().parents[1] / "index-node" / "public" / "pwa").expanduser()
 
 
 def _git_rev_short() -> str:
@@ -1442,6 +1457,398 @@ async def handle_bridge_fire_daily(request: web.Request) -> web.Response:
     )
 
 
+def _fire_week_path(week: str) -> Path:
+    return FIRE_STATE_DIR / f"{week}.json"
+
+
+def _fire_make_base(week: str) -> dict[str, Any]:
+    strikes = [{"title": f"Strike #{i}", "done": False} for i in range(1, 5)]
+    return {
+        "week": week,
+        "domains": {d: [dict(s) for s in strikes] for d in FIRE_ALLOWED_DOMAINS},
+        "meta": {"createdAt": _now().isoformat()},
+    }
+
+
+def _fire_read_week(week: str) -> Optional[dict[str, Any]]:
+    path = _fire_week_path(week)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _fire_write_week(week: str, payload: dict[str, Any]) -> None:
+    _ensure_dir(FIRE_STATE_DIR)
+    _save_json(_fire_week_path(week), payload)
+
+
+def _fire_score(payload: dict[str, Any]) -> dict[str, int]:
+    domains = payload.get("domains") if isinstance(payload.get("domains"), dict) else {}
+    all_rows: list[dict[str, Any]] = []
+    for domain in FIRE_ALLOWED_DOMAINS:
+        rows = domains.get(domain)
+        if isinstance(rows, list):
+            all_rows.extend([r for r in rows if isinstance(r, dict)])
+    done = sum(1 for r in all_rows if bool(r.get("done")))
+    return {"strikesDone": done, "strikesMax": 16}
+
+
+def _fire_parse_task_date(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(TZ) if value.tzinfo else value.replace(tzinfo=TZ)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(TZ)
+    except Exception:
+        pass
+    match = re.fullmatch(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?", text)
+    if not match:
+        return None
+    try:
+        year = int(match.group(1))
+        month = int(match.group(2))
+        day_num = int(match.group(3))
+        hour = int(match.group(4))
+        minute = int(match.group(5))
+        second = int(match.group(6))
+        return datetime(year, month, day_num, hour, minute, second, tzinfo=timezone.utc).astimezone(TZ)
+    except Exception:
+        return None
+
+
+def _fire_task_date_candidates(task: dict[str, Any]) -> list[datetime]:
+    out: list[datetime] = []
+    for field in FIRE_TASK_DATE_FIELDS:
+        val = _fire_parse_task_date(task.get(field))
+        if val is not None:
+            out.append(val)
+    return out
+
+
+def _fire_task_primary_date(task: dict[str, Any]) -> Optional[datetime]:
+    dates = _fire_task_date_candidates(task)
+    if not dates:
+        return None
+    return min(dates)
+
+
+def _fire_tags_match(value: Any) -> bool:
+    if not FIRE_TASK_TAGS:
+        return True
+    tags = _norm_tags(value)
+    if FIRE_TASK_TAGS_MODE == "all":
+        return all(tag in tags for tag in FIRE_TASK_TAGS)
+    return any(tag in tags for tag in FIRE_TASK_TAGS)
+
+
+def _fire_task_in_range(task: dict[str, Any], start: datetime, end: datetime, include_overdue: bool = True) -> bool:
+    dt = _fire_task_primary_date(task)
+    if dt is None:
+        return False
+    if include_overdue and dt < start:
+        return True
+    return start <= dt < end
+
+
+def _fire_detect_domain(task: dict[str, Any]) -> str:
+    tags = " ".join(sorted(_norm_tags(task.get("tags"))))
+    project = str(task.get("project") or "").strip().lower()
+    haystack = f"{project} {tags}"
+    for domain in FIRE_ALLOWED_DOMAINS:
+        if re.search(rf"\b{re.escape(domain)}\b", haystack):
+            return domain
+    return "other"
+
+
+def _fire_normalize_task(task: dict[str, Any], start: datetime) -> dict[str, Any]:
+    date_val = _fire_task_primary_date(task)
+    title = str(task.get("description") or task.get("title") or "(ohne Titel)").strip()
+    return {
+        "id": task.get("id") or task.get("uuid"),
+        "title": title,
+        "description": title,
+        "tags": task.get("tags") if isinstance(task.get("tags"), list) else [],
+        "project": str(task.get("project") or "").strip(),
+        "due": str(task.get("due") or "").strip(),
+        "scheduled": str(task.get("scheduled") or "").strip(),
+        "date": date_val.isoformat() if date_val else "",
+        "domain": _fire_detect_domain(task),
+        "overdue": bool(date_val and date_val < start),
+    }
+
+
+def _fire_week_window(ref: Optional[datetime] = None) -> tuple[datetime, datetime, str]:
+    base = ref.astimezone(TZ) if isinstance(ref, datetime) else _now()
+    start = base - timedelta(days=base.weekday())
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=7)
+    return start, end, _week_key(start)
+
+
+async def _fire_task_candidates() -> tuple[list[dict[str, Any]], str, Optional[str]]:
+    source = "task_export"
+    error: Optional[str] = None
+
+    if TASK_BIN and _task_bin_available():
+        export_args = (
+            shlex.split(FIRE_TASK_EXPORT_FILTER) if FIRE_TASK_EXPORT_FILTER else ["status:pending", "export"]
+        )
+        report = await _run_task_report([TASK_BIN, *export_args], timeout_s=10.0)
+        if report.get("ok"):
+            try:
+                payload = json.loads(str(report.get("stdout") or "[]"))
+                tasks = _extract_task_list(payload)
+                return tasks, "taskwarrior-live", None
+            except Exception as exc:
+                error = f"task export parse failed: {exc}"
+        else:
+            error = str(report.get("error") or "task export failed")
+
+    path = _task_export_path()
+    if path.exists():
+        try:
+            raw = await asyncio.to_thread(path.read_text, encoding="utf-8")
+            payload = json.loads(raw) if raw.strip() else []
+            tasks = _extract_task_list(payload)
+            return tasks, source, error
+        except Exception as exc:
+            if error:
+                error = f"{error} | export file read failed: {exc}"
+            else:
+                error = f"export file read failed: {exc}"
+
+    return [], source, error
+
+
+async def handle_fire_api_week(_request: web.Request) -> web.Response:
+    week = _week_key(_now())
+    data = _fire_read_week(week)
+    if not data:
+        data = _fire_make_base(week)
+        _fire_write_week(week, data)
+    return web.json_response({"ok": True, "data": data, "score": _fire_score(data)})
+
+
+async def handle_fire_api_tasks(_request: web.Request) -> web.Response:
+    start, end, _week = _fire_week_window()
+    tasks_raw, source, error = await _fire_task_candidates()
+    selected: list[dict[str, Any]] = []
+    for task in tasks_raw:
+        if not isinstance(task, dict):
+            continue
+        status = str(task.get("status") or "").strip().lower()
+        if status and status not in ("pending", "waiting"):
+            continue
+        if _fire_task_in_range(task, start, end, include_overdue=True):
+            selected.append(_fire_normalize_task(task, start))
+            continue
+        if not FIRE_INCLUDE_UNDATED:
+            continue
+        if _fire_task_primary_date(task) is not None:
+            continue
+        if _fire_tags_match(task.get("tags")):
+            selected.append(_fire_normalize_task(task, start))
+
+    selected.sort(key=lambda t: str(t.get("date") or "9999-12-31T23:59:59"))
+    return web.json_response({"ok": True, "tasks": selected, "source": source, "error": error})
+
+
+def _core4_date_from_query(value: Any) -> Optional[date]:
+    text = str(value or "").strip()
+    if not text:
+        return _now().date()
+    try:
+        return date.fromisoformat(text)
+    except Exception:
+        return None
+
+
+def _core4_day_payload_for(day: date, week_data: dict[str, Any]) -> dict[str, Any]:
+    date_key = day.isoformat()
+    week = str(week_data.get("week") or "")
+    entries = week_data.get("entries") if isinstance(week_data.get("entries"), list) else []
+    day_entries = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("date") or "") != date_key:
+            continue
+        day_entries.append(
+            {
+                "ts": entry.get("ts"),
+                "domain": entry.get("domain"),
+                "task": entry.get("task"),
+                "points": _safe_float(entry.get("points"), 0.0),
+                "source": entry.get("source") or "bridge",
+            }
+        )
+    return {
+        "ok": True,
+        "date": date_key,
+        "week": week,
+        "total": _core4_total_for_date(entries, date_key),
+        "entries": day_entries,
+    }
+
+
+async def handle_api_core4_day_state(request: web.Request) -> web.Response:
+    day = _core4_date_from_query(request.query.get("date"))
+    if not day:
+        return web.json_response({"ok": False, "error": "invalid date"}, status=400)
+    async with core4_lock:
+        week_data = _core4_build_week_for_date(day)
+    return web.json_response(_core4_day_payload_for(day, week_data))
+
+
+async def handle_api_core4_week_summary(request: web.Request) -> web.Response:
+    day = _core4_date_from_query(request.query.get("date"))
+    if not day:
+        return web.json_response({"ok": False, "error": "invalid date"}, status=400)
+    async with core4_lock:
+        week_data = _core4_build_week_for_date(day)
+    totals = week_data.get("totals") if isinstance(week_data.get("totals"), dict) else {}
+    return web.json_response({"ok": True, "week": week_data.get("week"), "totals": totals})
+
+
+async def handle_api_core4_log(request: web.Request) -> web.Response:
+    payload = await _read_json(request)
+    domain = str(payload.get("domain", "")).strip().lower()
+    task = _core4_canon_task(str(payload.get("task", "")).strip().lower())
+    domain = _core4_infer_domain(domain, task)
+    if not domain or not task:
+        return web.json_response({"ok": False, "error": "missing domain or task"}, status=400)
+
+    date_override = _core4_date_from_query(payload.get("date"))
+    ts = _parse_ts(payload.get("ts") or payload.get("timestamp"))
+    if date_override:
+        ts = datetime.combine(date_override, datetime.min.time(), tzinfo=TZ)
+    done = bool(payload.get("done", True))
+    points = 0.5 if done else 0.0
+    week = _week_key(ts)
+    date_key = _date_key(ts)
+    entry_key = str(payload.get("key") or "").strip() or _core4_entry_key(date_key, domain, task)
+    source = str(payload.get("source", "core4-pwa")).strip() or "core4-pwa"
+    event = {
+        "id": payload.get("id") or str(uuid.uuid4()),
+        "key": entry_key,
+        "ts": ts.isoformat(),
+        "last_ts": ts.isoformat(),
+        "date": date_key,
+        "week": week,
+        "domain": domain,
+        "task": task,
+        "done": done,
+        "points": points,
+        "source": source,
+        "sources": [source],
+        "user": payload.get("user") or {},
+    }
+
+    duplicate = False
+    async with core4_lock:
+        existing = _core4_dedup_entries(_core4_events_for_day(date_key))
+        duplicate = any(str(e.get("key") or "") == entry_key for e in existing)
+        if not duplicate:
+            _core4_write_event(event)
+        _core4_build_day(date_key)
+        week_data = _core4_build_week_for_date(ts.date())
+
+    day_payload = _core4_day_payload_for(ts.date(), week_data)
+    totals = week_data.get("totals") if isinstance(week_data.get("totals"), dict) else {}
+    return web.json_response(
+        {
+            "ok": True,
+            "duplicate": duplicate,
+            "day": day_payload,
+            "week": {"ok": True, "week": week_data.get("week"), "totals": totals},
+            "total_today": day_payload.get("total", 0),
+        }
+    )
+
+
+async def _fire_read_or_init_current_week() -> tuple[str, dict[str, Any]]:
+    week = _week_key(_now())
+    data = _fire_read_week(week)
+    if not data:
+        data = _fire_make_base(week)
+        _fire_write_week(week, data)
+    return week, data
+
+
+async def handle_fire_api_toggle(request: web.Request) -> web.Response:
+    payload = await _read_json(request)
+    domain = str(payload.get("domain") or "").strip().lower()
+    index = payload.get("index")
+    if domain not in FIRE_ALLOWED_DOMAINS:
+        return web.json_response({"ok": False, "error": "invalid_domain"}, status=400)
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index > 3:
+        return web.json_response({"ok": False, "error": "invalid_index"}, status=400)
+
+    week, data = await _fire_read_or_init_current_week()
+    rows = data.get("domains", {}).get(domain)
+    if not isinstance(rows, list) or len(rows) != 4:
+        data = _fire_make_base(week)
+        rows = data["domains"][domain]
+    rows[index]["done"] = not bool(rows[index].get("done"))
+    _fire_write_week(week, data)
+    return web.json_response({"ok": True, "data": data, "score": _fire_score(data)})
+
+
+async def handle_fire_api_rename(request: web.Request) -> web.Response:
+    payload = await _read_json(request)
+    domain = str(payload.get("domain") or "").strip().lower()
+    index = payload.get("index")
+    title = str(payload.get("title") or "").strip()[:80]
+    if domain not in FIRE_ALLOWED_DOMAINS:
+        return web.json_response({"ok": False, "error": "invalid_domain"}, status=400)
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index > 3:
+        return web.json_response({"ok": False, "error": "invalid_index"}, status=400)
+    if not title:
+        return web.json_response({"ok": False, "error": "invalid_title"}, status=400)
+
+    week, data = await _fire_read_or_init_current_week()
+    rows = data.get("domains", {}).get(domain)
+    if not isinstance(rows, list) or len(rows) != 4:
+        data = _fire_make_base(week)
+        rows = data["domains"][domain]
+    rows[index]["title"] = title
+    _fire_write_week(week, data)
+    return web.json_response({"ok": True, "data": data, "score": _fire_score(data)})
+
+
+async def handle_fire_api_reorder(request: web.Request) -> web.Response:
+    payload = await _read_json(request)
+    domain = str(payload.get("domain") or "").strip().lower()
+    order = payload.get("order")
+    if domain not in FIRE_ALLOWED_DOMAINS:
+        return web.json_response({"ok": False, "error": "invalid_domain"}, status=400)
+    if not isinstance(order, list) or len(order) != 4:
+        return web.json_response({"ok": False, "error": "invalid_order"}, status=400)
+    try:
+        order_int = [int(v) for v in order]
+    except Exception:
+        return web.json_response({"ok": False, "error": "invalid_order"}, status=400)
+    if sorted(order_int) != [0, 1, 2, 3]:
+        return web.json_response({"ok": False, "error": "invalid_order"}, status=400)
+
+    week, data = await _fire_read_or_init_current_week()
+    rows = data.get("domains", {}).get(domain)
+    if not isinstance(rows, list) or len(rows) != 4:
+        data = _fire_make_base(week)
+        rows = data["domains"][domain]
+    data["domains"][domain] = [rows[i] for i in order_int]
+    _fire_write_week(week, data)
+    return web.json_response({"ok": True, "data": data, "score": _fire_score(data)})
+
+
 async def handle_core4_log(request: web.Request) -> web.Response:
     """
     Core4 event log endpoint (called by Gas HQ via Tailscale).
@@ -2660,12 +3067,22 @@ async def handle_doctor(_request: web.Request) -> web.Response:
     return web.json_response(data, status=200 if data["ok"] else 500)
 
 
+async def handle_pwa_root(_request: web.Request) -> web.Response:
+    raise web.HTTPFound("/pwa/core4/")
+
+
+async def handle_bridge_pwa_root(_request: web.Request) -> web.Response:
+    raise web.HTTPFound("/bridge/pwa/core4/")
+
+
 def create_app() -> web.Application:
     app = web.Application(middlewares=[auth_middleware, request_log_middleware])
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
     app.add_routes(
         [
+            web.get("/pwa", handle_pwa_root),
+            web.get("/bridge/pwa", handle_bridge_pwa_root),
             web.get("/health", handle_health),
             web.get("/bridge/health", handle_health),
             web.get("/version", handle_version),
@@ -2682,6 +3099,16 @@ def create_app() -> web.Application:
             web.post("/bridge/trigger/weekly-firemap", handle_bridge_trigger_weekly_firemap),
             web.post("/fire/daily", handle_bridge_fire_daily),
             web.post("/bridge/fire/daily", handle_bridge_fire_daily),
+            web.get("/api/fire/week", handle_fire_api_week),
+            web.get("/api/fire/tasks", handle_fire_api_tasks),
+            web.post("/api/fire/toggle", handle_fire_api_toggle),
+            web.post("/api/fire/rename", handle_fire_api_rename),
+            web.post("/api/fire/reorder", handle_fire_api_reorder),
+            web.get("/bridge/api/fire/week", handle_fire_api_week),
+            web.get("/bridge/api/fire/tasks", handle_fire_api_tasks),
+            web.post("/bridge/api/fire/toggle", handle_fire_api_toggle),
+            web.post("/bridge/api/fire/rename", handle_fire_api_rename),
+            web.post("/bridge/api/fire/reorder", handle_fire_api_reorder),
             web.post("/core4/log", handle_core4_log),
             web.post("/bridge/core4/log", handle_core4_log),
             web.get("/core4/week", handle_core4_week),
@@ -2690,6 +3117,14 @@ def create_app() -> web.Application:
             web.get("/bridge/core4/today", handle_core4_today),
             web.post("/core4/pull", handle_core4_pull),
             web.post("/bridge/core4/pull", handle_core4_pull),
+            web.get("/api/core4/day-state", handle_api_core4_day_state),
+            web.get("/api/core4/week-summary", handle_api_core4_week_summary),
+            web.get("/api/core4/today", handle_core4_today),
+            web.post("/api/core4/log", handle_api_core4_log),
+            web.get("/bridge/api/core4/day-state", handle_api_core4_day_state),
+            web.get("/bridge/api/core4/week-summary", handle_api_core4_week_summary),
+            web.get("/bridge/api/core4/today", handle_core4_today),
+            web.post("/bridge/api/core4/log", handle_api_core4_log),
             web.post("/fruits/answer", handle_fruits_answer),
             web.post("/bridge/fruits/answer", handle_fruits_answer),
             web.post("/tent/summary", handle_tent_summary),
@@ -2720,6 +3155,15 @@ def create_app() -> web.Application:
             web.post("/bridge/sync/abort", handle_sync_abort),
         ]
     )
+    if PWA_ROOT_DIR.exists():
+        app.add_routes(
+            [
+                web.static("/pwa", str(PWA_ROOT_DIR), show_index=True),
+                web.static("/bridge/pwa", str(PWA_ROOT_DIR), show_index=True),
+            ]
+        )
+    else:
+        LOGGER.warning("PWA root dir missing, static PWA routes disabled: %s", PWA_ROOT_DIR)
     return app
 
 

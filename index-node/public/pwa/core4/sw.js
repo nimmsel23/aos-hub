@@ -1,4 +1,4 @@
-const CACHE = "core4-v3";
+const CACHE = "core4-v4";
 const STATIC = [
   "/pwa/core4/",
   "/pwa/core4/index.html",

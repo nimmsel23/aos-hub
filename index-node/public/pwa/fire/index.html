@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>αOS · FIRE</title>
+  <link rel="manifest" href="/pwa/fire/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/core4/icon-192.svg" />
   <link rel="stylesheet" href="/pwa/fire/style.css" />
 </head>
 <body>
@@ -107,5 +109,10 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
   <script src="/pwa/gas-fallback.js"></script>
   <script src="/pwa/fire/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/fire/sw.js", { scope: "/pwa/fire/" });
+    }
+  </script>
 </body>
 </html>
