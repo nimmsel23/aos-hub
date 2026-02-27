@@ -9,7 +9,7 @@ set -euo pipefail
 # - bridge/sync: convenience wrappers around bridgectl for the "GAS pipeline".
 # - tent: manage GAS Tent Centre (clasp deploy, status, doctor).
 
-GASCTL_VERSION="1.1.0"
+GASCTL_VERSION="1.1.1"
 APP="gasctl"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" )")" && pwd)"
@@ -47,13 +47,13 @@ Usage:
 
 Options:
   --env FILE       Load env overrides (default: $ROOT_DIR/.env/aos.env)
-  --tent-dir PATH  Override GAS Tent dir (default: $ROOT_DIR/game/gas-tent-dev)
+  --tent-dir PATH  Override GAS Tent dir (default: auto-detect game/gas-tent-dev or gas-tent-dev)
 
 Env:
   AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
   HB_URL / AOS_GAS_WEBHOOK_URL   GAS webhook /exec URL
   HB_HOST                       Host label (default: $HB_HOST_DEFAULT)
-  AOS_GAS_TENT_DIR               GAS Tent project dir (default: $ROOT_DIR/game/gas-tent-dev)
+  AOS_GAS_TENT_DIR               GAS Tent project dir (overrides auto-detect)
 EOF
 }
 
@@ -88,7 +88,28 @@ fi
 HB_HOST="${HB_HOST:-$HB_HOST_DEFAULT}"
 HB_URL="${HB_URL:-${AOS_GAS_WEBHOOK_URL:-}}"
 
-GAS_TENT_DIR="${gas_tent_dir_override:-${AOS_GAS_TENT_DIR:-$ROOT_DIR/game/gas-tent-dev}}"
+resolve_gas_tent_dir() {
+  if [[ -n "$gas_tent_dir_override" ]]; then
+    echo "$gas_tent_dir_override"
+    return 0
+  fi
+  if [[ -n "${AOS_GAS_TENT_DIR:-}" ]]; then
+    echo "$AOS_GAS_TENT_DIR"
+    return 0
+  fi
+  if [[ -d "$ROOT_DIR/game/gas-tent-dev" ]]; then
+    echo "$ROOT_DIR/game/gas-tent-dev"
+    return 0
+  fi
+  if [[ -d "$ROOT_DIR/gas-tent-dev" ]]; then
+    echo "$ROOT_DIR/gas-tent-dev"
+    return 0
+  fi
+  # Keep a deterministic fallback for error messages.
+  echo "$ROOT_DIR/game/gas-tent-dev"
+}
+
+GAS_TENT_DIR="$(resolve_gas_tent_dir)"
 
 ping() {
   has_cmd curl || die "curl not found"
@@ -233,7 +254,7 @@ Commands:
   help         Show this help
 
 Env:
-  AOS_GAS_TENT_DIR=/path/to/game/gas-tent-dev
+  AOS_GAS_TENT_DIR=/path/to/gas-tent-dev
 EOF_TENT
 }
 
