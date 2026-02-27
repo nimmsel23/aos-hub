@@ -15,6 +15,7 @@ STRICT_CTLS=(
   indexctl
   mountctl
   nodectl
+  pwactl
   rclonectl
   syncctl
   telectl
@@ -30,7 +31,6 @@ LEGACY_CTLS=(
 )
 
 WRAPPER_CTLS=(
-  pwactl
   syncvaultctl
   voicectl
 )

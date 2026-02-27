@@ -80,6 +80,37 @@ nodectl logs            # follow user service logs
 nodectl open            # open best URL (tailscale preferred)
 ```
 
+### pwactl ✅
+
+**Purpose:** PWA runtime + app-shell control for laptop-first operation.
+
+**Notes:**
+- controls both runtimes:
+  - main index runtime (`:8799`)
+  - standalone PWA runtime (`:8780`)
+- focuses on installed app-shell stability (`list`, `check`, `health`, `doctor`, `routes`)
+- includes interactive operations (`menu`) and compact runtime summary (`status`)
+- `run` avoids blind restarts when runtime is already reachable (override with `--force`)
+- manages user-service mode via `~/.env/pwa.env`:
+  - `dev` -> `npm run pwa:dev`
+  - `normal` -> `npm run pwa`
+
+**Examples:**
+```bash
+pwactl status
+pwactl apps
+pwactl list
+pwactl health all
+pwactl routes pwa
+pwactl run pwa
+pwactl run main --force
+pwactl mode dev
+pwactl mode normal --restart
+pwactl service setup
+pwactl service logs
+pwactl open core4 pwa
+```
+
 ### taskwarrior/ ✅
 
 **Purpose:** Local Taskwarrior integration glue (hooks + export snapshots)

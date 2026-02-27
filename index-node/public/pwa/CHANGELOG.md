@@ -103,6 +103,13 @@ All three PWAs live under `index-node/public/pwa/` and are served at `/pwa/{name
 - Both SWs include `/pwa/gas-fallback.js` in static cache, so offline app boot can still trigger GAS redirect logic.
 - `core4` + `fire` stay modular as primary daily flow apps.
 
+### standalone local runtime
+- Added independent local runtime entry `index-node/pwa-server.js` (default port `8780`) for PWA app-shell stability during `server.js` refactors.
+- Added npm scripts:
+  - `npm run pwa`
+  - `npm run pwa:dev`
+- Operating principle updated: GAS is optional last fallback; local standalone runtime is primary resilience layer.
+
 ---
 
 ## Format

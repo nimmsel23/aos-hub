@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "core4": "node core4-tty.js"
+    "core4": "node core4-tty.js",
+    "pwa": "node pwa-server.js",
+    "pwa:dev": "nodemon pwa-server.js"
   },
   "bin": {
     "alphaos-core4": "./core4-tty.js"

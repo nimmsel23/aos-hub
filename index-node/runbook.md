@@ -127,7 +127,7 @@ Canonical host for mobile/public PWA access:
 Current expected handlers:
 - `/` -> `http://127.0.0.1:8799` (index-node + all `/pwa/*` + `/api/*`)
 - `/bridge` -> `http://127.0.0.1:8080`
-- `/fitnessctx` -> `http://127.0.0.1:8788`
+- `/fitnessctx` -> `http://127.0.0.1:8780`
 
 Important:
 - Do **not** add separate handlers for `/api/core4`, `/api/fire`, `/api/focus`.

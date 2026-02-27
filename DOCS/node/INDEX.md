@@ -12,6 +12,7 @@ Main runtime repo path:
 2. Detailed node implementation: `README.md`
 3. Alignment and fallback model: `../ALIGNMENT_INDEXNODE_GAS.md`
 4. Index-node internal docs: `../index-node/docs-index.md`
+5. PWA resilience + standalone runtime: `pwa-resilience.md`
 
 ## Centre Docs (Node)
 

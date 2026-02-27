@@ -483,8 +483,11 @@ EXAMPLES:
   aosctl dashboard 5
   aosctl status
   aosctl hub status
-  aosctl hub deploy            # sync hub/index-node → /opt/aos/index + restart
-  aosctl hub deploy --dry-run  # preview only
+  aosctl hub deploy            # rsync PWAs + restart service
+  aosctl hub deploy pwa        # rsync all PWAs (no restart)
+  aosctl hub deploy pwa:core4  # rsync single PWA (no restart)
+  aosctl hub deploy backend    # restart service only (symlink)
+  aosctl hub deploy --dry-run  # preview mode
   aosctl core4 status
   aosctl router status
   aosctl bridge logs
@@ -1035,8 +1038,27 @@ _status_timer_line() {
 }
 
 _index_deploy_drift() {
-  local prod_file="/opt/aos/index/server.js"
-  local repo_file="${SCRIPT_DIR}/index-node/server.js"
+  local prod_dir="/opt/aos/index"
+  local repo_dir="${SCRIPT_DIR}/index-node"
+
+  if [[ -L "$prod_dir" ]]; then
+    local target
+    target="$(readlink -f "$prod_dir" 2>/dev/null || true)"
+    printf "  /opt/aos/index → %s  [%s] symlink\n" "$target" "$(aosctl_chip ok)"
+    # Check PWA drift
+    local pwa_dir="${AOS_PWA_DIR:-/opt/aos/pwa}"
+    if [[ -d "$pwa_dir" ]]; then
+      local pwa_count
+      pwa_count="$(find "$pwa_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+      printf "  /opt/aos/pwa   (%s apps)  [%s]\n" "$pwa_count" "$(aosctl_chip ok)"
+    else
+      printf "  /opt/aos/pwa   [%s] missing — run: aosctl hub deploy pwa\n" "$(aosctl_chip warn)"
+    fi
+    return 0
+  fi
+
+  local prod_file="$prod_dir/server.js"
+  local repo_file="$repo_dir/server.js"
   if [[ ! -f "$prod_file" || ! -f "$repo_file" ]]; then
     return 0
   fi
@@ -1368,7 +1390,7 @@ aosctl index — production index control (/opt/aos + system scope)
 Usage:
   aosctl index status|start|stop|restart|logs|health|doctor
   aosctl index enable|disable
-  aosctl index deploy [--dry-run] [--src=PATH] [--dst=PATH]
+  aosctl index deploy [pwa|pwa:NAME|backend] [--dry-run]
 __INDEX_HELP__
       ;;
     *)
@@ -1654,56 +1676,34 @@ creatorking_cmd() {
   "$CREATORKING_BIN" "$@"
 }
 
-index_deploy_cmd() {
-  local src="${AOS_INDEX_DEPLOY_SRC:-$SCRIPT_DIR/index-node}"
-  local dst="${AOS_INDEX_DEPLOY_DST:-/opt/aos/index}"
-  local service="aos-index.service"
-  local dry_run=0
+_deploy_pwa() {
+  local src="$1" dst="$2" dry_run="$3" target="${4:-}"
+  local pwa_src="$src/public/pwa"
+  local pwa_dst="${AOS_PWA_DIR:-/opt/aos/pwa}"
 
-  for arg in "$@"; do
-    case "$arg" in
-      --dry-run|-n) dry_run=1 ;;
-      --src=*) src="${arg#--src=}" ;;
-      --dst=*) dst="${arg#--dst=}" ;;
-      *) die "Usage: aosctl index deploy [--dry-run] [--src=PATH] [--dst=PATH]" ;;
-    esac
-  done
+  [[ -d "$pwa_src" ]] || die "PWA source not found: $pwa_src"
+  [[ -d "$pwa_dst" ]] || die "PWA dest not found: $pwa_dst (run: sudo mkdir -p $pwa_dst && sudo chown \$USER $pwa_dst)"
 
-  [[ -d "$src" ]] || die "Source not found: $src"
-  [[ -d "$dst" ]] || die "Destination not found: $dst (is aos-index.service installed?)"
-
-  msg "Index Deploy"
-  msg "  src : $src"
-  msg "  dst : $dst"
-  msg "  svc : $service"
-  if [[ "$dry_run" == "1" ]]; then
-    msg "  mode: DRY RUN (no changes)"
-    msg ""
-    msg "Would run:"
-    if have rsync; then
-      msg "  rsync -a --exclude='node_modules/' --exclude='.git/' $src/ $dst/"
-    else
-      msg "  sudo cp -r [files from $src, excluding node_modules/.git] → $dst/"
-    fi
-    msg "  sudo systemctl restart $service"
-    return 0
-  fi
-  msg ""
-
-  if have rsync; then
-    sudo rsync -a --delete \
-      --exclude='node_modules/' \
-      --exclude='.git/' \
-      --exclude='.claude/' \
-      "$src/" "$dst/"
+  if [[ -n "$target" ]]; then
+    # Single PWA deploy (e.g. pwa:core4)
+    [[ -d "$pwa_src/$target" ]] || die "PWA not found: $pwa_src/$target"
+    msg "  pwa/$target: $pwa_src/$target/ → $pwa_dst/$target/"
+    if [[ "$dry_run" == "1" ]]; then return 0; fi
+    rsync -a --delete "$pwa_src/$target/" "$pwa_dst/$target/"
+    msg "[$(aosctl_chip ok)] pwa/$target synced"
   else
-    # copy file by file, skip node_modules and .git
-    sudo find "$src" -maxdepth 1 -mindepth 1 \
-      ! -name 'node_modules' ! -name '.git' ! -name '.claude' \
-      -exec sudo cp -r {} "$dst/" \;
+    # All PWAs
+    msg "  pwa: $pwa_src/ → $pwa_dst/"
+    if [[ "$dry_run" == "1" ]]; then return 0; fi
+    rsync -a --delete "$pwa_src/" "$pwa_dst/"
+    msg "[$(aosctl_chip ok)] All PWAs synced"
   fi
-  msg "[$(aosctl_chip ok)] Files synced to $dst"
+}
 
+_deploy_restart() {
+  local service="$1" dry_run="$2"
+  msg "  svc: sudo systemctl restart $service"
+  if [[ "$dry_run" == "1" ]]; then return 0; fi
   sudo systemctl restart "$service"
   sleep 1
   local active
@@ -1715,6 +1715,66 @@ index_deploy_cmd() {
     msg "  → check: sudo journalctl -u $service -n 30"
     return 1
   fi
+}
+
+index_deploy_cmd() {
+  local src="${AOS_INDEX_DEPLOY_SRC:-$SCRIPT_DIR/index-node}"
+  local dst="${AOS_INDEX_DEPLOY_DST:-/opt/aos/index}"
+  local service="aos-index.service"
+  local dry_run=0
+  local subcmd=""
+
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run|-n) dry_run=1 ;;
+      --src=*) src="${arg#--src=}" ;;
+      --dst=*) dst="${arg#--dst=}" ;;
+      pwa:*) subcmd="$arg" ;;
+      pwa|backend) subcmd="$arg" ;;
+      -h|--help|help)
+        cat <<'__DEPLOY_HELP__'
+aosctl hub deploy — Split deployment (symlink backend + independent PWA)
+
+Usage:
+  aosctl hub deploy              # full: rsync PWAs + restart service
+  aosctl hub deploy pwa          # rsync all PWAs (no restart)
+  aosctl hub deploy pwa:NAME     # rsync single PWA, e.g. pwa:core4 (no restart)
+  aosctl hub deploy backend      # restart service only (symlink = no copy needed)
+  aosctl hub deploy --dry-run    # preview mode (combinable with above)
+__DEPLOY_HELP__
+        return 0
+        ;;
+      *) die "Unknown deploy arg: $arg (try: aosctl hub deploy help)" ;;
+    esac
+  done
+
+  [[ -d "$src" ]] || die "Source not found: $src"
+
+  msg "Index Deploy"
+  msg "  src : $src"
+  msg "  dst : $dst ($([ -L "$dst" ] && echo "symlink" || echo "directory"))"
+  msg "  svc : $service"
+  [[ "$dry_run" == "1" ]] && msg "  mode: DRY RUN"
+  msg ""
+
+  case "$subcmd" in
+    pwa:*)
+      local pwa_name="${subcmd#pwa:}"
+      _deploy_pwa "$src" "$dst" "$dry_run" "$pwa_name"
+      ;;
+    pwa)
+      _deploy_pwa "$src" "$dst" "$dry_run"
+      ;;
+    backend)
+      _deploy_restart "$service" "$dry_run"
+      ;;
+    "")
+      # Full deploy: PWAs + restart
+      _deploy_pwa "$src" "$dst" "$dry_run"
+      [[ "$dry_run" != "1" ]] && msg ""
+      _deploy_restart "$service" "$dry_run"
+      ;;
+  esac
 }
 
 centre_cmd() {

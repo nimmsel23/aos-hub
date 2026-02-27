@@ -11,6 +11,7 @@ Services that run under your user account, don't require root.
 
 **Active Services (Dev/User):**
 - `aos-index-dev.service` - Index Node (dev)
+- `aos-pwa-dev.service` - Standalone PWA runtime (mode via `~/.env/pwa.env`)
 - `aos-router-dev.service` - Router Bot (dev)
 - `aos-bridge-dev.service` - Bridge (dev)
 
@@ -47,6 +48,18 @@ Note: If your user service name differs (legacy installs), set:
 
 `AOS_INDEX_USER_SERVICE=<legacy-user-unit>.service`
 
+## PWA Runtime Mode
+
+The standalone PWA runtime is operated as a user service:
+
+- `aos-pwa-dev.service` (systemd user scope)
+- mode source: `~/.env/pwa.env`
+
+Supported mode values:
+
+- `AOS_PWA_RUN_MODE=dev` -> `npm run pwa:dev`
+- `AOS_PWA_RUN_MODE=normal` -> `npm run pwa`
+
 ## Installation
 
 ### User Services (No Root Required)
@@ -57,6 +70,12 @@ cp systemd/user/aos-index-dev.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable aos-index-dev.service
 systemctl --user start aos-index-dev.service
+
+# Standalone PWA runtime
+cp systemd/user/aos-pwa-dev.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable aos-pwa-dev.service
+systemctl --user start aos-pwa-dev.service
 
 # Router Bot (dev/user)
 cd router

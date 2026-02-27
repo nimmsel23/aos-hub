@@ -29,6 +29,7 @@ Nutze diese Frontdoors:
 - `indexctl`
 - `mountctl`
 - `nodectl`
+- `pwactl`
 - `rclonectl`
 - `syncctl`
 - `telectl`
@@ -48,7 +49,6 @@ Regel:
 ### Wrapper CTL (nur Weiterleitung)
 - `voicectl`
 - `syncvaultctl` (deprecated -> `syncctl`)
-- `pwactl` (wrapper -> `mobileappctl`)
 
 ## Wichtige Non-CTL Tools
 - `heartbeat`
