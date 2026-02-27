@@ -16,12 +16,11 @@ Component for Door lifecycle, War Stacks, Hit tracking, and 4P Flow.
 ## Door/Profit Boundary (important)
 
 - Blueprint alignment:
-  - `30 - Profit.md` defines **Profit** as the final Door stage ("Achieved & Done" / weekly yield review).
-- Therefore:
-  - Profit/execution review belongs to the **Door** domain (not Tent).
-  - Door/Profit outputs are the canonical source for weekly execution/profit status.
-- General's Tent consumes Profit as an input signal for weekly synthesis, but should not become the canonical owner of Profit scoring logic.
-- If Tent stores a session snapshot of Profit values, treat that as derived/session history only.
+  - `30 - Profit.md` beschreibt Profit als finale Door-Stufe ("Achieved & Done" / Wochen-Ertrag).
+- Praktische Leitlinie:
+  - Door ist der Ort fuer Profit-Berechnung/Review-Flow.
+  - Tent nutzt diese Ergebnisse im Wochen-Review als Input.
+  - Tent-eigene JSON/Markdown/CSV-Dateien koennen Profit-Werte enthalten, sind aber Tent-Review-Artefakte.
 
 ## Lint In Plain Language
 

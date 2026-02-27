@@ -27,5 +27,5 @@
 - [ ] Non-interactive Semantik für `core4` vereinheitlichen (bash/fish) oder klar dokumentieren
 - [ ] `~/.config/bash/core4-aliases` ausmisten / in kleinere, getestete Aliasset-Dateien splitten
 
-- [ ] `weekly_core4score.csv` exportieren (Tent-wochenbezogen) — nach General's Tent triggern, analog zur monatlichen CSV (Owner: Tent-Centre Route/Service, nicht `server.js`)
-- [ ] Sealed Tent-Bundle schreiben: `generalstent_KW**.md` (Core4-Wochenscore + Tent-Synthese gebuendelt; in `index-node/routes/game.tent.js` / `index-node/services/tent.service.js`)
+- [ ] `weekly_core4score.csv` exportieren (Tent-wochenbezogen) — nach General's Tent triggern, analog zur monatlichen CSV (aktuell bevorzugt im Tent-Centre Route/Service)
+- [ ] Sealed Tent-Bundle schreiben: `generalstent_KW**.md` (Core4-Wochenscore + Tent-Synthese gebuendelt; aktuell bevorzugt in `index-node/routes/game.tent.js` / `index-node/services/tent.service.js`)

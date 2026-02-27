@@ -25,9 +25,12 @@ Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, w
 - Reuse shared helper libs for ctl-style scripts (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`).
 
 ## Cross-Pillar Boundary (Tent vs Door/Profit)
-- `game/tent` owns the **General's Tent weekly synthesis/sealed review session** (strategic reflection, course correction, next targets).
-- **Profit / execution review** is a **Door** concern (see Door/Profit blueprint semantics) and is an upstream input to Tent, not Tent-owned source-of-truth logic.
-- Tent artifacts may include Profit-derived values and sealed snapshots, but those are derived session outputs/history, not the canonical Profit record.
+- Kapitel-Referenz:
+  - `30 - Profit.md` beschreibt Profit als Abschluss der Door-Woche.
+  - `41 - General_s Tent.md` beschreibt Tent als woechentliche Strategie-/Review-Session.
+- Fuer dieses Repo heisst das praktisch:
+  - Tent sammelt Wochen-Signale (u. a. Profit-Werte) und erstellt den versiegelten Wochen-Review.
+  - Profit-Logik bleibt bei den Door-bezogenen Flows/Artefakten.
 
 ## Blueprint-First Rule
 - Game development should start from local chapter/blueprint files inside this pillar.

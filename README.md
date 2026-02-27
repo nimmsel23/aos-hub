@@ -64,6 +64,33 @@ aosctl alias ui
 - **Env manager**: `envctl` or `aosctl env`
 - **Alias manager**: `aos-aliasctl` or `aosctl alias`
 
+## Direct Centre Shortcuts (`aos`)
+
+`aos` exposes short domain/centre commands and delegates internally to canonical pillar frontdoors:
+
+- `aos hot ...` -> `doorctl hot ...`
+- `aos potential ...` -> `doorctl potential ...`
+- `aos plan ...` -> `doorctl plan ...`
+- `aos production ...` -> `doorctl production ...`
+- `aos profit ...` -> `doorctl profit ...`
+- `aos frame ...` -> `gamectl frame ...`
+- `aos freedom ...` -> `gamectl freedom ...`
+- `aos focus ...` -> `gamectl focus ...`
+- `aos tent ...` -> `gamectl tent ...`
+
+Examples:
+
+```bash
+aos hot list
+aos hot add "Idea ..."
+aos plan activate 1
+aos frame new
+aos focus list
+```
+
+Note:
+- `aos fire ...` currently remains mapped to `firectl ...` (existing Fire tooling path).
+
 ## Aliases (Zsh)
 
 Defined in `~/.dotfiles/config/zsh/system-aliases.zsh`:

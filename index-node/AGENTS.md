@@ -66,6 +66,16 @@ See `api-map.md` for full reference. Short version:
 - Routes rely on `menu.yaml`; treat it as read-only input for UI consumers.
 - Bridge handoff uses `AOS_BRIDGE_URL` (or `BRIDGE_URL`) when set.
 - Vault content is read from `~/AlphaOS-Vault`; keep file paths stable.
+- API PIN barrier can block Core4 PWA API calls (`/api/core4/*`) on write methods and may surface as frontend parse/auth errors.
+- Use `index-node/nodectl` for PIN operations:
+  - `nodectl pin status`
+  - `nodectl pin off` (writes `~/.aos/pin.disabled`)
+  - `nodectl pin on`
+  - `nodectl pin clear-sessions`
+- After changing PIN flag/config, restart index-node (`nodectl restart` / service restart) before retesting PWA.
+- If restart crashes, collect logs first:
+  - `sudo journalctl -u aos-index.service -n 120 --no-pager`
+  - `journalctl --user -u aos-index-dev.service -n 120 --no-pager`
 
 ## Documentation Locations
 - Node centre docs belong in `DOCS/node/`.
