@@ -221,6 +221,12 @@ function getPinTokenCandidate(req) {
 }
 
 function pinBarrier(req, res, next) {
+  if (!PIN_BARRIER_ENV_ENABLED) return next();
+  try {
+    if (fs.existsSync(PIN_DISABLE_FLAG_PATH)) return next();
+  } catch (_) {
+    // Ignore fs errors and continue with normal PIN checks.
+  }
   const method = String(req.method || "").toUpperCase();
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return next();
   const path = String(req.path || "");
@@ -340,9 +346,19 @@ app.post("/api/pin/logout", (req, res) => {
 });
 
 app.get("/api/pin/status", (_req, res) => {
+  let disabledByFlag = false;
+  try {
+    disabledByFlag = fs.existsSync(PIN_DISABLE_FLAG_PATH);
+  } catch (_) {
+    disabledByFlag = false;
+  }
   return res.json({
     ok: true,
     configured: pinConfigExists(),
+    required: PIN_BARRIER_ENV_ENABLED && !disabledByFlag,
+    disabled_by_env: !PIN_BARRIER_ENV_ENABLED,
+    disabled_by_flag: disabledByFlag,
+    flag_path: PIN_DISABLE_FLAG_PATH,
   });
 });
 
@@ -455,11 +471,13 @@ const FIRE_TASK_TAGS = String(
 const PIN_STORE_DIR = path.join(os.homedir(), ".aos");
 const PIN_CONFIG_PATH = path.join(PIN_STORE_DIR, "pin.json");
 const PIN_SESSIONS_PATH = path.join(PIN_STORE_DIR, "pin-sessions.json");
+const PIN_DISABLE_FLAG_PATH = path.join(PIN_STORE_DIR, "pin.disabled");
 const PIN_COOKIE_NAME = "aos-pin-token";
 const PIN_SESSION_HEADER = "x-pin-token";
 const PIN_SESSION_TTL_MS = Number(process.env.PIN_SESSION_TTL_MS || 6 * 60 * 60 * 1000);
 const PIN_COOKIE_SECURE = String(process.env.PIN_COOKIE_SECURE || "0").trim() === "1";
 const PIN_HASH_ITERATIONS = Number(process.env.PIN_HASH_ITERATIONS || 310000);
+const PIN_BARRIER_ENV_ENABLED = String(process.env.AOS_INDEX_PIN_REQUIRED || "1").trim() !== "0";
 
 let PIN_CONFIG_CACHE = null;
 let PIN_SESSIONS_CACHE = null;

@@ -507,7 +507,7 @@ EOF
   mount) repo_exec "scripts/mountctl" "$@" ;;
   hook|hooks) repo_exec "scripts/hookctl" "$@" ;;
   core4) repo_exec "core4/python-core4/core4ctl" "$@" ;;
-  tent|tentctl) repo_exec "game/python-tent-bot/tentctl" "$@" ;;
+  tent|tentctl) repo_exec "game/tent/tentctl" "$@" ;;
   gas|gasctl) repo_exec "scripts/gasctl" "$@" ;;
   firectl) repo_exec "scripts/firectl" "$@" ;;
   tele|telectl) repo_exec "scripts/telectl" "$@" ;;

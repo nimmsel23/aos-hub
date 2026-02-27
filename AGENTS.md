@@ -12,7 +12,7 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
   - `core4/` (Core4 pillar; CLI lives in `core4/python-core4/`)
   - `door/` (Door pillar; tools live in `door/python-potential/`, `door/python-warstack/`, standalone GAS dev in `door/gas-door-dev/`)
   - `voice/` (Voice pillar)
-  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; Fire bot tooling lives in `game/fire/`; Tent bot lives in `game/python-tent-bot/`; Fruits GAS standalone is external at `~/.gas/fruits-dev`)
+  - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; Fire bot tooling lives in `game/fire/`; Tent bot lives in `game/tent/`; Fruits GAS standalone is external at `~/.gas/fruits-dev`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
 - Domain ownership rule:
   - Pillar/domain logic lives inside the pillar directory (`door/`, `game/`, `voice/`, `core4/`).

@@ -89,7 +89,7 @@ CORE4CTL="$(resolve_bin "core4ctl" "$SCRIPT_DIR/core4/python-core4/core4ctl" || 
 FIREMAP_BOT_PY="$(resolve_bin "$SCRIPT_DIR/game/fire/firemap_bot.py" "$SCRIPT_DIR/game/python-firemap/firemap_bot.py" || true)"
 FRUITS_BIN="$(resolve_bin "${AOS_FRUITS_BIN:-}" "$SCRIPT_DIR/python-fruits/fruits" || true)"
 CREATORKING_BIN="$(resolve_bin "${AOS_CREATORKING_BIN:-}" "$SCRIPT_DIR/python-creatorking/creatorking" || true)"
-TENTCTL="$(resolve_bin "$SCRIPT_DIR/game/python-tent-bot/tentctl" || true)"
+TENTCTL="$(resolve_bin "$SCRIPT_DIR/game/tent/tentctl" || true)"
 GASCTL="$(resolve_bin "$SCRIPT_DIR/scripts/gasctl" || true)"
 BACKUPCTL="$(resolve_bin "$SCRIPT_DIR/scripts/backupctl" || true)"
 MOUNTCTL="$(resolve_bin "$SCRIPT_DIR/scripts/mountctl" || true)"
@@ -456,7 +456,7 @@ COMPONENTS:
   game        Game mount tooling (gamectl)
   voice       Voice mount tooling (voicectl)
   firectl     Fire bot wrapper (firectl)
-  tentctl     Tent Bot manager (game/python-tent-bot)
+  tentctl     Tent Bot manager (game/tent)
   gas         GAS Tent Centre manager (gasctl)
   core4ctl    Core4 tooling (core4ctl)
   fruits      Fruits CLI (JSON store)
@@ -1442,7 +1442,7 @@ route_component() {
       "$FIRECTL_BIN" "$@"
       ;;
     tent|tentctl)
-      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/game/python-tent-bot/tentctl"
+      [[ -n "$TENTCTL" ]] || die "tentctl not found at $SCRIPT_DIR/game/tent/tentctl"
       "$TENTCTL" "$@"
       ;;
     gas|gasctl)

@@ -96,3 +96,42 @@ Core4 and terminal:
 2. If endpoints changed, update `docs/api-map.md`.
 3. If files moved, update `docs/file-map.md`.
 4. Keep responses JSON and avoid HTML stack traces.
+
+## Tailscale PWA Access (Serve/Funnel)
+
+Canonical host for mobile/public PWA access:
+- `https://ideapad.tail7a15d6.ts.net`
+
+Current expected handlers:
+- `/` -> `http://127.0.0.1:8799` (index-node + all `/pwa/*` + `/api/*`)
+- `/bridge` -> `http://127.0.0.1:8080`
+- `/fitnessctx` -> `http://127.0.0.1:8788`
+
+Important:
+- Do **not** add separate handlers for `/api/core4`, `/api/fire`, `/api/focus`.
+- Separate `/api/*` mappings can strip prefixes and cause PWA "failed to fetch" errors on mobile.
+
+Quick checks:
+
+```bash
+tailscale serve status
+tailscale funnel status
+nodectl pwa doctor
+curl -skI https://ideapad.tail7a15d6.ts.net/pwa/core4/
+curl -sk "https://ideapad.tail7a15d6.ts.net/api/core4/day-state?date=2026-02-26&tz=Europe/Berlin"
+```
+
+## Core4 PWA Ausbau-Hinweis (Journal + Timeline)
+
+Für `pwa/core4` ist festzuhalten:
+- Der Core4-Tracker in `index-node` hat bereits Journal-Funktionalität.
+- Der Core4-Tracker liefert bereits Timeline-/Verlaufsdaten (Tag/Woche), die in der PWA ausgebaut werden sollen.
+
+Relevante API-Bausteine für den Ausbau:
+- `GET /api/core4/day-state`
+- `GET /api/core4/week-summary`
+- `GET /api/core4/journal`
+- `POST /api/core4/journal`
+
+Ausbauziel:
+- Journal und Timeline als sichtbare First-Class-Module in `pwa/core4` integrieren (mobile-first).

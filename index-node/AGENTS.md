@@ -47,6 +47,16 @@ See `api-map.md` for full reference. Short version:
 - **Legacy (compat-only):** `POST /api/core4` · `GET /api/core4/today`
 - Storage: `~/.local/share/alphaos/core4/.core4/events/` (event ledger, append-only, no undo)
 
+## Core4 PWA Expansion Note
+- For `pwa/core4`, treat Journal and Timeline as planned first-class modules.
+- Journal exists in tracker/backend and should be surfaced in the mobile PWA UX.
+- Timeline/history data already exists via day/week APIs and should be made visible in `pwa/core4`.
+- Preferred API set for this expansion:
+- `GET /api/core4/day-state`
+- `GET /api/core4/week-summary`
+- `GET /api/core4/journal`
+- `POST /api/core4/journal`
+
 ## Commit & Pull Request Guidelines
 - Commit messages are short, imperative, and scoped to the change (e.g., “Load door chapters from vault”).
 - PRs should include a brief summary, affected routes, and screenshots for UI changes.

@@ -33,9 +33,53 @@ let state = {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+async function fetchJsonOrThrow(url, init) {
+  const res = await fetch(url, init);
+  const raw = await res.text();
+  let data = null;
+
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (_err) {
+    const preview = String(raw || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    throw new Error(`${url} returned non-JSON (HTTP ${res.status})${preview ? `: ${preview}` : ""}`);
+  }
+
+  if (!res.ok) {
+    const msg = data && typeof data === "object" && data.error ? String(data.error) : `HTTP ${res.status}`;
+    throw new Error(`${url} failed: ${msg}`);
+  }
+
+  return data;
+}
+
 function habitCount(domain, task) {
   const pts = state.weekHabits[`${domain}:${task}`] || 0;
   return Math.round(pts / 0.5);   // 0..7
+}
+
+function applyLegacyTodayPayload(payload, today) {
+  if (!payload || payload.ok !== true || !payload.data) return false;
+  const d = payload.data || {};
+  const map = [
+    ["fitness", "body", "fitness"],
+    ["fuel", "body", "fuel"],
+    ["meditation", "being", "meditation"],
+    ["memoirs", "being", "memoirs"],
+    ["partner", "balance", "person1"],
+    ["posterity", "balance", "person2"],
+    ["discover", "business", "discover"],
+    ["declare", "business", "declare"],
+  ];
+  map.forEach(([legacyKey, domain, task]) => {
+    if (Number(d[legacyKey] || 0) >= 1) state.done.add(`${domain}/${task}`);
+  });
+  state.daily = Number(payload.total || 0);
+  state.date = d.date || today;
+  return true;
 }
 
 // ── Main ring ─────────────────────────────────────────────────────────────────
@@ -135,12 +179,11 @@ async function handleLog(e) {
   btn.classList.add("logging");
 
   try {
-    const res  = await fetch("/api/core4/log", {
+    const data = await fetchJsonOrThrow("/api/core4/log", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ domain, task, source: "core4-pwa" }),
     });
-    const data = await res.json();
 
     if (data.duplicate || data.ok) {
       state.done.add(`${domain}/${task}`);
@@ -151,8 +194,9 @@ async function handleLog(e) {
       }
       showToast(data.duplicate ? "Already logged" : `${domain} · ${task} ✓`);
     }
-  } catch {
-    showToast("Error – check server");
+  } catch (err) {
+    const msg = String(err?.message || err || "check server");
+    showToast(`Error – ${msg.slice(0, 64)}`);
   }
 
   render();
@@ -165,12 +209,43 @@ async function load() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   })();
 
-  const [dayRes, weekRes] = await Promise.all([
-    fetch(`/api/core4/day-state?date=${today}`).then(r => r.json()),
-    fetch(`/api/core4/week-summary?date=${today}`).then(r => r.json()),
-  ]);
+  const dayPromise = (async () => {
+    try {
+      return await fetchJsonOrThrow(`/api/core4/day-state?date=${today}`);
+    } catch (err) {
+      const legacy = await fetchJsonOrThrow("/api/core4/today");
+      legacy.__fallback = "legacy-today";
+      legacy.__fallback_error = String(err?.message || err || "");
+      return legacy;
+    }
+  })();
 
-  if (dayRes.ok) {
+  const weekPromise = fetchJsonOrThrow(`/api/core4/week-summary?date=${today}`);
+  const [dayResult, weekResult] = await Promise.allSettled([dayPromise, weekPromise]);
+
+  let dayRes = null;
+  let weekRes = null;
+  const errors = [];
+
+  if (dayResult.status === "fulfilled") {
+    dayRes = dayResult.value;
+  } else {
+    errors.push(String(dayResult.reason?.message || dayResult.reason || "day-state failed"));
+  }
+
+  if (weekResult.status === "fulfilled") {
+    weekRes = weekResult.value;
+  } else {
+    errors.push(String(weekResult.reason?.message || weekResult.reason || "week-summary failed"));
+  }
+
+  if (dayRes?.ok && dayRes.__fallback === "legacy-today") {
+    applyLegacyTodayPayload(dayRes, today);
+    if (dayRes.__fallback_error) {
+      console.warn("[core4-pwa] day-state fallback -> /api/core4/today:", dayRes.__fallback_error);
+      showToast("Using legacy Core4 day API");
+    }
+  } else if (dayRes?.ok) {
     (dayRes.entries || []).forEach(e => {
       if (e.domain && e.task) state.done.add(`${e.domain}/${e.task}`);
     });
@@ -179,10 +254,14 @@ async function load() {
     state.week  = dayRes.week  || "";
   }
 
-  if (weekRes.ok) {
+  if (weekRes?.ok) {
     state.weekly     = Number(weekRes.totals?.week_total || 0);
     state.week       = weekRes.week || state.week;
     state.weekHabits = weekRes.totals?.by_habit || {};
+  }
+
+  if (!dayRes && !weekRes && errors.length) {
+    throw new Error(errors.join(" | "));
   }
 
   // Format date: "25. Feb 2026"

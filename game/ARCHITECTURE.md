@@ -34,7 +34,7 @@ Implementation currently lives across `index-node/`, scripts, and map-specific t
 - `index-node/public/game/*` — the UI pages
 - `index-node/server.js` + `index-node/routes/*` — APIs and exports
 - `game/python-firemap/` — Fire map bot tooling
-- `game/python-tent-bot/` — Tent bot tooling
+- `game/tent/bot/` — Tent bot tooling
 
 ## Debug / Runbook
 

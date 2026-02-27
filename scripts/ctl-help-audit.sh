@@ -13,7 +13,7 @@ PROBE_MISSING=0
 RUNTIME_TIMEOUT_SEC="${AOS_CTL_HELP_AUDIT_TIMEOUT_SEC:-3}"
 MAX_OUTPUT_LINES="${AOS_CTL_HELP_AUDIT_MAX_LINES:-12}"
 
-CANDIDATE_REGEX='(^|/)(aos|aosctl|routerctl|bridgectl|firemap)$|/scripts/[^/]*ctl$|/door/cli/doorctl$|/game/python-tent-bot/tentctl$|/core4/python-core4/core4ctl$'
+CANDIDATE_REGEX='(^|/)(aos|aosctl|routerctl|bridgectl|firemap)$|/scripts/[^/]*ctl$|/door/cli/doorctl$|/game/tent/tentctl$|/core4/python-core4/core4ctl$'
 
 usage() {
   cat <<EOF
@@ -59,7 +59,7 @@ collect_candidates() {
     case "$f" in
       "$ROOT_DIR"/aos|"$ROOT_DIR"/aosctl|"$ROOT_DIR"/firemap|\
       "$ROOT_DIR"/router/routerctl|"$ROOT_DIR"/bridge/bridgectl|\
-      "$ROOT_DIR"/door/cli/doorctl|"$ROOT_DIR"/game/python-tent-bot/tentctl|\
+      "$ROOT_DIR"/door/cli/doorctl|"$ROOT_DIR"/game/tent/tentctl|\
       "$ROOT_DIR"/core4/python-core4/core4ctl|"$ROOT_DIR"/scripts/*ctl)
         printf "%s\n" "$f"
         ;;
