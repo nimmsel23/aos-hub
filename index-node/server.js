@@ -366,7 +366,7 @@ app.get("/api/pin/status", (_req, res) => {
 app.use("/api", pinBarrier);
 
 // PWAs: AOS_PWA_DIR takes priority (prod: /opt/aos/pwa), fallback to ./public/pwa (dev)
-const PWA_DIR = process.env.AOS_PWA_DIR || path.join(__dirname, "public", "pwa");
+const PWA_DIR = process.env.AOS_PWA_DIR || path.join("public", "pwa");
 app.use("/pwa", express.static(PWA_DIR, { extensions: ["html"] }));
 
 app.use(
