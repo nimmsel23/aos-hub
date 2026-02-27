@@ -88,6 +88,8 @@ $APP — αOS main terminal frontdoor (user workflows + wrappers)
 Usage:
   $APP dashboard                    # hotkey terminal dashboard (default in TTY)
   $APP menu                         # gum menu (legacy/simple launcher)
+  $APP status|ping                  # quick hub status wrappers
+  $APP doctor [local|full]          # frontdoor self-check (+ optional hub doctor)
   $APP restart [all|index|router|bridge]
   $APP sync|vault|git ...           # syncctl/gitctl wrappers
   $APP hub|index|bridge|router ...  # aos-hub system/ops wrappers
@@ -119,6 +121,10 @@ Examples:
   $APP plan activate 1
   $APP production focus
   $APP profit review
+  $APP status
+  $APP ping
+  $APP doctor
+  $APP doctor full
   $APP hub doctor
   $APP menu
   $APP sync summary
@@ -832,9 +838,113 @@ restart_cmd() {
   node_restart_main "$target"
 }
 
+doctor_tool_line() {
+  local label="$1"
+  local resolved="${2:-}"
+  local fallback="${3:-}"
+  local required="${4:-required}"
+  local path="${resolved:-}"
+  local origin="resolved"
+  local state="ok"
+
+  if [[ -z "$path" || ! -x "$path" ]]; then
+    if [[ -n "$fallback" ]] && have "$fallback"; then
+      path="$(command -v "$fallback")"
+      origin="PATH"
+    else
+      path="-"
+      origin="-"
+      if [[ "$required" == "optional" ]]; then
+        state="optional"
+      else
+        state="missing"
+        AOS_DOCTOR_MISSING=$((AOS_DOCTOR_MISSING + 1))
+      fi
+    fi
+  fi
+
+  printf '  %-12s %-7s %-8s %s\n' "$label" "$state" "$origin" "$path"
+}
+
+doctor_cmd() {
+  local mode="${1:-local}"
+  case "$mode" in
+    local|full) ;;
+    *)
+      die "doctor usage: aos doctor [local|full]"
+      ;;
+  esac
+
+  local invoked="${0:-aos}"
+  local resolved="$invoked"
+  resolved="$(readlink -f "$invoked" 2>/dev/null || printf '%s' "$invoked")"
+
+  local tty_stdin=0 tty_stdout=0
+  [[ -t 0 ]] && tty_stdin=1
+  [[ -t 1 ]] && tty_stdout=1
+
+  AOS_DOCTOR_MISSING=0
+  printf 'aos doctor (%s)\n' "$mode"
+  printf '  invoked:      %s\n' "$invoked"
+  printf '  resolved:     %s\n' "$resolved"
+  printf '  script_dir:   %s\n' "$SCRIPT_DIR"
+  printf '  tty stdin/out:%s/%s\n' "$tty_stdin" "$tty_stdout"
+  printf '  can_prompt:   %s\n' "$(can_prompt && printf yes || printf no)"
+  printf '\n'
+  printf '  %-12s %-7s %-8s %s\n' "tool" "state" "origin" "path"
+  printf '  %-12s %-7s %-8s %s\n' "------------" "-------" "--------" "----"
+  doctor_tool_line "aosctl" "$AOSCTL" "aosctl"
+  doctor_tool_line "hubctl" "$HUBCTL" "hubctl"
+  doctor_tool_line "core4ctl" "$CORE4CTL" "core4ctl"
+  doctor_tool_line "gamectl" "$GAMECTL" "gamectl"
+  doctor_tool_line "doorctl" "$DOORCTL" "doorctl"
+  doctor_tool_line "firectl" "$FIRECTL" "firectl"
+  doctor_tool_line "syncctl" "$SYNCCTL" "syncctl"
+  doctor_tool_line "gitctl" "$GITCTL" "gitctl"
+  doctor_tool_line "nodectl" "$NODECTL" "nodectl"
+  doctor_tool_line "indexctl" "$INDEXCTL" "indexctl"
+  doctor_tool_line "bridgectl" "$BRIDGECTL" "bridgectl"
+  doctor_tool_line "routerctl" "$ROUTERCTL" "routerctl"
+  doctor_tool_line "voicectl" "$VOICECTL" "voicectl"
+  doctor_tool_line "backupctl" "$BACKUPCTL" "backupctl"
+  doctor_tool_line "hookctl" "$HOOKCTL" "hookctl"
+  doctor_tool_line "gasctl" "$GASCTL" "gasctl"
+  doctor_tool_line "telectl" "$TELECTL" "telectl"
+  doctor_tool_line "aos-alias" "$(resolve_bin aos-alias || true)" "aos-alias" optional
+
+  if ((AOS_DOCTOR_MISSING > 0)); then
+    printf '\n[aos] missing tools: %d\n' "$AOS_DOCTOR_MISSING" >&2
+  else
+    printf '\n[aos] local frontdoor wiring OK\n'
+  fi
+
+  if [[ "$mode" == "full" ]]; then
+    printf '\n[aos] running hub doctor...\n'
+    hub_cmd doctor
+  fi
+
+  if ((AOS_DOCTOR_MISSING > 0)); then
+    return 1
+  fi
+}
+
+status_cmd() {
+  if [[ -n "$AOSCTL" ]]; then
+    exec "$AOSCTL" status
+  fi
+  hub_cmd status
+}
+
+ping_cmd() {
+  exec_or_path "$AOSCTL" aosctl ping
+}
+
 case "$cmd" in
   dashboard|dash|ui) dashboard ;;
   menu) menu ;;
+  status) status_cmd ;;
+  ping) ping_cmd ;;
+  doctor) doctor_cmd "$@" ;;
   restart) restart_cmd "$@" ;;
   sync) sync_cmd "$@" ;;
   git) git_cmd "$@" ;;

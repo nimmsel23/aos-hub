@@ -53,6 +53,9 @@ aosctl alias ui
 ## Command Map (What To Type)
 
 - **One‑stop menu**: `aosctl` or `hubctl`
+- **Frontdoor status**: `aos status`
+- **Heartbeat ping**: `aos ping`
+- **Frontdoor self-check**: `aos doctor` (or `aos doctor full`)
 - **Status (no logs + heartbeat ping)**: `aosctl status`
 - **Heartbeat ping only**: `aosctl ping`
 - **System health**: `aosctl doctor`

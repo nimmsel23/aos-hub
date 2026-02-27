@@ -20,6 +20,83 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
   - Legacy root-level scripts for pillar behavior should be migrated into the pillar folder and kept as wrappers only during transition.
 - `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
 
+## AGENTS Index
+
+All `AGENTS.md` files currently under `aos-hub/`:
+- `AGENTS.md`
+- `bridge/AGENTS.md`
+- `core4/AGENTS.md`
+- `door/AGENTS.md`
+- `door/python-warstack/AGENTS.md`
+- `game/AGENTS.md`
+- `game/fire/AGENTS.md`
+- `game/focus/AGENTS.md`
+- `game/frame/AGENTS.md`
+- `game/freedom/AGENTS.md`
+- `game/python-firemap/AGENTS.md`
+- `game/tent/AGENTS.md`
+- `index-node/AGENTS.md`
+- `index-node/public/pwa/door/AGENTS.md`
+- `index-node/public/pwa/fire/AGENTS.md`
+- `index-node/public/pwa/focus/AGENTS.md`
+- `index-node/public/pwa/frame/AGENTS.md`
+- `index-node/public/pwa/freedom/AGENTS.md`
+- `index-node/public/pwa/game/AGENTS.md`
+- `router/AGENTS.md`
+- `scripts/AGENTS.md`
+- `voice/AGENTS.md`
+
+## CTL Scripts Index
+
+All `*ctl` entrypoints currently under `aos-hub/`:
+- `aosctl`
+- `bridge/bridgectl`
+- `bridge/bridge-servicectl`
+- `bridge/bridge-apictl`
+- `bridge/bridge-tsctl`
+- `core4/python-core4/core4ctl`
+- `core4/python-core4/core4-apictl`
+- `core4/python-core4/core4-checkctl`
+- `core4/python-core4/core4-clinctl`
+- `core4/python-core4/core4-menuctl`
+- `core4/python-core4/core4-migratectl`
+- `core4/python-core4/core4-servicectl`
+- `core4/python-core4/core4-syncctl`
+- `core4/python-core4/core4-trackctl`
+- `door/cli/doorctl`
+- `game/gamectl`
+- `game/protoctl`
+- `game/frame/framectl`
+- `game/freedom/freedomctl`
+- `game/focus/focusctl`
+- `game/fire/firectl`
+- `game/tent/tentctl`
+- `index-node/nodectl`
+- `router/routerctl`
+- `scripts/aos-aliasctl`
+- `scripts/aos-syncctl`
+- `scripts/backupctl`
+- `scripts/blueprintctl`
+- `scripts/firectl`
+- `scripts/gamectl`
+- `scripts/gasctl`
+- `scripts/gitctl`
+- `scripts/hookctl`
+- `scripts/hubctl`
+- `scripts/indexctl`
+- `scripts/mobileappctl`
+- `scripts/mountctl`
+- `scripts/nodectl`
+- `scripts/pwactl`
+- `scripts/rclonectl`
+- `scripts/syncctl`
+- `scripts/syncvaultctl`
+- `scripts/systemstatusctl`
+- `scripts/telectl`
+- `scripts/voicectl`
+- `scripts/sync-utils/vaultctl`
+- `voice/cli/voicectl`
+
 ## Build, Test, and Development Commands
 - `cd index-node && npm install && npm start` starts the HQ server.
 - `cd index-node && npm run dev` runs the HQ server with nodemon.
