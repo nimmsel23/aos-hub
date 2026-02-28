@@ -21,6 +21,7 @@ A living roadmap for the αOS ecosystem. Focus is on stability, data flow, and c
 - Telegram weekly Core4 summary + Tent export at Sunday trigger.
 - Door/Game centres writing to Vault + Task/TickTick pipelines.
 - Voice history: read and render markdown logs, open/read in UI.
+- Index Node Storage Adapter (`AOS_STORAGE_BACKEND=local|gdrive`): direct Google Drive API access without local `rclone` mount, with OAuth/token refresh and fallback to local FS.
 
 ## Later (Scale)
 
