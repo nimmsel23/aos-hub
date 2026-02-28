@@ -26,7 +26,7 @@ aos_freedom	AOS Freedom	aos freedom	tool	aos-hub	Game Freedom centre direct fron
 aos_focus	AOS Focus	aos focus	tool	aos-hub	Game Focus centre direct frontdoor (delegates to gamectl focus)
 aos_tent	AOS Tent	aos tent	tool	aos-hub	Game Tent centre direct frontdoor (delegates to gamectl tent)
 aos_status	AOS Status	aos status	tool	aos-hub	Quick status via frontdoor (prefers aosctl status; falls back to hubctl status)
-aos_ping	AOS Ping	aos ping	tool	aos-hub	Quick heartbeat ping via frontdoor (delegates to aosctl ping)
+aos_ping	AOS Ping	aos ping	tool	aos-hub	Frontdoor ping with modes: auto(remote->local fallback), local, remote, full
 aos_doctor	AOS Doctor	aos doctor	tool	aos-hub	Frontdoor self-check for aos wiring and dependencies
 routerctl	Router Control	routerctl	infra	manual	Start/stop/logs router bot service
 aos_sync	AOS Sync	aos-sync	infra	manual	Rclone sync management (menu/run/enable)

@@ -1270,7 +1270,7 @@ run_status() {
 
 run_ping() {
   if [[ -n "$ROUTERCTL" ]]; then
-    "$ROUTERCTL" heartbeat ping || true
+    "$ROUTERCTL" heartbeat ping
   else
     die "routerctl not found"
   fi

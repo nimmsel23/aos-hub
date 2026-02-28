@@ -88,7 +88,7 @@ $APP — αOS main terminal frontdoor (user workflows + wrappers)
 Usage:
   $APP dashboard                    # hotkey terminal dashboard (default in TTY)
   $APP menu                         # gum menu (legacy/simple launcher)
-  $APP status|ping                  # quick hub status wrappers
+  $APP status|ping [mode]           # quick frontdoor health wrappers
   $APP doctor [local|full]          # frontdoor self-check (+ optional hub doctor)
   $APP restart [all|index|router|bridge]
   $APP sync|vault|git ...           # syncctl/gitctl wrappers
@@ -123,6 +123,8 @@ Examples:
   $APP profit review
   $APP status
   $APP ping
+  $APP ping local
+  $APP ping remote
   $APP doctor
   $APP doctor full
   $APP hub doctor
@@ -935,15 +937,104 @@ status_cmd() {
   hub_cmd status
 }
 
+ping_http_code() {
+  local url="$1"
+  if ! have curl; then
+    printf "curl?"
+    return 0
+  fi
+  local code
+  code="$(curl -sS -o /dev/null -m 1 -w "%{http_code}" "$url" 2>/dev/null || true)"
+  if [[ -z "$code" || "$code" == "000" ]]; then
+    printf "down"
+  else
+    printf "%s" "$code"
+  fi
+}
+
+ping_local_probes() {
+  local index_url="http://127.0.0.1:8799/health"
+  local bridge_url="http://127.0.0.1:8080/health"
+  local index_code bridge_code index_state bridge_state ok_count=0
+
+  index_code="$(ping_http_code "$index_url")"
+  bridge_code="$(ping_http_code "$bridge_url")"
+
+  index_state="down"
+  bridge_state="down"
+  [[ "$index_code" == 2* ]] && index_state="ok"
+  [[ "$bridge_code" == 2* ]] && bridge_state="ok"
+  [[ "$index_state" == "ok" ]] && ok_count=$((ok_count + 1))
+  [[ "$bridge_state" == "ok" ]] && ok_count=$((ok_count + 1))
+
+  printf '[aos] local probes\n'
+  printf '  %-8s %-5s %s (%s)\n' "index" "$index_state" "$index_url" "$index_code"
+  printf '  %-8s %-5s %s (%s)\n' "bridge" "$bridge_state" "$bridge_url" "$bridge_code"
+
+  ((ok_count > 0))
+}
+
 ping_cmd() {
-  exec_or_path "$AOSCTL" aosctl ping
+  local mode="${1:-auto}"
+  case "$mode" in
+    auto|local|remote|full) ;;
+    *)
+      die "ping usage: aos ping [auto|local|remote|full]"
+      ;;
+  esac
+
+  local remote_rc=0
+  if [[ "$mode" == "auto" || "$mode" == "remote" || "$mode" == "full" ]]; then
+    local remote_out=""
+    if [[ -n "$AOSCTL" ]]; then
+      if remote_out="$("$AOSCTL" ping 2>&1)"; then
+        remote_rc=0
+      else
+        remote_rc=$?
+      fi
+    else
+      if remote_out="$(aosctl ping 2>&1)"; then
+        remote_rc=0
+      else
+        remote_rc=$?
+      fi
+    fi
+
+    if ((remote_rc == 0)); then
+      printf '[aos] remote heartbeat ok\n'
+      if [[ "$mode" != "full" ]]; then
+        return 0
+      fi
+    else
+      printf '[aos] remote heartbeat failed (rc=%d)\n' "$remote_rc" >&2
+      if [[ "${AOS_PING_VERBOSE:-0}" == "1" && -n "$remote_out" ]]; then
+        printf '%s\n' "$remote_out" >&2
+      fi
+      if [[ "$mode" == "remote" ]]; then
+        return "$remote_rc"
+      fi
+    fi
+  fi
+
+  if ping_local_probes; then
+    return 0
+  fi
+
+  if [[ "$mode" == "local" ]]; then
+    return 1
+  fi
+
+  if ((remote_rc == 0)); then
+    return 0
+  fi
+  return 1
 }
 
 case "$cmd" in
   dashboard|dash|ui) dashboard ;;
   menu) menu ;;
   status) status_cmd ;;
-  ping) ping_cmd ;;
+  ping) ping_cmd "$@" ;;
   doctor) doctor_cmd "$@" ;;
   restart) restart_cmd "$@" ;;
   sync) sync_cmd "$@" ;;

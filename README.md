@@ -54,7 +54,8 @@ aosctl alias ui
 
 - **One‑stop menu**: `aosctl` or `hubctl`
 - **Frontdoor status**: `aos status`
-- **Heartbeat ping**: `aos ping`
+- **Heartbeat ping**: `aos ping` (`auto` mode: remote heartbeat, fallback to local probes)
+- **Ping modes**: `aos ping local` | `aos ping remote` | `aos ping full`
 - **Frontdoor self-check**: `aos doctor` (or `aos doctor full`)
 - **Status (no logs + heartbeat ping)**: `aosctl status`
 - **Heartbeat ping only**: `aosctl ping`
