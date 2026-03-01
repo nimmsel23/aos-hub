@@ -14,7 +14,7 @@
     {
       "label": "Fitness Centre",
       "cmd": "fitness",
-      "url": "/pwa/fitness/"
+      "url": "https://ideapad.tail7a15d6.ts.net/fitnessctx"
     },
     {
       "label": "Being GPT",
@@ -40,7 +40,12 @@
     {
       "label": "Memoirs",
       "cmd": "memoirs",
-      "url": "/memoirs"
+      "url": "/pwa/memoirs/"
+    },
+    {
+      "label": "Voice",
+      "cmd": "voice",
+      "url": "/voice"
     },
 
     {

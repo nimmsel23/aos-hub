@@ -132,6 +132,78 @@ cmd_dir() {
   echo "$vdir"
 }
 
+cmd_status() {
+  local vdir
+  vdir=$(get_voice_dir)
+
+  ui_title "VOICE Status"
+  echo ""
+
+  # Vault directory
+  if [[ -d "$vdir" ]]; then
+    ui_ok "Vault:  $vdir"
+  else
+    ui_err "Vault:  $vdir (NOT FOUND)"
+  fi
+
+  # Session count
+  local total=0
+  if [[ -d "$vdir" ]]; then
+    total=$(find "$vdir" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
+  fi
+  ui_info "Total sessions: $total"
+
+  # This week / month
+  local this_week=0 this_month=0
+  if [[ -d "$vdir" ]]; then
+    this_week=$(find "$vdir" -maxdepth 1 -type f -name "*.md" -newermt "monday" 2>/dev/null | wc -l)
+    this_month=$(find "$vdir" -maxdepth 1 -type f -name "*.md" -newermt "$(date '+%Y-%m-01')" 2>/dev/null | wc -l)
+  fi
+  ui_info "This week:  $this_week"
+  ui_info "This month: $this_month"
+
+  # Today's session check
+  local today_file="$vdir/VOICE-$(date '+%Y-%m-%d')*.md"
+  local today_count
+  today_count=$(find "$vdir" -maxdepth 1 -type f -name "VOICE-$(date '+%Y-%m-%d')*.md" 2>/dev/null | wc -l)
+  local autosave_count
+  autosave_count=$(find "$vdir" -maxdepth 1 -type f -name "Voice_*_$(date '+%Y-%m-%d').md" 2>/dev/null | wc -l)
+  if (( today_count > 0 || autosave_count > 0 )); then
+    ui_ok "Today:  $((today_count + autosave_count)) file(s)"
+  else
+    ui_info "Today:  no session yet"
+  fi
+
+  # Index Node API check
+  echo ""
+  local api_url="${AOS_INDEX_URL:-http://127.0.0.1:8799}"
+  local health
+  health=$(curl -sf "$api_url/health" 2>/dev/null || echo "")
+  if [[ -n "$health" ]]; then
+    ui_ok "Index Node: $api_url (online)"
+    # Check memoirs PWA
+    local pwa_status
+    pwa_status=$(curl -sfI "$api_url/pwa/memoirs/" 2>/dev/null | head -1 || echo "")
+    if [[ "$pwa_status" == *"200"* ]]; then
+      ui_ok "Memoirs PWA: /pwa/memoirs/ (ok)"
+    else
+      ui_err "Memoirs PWA: /pwa/memoirs/ (not reachable)"
+    fi
+    # Check voice desktop
+    local voice_status
+    voice_status=$(curl -sfI "$api_url/voice/" 2>/dev/null | head -1 || echo "")
+    if [[ "$voice_status" == *"200"* ]]; then
+      ui_ok "Voice Desktop: /voice/ (ok)"
+    else
+      ui_err "Voice Desktop: /voice/ (not reachable)"
+    fi
+  else
+    ui_err "Index Node: $api_url (offline)"
+  fi
+
+  echo ""
+}
+
 voice_menu_pick() {
   local prompt="$1"
   shift || true
@@ -163,6 +235,7 @@ cmd_menu() {
       "recent (10)" \
       "list (20)" \
       "stats" \
+      "status" \
       "search..." \
       "show..." \
       "edit..." \
@@ -176,6 +249,7 @@ cmd_menu() {
       "recent (10)") cmd_recent 10 ;;
       "list (20)") cmd_list 20 ;;
       "stats") cmd_stats ;;
+      "status") cmd_status ;;
       "search...")
         local q
         q="$(ui_input "Search query" "")" || true
@@ -227,6 +301,7 @@ COMMANDS:
   search <query>              Search sessions by content
   stats                       Session statistics
   strike <id>                 Extract STRIKE from session
+  status                      Health check (vault, PWA, API)
   dir                         Show VOICE directory path
 
 EXAMPLES:
@@ -304,6 +379,9 @@ main() {
         exit 1
       fi
       cmd_strike "$@"
+      ;;
+    status)
+      cmd_status "$@"
       ;;
     dir)
       cmd_dir "$@"

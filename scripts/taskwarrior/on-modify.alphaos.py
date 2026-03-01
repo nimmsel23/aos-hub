@@ -221,6 +221,19 @@ def core4_ts_for_task(task: dict) -> str:
     return now_iso()
 
 
+def core4_date_key_for_task(task: dict) -> str:
+    """Derive Core4 date key (YYYY-MM-DD) from task context."""
+    try:
+        ts_raw = core4_ts_for_task(task)
+        ts_norm = ts_raw.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts_norm)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(TZ).date().isoformat()
+    except Exception:
+        return datetime.now(TZ).date().isoformat()
+
+
 def detect_domain(tags, project) -> str:
     project = (project or "").strip()
     project_lower = project.lower()
@@ -304,8 +317,18 @@ def send_bridge(payload: dict) -> None:
 
 
 def send_core4_log(payload: dict) -> None:
-    bridge_url = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
-    url = f"{bridge_url}/bridge/core4/log"
+    core4_url = os.environ.get("AOS_CORE4_LOG_URL", "").strip()
+    if not core4_url:
+        index_base = os.environ.get("AOS_INDEX_BASE_URL", "").strip()
+        if not index_base:
+            index_base = os.environ.get("AOS_INDEX_URL", "").strip()
+            if index_base.endswith("/api/centres"):
+                index_base = index_base[: -len("/api/centres")]
+        if index_base:
+            core4_url = f"{index_base.rstrip('/')}/api/core4/log"
+    if not core4_url:
+        bridge_url = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
+        core4_url = f"{bridge_url}/bridge/core4/log"
     # Hook-side Core4 logging is best-effort:
     # - never block `task` commands on network/bridge issues
     # - Bridge is idempotent (dedupe by `key = YYYY-MM-DD:domain:task`)
@@ -314,7 +337,7 @@ def send_core4_log(payload: dict) -> None:
     try:
         from urllib import request
 
-        req = request.Request(url, data=data, headers=headers)
+        req = request.Request(core4_url, data=data, headers=headers)
         with request.urlopen(req, timeout=5) as resp:
             resp.read()
     except Exception:
@@ -443,6 +466,7 @@ def main() -> int:
                 "task": habit,
                 "points": float(os.environ.get("AOS_CORE4_POINTS", "0.5")),
                 "ts": core4_ts_for_task(task),
+                "date": core4_date_key_for_task(task),
                 "source": "taskwarrior",
                 "user": {"id": task.get("uuid") or ""},
             }
@@ -474,6 +498,10 @@ def main() -> int:
         if status == "completed":
             payload = {"type": "task_done_sync", "timestamp": now_iso(), "data": data}
         else:
+            # Skip noisy/slow modify events when configured.
+            if _is_true(os.environ.get("AOS_HOOK_SKIP_MODIFY", "0")):
+                sys.stdout.write(json.dumps(task, ensure_ascii=False))
+                return 0
             payload = {"type": "task_modify_sync", "timestamp": now_iso(), "data": data}
 
     target = os.environ.get("AOS_HOOK_TARGET", "tele").lower().strip()

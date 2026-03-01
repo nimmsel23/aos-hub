@@ -98,11 +98,16 @@ ensure_env_file() {
 # AOS_HOOK_TELE_SILENT=1
 # AOS_HOOK_TELE_FORMAT=human
 # AOS_HOOK_TELE_INCLUDE_UUID=1
+# AOS_HOOK_SKIP_MODIFY=1
 # AOS_HOOK_CORE4_TELE_DONE=1
 # AOS_HOOK_TARGET=tele
 # AOS_BRIDGE_URL=http://127.0.0.1:8080
 # AOS_CORE4_LOG=1
+# AOS_CORE4_TICKTICK=1
 # AOS_CORE4_POINTS=0.5
+# AOS_CORE4_LOG_URL=http://127.0.0.1:8799/api/core4/log
+# AOS_INDEX_BASE_URL=http://127.0.0.1:8799
+# AOS_INDEX_URL=http://127.0.0.1:8799/api/centres
 #
 # Task export snapshot (on-exit)
 # AOS_TASK_EXPORT_FILTER=status:pending
@@ -181,7 +186,26 @@ _status_extra_hooks() {
   done
   shopt -u nullglob
 
-  return "$found"
+  if [[ "$found" == "1" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+list_extra_hooks() {
+  local phase_prefix canonical path base
+  shopt -s nullglob
+  for phase_prefix in on-add on-modify on-exit; do
+    canonical="${phase_prefix}.99-alphaos.py"
+    for path in "$HOOK_DIR"/"${phase_prefix}"*; do
+      [[ -e "$path" ]] || continue
+      [[ -x "$path" ]] || continue
+      base="$(basename "$path")"
+      [[ "$base" == "$canonical" ]] && continue
+      printf '%s\0' "$path"
+    done
+  done
+  shopt -u nullglob
 }
 
 cmd_status() {
@@ -193,9 +217,9 @@ cmd_status() {
   echo
   ui_info "Collision scan ($HOOK_DIR)"
   local extra=0
-  _status_extra_hooks "on-add" "on-add.99-alphaos.py" && extra=1 || true
-  _status_extra_hooks "on-modify" "on-modify.99-alphaos.py" && extra=1 || true
-  _status_extra_hooks "on-exit" "on-exit.99-alphaos.py" && extra=1 || true
+  if _status_extra_hooks "on-add" "on-add.99-alphaos.py"; then extra=1; fi
+  if _status_extra_hooks "on-modify" "on-modify.99-alphaos.py"; then extra=1; fi
+  if _status_extra_hooks "on-exit" "on-exit.99-alphaos.py"; then extra=1; fi
   if [[ "$extra" == "0" ]]; then
     ui_ok "no extra executable hooks detected"
   else
@@ -209,6 +233,8 @@ cmd_status() {
   ui_info "AOS_HOOK_TELE_FORMAT=$(read_env_value AOS_HOOK_TELE_FORMAT)"
   ui_info "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
   ui_info "AOS_HOOK_TELE_INCLUDE_UUID=$(read_env_value AOS_HOOK_TELE_INCLUDE_UUID)"
+  ui_info "AOS_HOOK_SKIP_MODIFY=$(read_env_value AOS_HOOK_SKIP_MODIFY)"
+  ui_info "AOS_TASK_EXPORT_MIN_INTERVAL_SEC=$(read_env_value AOS_TASK_EXPORT_MIN_INTERVAL_SEC)"
 }
 
 cmd_env() {
@@ -253,6 +279,26 @@ cmd_set_silent() {
     *) ui_err "Invalid value: $val (use on|off)"; exit 1 ;;
   esac
   ui_ok "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
+}
+
+cmd_disable_legacy() {
+  ui_title "Disable Legacy Hooks"
+  local disabled_dir="$HOOK_DIR/disabled"
+  mkdir -p "$disabled_dir"
+  local found=0
+  local path new
+  while IFS= read -r -d '' path; do
+    found=1
+    new="$disabled_dir/$(basename "$path")"
+    if [[ -e "$new" ]]; then
+      new="$disabled_dir/$(basename "$path").$(date +%s)"
+    fi
+    mv "$path" "$new"
+    ui_ok "disabled $(basename "$path") -> $(basename "$new")"
+  done < <(list_extra_hooks)
+  if [[ "$found" == "0" ]]; then
+    ui_ok "no extra hooks to disable"
+  fi
 }
 
 cmd_preview() {
@@ -349,6 +395,7 @@ Usage:
 Commands:
   install           Install hooks into ~/.task/hooks
   status            Show hook status + env flags
+  disable-legacy    Disable extra executable hooks (avoid duplicates)
   env               Edit hooks.env
   set-target [t]    Set AOS_HOOK_TARGET (tele|bridge)
   set-format [f]    Set AOS_HOOK_TELE_FORMAT (human|json)
@@ -360,6 +407,7 @@ Commands:
 
 Examples:
   hookctl install
+  hookctl disable-legacy
   hookctl set-format human
   hookctl set-silent on
   hookctl preview modify
@@ -372,6 +420,7 @@ menu() {
   action="$(ui_choose "Select" \
     "install hooks" \
     "status" \
+    "disable legacy" \
     "edit env" \
     "set target" \
     "set format" \
@@ -381,6 +430,7 @@ menu() {
   case "$action" in
     "install hooks") cmd_install ;;
     "status") cmd_status ;;
+    "disable legacy") cmd_disable_legacy ;;
     "edit env") cmd_env ;;
     "set target") cmd_set_target ;;
     "set format") cmd_set_format ;;
@@ -395,6 +445,7 @@ cmd="${1:-menu}"
 case "$cmd" in
   install) cmd_install ;;
   status) cmd_status ;;
+  disable-legacy) cmd_disable_legacy ;;
   env) cmd_env ;;
   set-target) cmd_set_target "${2:-}" ;;
   set-format) cmd_set_format "${2:-}" ;;

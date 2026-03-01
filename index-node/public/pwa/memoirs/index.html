@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0b14" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Memoirs</title>
+  <link rel="manifest" href="/pwa/memoirs/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/memoirs/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/memoirs/style.css" />
+</head>
+<body>
+
+  <header class="appbar">
+    <span class="app-title">MEMOIRS</span>
+    <span class="app-date"></span>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ── STOP ──────────────────────────────────────────────────────── -->
+    <div id="view-stop" class="view active">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 1</div>
+        <div class="phase-title">STOP</div>
+        <div class="phase-hint">Pattern Interrupt. Welche Geschichte muss heute stoppen?</div>
+      </div>
+      <textarea id="ta-stop" class="phase-textarea" placeholder="Was l&#228;uft gerade in deinem Kopf? Welches Muster zieht dich runter?"></textarea>
+      <div class="save-indicator">Saved</div>
+      <details class="chapter-toggle">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body" id="ch-stop"></div>
+      </details>
+    </div>
+
+    <!-- ── SUBMIT ────────────────────────────────────────────────────── -->
+    <div id="view-submit" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 2</div>
+        <div class="phase-title">SUBMIT</div>
+        <div class="phase-hint">Radikale Ehrlichkeit. Facts, Feelings, Focus, Fruit.</div>
+      </div>
+      <div class="submit-grid">
+        <div class="submit-field">
+          <label>Facts</label>
+          <textarea id="ta-submit_facts" class="phase-textarea" placeholder="Was ist objektiv wahr?"></textarea>
+        </div>
+        <div class="submit-field">
+          <label>Feelings</label>
+          <textarea id="ta-submit_feelings" class="phase-textarea" placeholder="Welche Emotionen kochen hoch?"></textarea>
+        </div>
+        <div class="submit-field">
+          <label>Focus</label>
+          <textarea id="ta-submit_focus" class="phase-textarea" placeholder="Wohin ging dein Fokus?"></textarea>
+        </div>
+        <div class="submit-field">
+          <label>Fruit</label>
+          <textarea id="ta-submit_fruit" class="phase-textarea" placeholder="Welche Fr&#252;chte erntest du?"></textarea>
+        </div>
+      </div>
+      <div class="save-indicator">Saved</div>
+      <details class="chapter-toggle">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body" id="ch-submit"></div>
+      </details>
+    </div>
+
+    <!-- ── STRUGGLE ──────────────────────────────────────────────────── -->
+    <div id="view-struggle" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 3</div>
+        <div class="phase-title">STRUGGLE</div>
+        <div class="phase-hint">Rewrite the Story. Welche Story rei&#223;t dich zur&#252;ck?</div>
+      </div>
+      <textarea id="ta-struggle" class="phase-textarea" placeholder="Alte Identit&#228;t vs. neue Identit&#228;t. Was muss sich &#228;ndern?"></textarea>
+      <div class="save-indicator">Saved</div>
+      <details class="chapter-toggle">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body" id="ch-struggle"></div>
+      </details>
+    </div>
+
+    <!-- ── STRIKE ────────────────────────────────────────────────────── -->
+    <div id="view-strike" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 4</div>
+        <div class="phase-title">STRIKE</div>
+        <div class="phase-hint">Execute above all. Welche Handlung schl&#228;gst du ein?</div>
+      </div>
+      <textarea id="ta-strike" class="phase-textarea" placeholder="Welche konkrete Aktion setzt du JETZT?"></textarea>
+      <div class="save-indicator">Saved</div>
+      <details class="chapter-toggle">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body" id="ch-strike"></div>
+      </details>
+    </div>
+
+    <!-- ── SESSION ───────────────────────────────────────────────────── -->
+    <div id="view-session" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Today</div>
+        <div class="phase-title">SESSION</div>
+        <div class="phase-hint">Deine heutige Voice Session im &#220;berblick.</div>
+      </div>
+
+      <div class="session-card" onclick="switchView('stop')">
+        <div class="session-card-head">
+          <span class="session-label">Stop</span>
+          <span class="session-status" id="ss-stop">leer</span>
+        </div>
+        <div class="session-preview" id="sp-stop"></div>
+      </div>
+
+      <div class="session-card" onclick="switchView('submit')">
+        <div class="session-card-head">
+          <span class="session-label">Submit</span>
+          <span class="session-status" id="ss-submit">leer</span>
+        </div>
+        <div class="session-preview" id="sp-submit"></div>
+      </div>
+
+      <div class="session-card" onclick="switchView('struggle')">
+        <div class="session-card-head">
+          <span class="session-label">Struggle</span>
+          <span class="session-status" id="ss-struggle">leer</span>
+        </div>
+        <div class="session-preview" id="sp-struggle"></div>
+      </div>
+
+      <div class="session-card" onclick="switchView('strike')">
+        <div class="session-card-head">
+          <span class="session-label">Strike</span>
+          <span class="session-status" id="ss-strike">leer</span>
+        </div>
+        <div class="session-preview" id="sp-strike"></div>
+      </div>
+
+      <div class="actions-row">
+        <button id="btn-preview" class="btn btn-ghost" type="button">Preview</button>
+        <button id="btn-export" class="btn btn-primary" type="button">Export</button>
+        <button id="btn-clear" class="btn btn-danger" type="button">Clear</button>
+      </div>
+    </div>
+
+    <!-- ── HISTORY ───────────────────────────────────────────────────── -->
+    <div id="view-history" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Vault</div>
+        <div class="phase-title">HISTORY</div>
+        <div class="phase-hint">Vergangene Voice Sessions.</div>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+  </main>
+
+  <!-- ── Bottom Nav ──────────────────────────────────────────────────── -->
+  <nav class="bottomnav">
+    <button class="bn-tab active" data-view="stop" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <rect x="6" y="4" width="4" height="16"/>
+        <rect x="14" y="4" width="4" height="16"/>
+      </svg>
+      <span>STOP</span>
+      <span class="dot"></span>
+    </button>
+    <button class="bn-tab" data-view="submit" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M12 22c5.5-3 9-7.5 9-12V5l-9-3-9 3v5c0 4.5 3.5 9 9 12z"/>
+      </svg>
+      <span>SUBMIT</span>
+      <span class="dot"></span>
+    </button>
+    <button class="bn-tab" data-view="struggle" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span>FIGHT</span>
+      <span class="dot"></span>
+    </button>
+    <button class="bn-tab" data-view="strike" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span>STRIKE</span>
+      <span class="dot"></span>
+    </button>
+    <button class="bn-tab" data-view="session" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <span>TODAY</span>
+    </button>
+    <button class="bn-tab" data-view="history" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <span>LOG</span>
+    </button>
+  </nav>
+
+  <!-- ── Modal ───────────────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-head">
+        <span id="modal-title" class="modal-title"></span>
+        <button id="modal-close" class="modal-close" type="button">&times;</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Toast ───────────────────────────────────────────────────────── -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/pwa/memoirs/app.js"></script>
+  <script>
+    // Render chapter content
+    ["stop","submit","struggle","strike"].forEach(function(p) {
+      var el = document.getElementById("ch-" + p);
+      if (el && CHAPTERS[p]) {
+        el.innerHTML = CHAPTERS[p]
+          .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+          .replace(/^- \*\*(.+?)\*\*(.*)$/gm, '<li><strong>$1</strong>$2</li>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/^(?!<[hlu])/gm, function(m, o, s) {
+            return s.charAt(o-1) === '>' ? m : '<p>' + m;
+          });
+      }
+    });
+
+    // Session view: update previews when switching to it
+    var origSwitch = switchView;
+    switchView = function(viewId) {
+      origSwitch(viewId);
+      if (viewId === "session") {
+        ["stop","submit","struggle","strike"].forEach(function(p) {
+          var fields = FIELDS[p];
+          var preview = "";
+          fields.forEach(function(f) { preview += getFieldValue(f) + " "; });
+          preview = preview.trim();
+          var sp = document.getElementById("sp-" + p);
+          var ss = document.getElementById("ss-" + p);
+          if (sp) sp.textContent = preview.substring(0, 120) || "";
+          if (ss) {
+            ss.textContent = preview ? "geschrieben" : "leer";
+            ss.classList.toggle("filled", !!preview);
+          }
+        });
+      }
+    };
+  </script>
+</body>
+</html>

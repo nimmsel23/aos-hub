@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#0d0b14"/>
+  <g transform="translate(256,256)">
+    <circle r="140" fill="none" stroke="#8b5cf6" stroke-width="6" opacity=".3"/>
+    <circle r="96" fill="none" stroke="#8b5cf6" stroke-width="5" opacity=".5"/>
+    <circle r="50" fill="#8b5cf6" opacity=".8"/>
+    <text y="18" text-anchor="middle" fill="#fff" font-family="system-ui" font-size="52" font-weight="900">V</text>
+  </g>
+</svg>

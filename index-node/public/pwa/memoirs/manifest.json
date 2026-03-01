@@ -1,0 +1,24 @@
+{
+  "name": "AlphaOS Memoirs",
+  "short_name": "Memoirs",
+  "description": "Daily journaling - Stop Submit Struggle Strike",
+  "start_url": "/pwa/memoirs/",
+  "scope": "/pwa/memoirs/",
+  "display": "standalone",
+  "theme_color": "#0d0b14",
+  "background_color": "#0d0b14",
+  "icons": [
+    {
+      "src": "/pwa/memoirs/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/memoirs/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

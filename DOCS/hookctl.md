@@ -23,6 +23,7 @@ Taskwarrior hook manager for αOS.
 ```
 hookctl install
 hookctl status
+hookctl disable-legacy
 hookctl env
 hookctl set-target tele|bridge
 hookctl set-format human|json
@@ -47,6 +48,10 @@ hookctl help
 - `AOS_HOOK_TELE_BIN=tele`
 - `AOS_HOOK_TELE_FORMAT=human|json`
 - `AOS_HOOK_TELE_SILENT=1`
+- `AOS_HOOK_SKIP_MODIFY=1` (skip non-Core4 modify events)
+- `AOS_CORE4_LOG_URL=http://127.0.0.1:8799/api/core4/log` (send Core4 logs to index-node)
+- `AOS_INDEX_BASE_URL=http://127.0.0.1:8799` (used when CORE4_LOG_URL unset)
+- `AOS_INDEX_URL=http://127.0.0.1:8799/api/centres` (fallback; /api/centres trimmed)
 - `AOS_BRIDGE_URL=http://127.0.0.1:8080`
 - `AOS_TASK_EXPORT_*` (export snapshot settings for on-exit)
 
@@ -55,4 +60,5 @@ hookctl help
 ```
 hookctl status
 hookctl preview modify
+hookctl disable-legacy
 ```

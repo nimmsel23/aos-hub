@@ -365,6 +365,10 @@ app.get("/api/pin/status", (_req, res) => {
 
 app.use("/api", pinBarrier);
 
+// Memoirs → PWA redirect (must be before static middleware)
+app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
+app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
+
 // PWAs: AOS_PWA_DIR takes priority (prod: /opt/aos/pwa), fallback to ./public/pwa (dev)
 const PWA_DIR = process.env.AOS_PWA_DIR || path.join("public", "pwa");
 app.use("/pwa", express.static(PWA_DIR, { extensions: ["html"] }));
@@ -4611,10 +4615,10 @@ app.get("/fire",   (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/fire/",  (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/focus",  (_req, res) => res.redirect(301, "/pwa/focus/"));
 app.get("/focus/", (_req, res) => res.redirect(301, "/pwa/focus/"));
+app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
+app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
-app.get("/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
-app.get("/voice", (_req, res) => res.redirect(302, "/memoirs/"));
-app.get("/game/memoirs", (_req, res) => res.redirect(302, "/memoirs/"));
+app.get("/game/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/game/frame", (_req, res) => res.redirect(302, "/game/frame.html"));
 app.get("/game/freedom", (_req, res) => res.redirect(302, "/game/freedom.html"));
 app.get("/game/focus", (_req, res) => res.redirect(302, "/game/focus.html"));
