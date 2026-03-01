@@ -5437,6 +5437,14 @@ app.get("/api/door/warstack/:id", (req, res) => {
   }
 });
 
+function filterFireTasksByDomain(tasks, domainRaw) {
+  const domain = String(domainRaw || "").trim().toLowerCase();
+  if (!domain) return tasks;
+  const allowed = new Set(["body", "being", "balance", "business"]);
+  if (!allowed.has(domain)) return null;
+  return tasks.filter((task) => String(task.domain || "").toLowerCase() === domain);
+}
+
 // Fire Week (TickTick primary, GCal fallback, Taskwarrior offline fallback)
 app.get("/api/fire/week", async (req, res) => {
   const { start, end, week, rangeLabel } = getWeekRangeLocal();
@@ -5500,12 +5508,17 @@ app.get("/api/fire/week", async (req, res) => {
     }
   }
 
+  const filtered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (filtered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
   return res.json({
     ok: tasks.length > 0 || !error,
     source,
     week,
     rangeLabel,
-    tasks,
+    tasks: filtered,
     error,
     gcal_url: FIRE_GCAL_EMBED_URL || "",
   });
@@ -5574,11 +5587,169 @@ app.get("/api/fire/day", async (req, res) => {
     }
   }
 
+  const filtered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (filtered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
   return res.json({
     ok: tasks.length > 0 || !error,
     source,
     date: label,
-    tasks,
+    tasks: filtered,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
+});
+
+// Fire Week Tasks (explicit for Game/Fire UI)
+app.get("/api/fire/tasks-week", async (req, res) => {
+  const { start, end, week, rangeLabel } = getWeekRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "ticktick";
+
+  try {
+    const raw = await ticktickListProjectTasks();
+    const filtered = raw
+      .filter((task) => !task.isCompleted && !task.completedTime)
+      .filter((task) => taskInRange(task, start, end))
+      .map((task) => {
+        const due = parseTickTickDue(task);
+        return {
+          id: task.id,
+          title: task.title || "(no title)",
+          tags: task.tags || [],
+          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          domain: detectDomainFromTags(task.tags),
+          overdue: due ? due < start : false
+        };
+      });
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+  } catch (tickErr) {
+    source = "taskwarrior";
+    error = tickErr?.message || String(tickErr);
+    try {
+      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+      if (!ok) throw new Error(taskError || "task-export-failed");
+
+      const filtered = twTasks
+        .filter((task) => {
+          const st = String(task.status || "").toLowerCase();
+          return st === "pending" || st === "waiting";
+        })
+        .filter((task) => {
+          if (fireTaskInRange(task, start, end, true)) return true;
+          if (!FIRE_INCLUDE_UNDATED) return false;
+          if (fireTaskPrimaryDate(task)) return false;
+          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+        })
+        .map((task) => normalizeFireTask(task, start));
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (twErr) {
+      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    }
+  }
+
+  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (domainFiltered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
+  return res.json({
+    ok: tasks.length > 0 || !error,
+    source,
+    week,
+    rangeLabel,
+    tasks: domainFiltered,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
+});
+
+// Fire Day Tasks (explicit for Game/Fire UI)
+app.get("/api/fire/tasks-day", async (req, res) => {
+  const { start, end, label } = getDayRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "ticktick";
+
+  try {
+    const raw = await ticktickListProjectTasks();
+    const filtered = raw
+      .filter((task) => !task.isCompleted && !task.completedTime)
+      .filter((task) => taskInRange(task, start, end))
+      .map((task) => {
+        const due = parseTickTickDue(task);
+        return {
+          id: task.id,
+          title: task.title || "(no title)",
+          tags: task.tags || [],
+          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+          domain: detectDomainFromTags(task.tags),
+          overdue: due ? due < start : false
+        };
+      });
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+  } catch (tickErr) {
+    source = "taskwarrior";
+    error = tickErr?.message || String(tickErr);
+    try {
+      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+      if (!ok) throw new Error(taskError || "task-export-failed");
+
+      const filtered = twTasks
+        .filter((task) => {
+          const st = String(task.status || "").toLowerCase();
+          return st === "pending" || st === "waiting";
+        })
+        .filter((task) => {
+          if (fireTaskInRange(task, start, end, true)) return true;
+          if (!FIRE_INCLUDE_UNDATED) return false;
+          if (fireTaskPrimaryDate(task)) return false;
+          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+        })
+        .map((task) => normalizeFireTask(task, start));
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (twErr) {
+      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    }
+  }
+
+  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (domainFiltered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
+  return res.json({
+    ok: tasks.length > 0 || !error,
+    source,
+    date: label,
+    tasks: domainFiltered,
     error,
     gcal_url: FIRE_GCAL_EMBED_URL || "",
   });

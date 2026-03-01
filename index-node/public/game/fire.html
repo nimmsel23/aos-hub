@@ -683,7 +683,7 @@
 
   async function loadDaily() {
     try {
-      const res = await fetch('/api/fire/day');
+      const res = await fetch('/api/fire/tasks-day');
       const data = await res.json();
 
       document.getElementById('daily-date').textContent = data.date || 'Today';
@@ -707,7 +707,7 @@
     try {
       const date = getTargetDate();
       const [tasksRes, rangeRes] = await Promise.all([
-        fetch('/api/fire/week'),
+        fetch('/api/fire/tasks-week'),
         fetch(`/api/fire/week-range?date=${date.toISOString()}`)
       ]);
 
