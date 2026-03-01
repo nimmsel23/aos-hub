@@ -16,7 +16,7 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 - `public/core4.html` is the Core4 TTY bridge page (legacy terminal view).
 - `public/pwa/core4/` is the **mobile-first Core4 PWA** — served at `/pwa/core4/`.
 - `/core4` is legacy and redirects to `/pwa/core4/`.
-- The mobile hover launcher button ("MOBILE") lives in `public/index.html` under `.pwa-launcher` and links directly to the PWA/runtime entrypoints (e.g., Fitness → `http://127.0.0.1:8780`).
+- The mobile hover launcher button ("MOBILE") lives in `public/index.html` under `.pwa-launcher` and links directly to the tailnet PWA/runtime entrypoints (e.g., Core4 → `https://ideapad.tail7a15d6.ts.net/pwa/core4/`, Fitness → `https://ideapad.tail7a15d6.ts.net/fitnessctx`).
 - Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
 - Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
