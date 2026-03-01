@@ -56,8 +56,8 @@ Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 ## Quick Debug Commands
 - Firemap dry output: `python game/fire/firemap_bot.py print --scope daily`
 - Firemap counts: `python game/fire/firemap_bot.py test --debug --scope daily`
-- Fire timers: `systemctl --user status alphaos-fire-daily.timer alphaos-fire-weekly.timer`
-- Fire logs: `journalctl --user -u alphaos-fire-daily.service -u alphaos-fire-weekly.service -n 200 --no-pager`
+- Fire timers: `systemctl --user status aos-fire-daily.timer aos-fire-weekly.timer`
+- Fire logs: `journalctl --user -u aos-fire-daily.service -u aos-fire-weekly.service -n 200 --no-pager`
 - GCal bootstrap: `game/fire/firectl gcal bootstrap`
 - GCal doctor: `game/fire/firectl gcal doctor`
 - GCal preview: `game/fire/firectl gcal due --backend print`

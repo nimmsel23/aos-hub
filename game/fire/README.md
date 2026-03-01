@@ -39,8 +39,8 @@ scripts/taskwarrior/export-snapshot.sh
 ## Systemd Units (User)
 
 Common units (host user):
-- `alphaos-fire-daily.timer` → `alphaos-fire-daily.service` → `game/fire/firectl send daily`
-- `alphaos-fire-weekly.timer` → `alphaos-fire-weekly.service` → `game/fire/firectl send weekly`
+- `aos-fire-daily.timer` → `aos-fire-daily.service` → `game/fire/firectl send daily`
+- `aos-fire-weekly.timer` → `aos-fire-weekly.service` → `game/fire/firectl send weekly`
 
 Router `/fire` and `/fireweek` prefers `systemctl --user start` on these units (same logs/env).
 

@@ -332,7 +332,7 @@ fire_action() {
   local cmd="${1:-}"
   shift || true
 
-  local timer="${AOS_FIREMAP_TIMER_UNIT:-alphaos-fire-weekly.timer}"
+  local timer="${AOS_FIREMAP_TIMER_UNIT:-aos-fire-weekly.timer}"
   local service="${timer%.timer}.service"
 
   case "$cmd" in
