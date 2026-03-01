@@ -369,9 +369,11 @@ app.use("/api", pinBarrier);
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 
-// PWAs: AOS_PWA_DIR takes priority (prod: /opt/aos/pwa), fallback to ./public/pwa (dev)
-const PWA_DIR = process.env.AOS_PWA_DIR || path.join("public", "pwa");
-app.use("/pwa", express.static(PWA_DIR, { extensions: ["html"] }));
+// PWAs: dev (public/pwa) first, then AOS_PWA_DIR fallback (prod deploy cache)
+app.use("/pwa", express.static(path.join("public", "pwa"), { extensions: ["html"] }));
+if (process.env.AOS_PWA_DIR) {
+  app.use("/pwa", express.static(process.env.AOS_PWA_DIR, { extensions: ["html"] }));
+}
 
 app.use(
   express.static("public", {
