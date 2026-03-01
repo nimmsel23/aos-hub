@@ -170,6 +170,7 @@ All `*ctl` entrypoints currently under `aos-hub/`:
 ## Ops Notes
 - Sessionübergreifende Ops-Feststellungen stehen in `FINDINGS.md`.
 - Übergabe-/Betriebsstatus für die nächste Session steht in `HANDOFF.md`.
+- TODO: PWA→GAS fallback route (`/api/pwa/gas-fallback`) needs proper hardening/expansion (offline/redirect behavior, config validation, error telemetry).
 
 ## Codex Sessions & Branch Hygiene
 - Prefer one git branch per Codex session (so `resume` shows the correct branch context).
