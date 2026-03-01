@@ -13,9 +13,10 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
   - `public/door/` is the local Door Centre (`/door`).
   - `public/facts.html` is the local Fruits UI (`/facts`).
   - `public/voice/` contains Voice Centre pages.
-  - `public/core4.html` is the Core4 TTY bridge page (legacy terminal view).
-  - `public/pwa/core4/` is the **mobile-first Core4 PWA** — served at `/pwa/core4/`.
-  - `/core4` is legacy and redirects to `/pwa/core4/`.
+- `public/core4.html` is the Core4 TTY bridge page (legacy terminal view).
+- `public/pwa/core4/` is the **mobile-first Core4 PWA** — served at `/pwa/core4/`.
+- `/core4` is legacy and redirects to `/pwa/core4/`.
+- The mobile hover launcher button ("MOBILE") lives in `public/index.html` under `.pwa-launcher` and links directly to the PWA/runtime entrypoints (e.g., Fitness → `http://127.0.0.1:8780`).
 - Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
 - Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
