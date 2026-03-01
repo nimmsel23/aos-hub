@@ -1,4 +1,4 @@
-const CACHE = "core4-v4";
+const CACHE = "core4-v5";
 const STATIC = [
   "/pwa/core4/",
   "/pwa/core4/index.html",
@@ -6,8 +6,8 @@ const STATIC = [
   "/pwa/core4/app.js",
   "/pwa/gas-fallback.js",
   "/pwa/core4/manifest.json",
-  "/pwa/core4/icon-192.svg",
-  "/pwa/core4/icon-512.svg",
+  "/pwa/core4/icon-192-v2.svg",
+  "/pwa/core4/icon-512-v2.svg",
 ];
 
 self.addEventListener("install", (e) => {

@@ -13,28 +13,28 @@ const DOMAINS = [
 const MAPS = {
   frame: {
     label: "FRAME",
-    subtitle: "Where am I now?",
+    subtitle: "Frame Map · The Pit of Reality",
     accent: "#7ec8a0",
     accentDim: "rgba(126,200,160,.12)",
     route: "/pwa/frame/",
   },
   freedom: {
     label: "FREEDOM",
-    subtitle: "10-Year IPW Vision",
+    subtitle: "Freedom Map · Ideal Parallel World",
     accent: "#e8a838",
     accentDim: "rgba(232,168,56,.12)",
     route: "/pwa/freedom/",
   },
   focus: {
     label: "FOCUS",
-    subtitle: "Monthly Mission",
+    subtitle: "Focus Map · Monthly Mission",
     accent: "#6a9cf5",
     accentDim: "rgba(106,156,245,.12)",
     route: "/pwa/focus/",
   },
   fire: {
     label: "FIRE",
-    subtitle: "Weekly War (4×4)",
+    subtitle: "Fire Map · Weekly War (4×4)",
     accent: "#e8734a",
     accentDim: "rgba(232,115,74,.12)",
     route: "/pwa/fire/",
@@ -81,7 +81,7 @@ function renderCards(mapKey) {
         <div class="dc-icon">${d.icon}</div>
       </div>
       <div class="dc-preview">
-        Tap to view ${d.label} ${map.label} Map
+        Enter the ${d.label} ${map.label} Map
       </div>
       <div class="dc-meta">
         <div class="dc-meta-item">
@@ -89,7 +89,7 @@ function renderCards(mapKey) {
             <polyline points="9 11 12 14 22 4"/>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
           </svg>
-          <span>VIEW MAP</span>
+          <span>ENTER MAP</span>
         </div>
       </div>
     `;

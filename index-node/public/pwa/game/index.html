@@ -9,19 +9,25 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>αOS · THE GAME</title>
   <link rel="manifest" href="/pwa/game/manifest.json" />
-  <link rel="apple-touch-icon" href="/pwa/game/icon-192.svg" />
+  <link rel="apple-touch-icon" href="/pwa/game/icon-192-v2.svg" />
   <link rel="stylesheet" href="/pwa/game/style.css" />
 </head>
 <body>
 
   <!-- App header -->
   <header class="appbar">
-    <span class="app-title">THE GAME</span>
-    <span class="app-subtitle" id="appSubtitle">—</span>
+    <div class="appbar-left">
+      <div class="app-kicker">αOS · THE GAME</div>
+      <div class="app-title">The Game</div>
+    </div>
+    <div class="appbar-right">
+      <div class="app-subtitle" id="appSubtitle">—</div>
+      <div class="app-hint">Fact Maps Cascade</div>
+    </div>
   </header>
 
   <!-- Top Nav: Map Cascade -->
-  <nav class="topnav">
+  <nav class="topnav" aria-label="Map Cascade">
     <button class="tn-tab active" data-map="frame">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -31,6 +37,7 @@
         <circle cx="17" cy="17" r="1.5"/>
       </svg>
       <span>FRAME</span>
+      <span class="tn-sub">Facts</span>
     </button>
     <button class="tn-tab" data-map="freedom">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -39,6 +46,7 @@
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
       </svg>
       <span>FREE</span>
+      <span class="tn-sub">Vision</span>
     </button>
     <button class="tn-tab" data-map="focus">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -50,6 +58,7 @@
         <line x1="19" y1="12" x2="22" y2="12"/>
       </svg>
       <span>FOCUS</span>
+      <span class="tn-sub">Mission</span>
     </button>
     <button class="tn-tab" data-map="fire">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -57,12 +66,25 @@
         <path d="M12 12c0 0-3 3-3 5a3 3 0 0 0 6 0c0-2-3-5-3-5z"/>
       </svg>
       <span>FIRE</span>
+      <span class="tn-sub">Execution</span>
     </button>
   </nav>
 
   <main class="wrap">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="hero-label">FACT MAPS</div>
+        <h1 class="hero-title">Enter The Game.</h1>
+        <p class="hero-sub">Frame → Freedom → Focus → Fire. Pick a map, then a domain. Win the week.</p>
+      </div>
+      <div class="hero-badge">
+        <div class="badge-title">Cascade</div>
+        <div class="badge-body">Now → Horizon → Mission → War</div>
+      </div>
+    </section>
+
     <!-- Domain cards container -->
-    <section id="cards" class="cards">
+    <section id="cards" class="cards" aria-live="polite">
       <div class="loading">Loading...</div>
     </section>
   </main>
