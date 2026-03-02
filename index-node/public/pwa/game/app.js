@@ -13,7 +13,7 @@ const DOMAINS = [
 const MAPS = {
   frame: {
     label: "FRAME",
-    subtitle: "Frame Map · The Pit of Reality",
+    subtitle: "Frame Map · Start Here",
     accent: "#7ec8a0",
     accentDim: "rgba(126,200,160,.12)",
     route: "/pwa/frame/",
@@ -34,7 +34,7 @@ const MAPS = {
   },
   fire: {
     label: "FIRE",
-    subtitle: "Fire Map · Weekly War (4×4)",
+    subtitle: "Fire Map · Daily Execution",
     accent: "#e8734a",
     accentDim: "rgba(232,115,74,.12)",
     route: "/pwa/fire/",
@@ -81,7 +81,7 @@ function renderCards(mapKey) {
         <div class="dc-icon">${d.icon}</div>
       </div>
       <div class="dc-preview">
-        Enter the ${d.label} ${map.label} Map
+        ${map.label} → ${d.label} Domain
       </div>
       <div class="dc-meta">
         <div class="dc-meta-item">
@@ -89,7 +89,7 @@ function renderCards(mapKey) {
             <polyline points="9 11 12 14 22 4"/>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
           </svg>
-          <span>ENTER MAP</span>
+          <span>ENTER ${map.label}</span>
         </div>
       </div>
     `;

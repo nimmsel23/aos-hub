@@ -389,6 +389,196 @@ body {
 .domain-card.balance .card-bar-fill { background: rgba(184,93,184,.7); }
 .domain-card.business .card-bar-fill { background: rgba(216,157,91,.7); }
 
+/* ── Heatmap ── */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  margin-bottom: 18px;
+}
+
+.heat-day {
+  text-align: center;
+}
+
+.heat-day .hd-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.heat-day .hd-label.today {
+  color: var(--ok);
+}
+
+.heat-day .hd-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.heat-day .hd-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .4s ease;
+}
+
+.heat-day .hd-fill.q0 { width: 0%; }
+.heat-day .hd-fill.q1 { width: 25%;  background: #f87171; }
+.heat-day .hd-fill.q2 { width: 50%;  background: #fb923c; }
+.heat-day .hd-fill.q3 { width: 75%;  background: #a3e635; }
+.heat-day .hd-fill.q4 { width: 100%; background: #4ade80; }
+
+.heat-day .hd-pts {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* ── Journal ── */
+.journal-section {
+  background: var(--card);
+  border-radius: var(--r);
+  padding: 14px;
+}
+
+.journal-controls {
+  margin-bottom: 10px;
+}
+
+.journal-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7380'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.journal-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.journal-input::placeholder {
+  color: #3a3f48;
+}
+
+.journal-input:focus {
+  outline: none;
+  border-color: var(--ok);
+}
+
+.journal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.journal-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color .2s;
+}
+
+.journal-status.error {
+  color: #f87171;
+}
+
+.journal-save {
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--ok);
+  color: #080808;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.journal-save:active { opacity: .7; }
+.journal-save:disabled { opacity: .4; cursor: default; }
+
+.journal-list {
+  margin-top: 14px;
+}
+
+.journal-entry {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.journal-entry:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.je-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.je-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: var(--ok);
+}
+
+.je-label.body    { color: var(--body); }
+.je-label.being   { color: var(--being); }
+.je-label.balance { color: var(--balance); }
+.je-label.business{ color: var(--business); }
+
+.je-time {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.je-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  opacity: .85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.journal-empty {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 12px 0;
+}
+
 /* ── Toast ── */
 .toast {
   position: fixed;

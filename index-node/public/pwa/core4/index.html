@@ -51,6 +51,13 @@
       </div>
     </section>
 
+    <!-- Heatmap -->
+    <div class="section-label">
+      <span>THIS WEEK</span>
+      <span class="sl-hint">daily score per day</span>
+    </div>
+    <section class="heatmap" id="heatmap"></section>
+
     <!-- Section label -->
     <div class="section-label">
       <span>HABITS</span>
@@ -59,6 +66,31 @@
 
     <!-- Cards -->
     <section id="cards" class="cards"></section>
+
+    <!-- Journal -->
+    <div class="section-label" style="margin-top:20px">
+      <span>JOURNAL</span>
+    </div>
+    <section class="journal-section">
+      <div class="journal-controls">
+        <select id="journalHabit" class="journal-select">
+          <option value="body:fitness">Fitness</option>
+          <option value="body:fuel">Fuel</option>
+          <option value="being:meditation">Meditation</option>
+          <option value="being:memoirs">Memoirs</option>
+          <option value="balance:person1">Partner</option>
+          <option value="balance:person2">Posterity</option>
+          <option value="business:discover">Discover</option>
+          <option value="business:declare">Declare</option>
+        </select>
+      </div>
+      <textarea id="journalInput" class="journal-input" placeholder="Write your journal entry..." rows="3"></textarea>
+      <div class="journal-actions">
+        <span class="journal-status" id="journalStatus"></span>
+        <button id="journalSave" class="journal-save">SAVE</button>
+      </div>
+      <div class="journal-list" id="journalList"></div>
+    </section>
 
     <div class="toast" id="toast"></div>
   </main>

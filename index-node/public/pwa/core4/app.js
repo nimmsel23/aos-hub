@@ -19,8 +19,9 @@ const DOMAINS = [
     tasks: [{ key: "discover", label: "DISCOVER .5" }, { key: "declare", label: "DECLARE .5" }] },
 ];
 
-const CIRCUMFERENCE      = 2 * Math.PI * 50;   // main ring r=50 → 314.16
-const MINI_CIRC          = 2 * Math.PI * 12;   // mini ring r=12 → 75.4
+const DAY_NAMES = ["MO","DI","MI","DO","FR","SA","SO"];
+const CIRCUMFERENCE = 2 * Math.PI * 50;   // main ring r=50 → 314.16
+const MINI_CIRC     = 2 * Math.PI * 12;   // mini ring r=12 → 75.4
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,10 +31,36 @@ let state = {
   weekly: 0,
   date: "",
   week: "",
-  weekHabits: {},   // "body:fitness" → count (0-7)
+  weekHabits: {},       // "body:fitness" → points
+  weekByDay: {},        // "YYYY-MM-DD" → total points
+  weekDates: [],        // 7 date keys for current week
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function weekDatesFor(dateStr) {
+  const ref = new Date(dateStr + "T12:00:00");
+  const day = ref.getDay();
+  const diff = ref.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(ref);
+  start.setDate(diff);
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+  }
+  return out;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 async function fetchJsonOrThrow(url, init) {
   const netFetch = window.aosGasFallback?.fetch
     ? window.aosGasFallback.fetch
@@ -45,10 +72,7 @@ async function fetchJsonOrThrow(url, init) {
   try {
     data = raw ? JSON.parse(raw) : {};
   } catch (_err) {
-    const preview = String(raw || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 120);
+    const preview = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 120);
     throw new Error(`${url} returned non-JSON (HTTP ${res.status})${preview ? `: ${preview}` : ""}`);
   }
 
@@ -102,6 +126,24 @@ function showToast(msg) {
   el.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 2000);
+}
+
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+function renderHeatmap() {
+  const el = $("heatmap");
+  if (!el) return;
+  const today = todayKey();
+
+  el.innerHTML = state.weekDates.map((dateKey, idx) => {
+    const pts = Number(state.weekByDay[dateKey] || 0);
+    const level = pts === 0 ? 0 : pts <= 1 ? 1 : pts <= 2 ? 2 : pts <= 3 ? 3 : 4;
+    const isToday = dateKey === today;
+    return `<div class="heat-day">
+      <div class="hd-label${isToday ? " today" : ""}">${DAY_NAMES[idx]}</div>
+      <div class="hd-bar"><div class="hd-fill q${level}"></div></div>
+      <div class="hd-pts">${pts > 0 ? pts.toFixed(1) : ""}</div>
+    </div>`;
+  }).join("");
 }
 
 // ── Mini ring HTML ────────────────────────────────────────────────────────────
@@ -172,7 +214,9 @@ function render() {
   updateRing(state.daily);
   $("weeklyScore").textContent = state.weekly % 1 === 0 ? state.weekly : state.weekly.toFixed(1);
   const wl = $("weekLabel");
-  if (wl) wl.textContent = state.week || "—";
+  if (wl) wl.textContent = state.week || "\u2014";
+
+  renderHeatmap();
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
@@ -195,23 +239,101 @@ async function handleLog(e) {
       if (data.week?.totals) {
         state.weekly     = Number(data.week.totals.week_total || 0);
         state.weekHabits = data.week.totals.by_habit || {};
+        state.weekByDay  = data.week.totals.by_day || {};
       }
-      showToast(data.duplicate ? "Already logged" : `${domain} · ${task} ✓`);
+      showToast(data.duplicate ? "Already logged" : `${domain} \u00b7 ${task} \u2713`);
     }
   } catch (err) {
     const msg = String(err?.message || err || "check server");
-    showToast(`Error – ${msg.slice(0, 64)}`);
+    showToast(`Error \u2013 ${msg.slice(0, 64)}`);
   }
 
   render();
 }
 
+// ── Journal ───────────────────────────────────────────────────────────────────
+function setJournalStatus(msg, isError) {
+  const el = $("journalStatus");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle("error", !!isError);
+  if (msg) setTimeout(() => { el.textContent = ""; }, 3000);
+}
+
+async function loadJournal(dateKey) {
+  const list = $("journalList");
+  if (!list) return;
+  try {
+    const data = await fetchJsonOrThrow(`/api/core4/journal?date=${encodeURIComponent(dateKey)}`);
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0) {
+      list.innerHTML = `<div class="journal-empty">No journal entries for today.</div>`;
+      return;
+    }
+    list.innerHTML = entries.map(entry => {
+      const text = String(entry.text || "");
+      // Parse individual entries from the markdown file (split on ## HH:MM headers)
+      const parts = text.split(/^## /m).filter(Boolean);
+      return parts.map(part => {
+        const lines = part.split("\n");
+        const time = (lines[0] || "").replace(/---\s*$/, "").trim();
+        const body = lines.slice(1).join("\n").replace(/\n---\n?$/g, "").trim();
+        if (!body) return "";
+        return `<div class="journal-entry">
+          <div class="je-head">
+            <span class="je-label ${escHtml(entry.domain)}">${escHtml(entry.label)}</span>
+            <span class="je-time">${escHtml(time)}</span>
+          </div>
+          <div class="je-text">${escHtml(body)}</div>
+        </div>`;
+      }).join("");
+    }).join("");
+  } catch {
+    list.innerHTML = `<div class="journal-empty">Could not load journal.</div>`;
+  }
+}
+
+async function saveJournal() {
+  const input = $("journalInput");
+  const text = String(input?.value || "").trim();
+  if (!text) { setJournalStatus("Write something first", true); return; }
+
+  const sel = String($("journalHabit")?.value || "").split(":");
+  const domain = sel[0];
+  const habit = sel[1];
+  if (!domain || !habit) { setJournalStatus("Select a habit", true); return; }
+
+  const btn = $("journalSave");
+  if (btn) btn.disabled = true;
+
+  try {
+    const data = await fetchJsonOrThrow("/api/core4/journal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, habit, text, date: state.date || todayKey() }),
+    });
+    if (data.ok) {
+      input.value = "";
+      setJournalStatus("Saved");
+      await loadJournal(state.date || todayKey());
+    } else {
+      setJournalStatus(data.error || "Save failed", true);
+    }
+  } catch (err) {
+    setJournalStatus(String(err?.message || "Save failed").slice(0, 60), true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function initJournal() {
+  const btn = $("journalSave");
+  if (btn) btn.addEventListener("click", saveJournal);
+}
+
 // ── Load ──────────────────────────────────────────────────────────────────────
 async function load() {
-  const today = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })();
+  const today = todayKey();
 
   const dayPromise = (async () => {
     try {
@@ -262,14 +384,18 @@ async function load() {
     state.weekly     = Number(weekRes.totals?.week_total || 0);
     state.week       = weekRes.week || state.week;
     state.weekHabits = weekRes.totals?.by_habit || {};
+    state.weekByDay  = weekRes.totals?.by_day || {};
   }
+
+  // Compute week dates for heatmap
+  state.weekDates = weekDatesFor(state.date || today);
 
   if (!dayRes && !weekRes && errors.length) {
     throw new Error(errors.join(" | "));
   }
 
-  // Format date: "25. Feb 2026"
-  const dateObj = new Date(state.date + "T12:00:00");
+  // Format date: "1. Mär 2026"
+  const dateObj = new Date((state.date || today) + "T12:00:00");
   const months = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
   const day = dateObj.getDate();
   const month = months[dateObj.getMonth()];
@@ -277,9 +403,11 @@ async function load() {
   $("dateLabel").textContent = `${day}. ${month} ${year}`;
 
   const wl = $("weekLabel");
-  if (wl) wl.textContent = state.week || "—";
+  if (wl) wl.textContent = state.week || "\u2014";
 
   render();
+  initJournal();
+  loadJournal(state.date || today);
 }
 
 load().catch(err => {
