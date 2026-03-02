@@ -1,1136 +1,702 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="matrix">
+<html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>αOS Memoirs Centre</title>
-  <link rel="stylesheet" href="/themes.css">
-  <link rel="stylesheet" href="/themes-voice-legacy.css">
-  <script src="/vendor/marked/marked.min.js"></script>
-  <script src="/matrix.js" defer></script>
+  <title>The Voice - Desktop</title>
   <style>
-    :root{
-      --bg: #0b0c10;
-      --card: #11131a;
-      --border: rgba(255,255,255,.10);
-      --text: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.62);
+    :root {
+      --bg: #0d0b14;
+      --card: #16132a;
+      --text: #e8e4f0;
+      --muted: #7b7490;
+      --line: #231f3a;
       --accent: #8b5cf6;
-      --accent-2: #22d3ee;
-      --nav: rgba(0,0,0,.75);
-      --glow: rgba(139,92,246,.24);
-      --grain: none;
-      --accent-light: var(--accent-2);
-      --gold: var(--accent-2);
-      --phaseFocusDim: 0.18;
-      --phaseFocusBlur: 1.5px;
-      --phaseFocusLift: 1.02;
-      --phaseFocusGlow: var(--glow);
+      --accent-dim: rgba(139,92,246,.12);
+      --accent-glow: rgba(139,92,246,.25);
     }
-    /* Themes are now loaded from themes.css and themes-voice-legacy.css */
-    body{
-      margin:0;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
       min-height: 100vh;
-      background-image: var(--grain);
+      -webkit-font-smoothing: antialiased;
     }
-    #loader-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.92);z-index:9999;}
-    .loader-wrapper{display:flex;flex-direction:column;align-items:center;gap:14px;}
-    .loader-ring{width:70px;height:70px;border-radius:50%;border:6px solid rgba(255,255,255,.12);border-top-color:var(--accent);border-right-color:var(--accent-2);animation:spin 1s linear infinite;box-shadow:0 0 24px var(--glow);}
-    .loader-text{letter-spacing:0.18em;text-transform:uppercase;font-size:13px;color:var(--text);}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    nav{
-      position:sticky;top:0;z-index:10;
-      display:flex;gap:10px;flex-wrap:wrap;
-      padding:16px 18px;
-      background:linear-gradient(135deg,var(--nav),color-mix(in srgb,var(--bg) 70%,transparent));
-      border-bottom:1px solid var(--border);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
+
+    /* ── Nav ──────────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; gap: 8px; flex-wrap: wrap;
+      padding: 12px 18px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
     }
-    nav a, nav button{
-      color:var(--text);
-      text-decoration:none;
-      padding:10px 14px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      background:var(--card);
-      font-weight:700;
-      letter-spacing:0.08em;
-      text-transform:uppercase;
-      transition:all .2s ease;
-      cursor:pointer;
+    nav button {
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .15s;
     }
-    nav a.active, nav a:hover, nav button:hover{
-      border-color:var(--accent);
-      color:var(--accent);
-      box-shadow:0 10px 30px color-mix(in srgb,var(--glow) 60%, transparent);
+    nav button:hover { border-color: var(--accent); color: var(--text); }
+    nav button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    /* ── Container ───────────────────────────────────────────────── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 20px 80px;
     }
-    .container{
-      max-width:1200px;
-      margin:24px auto 80px;
-      padding:0 18px;
-      display:grid;
-      grid-template-columns:1fr;
-      gap:18px;
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Phase Card ──────────────────────────────────────────────── */
+    .phase-header { margin-bottom: 16px; }
+    .phase-kicker {
+      font-size: 11px; font-weight: 800;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 4px;
     }
-    .tab{display:none;}
-    .tab.active{display:block;}
-    .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:18px;
-      padding:18px;
-      box-shadow:0 12px 40px rgba(0,0,0,.35);
+    .phase-title {
+      font-size: 28px; font-weight: 900;
+      letter-spacing: .04em; color: var(--text);
     }
-    .card-split{display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;}
-    .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-    .badge{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);}
-    .kicker{font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);font-weight:800;}
-    .toc{border:1px solid var(--border);border-radius:14px;padding:12px;background:color-mix(in srgb,var(--card) 85%,transparent);position:sticky;top:84px;}
-    .toc-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:10px;color:var(--muted);}
-    .toc ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
-    .toc a{color:var(--text);text-decoration:none;font-size:13px;border:1px solid color-mix(in srgb,var(--border) 60%,transparent);border-radius:10px;padding:6px 8px;display:block;}
-    .toc a:hover,.toc a.active{border-color:var(--accent);color:var(--accent);}
-    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-    textarea{
-      width:100%;
-      min-height:140px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      background:color-mix(in srgb,var(--bg) 82%, #000 18%);
-      color:var(--text);
-      padding:12px 14px;
-      font-size:15px;
-      line-height:1.5;
-      resize:vertical;
+    .phase-hint {
+      font-size: 14px; color: var(--muted);
+      margin-top: 6px; line-height: 1.5;
     }
-    textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%, transparent);}
-    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
-    button.btn{
-      border:none;
-      border-radius:12px;
-      padding:11px 14px;
-      font-weight:800;
-      letter-spacing:0.08em;
-      text-transform:uppercase;
-      cursor:pointer;
-      background:linear-gradient(135deg,var(--accent),var(--accent-2));
-      color:#fff;
-      box-shadow:0 10px 30px color-mix(in srgb,var(--glow) 70%, transparent);
+    textarea {
+      width: 100%;
+      min-height: 200px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.3);
+      color: var(--text);
+      padding: 14px 16px;
+      font-size: 15px;
+      line-height: 1.6;
+      resize: vertical;
+      font-family: inherit;
     }
-    button.btn-ghost{
-      background:transparent;
-      color:var(--text);
-      border:1px solid var(--border);
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
     }
-    .output{margin-top:12px;border:1px solid var(--border);border-radius:14px;padding:12px;background:color-mix(in srgb,var(--card) 90%, transparent);}
-    .output-head{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;}
-    pre{
-      white-space:pre-wrap;
-      background:color-mix(in srgb,var(--bg) 80%, #000 20%);
-      border:1px solid var(--border);
-      border-radius:10px;
-      padding:10px;
-      color:var(--text);
-      overflow:auto;
+    textarea::placeholder { color: var(--muted); opacity: .6; }
+
+    /* ── Submit 4F ───────────────────────────────────────────────── */
+    .submit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
     }
-    #matrix-rain{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;}
-    .session-actions{
-      display:flex;gap:10px;flex-wrap:wrap;
-      background:color-mix(in srgb,var(--card) 88%, transparent);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:12px;
-      position:sticky;
-      top:68px;
-      z-index:5;
+    .submit-field label {
+      display: block;
+      font-size: 11px; font-weight: 800;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 6px;
     }
-    footer{
-      text-align:center;
-      padding:40px 20px;
-      color:var(--muted);
-      border-top:1px solid var(--border);
+    .submit-field textarea { min-height: 140px; }
+
+    /* ── Chapter Toggle ──────────────────────────────────────────── */
+    details.chapter {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0,0,0,.15);
     }
-    .theme-switcher{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px;}
-    .theme-switcher select{
-      background:var(--card);
-      color:var(--text);
-      border:1px solid var(--border);
-      border-radius:10px;
-      padding:8px 10px;
-      font-weight:600;
+    details.chapter summary {
+      padding: 10px 14px;
+      font-size: 11px; font-weight: 800;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); cursor: pointer;
+      list-style: none;
     }
-    .history-item{border-bottom:1px solid var(--border);padding:10px 0;}
-    .history-item:last-child{border-bottom:none;}
-    .history-meta{color:var(--muted);font-size:0.9rem;}
-    .phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:980px;margin:0 auto 18px;}
-    .phase-card{border:1px solid var(--border);border-radius:14px;padding:14px 16px;background:var(--card);color:var(--text);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .2s, border-color .2s, box-shadow .2s;}
-    .phase-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 12px 36px var(--glow);}
-    .phase-chapter{margin-top:16px;border:1px dashed var(--border);border-radius:14px;padding:14px;background:color-mix(in srgb,var(--card) 92%, transparent);}
-    .phase-chapter h4{margin:0 0 8px;color:var(--accent);letter-spacing:0.12em;text-transform:uppercase;font-size:12px;}
-    /* modal */
-    :root{
-      --aosAccent: var(--accent);
-      --aosAccent2: var(--accent-2);
-      --aosGlow: var(--glow);
-      --aosModalBorder: var(--border);
-      --aosModalText: var(--text);
-      --aosModalMuted: var(--muted);
-      --aosModalRadius: 22px;
-      --aosModalOverlayA: color-mix(in srgb, var(--aosAccent) 12%, transparent);
-      --aosModalOverlayB: rgba(0,0,0,.78);
-      --aosModalOverlayC: rgba(0,0,0,.90);
-      --aosModalCardA: color-mix(in srgb, var(--card) 92%, #000 8%);
-      --aosModalCardB: color-mix(in srgb, var(--card) 82%, #000 18%);
+    details.chapter summary::before { content: "\25B6 "; font-size: 8px; }
+    details.chapter[open] summary::before { content: "\25BC "; }
+    .chapter-body {
+      padding: 14px;
+      border-top: 1px solid var(--line);
+      font-size: 14px; line-height: 1.7;
+      color: var(--muted);
     }
-    .aos-modal-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,var(--aosModalOverlayA) 0%,var(--aosModalOverlayB) 55%,var(--aosModalOverlayC) 100%);z-index:9999;padding:22px;backdrop-filter:blur(8px);}
-    .aos-modal-overlay.show{display:flex;}
-    .aos-modal{width:min(980px,100%);max-height:min(88vh,940px);overflow:hidden;border-radius:var(--aosModalRadius);background:linear-gradient(180deg,var(--aosModalCardA),var(--aosModalCardB));border:1px solid var(--aosModalBorder);box-shadow:0 30px 120px rgba(0,0,0,.8),0 0 60px var(--aosGlow);display:flex;flex-direction:column;}
-    .aos-modal-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:color-mix(in srgb,var(--card) 60%, transparent);border-bottom:1px solid color-mix(in srgb,var(--aosModalBorder) 70%, transparent);}
-    .aos-modal-title{font-weight:900;letter-spacing:2px;font-size:13px;text-transform:uppercase;color:var(--aosModalText);}
-    .aos-modal-sub{font-size:12px;line-height:1.55;color:var(--aosModalMuted);margin-top:4px;letter-spacing:.4px;}
-    .aos-modal-close{width:34px;height:34px;border-radius:999px;border:1px solid color-mix(in srgb,var(--aosModalBorder) 70%, transparent);background:color-mix(in srgb,var(--card) 45%, transparent);color:color-mix(in srgb,var(--aosModalText) 75%, transparent);cursor:pointer;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;}
-    .aos-modal-close:hover{border-color:color-mix(in srgb,var(--aosAccent) 70%, var(--aosModalBorder));color:var(--aosModalText);box-shadow:0 0 18px var(--aosGlow);}
-    .aos-modal-body{padding:18px;overflow:auto;-ms-overflow-style:none;scrollbar-width:none;}
-    .aos-modal-body::-webkit-scrollbar{display:none;}
-    .aos-modal-section{border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);border-radius:16px;padding:14px;background:color-mix(in srgb,var(--card) 70%, transparent);margin-bottom:12px;}
-    .aos-phase-wrap{border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);border-radius:18px;padding:18px;background:color-mix(in srgb,var(--card) 70%, transparent);}
-    .aos-phase-kicker{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:color-mix(in srgb,var(--aosModalMuted) 90%, transparent);margin-bottom:10px;}
-    .aos-phase-title{font-size:28px;font-weight:900;letter-spacing:2px;color:var(--aosModalText);margin-bottom:10px;text-shadow:0 0 24px var(--aosGlow);}
-    .aos-phase-hint{color:var(--aosModalMuted);font-size:14px;line-height:1.7;margin-bottom:14px;}
-    .aos-phase-input{width:100%;min-height:200px;resize:vertical;padding:14px 16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--aosModalBorder) 85%, transparent);background:color-mix(in srgb,var(--bg) 78%, #000 22%);color:var(--aosModalText);font-size:16px;line-height:1.6;outline:none;}
-    .aos-phase-actions{position:sticky;bottom:0;margin-top:14px;padding:12px 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 0%, transparent),color-mix(in srgb,var(--bg) 85%, transparent) 45%,color-mix(in srgb,var(--bg) 92%, transparent));border-top:1px solid color-mix(in srgb,var(--aosModalBorder) 60%, transparent);}
-    .copy-btn{border:1px solid var(--border);background:transparent;color:var(--text);border-radius:10px;padding:6px 10px;cursor:pointer;}
-    @media(max-width:900px){.card-split{grid-template-columns:1fr;}.session-actions{position:static;}.toc{position:static;top:auto;}}
-    /* Matrix rain visibility */
-    #matrix-rain { position: fixed; inset: 0; z-index: -1; pointer-events: none; display: none; }
-    body.theme-matrix #matrix-rain,
-    [data-theme="matrix"] #matrix-rain,
-    [data-theme="cyan"] #matrix-rain { display: block; }
+    .chapter-body h2 { color: var(--text); font-size: 14px; margin: 14px 0 6px; }
+    .chapter-body h2:first-child { margin-top: 0; }
+    .chapter-body p { margin-bottom: 8px; }
+    .chapter-body strong { color: var(--text); }
+    .chapter-body ul { padding-left: 20px; margin-bottom: 8px; }
+
+    /* ── Session Overview ────────────────────────────────────────── */
+    .session-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .session-card:hover { border-color: var(--accent); }
+    .session-label {
+      font-size: 12px; font-weight: 800;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent);
+    }
+    .session-preview {
+      font-size: 13px; color: var(--muted);
+      margin-top: 4px; line-height: 1.5;
+      white-space: pre-wrap; max-height: 60px; overflow: hidden;
+    }
+    .session-status {
+      float: right;
+      font-size: 10px; font-weight: 700;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+    }
+    .session-status.filled { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Buttons ──────────────────────────────────────────────────── */
+    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .btn {
+      border: none; border-radius: 12px;
+      padding: 10px 18px; font-size: 13px;
+      font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; cursor: pointer;
+    }
+    .btn:active { opacity: .7; }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 20px var(--accent-glow); }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn-danger { background: transparent; color: #ef4444; border: 1px solid rgba(239,68,68,.3); }
+
+    /* ── History ──────────────────────────────────────────────────── */
+    .history-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      background: var(--card);
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .history-item:hover { border-color: var(--accent); }
+    .history-name { font-size: 14px; font-weight: 700; word-break: break-word; }
+    .history-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .history-empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+
+    /* ── Modal ────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.8);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+      display: none;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      width: min(800px, 92vw);
+      max-height: 85vh;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-head {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-title { font-size: 13px; font-weight: 800; letter-spacing: .1em; }
+    .modal-close {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-body {
+      padding: 16px; overflow-y: auto;
+      font-size: 14px; line-height: 1.7;
+    }
+    .modal-body pre {
+      white-space: pre-wrap; word-break: break-word;
+      background: rgba(0,0,0,.3);
+      padding: 12px; border-radius: 10px; font-size: 13px;
+    }
+
+    /* ── Save indicator ──────────────────────────────────────────── */
+    .saved { font-size: 10px; color: var(--muted); margin-top: 6px; opacity: 0; transition: opacity .3s; }
+    .saved.show { opacity: 1; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .footer-phases {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+    .footer-phase {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: var(--card);
+      text-align: center;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color .15s, transform .15s;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .footer-phase:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    @media (max-width: 700px) {
+      .submit-grid { grid-template-columns: 1fr; }
+      .footer-phases { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
-  <canvas id="matrix-rain" aria-hidden="true"></canvas>
-  <div id="loader-overlay">
-    <div class="loader-wrapper">
-      <div class="loader-ring"></div>
-      <div class="loader-text">Loading · αOS</div>
-    </div>
-  </div>
 
   <nav>
-    <a href="/" data-tab="back">Index</a>
-    <a href="#" data-tab="home" class="active">Home</a>
-    <a href="#" data-tab="history">Historie</a>
-    <button type="button" id="zenToggle" class="nav-zen-toggle">Zen Mode</button>
+    <button class="active" data-view="home" type="button">Home</button>
+    <button data-view="stop" type="button">Stop</button>
+    <button data-view="submit" type="button">Submit</button>
+    <button data-view="struggle" type="button">Struggle</button>
+    <button data-view="strike" type="button">Strike</button>
+    <button data-view="session" type="button">Session</button>
+    <button data-view="history" type="button">History</button>
+    <button onclick="location.href='/'" type="button">Index</button>
   </nav>
 
   <div class="container">
-    <div class="session-actions" id="sessionActions" style="display:none;">
-      <button class="btn-ghost btn" type="button" onclick="openSessionPreview()">Preview</button>
+
+    <!-- ── HOME ──────────────────────────────────────────────────── -->
+    <div id="v-home" class="view active">
+      <div class="phase-header">
+        <div class="phase-kicker">Pillar #4</div>
+        <div class="phase-title">THE VOICE</div>
+        <div class="phase-hint">The Voice is not reflection. It is correction. STOP the pattern. SUBMIT to the truth. STRUGGLE with the story. STRIKE with action. No strike. No progress.</div>
+      </div>
+
+      <div style="margin-top:24px; line-height:1.8; color:var(--muted); font-size:15px;">
+        <h2 style="color:var(--text); font-size:18px; margin-bottom:12px;">Every Day is a Battlefield</h2>
+        <p>Picture yourself at the dawn of a new day. Behind you are the echoes of the IPW and Annual Freedom Game. The promises of the Monthly Mission. The strategies of the Weekly War. Ahead lies the crucible of today.</p>
+
+        <h2 style="color:var(--text); font-size:18px; margin:24px 0 12px;">The Trinity: Power, Perspective, Production</h2>
+        <p><strong style="color:var(--accent);">Power through The Core</strong> - Eight simple promises you make to yourself every single day. These are your shields and swords.</p>
+        <p><strong style="color:var(--accent);">Perspective through The Voice</strong> - Your daily communion, your time to converse with God and your soul. The Voice sharpens your focus, offers clarity, and guides your daily actions.</p>
+        <p><strong style="color:var(--accent);">Production through The Door</strong> - Armed with power and perspective, the day's battlefield awaits. Key tasks emerge from your Fire Map and Weekly War.</p>
+
+        <h2 style="color:var(--text); font-size:18px; margin:24px 0 12px;">Embracing the Work</h2>
+        <p>With clarity in heart and focus in mind, you march into the day. It's time to Do The Work. Today's tasks weave the tapestry of the Weekly War. This week's successes lead to the Monthly Mission. And every monthly victory brings you closer to conquering your Ideal Parallel World.</p>
+      </div>
+
+      <div class="footer-phases">
+        <button class="footer-phase" data-view="stop" type="button">Stop</button>
+        <button class="footer-phase" data-view="submit" type="button">Submit</button>
+        <button class="footer-phase" data-view="struggle" type="button">Struggle</button>
+        <button class="footer-phase" data-view="strike" type="button">Strike</button>
+      </div>
     </div>
 
-    <section id="home" class="tab active">
-      <div class="card card-split">
-        <div class="card-main">
-          <div class="card-head">
-            <div class="kicker">αOS · Pillar #4</div>
-            <div class="badge">Stop · Submit · Struggle · Strike</div>
-          </div>
-          <div class="markdown-body" id="voice-markdown">
-            <h1>The Voice</h1>
-            <p>The Voice is not reflection. It is correction.</p>
-            <p>STOP the pattern. SUBMIT to the truth. STRUGGLE with the story. STRIKE with action.</p>
-            <p>No strike. No progress.</p>
-          </div>
-        </div>
-        <aside class="toc">
-          <div class="toc-title">Memoirs Chapters (The Voice)</div>
-          <ul id="toc-list"></ul>
-        </aside>
+    <!-- ── STOP ──────────────────────────────────────────────────── -->
+    <div id="v-stop" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 1</div>
+        <div class="phase-title">STOP</div>
+        <div class="phase-hint">Pattern Interrupt. Welche Geschichte muss heute stoppen?</div>
       </div>
-    </section>
+      <textarea id="ta-stop" placeholder="Was l&#228;uft gerade in deinem Kopf? Welches Muster zieht dich runter?"></textarea>
+      <div class="saved" id="sv-stop">Saved</div>
+      <details class="chapter">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body">
+          <h2>Creating Valuable Space</h2>
+          <p>Society moves at a relentless pace, rarely offering us a chance to breathe. Our days become a series of reactions, fooling us into believing we're living with purpose when, in reality, we're just surviving.</p>
+          <h2>The Power of the Pause</h2>
+          <p>There's unmatched power in stillness. When you choose to Stop, you're not just pausing your physical movements - you're also quieting the mental noise. You create space to think, reflect, and question the stories that have controlled your mind for too long.</p>
+          <h2>Beyond Reaction: Designing Change</h2>
+          <p>Too often, people only change when they're forced to by trauma or drama. But the Alpha doesn't wait for life to make decisions for them. The Alpha chooses. By stopping, change becomes deliberate.</p>
+          <p>Stopping is the first crucial step on the journey of self-awareness, self-improvement, and self-mastery. To truly change the stories we tell ourselves, we must first stop and listen to them as they are. Only then can we rewrite them.</p>
+        </div>
+      </details>
+    </div>
 
-    <section id="stop" class="tab">
-      <div class="card">
-        <div class="card-head">
-          <div class="kicker">Stop</div>
-          <span class="badge">Pattern Interrupt</span>
+    <!-- ── SUBMIT ────────────────────────────────────────────────── -->
+    <div id="v-submit" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 2</div>
+        <div class="phase-title">SUBMIT</div>
+        <div class="phase-hint">Radikale Ehrlichkeit. Facts, Feelings, Focus, Fruit.</div>
+      </div>
+      <div class="submit-grid">
+        <div class="submit-field">
+          <label>Facts</label>
+          <textarea id="ta-submit_facts" placeholder="Was ist objektiv wahr?"></textarea>
         </div>
-        <textarea id="stopinput" placeholder="Welche Geschichte muss heute stoppen?"></textarea>
-        <div class="actions">
-          <button class="btn" type="button" onclick="generateStep('stop')">Generate</button>
-          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('stop')">Phase Chapter</button>
+        <div class="submit-field">
+          <label>Feelings</label>
+          <textarea id="ta-submit_feelings" placeholder="Welche Emotionen kochen hoch?"></textarea>
         </div>
-        <div class="output" id="stop-wrapper" style="display:none;">
-          <div class="output-head">
-            <strong>Output</strong>
-            <div class="actions">
-              <button class="copy-btn" data-target="stopoutput">Copy</button>
-            </div>
-          </div>
-          <pre id="stopoutput"></pre>
+        <div class="submit-field">
+          <label>Focus</label>
+          <textarea id="ta-submit_focus" placeholder="Wohin ging dein Fokus?"></textarea>
         </div>
-        <div class="phase-chapter">
-          <h4>Stop Chapter</h4>
-          <div id="chapter-stop">
-            <p>Stop creates space between trigger and reaction.</p>
-          </div>
+        <div class="submit-field">
+          <label>Fruit</label>
+          <textarea id="ta-submit_fruit" placeholder="Welche Fr&#252;chte erntest du?"></textarea>
         </div>
       </div>
-    </section>
+      <div class="saved" id="sv-submit">Saved</div>
+      <details class="chapter">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body">
+          <h2>Radical Honesty</h2>
+          <p>Society and self-preservation teach us to hide the truths that make us uncomfortable. In Submit, the first requirement is honesty - radical honesty. This level of truth-telling demands courage and vulnerability.</p>
+          <h2>The Four Truths</h2>
+          <ul>
+            <li><strong>Facts:</strong> What are the undeniable realities? No exaggerations, no minimizing - just pure truth.</li>
+            <li><strong>Feelings:</strong> How do you truly feel? Go beyond surface reactions.</li>
+            <li><strong>Focus:</strong> What has been your mindset? Denial, avoidance, or confrontation?</li>
+            <li><strong>Fruit:</strong> What results have you gotten? What do you want them to be?</li>
+          </ul>
+          <p>Submission isn't about defeat; it's about empowerment. When you submit to the truth, you become its master.</p>
+        </div>
+      </details>
+    </div>
 
-    <section id="submit" class="tab">
-      <div class="card">
-        <div class="card-head">
-          <div class="kicker">Submit</div>
-          <span class="badge">Facts · Feelings · Focus · Fruit</span>
-        </div>
-        <div class="form-grid">
-          <textarea id="submit_facts" placeholder="Facts — Was ist objektiv wahr?"></textarea>
-          <textarea id="submit_feelings" placeholder="Feelings — Welche Emotionen kochen hoch?"></textarea>
-          <textarea id="submit_focus" placeholder="Focus — Wohin ging dein Fokus?"></textarea>
-          <textarea id="submit_fruit" placeholder="Fruit — Welche Früchte erntest du?"></textarea>
-        </div>
-        <div class="actions">
-          <button class="btn" type="button" onclick="generateStep('submit')">Generate</button>
-          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('submit')">Phase Chapter</button>
-        </div>
-        <div class="output" id="submit-wrapper" style="display:none;">
-          <div class="output-head">
-            <strong>Output</strong>
-            <div class="actions">
-              <button class="copy-btn" data-target="submitoutput">Copy</button>
-            </div>
-          </div>
-          <pre id="submitoutput"></pre>
-        </div>
-        <div class="phase-chapter">
-          <h4>Submit Chapter</h4>
-          <div id="chapter-submit">
-            <p>Submit means radical honesty: Facts, Feelings, Focus, Fruit.</p>
-          </div>
-        </div>
+    <!-- ── STRUGGLE ──────────────────────────────────────────────── -->
+    <div id="v-struggle" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 3</div>
+        <div class="phase-title">STRUGGLE</div>
+        <div class="phase-hint">Rewrite the Story. Welche Story rei&#223;t dich zur&#252;ck?</div>
       </div>
-    </section>
+      <textarea id="ta-struggle" placeholder="Alte Identit&#228;t vs. neue Identit&#228;t. Was muss sich &#228;ndern?"></textarea>
+      <div class="saved" id="sv-struggle">Saved</div>
+      <details class="chapter">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body">
+          <h2>A Battle of Identities</h2>
+          <p>This fight is a clash between who you were and who you are becoming. It's a battle with the stories from your past, the narratives that shaped your actions.</p>
+          <h2>Active Engagement</h2>
+          <p>Struggle isn't just about recognizing what's wrong; it's about actively engaging with it. The struggle becomes a deliberate battle between outdated beliefs and new aspirations.</p>
+          <h2>Emergence and Rebirth</h2>
+          <p>Choosing to face the Struggle every day is more than a routine - it's a commitment to rise, evolve, and thrive. In the heat of Struggle, an Alpha finds their true strength.</p>
+        </div>
+      </details>
+    </div>
 
-    <section id="struggle" class="tab">
-      <div class="card">
-        <div class="card-head">
-          <div class="kicker">Struggle</div>
-          <span class="badge">Rewrite the story</span>
-        </div>
-        <textarea id="struggleinput" placeholder="Welche Story reißt dich zurück?"></textarea>
-        <div class="actions">
-          <button class="btn" type="button" onclick="generateStep('struggle')">Generate</button>
-          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('struggle')">Phase Chapter</button>
-        </div>
-        <div class="output" id="struggle-wrapper" style="display:none;">
-          <div class="output-head">
-            <strong>Output</strong>
-            <div class="actions">
-              <button class="copy-btn" data-target="struggleoutput">Copy</button>
-            </div>
-          </div>
-          <pre id="struggleoutput"></pre>
-        </div>
-        <div class="phase-chapter">
-          <h4>Struggle Chapter</h4>
-          <div id="chapter-struggle">
-            <p>Struggle is the fight between old identity and future identity.</p>
-          </div>
-        </div>
+    <!-- ── STRIKE ────────────────────────────────────────────────── -->
+    <div id="v-strike" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Phase 4</div>
+        <div class="phase-title">STRIKE</div>
+        <div class="phase-hint">Execute above all. Welche Handlung schl&#228;gst du ein?</div>
       </div>
-    </section>
+      <textarea id="ta-strike" placeholder="Welche konkrete Aktion setzt du JETZT?"></textarea>
+      <div class="saved" id="sv-strike">Saved</div>
+      <details class="chapter">
+        <summary>Chapter lesen</summary>
+        <div class="chapter-body">
+          <h2>Why Action Is Paramount</h2>
+          <p>Many people live in a world of ideas - constantly dreaming, reflecting, thinking. While these have value, they don't amount to much without action. Dreams without steps are just fantasies.</p>
+          <h2>Execution Above All</h2>
+          <p>The Strike is what makes the difference. It's the daily force that drives your Weekly Fire, your Monthly Focus, and your journey towards Annual Freedom. It's the leap from "what if" to "I did it."</p>
+          <p>The Voice isn't just about gaining insight. It's a call to action. The strength of our actions shapes our destiny.</p>
+        </div>
+      </details>
+    </div>
 
-  <section id="strike" class="tab">
-      <div class="card">
-        <div class="card-head">
-          <div class="kicker">Strike</div>
-          <span class="badge">Execute above all</span>
-        </div>
-        <textarea id="strikeinput" placeholder="Welche Handlung schlägst du ein?"></textarea>
-        <div class="actions">
-          <button class="btn" type="button" onclick="generateStep('strike')">Generate</button>
-          <button class="btn-ghost btn" type="button" onclick="openPhaseModal('strike')">Phase Chapter</button>
-        </div>
-        <div class="output" id="strike-wrapper" style="display:none;">
-          <div class="output-head">
-            <strong>Output</strong>
-            <div class="actions">
-              <button class="copy-btn" data-target="strikeoutput">Copy</button>
-            </div>
-          </div>
-          <pre id="strikeoutput"></pre>
-        </div>
-        <div class="phase-chapter">
-          <h4>Strike Chapter</h4>
-          <div id="chapter-strike">
-            <p>Strike is execution. Insight without action is noise.</p>
-          </div>
-        </div>
+    <!-- ── SESSION ───────────────────────────────────────────────── -->
+    <div id="v-session" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Today</div>
+        <div class="phase-title">SESSION</div>
+        <div class="phase-hint">Deine heutige Voice Session im &#220;berblick.</div>
       </div>
-  </section>
+      <div class="session-card" data-goto="stop">
+        <span class="session-status" id="ss-stop">leer</span>
+        <div class="session-label">Stop</div>
+        <div class="session-preview" id="sp-stop"></div>
+      </div>
+      <div class="session-card" data-goto="submit">
+        <span class="session-status" id="ss-submit">leer</span>
+        <div class="session-label">Submit</div>
+        <div class="session-preview" id="sp-submit"></div>
+      </div>
+      <div class="session-card" data-goto="struggle">
+        <span class="session-status" id="ss-struggle">leer</span>
+        <div class="session-label">Struggle</div>
+        <div class="session-preview" id="sp-struggle"></div>
+      </div>
+      <div class="session-card" data-goto="strike">
+        <span class="session-status" id="ss-strike">leer</span>
+        <div class="session-label">Strike</div>
+        <div class="session-preview" id="sp-strike"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="btn-preview" type="button">Preview</button>
+        <button class="btn btn-primary" id="btn-export" type="button">Export</button>
+        <button class="btn btn-danger" id="btn-clear" type="button">Clear</button>
+      </div>
+    </div>
 
-    <section id="history" class="tab">
-      <div class="card">
-        <div class="card-head">
-          <div class="kicker">History</div>
-          <span class="badge">~/AlphaOS-Vault/VOICE</span>
-        </div>
-        <div id="history-list">Lade…</div>
+    <!-- ── HISTORY ───────────────────────────────────────────────── -->
+    <div id="v-history" class="view">
+      <div class="phase-header">
+        <div class="phase-kicker">Vault</div>
+        <div class="phase-title">HISTORY</div>
+        <div class="phase-hint">Vergangene Voice Sessions.</div>
       </div>
-    </section>
+      <div id="history-list"></div>
+    </div>
+
   </div>
 
-  <footer>
-    <div class="phase-grid">
-      <button class="phase-card" data-target="stop" type="button">Stop</button>
-      <button class="phase-card" data-target="submit" type="button">Submit</button>
-      <button class="phase-card" data-target="struggle" type="button">Struggle</button>
-      <button class="phase-card" data-target="strike" type="button">Strike</button>
-    </div>
-    <div class="theme-switcher">
-      <label for="theme-select">Style:</label>
-      <select id="theme-select" aria-label="Theme Auswahl">
-        <option value="matrix">⚡ Matrix</option>
-        <option value="neutral">🌙 Neutral</option>
-        <option value="cyan">💎 Cyan</option>
-        <option disabled>────────────</option>
-        <option value="obsidian">🔮 Obsidian</option>
-        <option value="aurora">🌌 Aurora</option>
-        <option value="dawn">🌅 Dawn</option>
-        <option value="monk">📜 Monk</option>
-        <option value="copper">🪙 Copper</option>
-        <option value="forestnight">🌲 Forest Night</option>
-        <option value="inkgold">✨ Ink & Gold</option>
-        <option value="bloodred">🩸 Blood Red</option>
-        <option disabled>────────────</option>
-        <option value="github">💻 GitHub</option>
-        <option value="ocean">🌊 Ocean</option>
-        <option value="blackred">⚫ Black/Red</option>
-      </select>
-    </div>
-  </footer>
-
-  <div id="aosModalOverlay" class="aos-modal-overlay" aria-hidden="true">
-    <div class="aos-modal" role="dialog" aria-modal="true" aria-labelledby="aosModalTitle">
-      <div class="aos-modal-head">
-        <div>
-          <div id="aosModalTitle" class="aos-modal-title">Modal</div>
-          <div id="aosModalSub" class="aos-modal-sub"></div>
-        </div>
-        <button type="button" class="aos-modal-close" onclick="AOS_modalClose()" aria-label="Close">×</button>
+  <!-- ── Modal ───────────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="modal-title" class="modal-title"></span>
+        <button id="modal-close" class="modal-close" type="button">&times;</button>
       </div>
-      <div id="aosModalBody" class="aos-modal-body"></div>
+      <div id="modal-body" class="modal-body"></div>
     </div>
   </div>
 
   <script>
-    const voiceMarkdown = `The Voice is not reflection.
-It is correction.
+  (function() {
+    "use strict";
 
-STOP the pattern.
-SUBMIT to the truth.
-STRUGGLE with the story.
-STRIKE with action.
-
-No strike. No progress.
-
-
-# EVERY DAY IS A BATTLEFIELD
-Picture yourself at the dawn of a new day. Behind you are:  
-- The echoes of the IPW and Annual Freedom Game (Freedom Map).  
-- The promises of the Monthly Mission (Focus Map).  
-- The strategies of the Weekly War (Fire Map).  
-Ahead lies the crucible of today, demanding your full commitment, offering the chance to seize its vast potential.
-
-# THE TRINITY: POWER, PERSPECTIVE, PRODUCTION
-Each day presents three essential elements: power, perspective, and production.  
-- **Power through The Core:** Every Alpha needs their arsenal, and yours is The Core.   
-These aren’t just principles but vows you uphold daily.   
-Your commitment to Body, Being, Balance, and Business is about channeling energy and vigor into every part of your life.   
-Eight simple promises you make to yourself every single day.   
-These are your shields and swords, making you unstoppable.  
-- **Perspective through The Voice:** While The Core arms you, The Voice provides clarity.   
-It’s your daily communion, your time to converse with God and your soul.   
-This alignment isn’t just a ritual; it’s a necessity.   
-The Voice sharpens your focus, offers clarity, and guides your daily actions.  
-- **Production through The Door:** Armed with power and perspective, the day’s battlefield awaits. Key tasks emerge from your Fire Map and Weekly War.   
-Some come from your communion in The Voice; others are strategies aligned with broader visions. These are your priority tasks that align with the larger narrative of the Alpha OS.
-
-# THE DELICATE DANCE OF DECISIONS  
-For the untrained, these tools might feel overwhelming.   
-But you, Alpha, know their worth. They are your compass, your North Star. It’s not about juggling but creating a harmony that turns each day into a masterpiece. It’s a commitment, a pact with the present. Every day, you must choose. Choose to acknowledge today’s Frame. Recognize the Freedom of the future. Understand the focus of the month ahead. Feel the fire of the week. And most importantly, immerse yourself in today’s game: The Core, The Voice, The Door.
-
-# EMBRACING THE WORK 
-With clarity in heart and focus in mind, you march into the day.   
-It’s time to Do The Work. Today’s tasks weave the tapestry of the Weekly War.   
-This week’s successes lead to the completion of the Monthly Mission.   
-And every monthly victory brings you closer to conquering the Annual Freedom Game and your Ideal Parallel World. Alpha, every day is your proving ground.   
-Rise, commit, and conquer. Remember, every action counts in the grand tapestry of the Alpha OS.
-
-`;
-    const CH_STOP = `
-## 1 CREATING VALUABLE SPACE IN A CROWDED WORLD
-
-Society moves at a relentless pace, rarely offering us a chance to breathe.   
-Our days become a series of reactions, a continuous flow of events that we respond to without thinking.   
-These reactions turn into habits, into routines, fooling us into believing we’re living with purpose when, in reality, we’re just surviving.  
-Survival is essential, but it’s not the same as thriving.   
-As Alphas, we’re not here just to exist; we’re here to flourish, lead, and conquer.   
-But how can you do that when life’s whirlwind constantly pushes you around?
-
-## 2 RECOGNIZING THE POWER OF THE PAUSE
-
-There’s unmatched power in stillness.   
-When you choose to Stop, you’re not just pausing your physical movements—you’re also quieting the mental noise.   
-You create space to think, reflect, and question the stories that have controlled your mind for too long.   
-You give yourself a break from life’s relentless rhythm, and in that break, you open up new possibilities.  
-But it’s not just about being still—it’s about understanding the value of stillness.   
-In a world that glorifies constant motion and endless hustle, stopping might seem like the wrong move.   
-However, this intentional pause, this choice to stop, offers a huge return on investment. It’s when you reset, recalibrate, and get ready to redirect your energy.
-
-## 3 BEYOND REACTION: DESIGNING CHANGE
-
-Too often, people only change when they’re forced to by trauma or drama.   
-They switch paths because of external pressure, not personal choice. But the Alpha doesn’t wait for life to make decisions for them. The Alpha chooses. By stopping change becomes deliberate, not just something that happens to you.  
-Stopping is the first step in acknowledging the need for change.   
-It’s a conscious interruption of your usual patterns, a momentary break from the old ways to make room for something new.   
-It’s the Alpha’s superpower—to be still when the world demands action, to think when others react, to connect with oneself and God in a deep way that most never achieve.  
-As the world races by with its distractions and pressures, the Alpha stands apart, not just in action, but in deliberate inaction.   
-Stopping isn’t just about physical stillness—it’s about mental and spiritual stillness too.   
-It’s the first crucial step on the journey of self-awareness, self-improvement, and self-mastery.   
-The Alpha understands that to truly change the stories we tell ourselves, we must first stop and listen to them as they are.   
-Only then can we rewrite them. Only then can we change our actions and transform our lives.
-`;
-
-    const CH_SUBMIT = `
-In the vast landscape of our minds, there are places we avoid, truths we deny, and stories we ignore.   
-After the deliberate pause—Stop—we move into the next crucial phase: Submit.   
-This is where we shine a light on what’s been hidden and bring the truth into clear focus.  
-The journey of transformation isn’t just about reaching new heights; it’s often about digging deep into the trenches of our souls.   
-To submit means to lay yourself bare, to strip away the masks and pretenses, and to confront the raw, unfiltered truth about who you are.
-
-## 1 RADICAL HONESTY
-
-Society and self-preservation teach us to hide the truths that make us uncomfortable.   
-These might be truths about our failures, fears, desires, or vulnerabilities.   
-Over time, hiding becomes so automatic that it’s hard to see your true self.   
-In Submit, the first requirement is honesty—radical honesty.   
-This level of truth-telling demands courage and vulnerability.   
-It’s about revealing, recognizing, and reckoning with every part of yourself, no matter how uncomfortable it is.
-
-## 2 UNLEASHING YOUR EMOTIONS
-
-Human emotions cover a wide range, from intense anger to deep gratitude.   
-All these emotions, whether dark or light, need to be acknowledged during submission.   
-Suppressing feelings doesn’t solve anything.   
-Whether it’s rage, joy, shame, or appreciation, every emotion gives you clues to understanding yourself better.   
-By bringing them to the surface, you allow yourself to process, understand, and use these feelings as fuel for change.
-
-## 3 ACKNOWLEDGING THE FOUR TRUTHS IN SUBMISSION
-
-- **Facts:** What are the undeniable realities of your current situation? No exaggerations, no minimizing—just the pure, objective truth.  
-- **Feelings:** Emotions are complex and layered. How do you truly feel about these facts? Go beyond surface reactions.  
-- **Focus:** What has been your mindset toward these facts and feelings? Have you been in denial, avoiding the truth, or confronting it head-on?  
-- **Fruit:** What results or outcomes have you gotten from this mindset? And what do you want the results to be?
-
-## 4 FROM PRESENT TO POTENTIAL
-
-Submission isn’t just about acknowledging where you are now; it’s also about recognizing your potential.   
-Once you have a clear, unclouded view of your current situation, the next step is to envision where you want to be.   
-This balance—between acknowledging the present and aspiring to the future—is at the heart of submission.  
-In this space of truth, as uncomfortable and confronting as it might be, lies immense power.   
-By submitting to the truth within and being radically honest about your feelings, facts, focus, and fruit, you take the most crucial step toward transformation.  
-Submission isn’t about defeat; it’s about empowerment.   
-When you submit to the truth, you’re no longer at its mercy—you become its master, ready to shape and direct it to chart the course of your destiny.  
-As Ralph Waldo Emerson once said, "To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment."  
-This chapter—Submit—is your guide to claiming that greatest accomplishment.
-`;
-
-    const CH_STRUGGLE = `
-Every transformative journey hits a crucible, a tough test that reshapes the soul.   
-For an Alpha, this crucible is called Struggle.   
-After you choose to Stop—taking a deliberate pause from life’s nonstop momentum—and bravely Submit to the raw, unfiltered truths of your reality, you step onto the battlefield of Struggle.
-
-## 1 A BATTLE OF IDENTITIES
-
-This fight is both simple and complex: it’s a clash between who you were and who you are becoming.   
-It’s a battle with the stories from your past, the narratives that shaped your actions.   
-But then, something triggers you—an event or emotion that pulls you away from those old stories.   
-This new awareness, often hidden in your subconscious, rises to the surface, demanding that you deal with it.
-
-## 2 ACTIVE ENGAGEMENT AND TRANSFORMATION
-
-Struggle isn’t just about recognizing what’s wrong; it’s about actively engaging with it.   
-A passive Alpha might turn The Voice into just another diary entry.   
-But if you’re serious about real transformation, the struggle becomes a deliberate battle between outdated beliefs and new aspirations.   
-It’s a war within yourself, a deep engagement of the soul.
-
-## 3 THE MIND’S DUAL TENDENCIES
-
-The mind naturally wants to stick with what it knows, preferring the comfort of the familiar.   
-But an Alpha understands that true growth comes from stepping into the unknown and breaking old patterns.   
-This is where Struggle and The Code work together.   
-The Struggle is your daily battle, and The Code is your guide, sharpening your actions and thoughts.
-
-## 4 EMERGENCE AND REBIRTH
-
-Choosing to face the Struggle every day is more than just a routine—it’s a commitment to rise, evolve, and thrive.   
-In the heat of Struggle, an Alpha finds their true strength. And in that discovery, they unlock a freedom that’s unparalleled.  
-Struggle is where the Alpha’s identity is forged and where transformation takes root.  
-It’s not about avoiding the fight; it’s about engaging with it fully and coming out the other side stronger, clearer, and more aligned with your true self.
-`;
-
-    const CH_STRIKE = `
-# THE CULMINATION OF STACKING
-
-The Voice isn’t just about reflection.   
-It’s a process designed to push you into decisive action.   
-While the first three stages—Stop, Submit, and Struggle—shape your mindset and perspective, the final stage, Strike, brings those insights into the real world.
-
-## 1 WHY ACTION IS PARAMOUNT
-
-Many people live in a world of ideas—constantly dreaming, reflecting, and thinking.   
-While these activities have value, they don’t amount to much without action.   
-Dreams without steps to achieve them are just fantasies.   
-In life, actions speak louder than thoughts, intentions, or even words.
-
-## 2 DIVINE INTERVENTION: GOD'S ROLE IN THE STRIKE
-
-Through The Voice, you’ve been wrestling with your truths and desires.   
-But there’s also a guiding force at work—God.   
-If you’re open to Him, God can light your path, especially in the Strike phase, ensuring your actions align with a greater purpose.   
-This spiritual connection elevates mere action into something more—divinely   
-inspired execution.
-
-## 3 THE DANGERS OF INACTION
-
-Today, there’s a dangerous trend—celebrating ideas as if they were actions.   
-People get caught up in the excitement of a “eureka moment,” thinking that having a great idea is the same as making it happen.   
-But that’s an illusion.   
-Ideas are just the beginning.   
-Without action, even the best insights from The Voice are worthless.
-
-## 4 WHY THE STRIKE IS THE GAME-CHANGER
-
-The Strike is what makes the difference.   
-It’s the daily force that drives your Weekly Fire, your Monthly Focus, and your journey towards Annual Freedom.   
-It’s the leap from “what if” to “I did it.”   
-The Strike moves you from theory to practice, from potential energy to real-world impact.   
-It’s about correcting, adjusting, and taking bold steps every day.
-
-## 5 EXECUTION ABOVE ALL
-
-As we wrap up this chapter, remember this fundamental truth: The Voice isn’t just about gaining insight or feeling good for a moment.   
-It’s a call to action.   
-It’s not about having grand ideas—it’s about the grit to execute those ideas.   
-In the end, it’s not the brilliance of our thoughts but the strength of our actions that shapes our destiny.
-`;
-
-    const TEXTAREA_IDS = [
-      'stopinput',
-      'submit_facts','submit_feelings','submit_focus','submit_fruit',
-      'struggleinput','strikeinput'
-    ];
-    const VOICE_SECTION_BY_ID = {
-      stopinput: 'stop',
-      submit_facts: 'submit',
-      submit_feelings: 'submit',
-      submit_focus: 'submit',
-      submit_fruit: 'submit',
-      struggleinput: 'struggle',
-      strikeinput: 'strike'
+    var PHASES = ["stop", "submit", "struggle", "strike"];
+    var FIELDS = {
+      stop: ["stop"],
+      submit: ["submit_facts", "submit_feelings", "submit_focus", "submit_fruit"],
+      struggle: ["struggle"],
+      strike: ["strike"]
     };
-    const VOICE_AUTOSAVE_CACHE = {};
+    var autosaveCache = {};
 
-    const PHASES = {
-      stop: { title:'Stop', textareaId:'stopinput', body:CH_STOP },
-      submit: { title:'Submit', textareaId:null, body:CH_SUBMIT },
-      struggle: { title:'Struggle', textareaId:'struggleinput', body:CH_STRUGGLE },
-      strike: { title:'Strike', textareaId:'strikeinput', body:CH_STRIKE },
-    };
+    function $(sel) { return document.querySelector(sel); }
+    function $$(sel) { return [].slice.call(document.querySelectorAll(sel)); }
+    function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function today() { return new Date().toISOString().slice(0,10); }
 
-    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function lsKey(fid) { return "voice_" + fid + "_" + today(); }
 
-    function renderDoc(markdown){
-      const target = document.getElementById('voice-markdown');
-      if (!target) return;
-      try{
-        target.innerHTML = (typeof marked !== 'undefined') ? marked.parse(markdown) : `<pre>${escapeHtml(markdown)}</pre>`;
-      }catch(e){
-        target.textContent = markdown;
+    function saveField(fid) {
+      var el = $("#ta-" + fid);
+      if (el) try { localStorage.setItem(lsKey(fid), el.value); } catch(_) {}
+    }
+    function restoreField(fid) {
+      var el = $("#ta-" + fid);
+      if (!el) return;
+      try { var v = localStorage.getItem(lsKey(fid)); if (v !== null) el.value = v; } catch(_) {}
+    }
+    function getVal(fid) {
+      var el = $("#ta-" + fid);
+      return el ? el.value.trim() : "";
+    }
+    function hasContent(phase) {
+      return FIELDS[phase].some(function(f) { return getVal(f).length > 0; });
+    }
+
+    // ── Autosave ────────────────────────────────────────────────
+    function buildPhaseMd(phase) {
+      var d = today();
+      if (phase === "submit") {
+        var parts = [];
+        if (getVal("submit_facts")) parts.push("## Facts\n" + getVal("submit_facts"));
+        if (getVal("submit_feelings")) parts.push("## Feelings\n" + getVal("submit_feelings"));
+        if (getVal("submit_focus")) parts.push("## Focus\n" + getVal("submit_focus"));
+        if (getVal("submit_fruit")) parts.push("## Fruit\n" + getVal("submit_fruit"));
+        return parts.length ? "# Voice Submit - " + d + "\n\n" + parts.join("\n\n") + "\n" : "";
       }
-      buildToc();
+      var v = getVal(phase);
+      return v ? "# Voice " + phase.toUpperCase() + " - " + d + "\n\n" + v + "\n" : "";
     }
 
-    async function loadDoc(){
-      try{
-        const res = await fetch('/api/doc?name=voice', { cache: 'no-store' });
-        if(res.ok){
-          const data = await res.json();
-          if(data?.ok && data.content){
-            renderDoc(data.content);
-            return;
-          }
-        }
-      }catch(_){}
-      renderDoc(voiceMarkdown);
+    function autosave(phase) {
+      var md = buildPhaseMd(phase);
+      if (!md || autosaveCache[phase] === md) return;
+      autosaveCache[phase] = md;
+      fetch("/api/voice/autosave", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ section: phase, date: today(), markdown: md })
+      }).then(function() {
+        var sv = $("#sv-" + phase);
+        if (sv) { sv.classList.add("show"); clearTimeout(sv._t); sv._t = setTimeout(function(){ sv.classList.remove("show"); }, 2000); }
+      }).catch(function(){});
     }
 
-    function buildToc(){
-      const container = document.getElementById('voice-markdown');
-      const tocList = document.getElementById('toc-list');
-      if(!container || !tocList) return;
-      tocList.innerHTML = '';
-      const headings = container.querySelectorAll('h1, h2, h3');
-      headings.forEach(h=>{
-        const text = (h.textContent||'').trim();
-        if(!text) return;
-        if(!h.id){
-          h.id = text.toLowerCase().replace(/[ä]/g,'ae').replace(/[ö]/g,'oe').replace(/[ü]/g,'ue').replace(/[ß]/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-        }
-        const li = document.createElement('li');
-        li.classList.add('level-'+(h.tagName==='H1'?1:h.tagName==='H2'?2:3));
-        const a = document.createElement('a');
-        a.href = '#'+h.id;
-        a.textContent = text;
-        a.addEventListener('click', ev=>{
-          ev.preventDefault();
-          activateTab('home');
-          const target = document.getElementById(h.id);
-          if(!target) return;
-          window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 80, behavior:'smooth' });
-        });
-        li.appendChild(a);
-        tocList.appendChild(li);
-      });
-    }
-
-    function activateTab(tabId){
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      document.querySelectorAll('nav a[data-tab]').forEach(n=>n.classList.remove('active'));
-      document.getElementById(tabId)?.classList.add('active');
-      document.querySelector(`nav a[data-tab="${tabId}"]`)?.classList.add('active');
-      updateSessionActionsVisibility();
-    }
-
-    function updateSessionActionsVisibility(){
-      const actions = document.getElementById('sessionActions');
-      if(!actions) return;
-      const active = document.querySelector('.tab.active');
-      actions.style.display = active && active.id !== 'home' ? 'flex' : 'none';
-    }
-
-    async function loadHistory(){
-      const list = document.getElementById('history-list');
-      if (!list) return;
-      list.textContent = 'Lade…';
-      try{
-        const res = await fetch('/api/voice/history?limit=50', { cache:'no-store' });
-        const data = await res.json();
-        if(!data?.ok || !Array.isArray(data.files)){
-          list.textContent = 'Keine Einträge gefunden.';
-          return;
-        }
-        if(!data.files.length){
-          list.textContent = 'Keine Einträge vorhanden.';
-          return;
-        }
-        const html = data.files.map(f=>{
-          const date = f.mtimeMs ? new Date(f.mtimeMs).toLocaleString('de-DE') : '';
-          const label = f.relative || f.name || '';
-          const rel = f.relative || f.name || '';
-          return `<div class="history-item">
-            <div class="task-title">${escapeHtml(label)}</div>
-            <div class="history-meta">${date}</div>
-            <div class="actions">
-              <button class="btn-ghost btn" type="button" data-open-file="${escapeHtml(rel)}">Open</button>
-              <button class="btn-ghost btn" type="button" data-copy-path="${escapeHtml(rel)}">Copy Path</button>
-            </div>
-          </div>`;
-        }).join('');
-        list.innerHTML = html;
-        list.querySelectorAll('[data-open-file]').forEach(btn=>{
-          btn.addEventListener('click', () => {
-            const rel = btn.getAttribute('data-open-file') || '';
-            if (rel) openHistoryFile(rel);
-          });
-        });
-        list.querySelectorAll('[data-copy-path]').forEach(btn=>{
-          btn.addEventListener('click', () => {
-            const rel = btn.getAttribute('data-copy-path') || '';
-            if (rel) copyText(rel);
-          });
-        });
-      }catch(_){
-        list.textContent = 'Fehler beim Laden.';
-      }
-    }
-
-    async function openHistoryFile(relPath){
-      try{
-        const res = await fetch(`/api/voice/file?path=${encodeURIComponent(relPath)}`, { cache:'no-store' });
-        const data = await res.json();
-        if(!data?.ok) throw new Error(data?.error || 'read failed');
-        const html = mdToTrustedHtml(data.content || '');
-        AOS_modalOpen({
-          title: 'Voice Entry',
-          sub: relPath,
-          html: `<div class="markdown-body">${html}</div>`
-        });
-      }catch(err){
-        alert('Fehler beim Laden: ' + (err?.message || String(err)));
-      }
-    }
-
-    function copyText(text){
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-          alert('Pfad kopiert.');
-        }).catch(() => alert('Kopieren fehlgeschlagen.'));
-      } else {
-        alert(text);
-      }
-    }
-
-
-    function restoreTextareas(){
-      TEXTAREA_IDS.forEach(id=>{
-        const el = document.getElementById(id);
-        if(!el) return;
-        const saved = localStorage.getItem('voice_'+id);
-        if(saved!==null) el.value = saved;
-        el.addEventListener('input', ()=>{
-          try{ localStorage.setItem('voice_'+id, el.value); }catch(_){}
-        });
-        el.addEventListener('blur', ()=>{
-          const section = VOICE_SECTION_BY_ID[id];
-          if(section) autosaveVoiceSection(section);
-        });
-      });
-    }
-
-    function voiceDateStamp(){
-      return new Date().toISOString().slice(0,10);
-    }
-
-    function buildVoiceSectionMarkdown(section){
-      const date = voiceDateStamp();
-      if(section === 'submit'){
-        const facts = document.getElementById('submit_facts')?.value.trim() || '';
-        const feelings = document.getElementById('submit_feelings')?.value.trim() || '';
-        const focus = document.getElementById('submit_focus')?.value.trim() || '';
-        const fruit = document.getElementById('submit_fruit')?.value.trim() || '';
-        const blocks = [];
-        if(facts) blocks.push(`## Facts\n${facts}`);
-        if(feelings) blocks.push(`## Feelings\n${feelings}`);
-        if(focus) blocks.push(`## Focus\n${focus}`);
-        if(fruit) blocks.push(`## Fruit\n${fruit}`);
-        if(!blocks.length) return '';
-        return `# Voice Submit - ${date}\n\n${blocks.join('\n\n')}\n`;
-      }
-      const input = document.getElementById(section+'input')?.value.trim() || '';
-      if(!input) return '';
-      return `# Voice ${section.toUpperCase()} - ${date}\n\n${input}\n`;
-    }
-
-    async function autosaveVoiceSection(section){
-      const md = buildVoiceSectionMarkdown(section);
-      if(!md) return;
-      if(VOICE_AUTOSAVE_CACHE[section] === md) return;
-      VOICE_AUTOSAVE_CACHE[section] = md;
-      try{
-        await fetch('/api/voice/autosave', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ section, date: voiceDateStamp(), markdown: md })
-        });
-      }catch(err){
-        console.warn('Voice autosave failed', err);
-      }
-    }
-
-    function buildVoiceSessionMarkdown(){
-      const now = new Date();
-      const ts = now.toISOString().slice(0,19).replace('T',' ');
-      const stopInput = (document.getElementById('stopinput')?.value || '').trim();
-      const submitFacts = (document.getElementById('submit_facts')?.value || '').trim();
-      const submitFeel = (document.getElementById('submit_feelings')?.value || '').trim();
-      const submitFocus = (document.getElementById('submit_focus')?.value || '').trim();
-      const submitFruit = (document.getElementById('submit_fruit')?.value || '').trim();
-      const struggleInput = (document.getElementById('struggleinput')?.value || '').trim();
-      const strikeInput = (document.getElementById('strikeinput')?.value || '').trim();
-      const stopOutput = (document.getElementById('stopoutput')?.textContent || '').trim();
-      const submitOutput = (document.getElementById('submitoutput')?.textContent || '').trim();
-      const struggleOutput = (document.getElementById('struggleoutput')?.textContent || '').trim();
-      const strikeOutput = (document.getElementById('strikeoutput')?.textContent || '').trim();
-      const fence = (content)=>content?`**Generated Markdown:**\n\n\`\`\`md\n${content}\n\`\`\`\n\n`:'';
-
-      let md = `# The Voice Session – αOS\n\n_${ts}_\n\n---\n\n`;
-      md += `## STOP\n\n**Input:**\n\n${stopInput || '_leer_'}\n\n${fence(stopOutput)}`;
-      md += `---\n\n## SUBMIT\n\n**FACTS:**\n\n${submitFacts || '_leer_'}\n\n**FEELINGS:**\n\n${submitFeel || '_leer_'}\n\n**FOCUS:**\n\n${submitFocus || '_leer_'}\n\n**FRUIT:**\n\n${submitFruit || '_leer_'}\n\n${fence(submitOutput)}`;
-      md += `---\n\n## STRUGGLE\n\n**Input:**\n\n${struggleInput || '_leer_'}\n\n${fence(struggleOutput)}`;
-      md += `---\n\n## STRIKE\n\n**Input:**\n\n${strikeInput || '_leer_'}\n\n${fence(strikeOutput)}`;
-      md += `---\n\n_Generated via The Voice Centre · αOS_\n`;
+    // ── Full session ────────────────────────────────────────────
+    function buildSession() {
+      var ts = new Date().toISOString().slice(0,19).replace("T"," ");
+      var md = "# The Voice Session \u2013 \u03B1OS\n\n_" + ts + "_\n\n---\n\n";
+      md += "## STOP\n\n" + (getVal("stop") || "_leer_") + "\n\n";
+      md += "---\n\n## SUBMIT\n\n";
+      md += "**FACTS:**\n\n" + (getVal("submit_facts") || "_leer_") + "\n\n";
+      md += "**FEELINGS:**\n\n" + (getVal("submit_feelings") || "_leer_") + "\n\n";
+      md += "**FOCUS:**\n\n" + (getVal("submit_focus") || "_leer_") + "\n\n";
+      md += "**FRUIT:**\n\n" + (getVal("submit_fruit") || "_leer_") + "\n\n";
+      md += "---\n\n## STRUGGLE\n\n" + (getVal("struggle") || "_leer_") + "\n\n";
+      md += "---\n\n## STRIKE\n\n" + (getVal("strike") || "_leer_") + "\n\n";
+      md += "---\n\n_Generated via Voice Centre \u00B7 \u03B1OS_\n";
       return md;
     }
 
-    function AOS_modalOpen(opts){
-      const overlay = document.getElementById('aosModalOverlay');
-      const titleEl = document.getElementById('aosModalTitle');
-      const subEl = document.getElementById('aosModalSub');
-      const bodyEl = document.getElementById('aosModalBody');
-      if(!overlay || !titleEl || !bodyEl) return;
-      titleEl.textContent = opts?.title || 'Modal';
-      subEl.textContent = opts?.sub || '';
-      bodyEl.innerHTML = opts?.html || '';
-      overlay.classList.add('show');
-      overlay.setAttribute('aria-hidden','false');
-      overlay._escHandler = (e)=>{ if(e.key==='Escape') AOS_modalClose(); };
-      document.addEventListener('keydown', overlay._escHandler);
-      overlay._clickHandler = (e)=>{ if(e.target===overlay) AOS_modalClose(); };
-      overlay.addEventListener('click', overlay._clickHandler);
-      document.body.classList.add('phase-focus');
+    function exportSession() {
+      var md = buildSession();
+      fetch("/api/voice/export", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ title: "Voice_Session_" + today(), markdown: md })
+      }).then(function(r){ return r.json(); }).then(function(d) {
+        alert(d && d.ok ? "Session exported!" : "Export failed: " + (d && d.error || "unknown"));
+      }).catch(function(e) { alert("Error: " + e.message); });
     }
 
-    function AOS_modalClose(){
-      const overlay = document.getElementById('aosModalOverlay');
-      if(!overlay) return;
-      overlay.classList.remove('show');
-      overlay.setAttribute('aria-hidden','true');
-      if(overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler);
-      if(overlay._clickHandler) overlay.removeEventListener('click', overlay._clickHandler);
-      overlay._escHandler = null; overlay._clickHandler = null;
-      document.body.classList.remove('phase-focus');
-    }
-
-    function openSessionPreview(){
-      const md = buildVoiceSessionMarkdown();
-      const html = `<div class="markdown-body">${(typeof marked !== 'undefined') ? marked.parse(md) : `<pre>${escapeHtml(md)}</pre>`}</div>`;
-      AOS_modalOpen({ title:'Voice Session Preview', sub:'Aus deinen Feldern', html });
-    }
-
-    function mdToTrustedHtml(md){
-      if(typeof marked !== 'undefined' && marked?.parse){
-        return marked.parse(String(md||''));
-      }
-      return `<pre style="white-space:pre-wrap">${escapeHtml(md||'')}</pre>`;
-    }
-
-    function renderPhaseChapters(){
-      const items = [
-        ['chapter-stop', CH_STOP],
-        ['chapter-submit', CH_SUBMIT],
-        ['chapter-struggle', CH_STRUGGLE],
-        ['chapter-strike', CH_STRIKE],
-      ];
-      items.forEach(([id, content])=>{
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.innerHTML = mdToTrustedHtml(content);
-      });
-    }
-
-    function openPhaseModal(phaseId){
-      const phase = PHASES[phaseId];
-      if(!phase) return;
-      let body = `
-        <div class="aos-phase-wrap">
-          <div class="aos-phase-kicker">Phase Focus</div>
-          <div class="aos-phase-title">${phase.title.toUpperCase()}</div>
-          <div class="aos-phase-hint">Schreib roh. Kein “schön”. Nur wahr.</div>
-          <details class="aos-lore" open>
-            <summary>Chapter</summary>
-            <div class="aos-lore-body">
-              <div class="markdown-body">${mdToTrustedHtml(phase.body)}</div>
-            </div>
-          </details>
-      `;
-
-      if(phaseId === 'submit'){
-        const facts = document.getElementById('submit_facts')?.value || '';
-        const feel  = document.getElementById('submit_feelings')?.value || '';
-        const focus = document.getElementById('submit_focus')?.value || '';
-        const fruit = document.getElementById('submit_fruit')?.value || '';
-        body += `
-          <div class="aos-modal-section"><h3>FACTS</h3><textarea class="aos-phase-input" id="aosSubmitFacts">${escapeHtml(facts)}</textarea></div>
-          <div class="aos-modal-section"><h3>FEELINGS</h3><textarea class="aos-phase-input" id="aosSubmitFeel">${escapeHtml(feel)}</textarea></div>
-          <div class="aos-modal-section"><h3>FOCUS</h3><textarea class="aos-phase-input" id="aosSubmitFocus">${escapeHtml(focus)}</textarea></div>
-          <div class="aos-modal-section"><h3>FRUIT</h3><textarea class="aos-phase-input" id="aosSubmitFruit">${escapeHtml(fruit)}</textarea></div>
-          <div class="aos-phase-actions">
-            <button type="button" class="btn-ghost btn" onclick="AOS_modalClose()">Schließen</button>
-            <button type="button" class="btn-ghost btn" onclick="AOS_submitSync()">Übernehmen</button>
-            <button type="button" class="btn" onclick="AOS_submitRun()">Generieren</button>
-          </div>
-        `;
-      }else{
-        const src = document.getElementById(phase.textareaId);
-        body += `
-          <textarea class="aos-phase-input" id="aosPhaseInput">${escapeHtml(src?.value || '')}</textarea>
-          <div class="aos-phase-actions">
-            <button type="button" class="btn-ghost btn" onclick="AOS_modalClose()">Schließen</button>
-            <button type="button" class="btn-ghost btn" onclick="AOS_phaseSync('${phase.textareaId}')">Übernehmen</button>
-            <button type="button" class="btn" onclick="AOS_phaseRun('${phaseId}')">Generieren</button>
-          </div>
-        `;
-      }
-
-      body += `</div>`;
-      AOS_modalOpen({ title: phase.title, html: body });
-      setTimeout(()=>{ document.querySelector('.aos-phase-input')?.focus(); }, 30);
-    }
-
-    function AOS_phaseSync(targetId){
-      const src = document.getElementById('aosPhaseInput');
-      const dst = document.getElementById(targetId);
-      if(!src || !dst) return;
-      dst.value = src.value;
-      try{ localStorage.setItem('voice_'+targetId, dst.value); }catch(_){}
-      const section = VOICE_SECTION_BY_ID[targetId];
-      if(section) autosaveVoiceSection(section);
-    }
-
-    function AOS_phaseRun(phaseId){
-      const phase = PHASES[phaseId];
-      if(!phase || !phase.textareaId) return;
-      AOS_phaseSync(phase.textareaId);
-      generateStep(phaseId);
-    }
-
-    function AOS_submitSync(){
-      const facts = document.getElementById('aosSubmitFacts');
-      const feel = document.getElementById('aosSubmitFeel');
-      const focus = document.getElementById('aosSubmitFocus');
-      const fruit = document.getElementById('aosSubmitFruit');
-      const dstFacts = document.getElementById('submit_facts');
-      const dstFeel = document.getElementById('submit_feelings');
-      const dstFocus = document.getElementById('submit_focus');
-      const dstFruit = document.getElementById('submit_fruit');
-      if (facts && dstFacts) dstFacts.value = facts.value;
-      if (feel && dstFeel) dstFeel.value = feel.value;
-      if (focus && dstFocus) dstFocus.value = focus.value;
-      if (fruit && dstFruit) dstFruit.value = fruit.value;
-      try{
-        if (dstFacts) localStorage.setItem('voice_submit_facts', dstFacts.value);
-        if (dstFeel) localStorage.setItem('voice_submit_feelings', dstFeel.value);
-        if (dstFocus) localStorage.setItem('voice_submit_focus', dstFocus.value);
-        if (dstFruit) localStorage.setItem('voice_submit_fruit', dstFruit.value);
-      }catch(_){}
-      autosaveVoiceSection('submit');
-    }
-
-    function AOS_submitRun(){
-      AOS_submitSync();
-      generateStep('submit');
-    }
-
-    function generateStep(step){
-      let md = '';
-      if(step === 'submit'){
-        const facts = document.getElementById('submit_facts')?.value.trim() || '';
-        const feelings = document.getElementById('submit_feelings')?.value.trim() || '';
-        const focus = document.getElementById('submit_focus')?.value.trim() || '';
-        const fruit = document.getElementById('submit_fruit')?.value.trim() || '';
-        if(!facts && !feelings && !focus && !fruit) return alert('Submit braucht Inhalt.');
-        md = `# SUBMIT: Face the Abyss\\n\\n` +
-             `**FACTS**\\n${facts || '_leer_'}\\n\\n` +
-             `**FEELINGS**\\n${feelings || '_leer_'}\\n\\n` +
-             `**FOCUS**\\n${focus || '_leer_'}\\n\\n` +
-             `**FRUIT**\\n${fruit || '_leer_'}\\n\\n`;
-      }else{
-        const input = document.getElementById(step+'input')?.value.trim() || '';
-        if(!input) return alert('Bitte Text eingeben.');
-        md = `# ${step.toUpperCase()}\\n\\n**Eingabe:**\\n${input}\\n`;
-      }
-      const out = document.getElementById(step+'output');
-      const wrap = document.getElementById(step+'-wrapper');
-      if(out) out.textContent = md;
-      if(wrap) wrap.style.display = 'block';
-      AOS_modalOpen({
-        title: step.toUpperCase(),
-        sub: 'Generated',
-        html: `<pre>${escapeHtml(md)}</pre>
-        <div class="actions" style="margin-top:10px;">
-          <button class="btn-ghost btn" type="button" onclick="AOS_modalClose()">Schließen</button>
-        </div>`
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', ()=>{
-      // Hide loader immediately
-      setTimeout(()=>{
-        const loader = document.getElementById('loader-overlay');
-        if(loader){
-          loader.style.transition = 'opacity 0.35s ease';
-          loader.style.opacity = '0';
-          setTimeout(()=>{ loader.style.display='none'; }, 360);
-        }
-      }, 200);
-
-      initTheme();
-      loadDoc();
-      renderPhaseChapters();
-      restoreTextareas();
-      document.querySelectorAll('nav a[data-tab]').forEach(a=>{
-        a.addEventListener('click', e=>{
-          e.preventDefault();
-          const tabId = a.dataset.tab;
-          if(!tabId) return;
-          if(tabId === 'back'){ window.location.href = '/'; return; }
-          activateTab(tabId);
-          if(tabId === 'history') loadHistory();
-          if(tabId === 'home') window.scrollTo({ top:0, behavior:'smooth' });
+    function clearToday() {
+      if (!confirm("Alle heutigen Eintr\u00E4ge l\u00F6schen?")) return;
+      PHASES.forEach(function(p) {
+        FIELDS[p].forEach(function(fid) {
+          var el = $("#ta-" + fid);
+          if (el) el.value = "";
+          try { localStorage.removeItem(lsKey(fid)); } catch(_) {}
         });
+        autosaveCache[p] = "";
       });
-      document.addEventListener('click', e=>{
-        const btn = e.target;
-        if(!btn?.classList?.contains('copy-btn')) return;
-        const targetId = btn.getAttribute('data-target');
-        const pre = document.getElementById(targetId);
-        if(!pre) return;
-        const text = pre.textContent || '';
-        if(navigator.clipboard?.writeText){
-          navigator.clipboard.writeText(text).then(()=>{
-            const old = btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=old, 800);
-          }).catch(()=>alert('Konnte nicht kopieren.'));
-        }else{
-          alert('Clipboard API nicht verfügbar.');
-        }
-      });
-      const zenBtn = document.getElementById('zenToggle');
-      zenBtn?.addEventListener('click', ()=>{
-        document.body.classList.toggle('zen-mode');
-        zenBtn.textContent = document.body.classList.contains('zen-mode') ? 'Exit Zen' : 'Zen Mode';
-      });
-      document.querySelectorAll('.phase-card').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const target = btn.getAttribute('data-target');
-          if(!target) return;
-          activateTab(target);
-          window.scrollTo({ top:0, behavior:'smooth' });
-        });
-      });
+    }
 
-      // Theme Switcher (Voice legacy themes)
-      const themeSelect = document.getElementById('theme-select');
-      function applyTheme(themeKey = 'obsidian') {
-        const html = document.documentElement;
-        html.setAttribute('data-theme', themeKey);
-        if (themeSelect) themeSelect.value = themeKey;
-        try { localStorage.setItem('voice_theme', themeKey); } catch (_) {}
-      }
-      function initTheme() {
-        let stored = 'obsidian';
-        try { stored = localStorage.getItem('voice_theme') || 'obsidian'; } catch (_) {}
-        applyTheme(stored);
-      }
-      initTheme();
-      themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+    // ── Views ───────────────────────────────────────────────────
+    function switchView(id) {
+      $$(".view").forEach(function(v){ v.classList.remove("active"); });
+      var el = $("#v-" + id);
+      if (el) el.classList.add("active");
+      $$("nav button[data-view]").forEach(function(b) {
+        b.classList.toggle("active", b.getAttribute("data-view") === id);
+      });
+      if (id === "history") loadHistory();
+      if (id === "session") updateSession();
+    }
+
+    function updateSession() {
+      PHASES.forEach(function(p) {
+        var preview = "";
+        FIELDS[p].forEach(function(f) { preview += getVal(f) + " "; });
+        preview = preview.trim();
+        var sp = $("#sp-" + p);
+        var ss = $("#ss-" + p);
+        if (sp) sp.textContent = preview.substring(0, 120);
+        if (ss) { ss.textContent = preview ? "geschrieben" : "leer"; ss.classList.toggle("filled", !!preview); }
+      });
+    }
+
+    // ── History ─────────────────────────────────────────────────
+    function loadHistory() {
+      var c = $("#history-list");
+      if (!c) return;
+      c.innerHTML = '<div class="history-empty">Lade...</div>';
+      fetch("/api/voice/history?limit=50", {cache:"no-store"})
+        .then(function(r){ return r.json(); })
+        .then(function(data) {
+          if (!data || !data.ok || !data.files || !data.files.length) {
+            c.innerHTML = '<div class="history-empty">Keine Eintr\u00E4ge.</div>';
+            return;
+          }
+          c.innerHTML = data.files.map(function(f) {
+            var name = f.relative || f.name || "?";
+            var date = f.mtimeMs ? new Date(f.mtimeMs).toLocaleDateString("de-DE", {day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+            return '<div class="history-item" data-path="' + esc(name) + '">' +
+              '<div class="history-name">' + esc(name) + '</div>' +
+              '<div class="history-date">' + esc(date) + '</div></div>';
+          }).join("");
+          $$(".history-item").forEach(function(item) {
+            item.addEventListener("click", function() { openFile(item.getAttribute("data-path")); });
+          });
+        })
+        .catch(function() { c.innerHTML = '<div class="history-empty">Fehler.</div>'; });
+    }
+
+    function openFile(path) {
+      fetch("/api/voice/file?path=" + encodeURIComponent(path), {cache:"no-store"})
+        .then(function(r){ return r.json(); })
+        .then(function(data) {
+          if (!data || !data.ok) throw new Error(data && data.error || "failed");
+          openModal(path, data.content || "");
+        })
+        .catch(function(e) { alert("Fehler: " + e.message); });
+    }
+
+    // ── Modal ───────────────────────────────────────────────────
+    function openModal(title, content) {
+      var overlay = $("#modal-overlay");
+      $("#modal-title").textContent = title;
+      $("#modal-body").innerHTML = "<pre>" + esc(content) + "</pre>";
+      overlay.classList.add("show");
+      function close() { overlay.classList.remove("show"); document.removeEventListener("keydown", onKey); }
+      function onKey(e) { if (e.key === "Escape") close(); }
+      document.addEventListener("keydown", onKey);
+      overlay.onclick = function(e) { if (e.target === overlay) close(); };
+      $("#modal-close").onclick = close;
+    }
+
+    // ── Init ────────────────────────────────────────────────────
+    // Restore fields
+    PHASES.forEach(function(p) { FIELDS[p].forEach(restoreField); });
+
+    // Textarea listeners
+    $$("textarea").forEach(function(ta) {
+      var fid = ta.id.replace("ta-", "");
+      var phase = null;
+      PHASES.forEach(function(p) { if (FIELDS[p].indexOf(fid) >= 0) phase = p; });
+      ta.addEventListener("input", function() { saveField(fid); });
+      ta.addEventListener("blur", function() { if (phase) autosave(phase); });
     });
+
+    // Nav
+    $$("nav button[data-view]").forEach(function(b) {
+      b.addEventListener("click", function() { switchView(b.getAttribute("data-view")); });
+    });
+
+    // Footer phase cards
+    $$(".footer-phase[data-view]").forEach(function(b) {
+      b.addEventListener("click", function() { switchView(b.getAttribute("data-view")); });
+    });
+
+    // Session cards
+    $$(".session-card[data-goto]").forEach(function(c) {
+      c.addEventListener("click", function() { switchView(c.getAttribute("data-goto")); });
+    });
+
+    // Actions
+    var btnPreview = $("#btn-preview");
+    var btnExport = $("#btn-export");
+    var btnClear = $("#btn-clear");
+    if (btnPreview) btnPreview.addEventListener("click", function() { openModal("Session Preview", buildSession()); });
+    if (btnExport) btnExport.addEventListener("click", exportSession);
+    if (btnClear) btnClear.addEventListener("click", clearToday);
+  })();
   </script>
 </body>
 </html>
