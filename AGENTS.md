@@ -14,6 +14,29 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
   - `voice/` (Voice pillar)
   - `game/` (Game pillar container; sub-centres live in `game/fire/`, `game/focus/`, etc; Fire bot tooling lives in `game/fire/`; Tent bot lives in `game/tent/`; Fruits GAS standalone is external at `~/.gas/fruits-dev`)
 - `scripts/` and `systemd/` provide operational tooling and units (preferred entrypoint: `scripts/hubctl`).
+- Dedicated PWA ctx runtimes (independent from shared PWA runtime `:8780`):
+  - `core4` -> port `8781` -> `aos-pwa-core4-ctx.service`
+  - `fire` -> port `8782` -> `aos-pwa-fire-ctx.service`
+  - `focus` -> port `8783` -> `aos-pwa-focus-ctx.service`
+  - `frame` -> port `8784` -> `aos-pwa-frame-ctx.service`
+  - `freedom` -> port `8785` -> `aos-pwa-freedom-ctx.service`
+  - `door` -> port `8786` -> `aos-pwa-door-ctx.service`
+  - `game` -> port `8787` -> `aos-pwa-game-ctx.service`
+  - `memoirs` -> port `8790` -> `aos-pwa-memoirs-ctx.service`
+  - runtime implementation: `index-node/pwa-app-server.js`
+  - launcher/control: `~/.dotfiles/bin/pwactx` + `core4ctx|firectx|focusctx|framectx|freedomctx|doorctx|gamectx|memoirsctx`
+- Fitnessctx (separate stack):
+  - dedicated Fitness app runtime at port `8788` (`core4-fitness-centre/fitnessctx`)
+  - canonical public path remains `/fitnessctx` (tailscale serve/funnel mapping)
+  - not part of the `aos-pwa-*-ctx.service` set above
+- Central links/menu SSOT (index-node):
+  - canonical file: `index-node/menu.yaml`
+  - `links` = classic centre/router links
+  - `mobile_links` = MOBILE hover launcher links in `index-node/public/index.html`
+  - API sources:
+    - `GET /menu` (returns `links` + `mobile_links`)
+    - `GET /api/centres` (router payload derived from `links`)
+    - `GET /api/pwa/mobile-links` (launcher-only subset)
 - Domain ownership rule:
   - Pillar/domain logic lives inside the pillar directory (`door/`, `game/`, `voice/`, `core4/`).
   - `scripts/` is the orchestration/frontdoor layer and should avoid embedding pillar-specific business logic.

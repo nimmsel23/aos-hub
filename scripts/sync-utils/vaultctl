@@ -33,6 +33,10 @@ STALE_AFTER_DEFAULT="${AOS_VAULT_STALE_AFTER_SECONDS:-1800}"
 LOCK_WAIT_SECONDS_DEFAULT="${AOS_VAULT_LOCK_WAIT_SECONDS:-0}"
 CHECK_SAMPLE_DEFAULT="${AOS_VAULT_CHECK_SAMPLE:-200}"
 ALERT_ON_ERROR_DEFAULT="${AOS_VAULT_ALERT_ON_ERROR:-0}"
+LOG_MAX_BYTES_DEFAULT="${AOS_VAULT_LOG_MAX_BYTES:-52428800}"
+LOG_ROTATIONS_DEFAULT="${AOS_VAULT_LOG_ROTATIONS:-3}"
+VAULT_ALERT_BOT_TOKEN_HARDCODED="8604865239:AAHKVEZCqyLWzt-0yu78gQBqY3qbgrazRWA"
+VAULT_ALERT_CHAT_ID_HARDCODED="${AOS_VAULT_ALERT_CHAT_ID:-8442781308}"
 
 need_tooling() {
   need_cmd rclone "install rclone and configure remote first"
@@ -120,27 +124,66 @@ resolve_effective_alert_on_error() {
   printf "%s\n" "${AOS_VAULT_ALERT_ON_ERROR:-$ALERT_ON_ERROR_DEFAULT}"
 }
 
+resolve_effective_log_max_bytes() {
+  printf "%s\n" "${AOS_VAULT_LOG_MAX_BYTES:-$LOG_MAX_BYTES_DEFAULT}"
+}
+
+resolve_effective_log_rotations() {
+  printf "%s\n" "${AOS_VAULT_LOG_ROTATIONS:-$LOG_ROTATIONS_DEFAULT}"
+}
+
+file_size_bytes() {
+  local path="$1"
+  if has_cmd stat; then
+    stat -c%s "$path" 2>/dev/null && return 0
+  fi
+  wc -c <"$path" 2>/dev/null || echo 0
+}
+
+rotate_log_if_needed() {
+  local max_bytes rotations size i
+  max_bytes="$(resolve_effective_log_max_bytes)"
+  rotations="$(resolve_effective_log_rotations)"
+  [[ "$max_bytes" =~ ^[0-9]+$ ]] || return 0
+  [[ "$rotations" =~ ^[0-9]+$ ]] || return 0
+  [[ -f "$LOG_FILE" ]] || return 0
+
+  size="$(file_size_bytes "$LOG_FILE")"
+  [[ "$size" =~ ^[0-9]+$ ]] || return 0
+  (( size > max_bytes )) || return 0
+
+  if (( rotations <= 0 )); then
+    rm -f "$LOG_FILE"
+    return 0
+  fi
+
+  for (( i = rotations; i >= 2; i-- )); do
+    if [[ -f "$LOG_FILE.$((i - 1))" ]]; then
+      mv -f "$LOG_FILE.$((i - 1))" "$LOG_FILE.$i"
+    fi
+  done
+  mv -f "$LOG_FILE" "$LOG_FILE.1"
+}
+
 send_error_alert() {
   local message="$1"
+  local payload="[vaultctl] $message"
   local alert_on_error
   alert_on_error="$(resolve_effective_alert_on_error)"
   if [[ "$alert_on_error" != "1" ]]; then
     return 0
   fi
 
-  if [[ -n "${AOS_VAULT_ALERT_CMD:-}" ]]; then
-    ALERT_MESSAGE="$message" bash -lc "$AOS_VAULT_ALERT_CMD" >/dev/null 2>&1 || true
+  if [[ -z "$VAULT_ALERT_BOT_TOKEN_HARDCODED" || -z "$VAULT_ALERT_CHAT_ID_HARDCODED" ]] || ! has_cmd curl; then
     return 0
   fi
 
-  if has_cmd telectl; then
-    telectl send "$message" >/dev/null 2>&1 || true
-    return 0
-  fi
-  if has_cmd tele; then
-    tele "$message" >/dev/null 2>&1 || true
-    return 0
-  fi
+  curl -sS --max-time 15 -X POST \
+    "https://api.telegram.org/bot${VAULT_ALERT_BOT_TOKEN_HARDCODED}/sendMessage" \
+    --data-urlencode "chat_id=${VAULT_ALERT_CHAT_ID_HARDCODED}" \
+    --data-urlencode "text=${payload}" \
+    --data "disable_notification=true" \
+    >/dev/null 2>&1 || true
 }
 
 write_units() {
@@ -239,6 +282,7 @@ run_push() {
   [[ "$remote_dir" == *:* ]] || die "Remote must match '<remote>:<path>' (got: $remote_dir)"
 
   ensure_state_dir
+  rotate_log_if_needed
 
   if has_cmd flock; then
     exec {lock_fd}>"$LOCK_FILE"
@@ -270,6 +314,9 @@ run_push() {
     --fast-list
     --transfers "${AOS_VAULT_RCLONE_TRANSFERS:-4}"
     --checkers "${AOS_VAULT_RCLONE_CHECKERS:-8}"
+    --retries "${AOS_VAULT_RCLONE_RETRIES:-6}"
+    --low-level-retries "${AOS_VAULT_RCLONE_LOW_LEVEL_RETRIES:-12}"
+    --retries-sleep "${AOS_VAULT_RCLONE_RETRIES_SLEEP:-10s}"
     --stats 20s
     --stats-one-line
     --log-file "$LOG_FILE"
@@ -333,6 +380,7 @@ run_check() {
   [[ -d "$local_dir" ]] || die "Local vault folder not found: $local_dir"
   [[ "$remote_dir" == *:* ]] || die "Remote must match '<remote>:<path>' (got: $remote_dir)"
   [[ "$sample_n" =~ ^[0-9]+$ ]] || die "--sample must be an integer"
+  rotate_log_if_needed
 
   if systemctl --user is-active --quiet "$PUSH_SERVICE"; then
     record_result "skipped_check_push_active"
@@ -382,6 +430,9 @@ run_check() {
     "$remote_dir/"
     --one-way
     --checkers "${AOS_VAULT_RCLONE_CHECKERS:-8}"
+    --retries "${AOS_VAULT_RCLONE_RETRIES:-6}"
+    --low-level-retries "${AOS_VAULT_RCLONE_LOW_LEVEL_RETRIES:-12}"
+    --retries-sleep "${AOS_VAULT_RCLONE_RETRIES_SLEEP:-10s}"
     --log-file "$LOG_FILE"
     --log-level INFO
   )
@@ -447,7 +498,7 @@ run_monitor() {
 
 render_status() {
   load_env_file
-  local local_dir remote_dir calendar monitor_interval stale_after lock_wait check_sample alert_on_error
+  local local_dir remote_dir calendar monitor_interval stale_after lock_wait check_sample alert_on_error log_max_bytes log_rotations last_stats
   local_dir="$(resolve_effective_local)"
   remote_dir="$(resolve_effective_remote)"
   calendar="$(resolve_effective_calendar)"
@@ -456,6 +507,9 @@ render_status() {
   lock_wait="$(resolve_effective_lock_wait)"
   check_sample="$(resolve_effective_check_sample)"
   alert_on_error="$(resolve_effective_alert_on_error)"
+  log_max_bytes="$(resolve_effective_log_max_bytes)"
+  log_rotations="$(resolve_effective_log_rotations)"
+  last_stats=""
 
   printf "vaultctl push-only status\n"
   printf "local:   %s\n" "$local_dir"
@@ -471,6 +525,8 @@ render_status() {
   printf "lock-wait-seconds: %s\n" "$lock_wait"
   printf "check-sample-default: %s\n" "$check_sample"
   printf "alert-on-error: %s\n" "$alert_on_error"
+  printf "log-max-bytes: %s\n" "$log_max_bytes"
+  printf "log-rotations: %s\n" "$log_rotations"
 
   if [[ -f "$LAST_SUCCESS_FILE" ]]; then
     local ts
@@ -490,6 +546,10 @@ render_status() {
 
   if [[ -f "$LOG_FILE" ]]; then
     printf "log-file: %s\n" "$LOG_FILE"
+    last_stats="$(grep -E 'INFO[[:space:]]*:[[:space:]]+[0-9.]+[[:space:]]+[KMGTPE]i?B[[:space:]]*/.*ETA' "$LOG_FILE" 2>/dev/null | tail -n 1 || true)"
+    if [[ -n "$last_stats" ]]; then
+      printf "progress: %s\n" "${last_stats#*INFO  : }"
+    fi
   fi
 }
 
