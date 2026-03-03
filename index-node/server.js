@@ -1,6 +1,7 @@
 import express from "express";
 import fs from "fs";
 import http from "http";
+import net from "net";
 import os from "os";
 import path from "path";
 import crypto from "crypto";
@@ -27,6 +28,10 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8799);
 const TERMINAL_ENABLED = process.env.TERMINAL_ENABLED !== "0";
 const TERMINAL_ALLOW_REMOTE = process.env.TERMINAL_ALLOW_REMOTE === "1";
+const PWA_CTX_ALLOW_REMOTE = process.env.AOS_PWA_CTX_ALLOW_REMOTE === "1";
+const PWA_CTX_BIN = String(
+  process.env.AOS_PWA_CTX_BIN || path.join(os.homedir(), ".dotfiles", "bin", "pwactx")
+).trim();
 const UI_BASIC_AUTH_ENABLED = process.env.AOS_UI_BASIC_AUTH === "1";
 const UI_BASIC_AUTH_USER = String(process.env.AOS_UI_BASIC_USER || "").trim();
 const UI_BASIC_AUTH_PASS = String(process.env.AOS_UI_BASIC_PASS || "");
@@ -368,6 +373,10 @@ app.use("/api", pinBarrier);
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
+// Fitness context shortcut should land on the current fitness PWA.
+app.get("/fitnessctx", (_req, res) => res.redirect(302, "/pwa/fitness/"));
+app.get("/fitnessctx/", (_req, res) => res.redirect(302, "/pwa/fitness/"));
+app.get(/^\/pwa\/fitness$/, (_req, res) => res.redirect(302, "/pwa/fitness/"));
 
 // PWAs: dev (public/pwa) first, then AOS_PWA_DIR fallback (prod deploy cache)
 app.use("/pwa", express.static(path.join("public", "pwa"), { extensions: ["html"] }));
@@ -397,6 +406,9 @@ app.use("/vendor/marked", express.static("node_modules/marked"));
 const MENU_PATH = process.env.MENU_YAML || "./menu.yaml";
 const GAS_ENV_FILE = String(
   process.env.AOS_GAS_ENV_FILE || path.join(os.homedir(), ".env", "gas.env")
+).trim();
+const GAS_URLS_FILE = String(
+  process.env.AOS_GAS_URLS_FILE || path.join(os.homedir(), ".aos", "gas-urls.yaml")
 ).trim();
 const AOS_REGISTRY_PATH =
   process.env.AOS_REGISTRY_PATH || path.join(os.homedir(), ".aos", "registry.tsv");
@@ -527,6 +539,16 @@ function readSimpleEnvFile(filePath) {
   }
 }
 
+function readSimpleYamlFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return {};
+  try {
+    const parsed = yaml.load(fs.readFileSync(filePath, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function composeGamePageUrl(baseUrl, page) {
   const base = String(baseUrl || "").trim();
   const p = String(page || "").trim();
@@ -542,17 +564,29 @@ function composeGamePageUrl(baseUrl, page) {
 
 function buildPwaGasFallbackRoutes() {
   const gasEnv = readSimpleEnvFile(GAS_ENV_FILE);
-  const fromEnv = (key) => String(process.env[key] || gasEnv[key] || "").trim();
+  const gasUrls = readSimpleYamlFile(GAS_URLS_FILE);
+  const fromEnv = (key, ...aliases) => {
+    for (const k of [key, ...aliases]) {
+      const value = process.env[k] || gasUrls?.[k] || gasEnv[k];
+      if (value) return String(value).trim();
+    }
+    return "";
+  };
 
-  const game = fromEnv("GAME_URL");
-  const frame = fromEnv("FRAME_WEBAPP_URL") || composeGamePageUrl(game, "frame");
-  const freedom = fromEnv("FREEDOM_WEBAPP_URL") || composeGamePageUrl(game, "freedom");
-  const focus = fromEnv("FOCUS_WEBAPP_URL") || composeGamePageUrl(game, "focus");
-  const fire = fromEnv("FIRE_WEBAPP_URL") || composeGamePageUrl(game, "fire");
+  const game = fromEnv("game", "GAME_URL");
+  const frame = fromEnv("frame", "FRAME_WEBAPP_URL") || composeGamePageUrl(game, "frame");
+  const freedom = fromEnv("freedom", "FREEDOM_WEBAPP_URL") || composeGamePageUrl(game, "freedom");
+  const focus = fromEnv("focus", "FOCUS_WEBAPP_URL") || composeGamePageUrl(game, "focus");
+  const fire = fromEnv("fire", "FIRE_WEBAPP_URL") || composeGamePageUrl(game, "fire");
 
   return {
-    core4: fromEnv("CORE4_WEBAPP_URL"),
-    door: fromEnv("DOOR_WEBAPP_URL"),
+    core4: fromEnv("core4", "CORE4_WEBAPP_URL"),
+    door: fromEnv("door", "DOOR_WEBAPP_URL"),
+    voice: fromEnv("voice", "VOICE_WEBAPP_URL"),
+    memoirs: fromEnv("memoirs", "MEMOIRS_WEBAPP_URL"),
+    fitness: fromEnv("fitness", "FITNESS_WEBAPP_URL"),
+    fuel: fromEnv("fuel", "FUEL_WEBAPP_URL"),
+    tent: fromEnv("tent", "TENT_WEBAPP_URL"),
     game,
     frame,
     freedom,
@@ -614,6 +648,108 @@ function loadMenu() {
                cmd: safeSlug(x?.cmd || ""),
   }))
   .filter((x) => x.label && x.url);
+}
+
+function loadMenuDoc() {
+  const doc = yaml.load(fs.readFileSync(MENU_PATH, "utf8"));
+  return doc && typeof doc === "object" ? doc : {};
+}
+
+function loadMobileLinks() {
+  const doc = loadMenuDoc();
+  const links = Array.isArray(doc?.mobile_links) ? doc.mobile_links : [];
+  return links
+    .map((x) => ({
+      label: String(x?.label || "").trim(),
+      url: String(x?.url || "").trim(),
+      target: String(x?.target || "_self").trim() || "_self",
+    }))
+    .filter((x) => x.label && x.url);
+}
+
+function isLocalHttpRequest(req) {
+  const remote = String(req.socket?.remoteAddress || "");
+  return (
+    remote === "127.0.0.1" ||
+    remote === "::1" ||
+    remote === "::ffff:127.0.0.1"
+  );
+}
+
+const PWA_CTX_APPS = new Set(["core4", "fire", "focus", "frame", "freedom", "door", "game", "memoirs"]);
+const PWA_CTX_ACTIONS = new Set(["status", "start", "stop", "restart", "enable", "disable"]);
+
+function parsePwactxStatus(text) {
+  const parsed = {};
+  for (const lineRaw of String(text || "").split(/\r?\n/)) {
+    const line = String(lineRaw || "").trim();
+    if (!line) continue;
+    const idx = line.indexOf(":");
+    if (idx < 1) continue;
+    const key = line.slice(0, idx).trim().toLowerCase().replace(/\s+/g, "_");
+    const value = line.slice(idx + 1).trim();
+    parsed[key] = value;
+  }
+  return parsed;
+}
+
+async function runPwactx(appName, action) {
+  const app = String(appName || "").trim().toLowerCase();
+  const cmd = String(action || "").trim().toLowerCase();
+  if (!PWA_CTX_APPS.has(app)) {
+    throw new Error("invalid_app");
+  }
+  if (!PWA_CTX_ACTIONS.has(cmd)) {
+    throw new Error("invalid_action");
+  }
+  if (!PWA_CTX_BIN || !fs.existsSync(PWA_CTX_BIN)) {
+    throw new Error(`pwactx_missing:${PWA_CTX_BIN}`);
+  }
+  const { stdout, stderr } = await execFileAsync(PWA_CTX_BIN, [app, cmd], {
+    timeout: cmd === "logs" ? 8000 : 6000,
+    maxBuffer: 1024 * 1024,
+  });
+  return {
+    app,
+    action: cmd,
+    stdout: String(stdout || ""),
+    stderr: String(stderr || ""),
+  };
+}
+
+function pwaCtxServiceForApp(appName) {
+  const app = String(appName || "").trim().toLowerCase();
+  const doc = loadMenuDoc();
+  const configured = doc?.pwa_ctx && typeof doc.pwa_ctx === "object" ? doc.pwa_ctx : {};
+  const service = String(configured?.[app]?.service || `aos-pwa-${app}-ctx.service`).trim();
+  return service;
+}
+
+async function runPwaCtxAction(appName, action) {
+  const app = String(appName || "").trim().toLowerCase();
+  const cmd = String(action || "").trim().toLowerCase();
+  if (cmd === "status") {
+    const run = await runPwactx(app, "status");
+    return {
+      app,
+      action: cmd,
+      service: pwaCtxServiceForApp(app),
+      stdout: run.stdout,
+      stderr: run.stderr,
+    };
+  }
+  const service = pwaCtxServiceForApp(app);
+  const { stdout, stderr } = await execFileAsync("systemctl", ["--user", cmd, service], {
+    timeout: 7000,
+    maxBuffer: 1024 * 1024,
+  });
+  return {
+    app,
+    action: cmd,
+    service,
+    stdout: String(stdout || ""),
+    stderr: String(stderr || ""),
+  };
 }
 
 
@@ -2689,7 +2825,12 @@ function getCore4StorageDir() {
 }
 
 function getCore4EventRootDir() {
-  return path.join(getCore4StorageDir(), ".core4", "events");
+  const base = getCore4StorageDir();
+  const flat = path.join(base, "events");
+  const legacy = path.join(base, ".core4", "events");
+  if (fs.existsSync(flat)) return flat;
+  if (fs.existsSync(legacy)) return legacy;
+  return flat;
 }
 
 function getCore4MountDir() {
@@ -2697,9 +2838,11 @@ function getCore4MountDir() {
 }
 
 function getCore4EventRootDirs() {
+  const mount = getCore4MountDir();
   const dirs = [
     getCore4EventRootDir(),
-    path.join(getCore4MountDir(), ".core4", "events"),
+    path.join(mount, "events"),
+    path.join(mount, ".core4", "events"),
   ];
   return Array.from(new Set(dirs));
 }
@@ -4518,11 +4661,88 @@ function extractTitleAndExcerpt(filePath) {
 // UI JSON
 app.get("/menu", (_req, res) => {
   try {
-    const doc = yaml.load(fs.readFileSync(MENU_PATH, "utf8"));
+    const doc = loadMenuDoc();
     const links = Array.isArray(doc?.links) ? doc.links : [];
-    res.json({ links });
+    const mobile_links = loadMobileLinks();
+    res.json({ links, mobile_links });
   } catch (err) {
-    res.status(500).json({ links: [], error: String(err) });
+    res.status(500).json({ links: [], mobile_links: [], error: String(err) });
+  }
+});
+
+app.get("/api/pwa/mobile-links", (_req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      updated_at: fs.existsSync(MENU_PATH) ? new Date(fs.statSync(MENU_PATH).mtimeMs).toISOString() : "",
+      links: loadMobileLinks(),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, links: [], error: String(err) });
+  }
+});
+
+app.get("/api/pwa/ctx", async (req, res) => {
+  try {
+    if (!PWA_CTX_ALLOW_REMOTE && !isLocalHttpRequest(req)) {
+      return res.status(403).json({ ok: false, error: "local_only" });
+    }
+    const apps = Array.from(PWA_CTX_APPS);
+    const menuDoc = loadMenuDoc();
+    const configured = menuDoc?.pwa_ctx && typeof menuDoc.pwa_ctx === "object" ? menuDoc.pwa_ctx : {};
+    const results = [];
+    for (const appName of apps) {
+      try {
+        const run = await runPwactx(appName, "status");
+        results.push({
+          ok: true,
+          app: appName,
+          config: configured[appName] || null,
+          status: parsePwactxStatus(run.stdout),
+        });
+      } catch (err) {
+        results.push({
+          ok: false,
+          app: appName,
+          config: configured[appName] || null,
+          error: String(err?.message || err),
+        });
+      }
+    }
+    return res.json({
+      ok: true,
+      local_only: !PWA_CTX_ALLOW_REMOTE,
+      apps: results,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/pwa/ctx/:app", async (req, res) => {
+  try {
+    if (!PWA_CTX_ALLOW_REMOTE && !isLocalHttpRequest(req)) {
+      return res.status(403).json({ ok: false, error: "local_only" });
+    }
+    const appName = String(req.params.app || "").trim().toLowerCase();
+    const action = String(req.body?.action || "").trim().toLowerCase();
+    if (!PWA_CTX_APPS.has(appName)) {
+      return res.status(400).json({ ok: false, error: "invalid_app" });
+    }
+    if (!PWA_CTX_ACTIONS.has(action)) {
+      return res.status(400).json({ ok: false, error: "invalid_action" });
+    }
+    const run = await runPwaCtxAction(appName, action);
+    return res.json({
+      ok: true,
+      app: appName,
+      action,
+      status: action === "status" ? parsePwactxStatus(run.stdout) : undefined,
+      stdout: run.stdout,
+      stderr: run.stderr,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
 });
 
@@ -4595,11 +4815,31 @@ app.get("/api/pwa/gas-fallback", (req, res) => {
       routes,
       gas_env_file: GAS_ENV_FILE,
       gas_env_exists: fs.existsSync(GAS_ENV_FILE),
+      gas_urls_file: GAS_URLS_FILE,
+      gas_urls_exists: fs.existsSync(GAS_URLS_FILE),
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
 });
+
+// GAS fallback map for quick inspection (no app filter).
+app.get("/gas", (_req, res) => {
+  try {
+    const routes = buildPwaGasFallbackRoutes();
+    return res.json({
+      ok: true,
+      routes,
+      gas_env_file: GAS_ENV_FILE,
+      gas_env_exists: fs.existsSync(GAS_ENV_FILE),
+      gas_urls_file: GAS_URLS_FILE,
+      gas_urls_exists: fs.existsSync(GAS_URLS_FILE),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+app.get("/gas/", (_req, res) => res.redirect(302, "/gas"));
 
 // Centre routes (legacy redirects)
 app.get("/generals", (_req, res) => res.redirect(302, "/game/tent"));
@@ -5437,379 +5677,24 @@ app.get("/api/door/warstack/:id", (req, res) => {
   }
 });
 
-function filterFireTasksByDomain(tasks, domainRaw) {
-  const domain = String(domainRaw || "").trim().toLowerCase();
-  if (!domain) return tasks;
-  const allowed = new Set(["body", "being", "balance", "business"]);
-  if (!allowed.has(domain)) return null;
-  return tasks.filter((task) => String(task.domain || "").toLowerCase() === domain);
-}
-
-// Fire Week (TickTick primary, GCal fallback, Taskwarrior offline fallback)
-app.get("/api/fire/week", async (req, res) => {
-  const { start, end, week, rangeLabel } = getWeekRangeLocal();
-  let tasks = [];
-  let error = null;
-  let source = "ticktick";
-
-  // Try TickTick FIRST (primary cloud source)
-  try {
-    const raw = await ticktickListProjectTasks();
-    const filtered = raw
-      .filter((task) => !task.isCompleted && !task.completedTime)
-      .filter((task) => taskInRange(task, start, end))
-      .map((task) => {
-        const due = parseTickTickDue(task);
-        return {
-          id: task.id,
-          title: task.title || "(no title)",
-          tags: task.tags || [],
-          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          domain: detectDomainFromTags(task.tags),
-          overdue: due ? due < start : false
-        };
-      });
-
-    tasks = filtered.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-      return da - db;
-    });
-  } catch (tickErr) {
-    // TickTick failed, try Taskwarrior as offline fallback
-    source = "taskwarrior";
-    error = tickErr?.message || String(tickErr);
-    try {
-      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
-      if (!ok) throw new Error(taskError || "task-export-failed");
-
-      const filtered = twTasks
-        .filter((task) => {
-          const st = String(task.status || "").toLowerCase();
-          return st === "pending" || st === "waiting";
-        })
-        .filter((task) => {
-          if (fireTaskInRange(task, start, end, true)) return true;
-          if (!FIRE_INCLUDE_UNDATED) return false;
-          if (fireTaskPrimaryDate(task)) return false;
-          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
-        })
-        .map((task) => normalizeFireTask(task, start));
-
-      tasks = filtered.sort((a, b) => {
-        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-        return da - db;
-      });
-      error = null;
-    } catch (twErr) {
-      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
-    }
-  }
-
-  const filtered = filterFireTasksByDomain(tasks, req.query.domain);
-  if (filtered === null) {
-    return res.status(400).json({ ok: false, error: "invalid_domain" });
-  }
-
-  return res.json({
-    ok: tasks.length > 0 || !error,
-    source,
-    week,
-    rangeLabel,
-    tasks: filtered,
-    error,
-    gcal_url: FIRE_GCAL_EMBED_URL || "",
-  });
-});
-
-// Fire Day (TickTick primary, Taskwarrior offline fallback)
-app.get("/api/fire/day", async (req, res) => {
-  const { start, end, label } = getDayRangeLocal();
-  let tasks = [];
-  let error = null;
-  let source = "ticktick";
-
-  // Try TickTick FIRST (primary cloud source)
-  try {
-    const raw = await ticktickListProjectTasks();
-    const filtered = raw
-      .filter((task) => !task.isCompleted && !task.completedTime)
-      .filter((task) => taskInRange(task, start, end))
-      .map((task) => {
-        const due = parseTickTickDue(task);
-        return {
-          id: task.id,
-          title: task.title || "(no title)",
-          tags: task.tags || [],
-          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          domain: detectDomainFromTags(task.tags),
-          overdue: due ? due < start : false
-        };
-      });
-
-    tasks = filtered.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-      return da - db;
-    });
-  } catch (tickErr) {
-    // TickTick failed, try Taskwarrior as offline fallback
-    source = "taskwarrior";
-    error = tickErr?.message || String(tickErr);
-    try {
-      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
-      if (!ok) throw new Error(taskError || "task-export-failed");
-
-      const filtered = twTasks
-        .filter((task) => {
-          const st = String(task.status || "").toLowerCase();
-          return st === "pending" || st === "waiting";
-        })
-        .filter((task) => {
-          if (fireTaskInRange(task, start, end, true)) return true;
-          if (!FIRE_INCLUDE_UNDATED) return false;
-          if (fireTaskPrimaryDate(task)) return false;
-          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
-        })
-        .map((task) => normalizeFireTask(task, start));
-
-      tasks = filtered.sort((a, b) => {
-        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-        return da - db;
-      });
-      error = null;
-    } catch (twErr) {
-      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
-    }
-  }
-
-  const filtered = filterFireTasksByDomain(tasks, req.query.domain);
-  if (filtered === null) {
-    return res.status(400).json({ ok: false, error: "invalid_domain" });
-  }
-
-  return res.json({
-    ok: tasks.length > 0 || !error,
-    source,
-    date: label,
-    tasks: filtered,
-    error,
-    gcal_url: FIRE_GCAL_EMBED_URL || "",
-  });
-});
-
-// Fire Week Tasks (explicit for Game/Fire UI)
-app.get("/api/fire/tasks-week", async (req, res) => {
-  const { start, end, week, rangeLabel } = getWeekRangeLocal();
-  let tasks = [];
-  let error = null;
-  let source = "ticktick";
-
-  try {
-    const raw = await ticktickListProjectTasks();
-    const filtered = raw
-      .filter((task) => !task.isCompleted && !task.completedTime)
-      .filter((task) => taskInRange(task, start, end))
-      .map((task) => {
-        const due = parseTickTickDue(task);
-        return {
-          id: task.id,
-          title: task.title || "(no title)",
-          tags: task.tags || [],
-          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          domain: detectDomainFromTags(task.tags),
-          overdue: due ? due < start : false
-        };
-      });
-
-    tasks = filtered.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-      return da - db;
-    });
-  } catch (tickErr) {
-    source = "taskwarrior";
-    error = tickErr?.message || String(tickErr);
-    try {
-      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
-      if (!ok) throw new Error(taskError || "task-export-failed");
-
-      const filtered = twTasks
-        .filter((task) => {
-          const st = String(task.status || "").toLowerCase();
-          return st === "pending" || st === "waiting";
-        })
-        .filter((task) => {
-          if (fireTaskInRange(task, start, end, true)) return true;
-          if (!FIRE_INCLUDE_UNDATED) return false;
-          if (fireTaskPrimaryDate(task)) return false;
-          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
-        })
-        .map((task) => normalizeFireTask(task, start));
-
-      tasks = filtered.sort((a, b) => {
-        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-        return da - db;
-      });
-      error = null;
-    } catch (twErr) {
-      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
-    }
-  }
-
-  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
-  if (domainFiltered === null) {
-    return res.status(400).json({ ok: false, error: "invalid_domain" });
-  }
-
-  return res.json({
-    ok: tasks.length > 0 || !error,
-    source,
-    week,
-    rangeLabel,
-    tasks: domainFiltered,
-    error,
-    gcal_url: FIRE_GCAL_EMBED_URL || "",
-  });
-});
-
-// Fire Day Tasks (explicit for Game/Fire UI)
-app.get("/api/fire/tasks-day", async (req, res) => {
-  const { start, end, label } = getDayRangeLocal();
-  let tasks = [];
-  let error = null;
-  let source = "ticktick";
-
-  try {
-    const raw = await ticktickListProjectTasks();
-    const filtered = raw
-      .filter((task) => !task.isCompleted && !task.completedTime)
-      .filter((task) => taskInRange(task, start, end))
-      .map((task) => {
-        const due = parseTickTickDue(task);
-        return {
-          id: task.id,
-          title: task.title || "(no title)",
-          tags: task.tags || [],
-          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          domain: detectDomainFromTags(task.tags),
-          overdue: due ? due < start : false
-        };
-      });
-
-    tasks = filtered.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-      return da - db;
-    });
-  } catch (tickErr) {
-    source = "taskwarrior";
-    error = tickErr?.message || String(tickErr);
-    try {
-      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
-      if (!ok) throw new Error(taskError || "task-export-failed");
-
-      const filtered = twTasks
-        .filter((task) => {
-          const st = String(task.status || "").toLowerCase();
-          return st === "pending" || st === "waiting";
-        })
-        .filter((task) => {
-          if (fireTaskInRange(task, start, end, true)) return true;
-          if (!FIRE_INCLUDE_UNDATED) return false;
-          if (fireTaskPrimaryDate(task)) return false;
-          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
-        })
-        .map((task) => normalizeFireTask(task, start));
-
-      tasks = filtered.sort((a, b) => {
-        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
-        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
-        return da - db;
-      });
-      error = null;
-    } catch (twErr) {
-      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
-    }
-  }
-
-  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
-  if (domainFiltered === null) {
-    return res.status(400).json({ ok: false, error: "invalid_domain" });
-  }
-
-  return res.json({
-    ok: tasks.length > 0 || !error,
-    source,
-    date: label,
-    tasks: domainFiltered,
-    error,
-    gcal_url: FIRE_GCAL_EMBED_URL || "",
-  });
-});
-
 app.get("/fire/day", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/day${query}`);
+  return res.redirect(302, `/api/fire/tasks-day${query}`);
 });
 
 app.get("/fire/week", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/week${query}`);
+  return res.redirect(302, `/api/fire/tasks-week${query}`);
 });
 
 app.get("/fired", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/day${query}`);
+  return res.redirect(302, `/api/fire/tasks-day${query}`);
 });
 
 app.get("/firew", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/week${query}`);
-});
-
-// Fire Week Range (for next week planning UI)
-app.get("/api/fire/week-range", (req, res) => {
-  try {
-    const dateParam = req.query?.date;
-    const date = dateParam ? new Date(dateParam) : new Date();
-
-    if (isNaN(date.getTime())) {
-      return res.status(400).json({ ok: false, error: "invalid date" });
-    }
-
-    const { start, end, week, rangeLabel } = getWeekRangeLocal(date);
-
-    // Calculate week dates for calendar display
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push({
-        date: d.toISOString().split('T')[0],
-        label: d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }),
-        dayOfWeek: d.getDay()
-      });
-    }
-
-    return res.json({
-      ok: true,
-      week,
-      rangeLabel,
-      start: start.toISOString(),
-      end: end.toISOString(),
-      days
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: String(err) });
-  }
+  return res.redirect(302, `/api/fire/tasks-week${query}`);
 });
 
 
@@ -7293,6 +7178,37 @@ app.get("/api/centres", (_req, res) => {
 
 // Health
 app.get("/health", (_req, res) => res.json({ ok: true, service: "index-centre" }));
+
+function checkPort(port, host = "127.0.0.1", timeoutMs = 400) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => done(true));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
+    socket.connect(port, host);
+  });
+}
+
+app.get("/api/system/ports", async (_req, res) => {
+  try {
+    const ports = [8799, 8780, 8080, 8788];
+    const checks = await Promise.all(ports.map(async (port) => ({
+      port,
+      ok: await checkPort(port),
+    })));
+    return res.json({ ok: true, ports: checks });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 
 // Redirect router: /voice, /door, /war ...

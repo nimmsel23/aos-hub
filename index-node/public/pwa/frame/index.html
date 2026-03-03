@@ -21,7 +21,7 @@
   </header>
 
   <!-- Shell: two-panel layout (list | editor), data-view switches on mobile -->
-  <div class="shell" data-view="list">
+  <div class="shell" data-view="list" data-mode="editor">
 
     <!-- ── Left sidebar ── -->
     <aside class="panel-left">
@@ -39,7 +39,7 @@
 
     <!-- ── Right editor panel ── -->
     <section class="panel-right">
-      <div class="editor-head">
+      <div class="editor-head" id="editorHead">
         <!-- Back button: mobile only -->
         <button class="back-btn" id="btnBack" aria-label="Back to list">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -49,10 +49,27 @@
         <div class="editor-title" id="editorTitle">—</div>
         <button class="save-btn" id="btnSave">Save</button>
       </div>
-      <div class="editor-wrap">
+      <div class="editor-wrap" id="editorWrap">
         <textarea id="editor" class="editor" spellcheck="false" placeholder="Describe your current reality…"></textarea>
       </div>
-      <div class="editor-hint">Markdown · Obsidian-compatible</div>
+      <div class="editor-hint" id="editorHint">Markdown · Obsidian-compatible</div>
+
+      <!-- Wizard (sequential full frame) -->
+      <div class="wizard" id="wizardWrap">
+        <div class="wizard-head">
+          <div class="wizard-title" id="wizardTitle">FRAME MAP</div>
+          <div class="wizard-progress" id="wizardProgress">1 / 20</div>
+        </div>
+        <div class="wizard-meta">
+          <div class="wizard-domain" id="wizardDomain">BODY</div>
+          <div class="wizard-question" id="wizardQuestion">Where am I now?</div>
+        </div>
+        <textarea id="wizardInput" class="editor" spellcheck="false" placeholder="Answer..."></textarea>
+        <div class="wizard-actions">
+          <button class="wizard-btn ghost" id="wizardBack">Back</button>
+          <button class="wizard-btn" id="wizardNext">Next</button>
+        </div>
+      </div>
     </section>
 
   </div><!-- /.shell -->

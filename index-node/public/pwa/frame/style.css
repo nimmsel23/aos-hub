@@ -313,6 +313,97 @@ body {
   border-top: 1px solid var(--line);
 }
 
+/* ── Wizard ── */
+.wizard {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 24px;
+  overflow: hidden;
+}
+
+.wizard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wizard-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .2em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.wizard-progress {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: var(--muted);
+}
+
+.wizard-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wizard-domain {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.wizard-question {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.wizard-btn {
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.wizard-btn.ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* Wizard mode hides editor UI */
+.shell[data-mode="wizard"] .editor-head,
+.shell[data-mode="wizard"] .editor-wrap,
+.shell[data-mode="wizard"] .editor-hint {
+  display: none;
+}
+
+.shell[data-mode="wizard"] .wizard {
+  display: flex;
+}
+
+.shell[data-mode="wizard"] .panel-left {
+  display: none;
+}
+
 /* ── Toast ── */
 .toast {
   position: fixed;

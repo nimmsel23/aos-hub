@@ -45,6 +45,20 @@ const FOCUS_CASCADE_HEADER_BEGIN = "<!-- AOS:FOCUS:CASCADE:FREEDOM:HEADER:BEGIN 
 const FOCUS_CASCADE_HEADER_END = "<!-- AOS:FOCUS:CASCADE:FREEDOM:HEADER:END -->";
 const FOCUS_CASCADE_FOOTER_BEGIN = "<!-- AOS:FOCUS:CASCADE:FRAME:FOOTER:BEGIN -->";
 const FOCUS_CASCADE_FOOTER_END = "<!-- AOS:FOCUS:CASCADE:FRAME:FOOTER:END -->";
+const GAME_DIR = path.join(process.cwd(), "..", "game");
+const GAME_CHAPTERS = [
+  { id: "32", title: "Frame", file: "32 - Frame.md" },
+  { id: "33", title: "Freedom", file: "33 - Freedom.md" },
+  { id: "34", title: "Focus", file: "34 - Focus.md" },
+  { id: "35", title: "Fire", file: "35 - Fire.md" },
+  { id: "36", title: "Game", file: "36 - Game.md" },
+  { id: "37", title: "The Life", file: "37 - The Life.md" },
+  { id: "38", title: "The Mission", file: "38 - The Mission.md" },
+  { id: "39", title: "The Fire", file: "39 - The Fire.md" },
+  { id: "40", title: "The Daily", file: "40 - The Daily.md" },
+  { id: "41", title: "The General's Tent", file: "41 - General_s Tent.md" },
+  { id: "42", title: "The Alpha Odyssey", file: "42 - The Alpha Odyssey.md" },
+];
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -121,6 +135,14 @@ function freedomFile(year, domain) {
 
 function focusFile(month, domain) {
   return path.join(FOCUS_DIR, String(month), `${domain}.md`);
+}
+
+function chapterById(id) {
+  return GAME_CHAPTERS.find((c) => String(c.id) === String(id));
+}
+
+function chapterFilePath(chapter) {
+  return path.join(GAME_DIR, chapter.file);
 }
 
 function frameSourceRef(domain) {
@@ -333,6 +355,32 @@ uiRouter.use("/tent", tentRouter);
 
 // ── Game PWA API router (/api/game) ──────────────────────────────────────────
 
+gameApiRouter.get("/chapters", (_req, res) => {
+  try {
+    const chapters = GAME_CHAPTERS.map((c) => ({
+      id: c.id,
+      title: c.title,
+    }));
+    return jsonOk(res, { chapters }, { chapters });
+  } catch (err) {
+    return jsonErr(res, 500, String(err));
+  }
+});
+
+gameApiRouter.get("/chapters/:id", (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const chapter = chapterById(id);
+    if (!chapter) return jsonErr(res, 404, "chapter_not_found");
+    const filePath = chapterFilePath(chapter);
+    if (!fs.existsSync(filePath)) return jsonErr(res, 404, "chapter_missing");
+    const content = readText(filePath);
+    return jsonOk(res, { id: chapter.id, title: chapter.title, content }, { id: chapter.id, title: chapter.title, content });
+  } catch (err) {
+    return jsonErr(res, 500, String(err));
+  }
+});
+
 // FRAME
 gameApiRouter.get("/frame/domains", (_req, res) => {
   try {
@@ -386,6 +434,54 @@ gameApiRouter.post("/frame/:domain/save", (req, res) => {
     const state = normalizeFrameState(parsed, domain, todayISO());
     writeText(frameFilePath(domain), frameStateToYaml(state));
     return jsonOk(res, { domain, updated: state.updated }, { domain, updated: state.updated });
+  } catch (err) {
+    return jsonErr(res, 500, String(err));
+  }
+});
+
+gameApiRouter.get("/annual/frame", (_req, res) => {
+  try {
+    ensureDir(FRAME_DIR);
+    const states = {};
+    VALID_DOMAINS.forEach((domain) => {
+      const filePath = frameFilePath(domain);
+      const content = ensureFileWithDefault(filePath, () => frameDefaultTemplate(domain));
+      const parsed = parseFrameStateContent(content);
+      const state = parsed ? normalizeFrameState(parsed, domain) : normalizeFrameState({}, domain);
+      states[domain] = state;
+    });
+    return jsonOk(res, { states }, { states });
+  } catch (err) {
+    return jsonErr(res, 500, String(err));
+  }
+});
+
+gameApiRouter.post("/annual/frame", (req, res) => {
+  try {
+    const answers = req.body?.answers || req.body?.states;
+    if (!answers || typeof answers !== "object") return jsonErr(res, 400, "invalid_payload");
+
+    const updatedDomains = [];
+    VALID_DOMAINS.forEach((domain) => {
+      const domainPayload = answers[domain];
+      if (!domainPayload || typeof domainPayload !== "object") return;
+      const filePath = frameFilePath(domain);
+      const content = ensureFileWithDefault(filePath, () => frameDefaultTemplate(domain));
+      const parsed = parseFrameStateContent(content) || {};
+      const state = normalizeFrameState(parsed, domain, todayISO());
+      const questions = state.questions || {};
+      Object.keys(questions).forEach((key) => {
+        if (typeof domainPayload[key] === "string") {
+          questions[key] = String(domainPayload[key]).trim();
+        }
+      });
+      state.questions = questions;
+      writeText(frameFilePath(domain), frameStateToYaml(state));
+      updatedDomains.push(domain);
+    });
+
+    if (!updatedDomains.length) return jsonErr(res, 400, "no_domains_updated");
+    return jsonOk(res, { updated: updatedDomains }, { updated: updatedDomains });
   } catch (err) {
     return jsonErr(res, 500, String(err));
   }

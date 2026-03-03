@@ -207,7 +207,7 @@ Correction: Create War Stack "BEING Daily Foundation" from VOICE sessions
 
 Track strategic state for each domain (BODY/BEING/BALANCE/BUSINESS) across all centres (Frame/Freedom/Focus/Fire).
 
-**Storage:** `~/AlphaOS-Vault/.states/{DOMAIN}.json`
+**Storage:** `~/vault/.states/{DOMAIN}.json`
 
 **Schema:** `domain-state-schema.json` (see separate file)
 
@@ -753,10 +753,10 @@ If domain-states are corrupt or outdated:
 
 ```bash
 # Backup existing states
-cp -r ~/AlphaOS-Vault/.states ~/AlphaOS-Vault/.states.backup
+cp -r ~/vault/.states ~/vault/.states.backup
 
 # Remove states
-rm ~/AlphaOS-Vault/.states/*.json
+rm ~/vault/.states/*.json
 
 # Re-generate
 curl -X POST http://localhost:8799/api/tent/init
@@ -773,7 +773,7 @@ curl -X POST http://localhost:8799/api/tent/init
                               ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    DOMAIN-STATE LAYER                        │
-│  ~/AlphaOS-Vault/.states/{BODY,BEING,BALANCE,BUSINESS}.json│
+│  ~/vault/.states/{BODY,BEING,BALANCE,BUSINESS}.json│
 │                                                              │
 │  Each domain-state tracks:                                  │
 │  - Frame/Freedom/Focus/Fire Maps (references + metadata)    │

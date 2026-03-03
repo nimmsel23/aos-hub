@@ -86,9 +86,27 @@ def core4_day_path(day: date) -> Path:
     return primary_core4_dir() / f"core4_day_{day.isoformat()}.json"
 
 
+def _core4_store_dir(base_dir: Path, leaf: str) -> Path:
+    """
+    Resolve Core4 data folders with flat-first semantics and legacy fallback.
+
+    New layout:
+      <base>/<leaf>
+    Legacy layout:
+      <base>/.core4/<leaf>
+    """
+    flat = base_dir / leaf
+    legacy = base_dir / ".core4" / leaf
+    if flat.exists():
+        return flat
+    if legacy.exists():
+        return legacy
+    return flat
+
+
 def core4_event_dir(base_dir: Path) -> Path:
     # Append-only event ledger; safe with multiple writers + sync lag.
-    return base_dir / ".core4" / "events"
+    return _core4_store_dir(base_dir, "events")
 
 
 def _safe_filename(value: str) -> str:
@@ -110,8 +128,8 @@ def core4_monthly_csv_path(month: str) -> Path:
 
 
 def core4_sealed_dir() -> Path:
-    return primary_core4_dir() / ".core4" / "sealed"
+    return _core4_store_dir(primary_core4_dir(), "sealed")
 
 
 def core4_sealed_months_dir() -> Path:
-    return primary_core4_dir() / ".core4" / "sealed-months"
+    return _core4_store_dir(primary_core4_dir(), "sealed-months")

@@ -4,17 +4,17 @@ Das zugehörige `framectl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 
 ## Scope
 - `game/frame/` owns Frame Map domain logic and tooling.
-- Vault writes go to `~/AlphaOS-Vault/Game/Frame/DOMAIN_frame.md`.
-- Node reads same path — filename convention must stay stable.
+- Editor state lives at `~/.aos/frame/{domain}.yaml` (SSOT for Frame edits).
+- Vault exports land at `~/vault/Game/Frame/` via `/api/game/export`.
 
 ## Stack
-- `frame.py` — Python engine (read/write vault)
+- `frame.py` — Python engine (read/write `.aos` frame state)
 - `framectl` — Bash dispatcher (ctl pattern)
 - `frame.fish` — Fish dashboard (gum UI wrapper)
 
 ## Filename Convention
-`{DOMAIN}_frame.md` — e.g. `BODY_frame.md`, `BUSINESS_frame.md`
-Node expects exactly this format via `scanForMap()`.
+`{domain}.yaml` — e.g. `body.yaml`, `business.yaml` in `~/.aos/frame/`.
+Vault exports are handled by `/api/game/export` (domain-aware merge).
 
 ## Commands
 ```bash

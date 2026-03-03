@@ -202,7 +202,7 @@ TENT (Weekly review - Return and report)
 
 **Entry:** `http://127.0.0.1:8799/game` (Main Game Hub)
 **Backend:** `index-node/server.js`
-**Storage:** Vault `~/AlphaOS-Vault/Game/`
+**Storage:** Vault `~/vault/Game/`
 
 #### Game Hub
 
@@ -222,7 +222,8 @@ TENT (Weekly review - Return and report)
 **Entry:** `http://127.0.0.1:8799/game/frame`
 
 **Storage:**
-- Vault: `~/AlphaOS-Vault/Game/Frame` (local)
+- Editor state: `~/.aos/frame/{domain}.yaml`
+- Vault export: `~/vault/Game/Frame` (local)
 
 **API:**
 - Frame data exported via `GET /api/game/export` (shared Game export)
@@ -231,6 +232,7 @@ TENT (Weekly review - Return and report)
 - Local Frame Map creation
 - 5 required questions (Where am I? How did I get here? etc.)
 - Export to Vault markdown
+- CLI parity: `framectl` should use the same state + export mechanisms as the Node UI
 
 ---
 
@@ -239,7 +241,8 @@ TENT (Weekly review - Return and report)
 **Entry:** `http://127.0.0.1:8799/game/freedom`
 
 **Storage:**
-- Vault: `~/AlphaOS-Vault/Game/Freedom` (local)
+- Editor state: `~/.aos/freedom/YYYY/{domain}.md` (YAML frontmatter)
+- Vault export: `~/vault/Game/Freedom` (local)
 
 **API:**
 - Export via `GET /api/game/export` (shared Game export)
@@ -256,7 +259,8 @@ TENT (Weekly review - Return and report)
 **Entry:** `http://127.0.0.1:8799/game/focus`
 
 **Storage:**
-- Vault: `~/AlphaOS-Vault/Game/Focus` (local)
+- Editor state: `~/.aos/focus/YYYY-MM/{domain}.md` (YAML frontmatter)
+- Vault export: `~/vault/Game/Focus` (local)
 
 **API:**
 - Export via `GET /api/game/export` (shared Game export)
@@ -272,7 +276,7 @@ TENT (Weekly review - Return and report)
 
 **Entry:** `http://127.0.0.1:8799/game/fire`
 **Backend:** `index-node/server.js`
-**Storage:** Vault `~/AlphaOS-Vault/Game/Fire/`
+**Storage:** Vault `~/vault/Game/Fire/`
 
 **API:**
 - `GET /api/fire/day` - Today's Fire Map (Taskwarrior primary, TickTick fallback)
@@ -299,7 +303,7 @@ FIRE_TASK_DATE_FIELDS=scheduled,due
 **Entry:** `http://127.0.0.1:8799/game/tent`
 
 **Storage:**
-- Vault: `~/AlphaOS-Vault/Game/Tent` (local)
+- Vault: `~/vault/Game/Tent` (local)
 
 **API:**
 ```bash

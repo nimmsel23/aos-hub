@@ -21,7 +21,9 @@
 **Backend:** YOUR JOB
 - Location: `routes/game.js` (to be created)
 - APIs: FRAME/FREEDOM/FOCUS endpoints
-- Storage: `~/.aos/{frame,freedom,focus}/`
+- **State storage (editor):** `~/.aos/{frame,freedom,focus}/`
+- **Vault exports:** `~/vault/Game/{Frame,Freedom,Focus}` (via `/api/game/export`)
+- **Domain-states (synthesis):** `~/vault/.states/{DOMAIN}.json`
 
 ## Your Responsibilities
 
@@ -29,10 +31,9 @@
 
 Create Express router with these endpoints:
 
-**FRAME API:**
-- `GET /api/game/frame/domains` → all 4 domains (preview + timestamp)
-- `GET /api/game/frame/:domain` → full markdown
-- `POST /api/game/frame/:domain/save` → save + update frontmatter
+**FRAME API (Annual, one session across all domains):**
+- `GET /api/game/annual/frame` → all 4 domains (YAML state)
+- `POST /api/game/annual/frame` → save all 4 domains in one pass
 
 **FREEDOM API:**
 - `GET /api/game/freedom/year` → current year (4 domains)
@@ -49,9 +50,9 @@ Create Express router with these endpoints:
 
 ### 2. Storage Pattern
 
-**Base:** `~/.aos/`
+**Base (editor state):** `~/.aos/`
 
-**FRAME:**
+**FRAME (YAML state, SSOT for editor):**
 ```
 ~/.aos/frame/
 ├── body.md
@@ -59,8 +60,9 @@ Create Express router with these endpoints:
 ├── balance.md
 └── business.md
 ```
+**Current:** `~/.aos/frame/{domain}.yaml` (legacy `.md` auto-migrates on load)
 
-**FREEDOM:**
+**FREEDOM (markdown with YAML frontmatter):**
 ```
 ~/.aos/freedom/
 ├── 2025/
@@ -72,7 +74,7 @@ Create Express router with these endpoints:
 │   └── ...
 ```
 
-**FOCUS:**
+**FOCUS (markdown with YAML frontmatter):**
 ```
 ~/.aos/focus/
 ├── 2026-01/
@@ -86,7 +88,7 @@ Create Express router with these endpoints:
 
 Use `js-yaml` to parse/write frontmatter.
 
-**FRAME:**
+**FRAME (YAML frontmatter on export):**
 ```yaml
 ---
 domain: BODY

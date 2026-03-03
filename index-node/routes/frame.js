@@ -4,12 +4,16 @@
 //
 // FRAME = Current Reality Snapshot ("Where am I now?")
 // Storage:
-//   ~/.aos/frame/{domain}.yaml   (one YAML state per domain)
+//   ~/.aos/frame/{domain}.json        (one JSON state per domain, SSOT)
+//   ~/.aos/frame/.history-yaml/...    (YAML history snapshots)
+//   ~/.aos/frame/frame.md             (full frame markdown snapshot)
 //
 // Routes:
 //   GET  /api/frame/domains         → { ok, domains: { body, being, balance, business } }
 //   GET  /api/frame/domain?domain=body → { ok, domain, content }
 //   POST /api/frame/domain/save     → { domain, content } → { ok }
+//   GET  /api/frame/full            → { ok, complete, content }
+//   POST /api/frame/full/save       → { answers } → { ok, complete }
 //
 // ================================================================
 
@@ -22,6 +26,10 @@ import yaml    from "js-yaml";
 const router = express.Router();
 
 const FRAME_DIR = process.env.FRAME_DIR || path.join(os.homedir(), ".aos", "frame");
+const FRAME_FULL_PATH = path.join(FRAME_DIR, "frame.md");
+const FRAME_HISTORY_DIR = path.join(FRAME_DIR, ".history");
+const FRAME_HISTORY_JSON_DIR = path.join(FRAME_DIR, ".history-json");
+const FRAME_HISTORY_YAML_DIR = path.join(FRAME_DIR, ".history-yaml");
 const CHAPTER_REF = "Game Chapter 32 - Frame";
 
 const VALID_DOMAINS = ["body", "being", "balance", "business"];
@@ -35,7 +43,8 @@ const DOMAIN_META = {
 
 // ── File helpers ─────────────────────────────────────────────────────────────
 
-export function frameFilePath(domain) { return path.join(FRAME_DIR, `${domain}.yaml`); }
+export function frameFilePath(domain) { return path.join(FRAME_DIR, `${domain}.json`); }
+export function frameYamlPath(domain) { return path.join(FRAME_DIR, `${domain}.yaml`); }
 export function frameLegacyFilePath(domain) { return path.join(FRAME_DIR, `${domain}.md`); }
 
 function ensureDir(p) { fs.mkdirSync(p, { recursive: true }); }
@@ -51,6 +60,10 @@ function writeText(fp, txt) {
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function timestampSlug() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
 function asString(value) {
@@ -99,6 +112,15 @@ function parseLegacyMarkdownState(markdown, domain) {
 export function parseFrameStateContent(content) {
   try {
     const parsed = yaml.load(String(content || ""));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseFrameStateJson(content) {
+  try {
+    const parsed = JSON.parse(String(content || ""));
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
@@ -210,37 +232,124 @@ export function framePreviewFromState(state) {
   return preview.slice(0, 60);
 }
 
+function isCompleteFrameState(state) {
+  const q = state && state.questions && typeof state.questions === "object" ? state.questions : {};
+  return [
+    q.where_am_i_now,
+    q.how_did_i_get_here,
+    q.how_do_i_feel_about_where_i_am,
+    q.what_is_working_about_where_i_am_now,
+    q.what_is_not_working_about_where_i_am,
+  ].every((value) => String(value || "").trim().length > 0);
+}
+
+function buildFullFrameMarkdown(states) {
+  const lines = ["# FRAME MAP", ""];
+  for (const domain of VALID_DOMAINS) {
+    const state = normalizeFrameState(states[domain] || {}, domain);
+    const label = domainLabel(domain);
+    const q = state.questions || {};
+    const sec = (title, value) => [
+      `### ${title}`,
+      "",
+      String(value || "").trim() ? String(value || "").trim() : "-",
+      "",
+    ];
+
+    lines.push(`## ${label}`);
+    lines.push("");
+    lines.push(...sec("Where am I now?", q.where_am_i_now));
+    lines.push(...sec("How did I get here?", q.how_did_i_get_here));
+    lines.push(...sec("How do I feel about where I am?", q.how_do_i_feel_about_where_i_am));
+    lines.push(...sec("What is working about where I am now?", q.what_is_working_about_where_i_am_now));
+    lines.push(...sec("What is not working about where I am?", q.what_is_not_working_about_where_i_am));
+    lines.push("");
+  }
+  return lines.join("\n").trim() + "\n";
+}
+
+function loadAllFrameStates(opts = {}) {
+  const states = {};
+  for (const domain of VALID_DOMAINS) {
+    const loaded = loadFrameState(domain, opts);
+    states[domain] = loaded?.state || frameDefaultState(domain);
+  }
+  return states;
+}
+
 function loadFrameState(domain, opts = {}) {
   const migrateLegacy = opts.migrateLegacy === true;
-  const filePath = frameFilePath(domain);
+  const jsonPath = frameFilePath(domain);
+  const yamlPath = frameYamlPath(domain);
   const legacyPath = frameLegacyFilePath(domain);
 
-  if (fs.existsSync(filePath)) {
-    const content = readText(filePath, "");
+  if (fs.existsSync(jsonPath)) {
+    const content = readText(jsonPath, "");
+    const parsed = parseFrameStateJson(content);
+    if (parsed) {
+      const state = normalizeFrameState(parsed, domain);
+      return { source: "json", filePath: jsonPath, content, state };
+    }
+  }
+
+  if (fs.existsSync(yamlPath)) {
+    const content = readText(yamlPath, "");
     const parsed = parseFrameStateContent(content);
     if (parsed) {
       const state = normalizeFrameState(parsed, domain);
-      return { source: "yaml", filePath, content, state };
+      if (migrateLegacy) {
+        writeText(jsonPath, JSON.stringify(state, null, 2));
+      }
+      return { source: "yaml", filePath: yamlPath, content, state };
     }
   }
 
   if (fs.existsSync(legacyPath)) {
     const markdown = readText(legacyPath, "");
     const state = normalizeFrameState(parseLegacyMarkdownState(markdown, domain), domain);
-    const content = frameStateToYaml(state);
-    if (migrateLegacy) writeText(filePath, content);
-    return { source: "legacy-md", filePath, content, state };
+    const content = JSON.stringify(state, null, 2);
+    if (migrateLegacy) writeText(jsonPath, content);
+    return { source: "legacy-md", filePath: legacyPath, content, state };
   }
 
   const state = frameDefaultState(domain);
-  const content = frameStateToYaml(state);
-  return { source: "default", filePath, content, state };
+  const content = JSON.stringify(state, null, 2);
+  return { source: "default", filePath: jsonPath, content, state };
 }
 
 export function getFrameStateForDomain(domain, opts = {}) {
   const key = String(domain || "").trim().toLowerCase();
   if (!VALID_DOMAINS.includes(key)) return null;
   return loadFrameState(key, opts);
+}
+
+function writeFrameHistory(domain, markdown) {
+  const safeDomain = String(domain || "").trim().toLowerCase();
+  if (!VALID_DOMAINS.includes(safeDomain)) return;
+  const dir = path.join(FRAME_HISTORY_DIR, safeDomain);
+  ensureDir(dir);
+  const fp = path.join(dir, `${timestampSlug()}.md`);
+  writeText(fp, String(markdown || ""));
+}
+
+function writeFrameHistoryJson(domain, state) {
+  const safeDomain = String(domain || "").trim().toLowerCase();
+  if (!VALID_DOMAINS.includes(safeDomain)) return;
+  const dir = path.join(FRAME_HISTORY_JSON_DIR, safeDomain);
+  ensureDir(dir);
+  const fp = path.join(dir, `${timestampSlug()}.json`);
+  const payload = normalizeFrameState(state || {}, safeDomain);
+  writeText(fp, JSON.stringify(payload, null, 2));
+}
+
+function writeFrameHistoryYaml(domain, state) {
+  const safeDomain = String(domain || "").trim().toLowerCase();
+  if (!VALID_DOMAINS.includes(safeDomain)) return;
+  const dir = path.join(FRAME_HISTORY_YAML_DIR, safeDomain);
+  ensureDir(dir);
+  const fp = path.join(dir, `${timestampSlug()}.yaml`);
+  const payload = normalizeFrameState(state || {}, safeDomain);
+  writeText(fp, frameStateToYaml(payload));
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
@@ -296,10 +405,12 @@ router.post("/domain/save", (req, res) => {
     const loaded = loadFrameState(domain, { migrateLegacy: true });
     const base = loaded?.state || frameDefaultState(domain);
 
-    // Backward-compat: allow direct YAML payloads, but prefer markdown editor input.
+    // Backward-compat: allow direct YAML/JSON payloads, but prefer markdown editor input.
     const parsedYaml = parseFrameStateContent(content);
-    const state = parsedYaml && parsedYaml.questions
-      ? normalizeFrameState({ ...base, ...parsedYaml }, domain, todayISO())
+    const parsedJson = parseFrameStateJson(content);
+    const parsedState = parsedJson && parsedJson.questions ? parsedJson : parsedYaml;
+    const state = parsedState && parsedState.questions
+      ? normalizeFrameState({ ...base, ...parsedState }, domain, todayISO())
       : normalizeFrameState(
           {
             ...base,
@@ -311,8 +422,79 @@ router.post("/domain/save", (req, res) => {
           domain,
           todayISO()
         );
-    writeText(frameFilePath(domain), frameStateToYaml(state));
+    const editorMarkdown = frameEditorMarkdownFromState(state);
+    writeText(frameFilePath(domain), JSON.stringify(state, null, 2));
+    writeFrameHistory(domain, editorMarkdown);
+    writeFrameHistoryJson(domain, state);
+    writeFrameHistoryYaml(domain, state);
+
+    // If all domains are complete, generate full frame.md
+    const states = loadAllFrameStates({ migrateLegacy: true });
+    if (VALID_DOMAINS.every((d) => isCompleteFrameState(states[d]))) {
+      writeText(FRAME_FULL_PATH, buildFullFrameMarkdown(states));
+    }
     res.json({ ok: true, updated: state.updated });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// GET /api/frame/full
+router.get("/full", (req, res) => {
+  try {
+    const states = loadAllFrameStates({ migrateLegacy: true });
+    const complete = VALID_DOMAINS.every((d) => isCompleteFrameState(states[d]));
+    const content = complete
+      ? buildFullFrameMarkdown(states)
+      : "";
+
+    if (complete) writeText(FRAME_FULL_PATH, content);
+
+    res.json({ ok: true, complete, content });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// POST /api/frame/full/save  { answers: { body: {...}, being: {...}, ... } }
+router.post("/full/save", (req, res) => {
+  try {
+    const answers = req.body?.answers;
+    if (!answers || typeof answers !== "object")
+      return res.status(400).json({ ok: false, error: "invalid_answers" });
+
+    const updated = todayISO();
+    const states = {};
+
+    for (const domain of VALID_DOMAINS) {
+      const input = answers[domain];
+      if (!input || typeof input !== "object")
+        return res.status(400).json({ ok: false, error: `missing_domain:${domain}` });
+
+      const state = normalizeFrameState(
+        {
+          ...frameDefaultState(domain, updated),
+          questions: {
+            where_am_i_now: input.where_am_i_now,
+            how_did_i_get_here: input.how_did_i_get_here,
+            how_do_i_feel_about_where_i_am: input.how_do_i_feel_about_where_i_am,
+            what_is_working_about_where_i_am_now: input.what_is_working_about_where_i_am_now,
+            what_is_not_working_about_where_i_am: input.what_is_not_working_about_where_i_am,
+          },
+        },
+        domain,
+        updated
+      );
+
+      states[domain] = state;
+      writeText(frameFilePath(domain), JSON.stringify(state, null, 2));
+      writeFrameHistory(domain, frameEditorMarkdownFromState(state));
+      writeFrameHistoryJson(domain, state);
+      writeFrameHistoryYaml(domain, state);
+    }
+
+    writeText(FRAME_FULL_PATH, buildFullFrameMarkdown(states));
+    res.json({ ok: true, complete: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }

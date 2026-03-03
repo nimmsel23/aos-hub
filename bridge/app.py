@@ -54,6 +54,11 @@ WARSTACK_DIR = Path(
 CORE4_PREFIX = "core4_week_"
 
 GAS_WEBHOOK_URL = os.getenv("AOS_GAS_WEBHOOK_URL", "").strip()
+WATCHDOG_WEBHOOK_URL = (
+    os.getenv("AOS_WATCHDOG_WEBHOOK_URL", "").strip()
+    or os.getenv("AOS_GAS_WATCHDOG_WEBHOOK_URL", "").strip()
+)
+HEARTBEAT_WEBHOOK_URL = WATCHDOG_WEBHOOK_URL or GAS_WEBHOOK_URL
 GAS_TENT_URL = os.getenv("AOS_GAS_TENT_URL", "").strip()
 GAS_CHAT_ID = os.getenv("AOS_GAS_CHAT_ID", "").strip()
 GAS_USER_ID = os.getenv("AOS_GAS_USER_ID", "").strip()
@@ -143,8 +148,8 @@ def _bridge_hb_host() -> str:
 
 
 async def _send_bridge_heartbeat_once(source: str = "bridge") -> tuple[bool, str]:
-    if not GAS_WEBHOOK_URL:
-        return False, "AOS_GAS_WEBHOOK_URL not set"
+    if not HEARTBEAT_WEBHOOK_URL:
+        return False, "heartbeat webhook not set (AOS_WATCHDOG_WEBHOOK_URL or AOS_GAS_WEBHOOK_URL)"
 
     payload = {
         "kind": "bridge_heartbeat",
@@ -157,7 +162,7 @@ async def _send_bridge_heartbeat_once(source: str = "bridge") -> tuple[bool, str
     try:
         timeout = aiohttp.ClientTimeout(total=6)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(GAS_WEBHOOK_URL, json=payload) as resp:
+            async with session.post(HEARTBEAT_WEBHOOK_URL, json=payload) as resp:
                 if resp.status >= 300:
                     body = await resp.text()
                     return False, f"GAS HTTP {resp.status}: {body[:200]}"
@@ -180,8 +185,8 @@ async def _on_startup(app: web.Application) -> None:
     if not BRIDGE_HEARTBEAT_ENABLED:
         LOGGER.info("Bridge heartbeat disabled (AOS_BRIDGE_HEARTBEAT_ENABLED=0)")
         return
-    if not GAS_WEBHOOK_URL:
-        LOGGER.info("Bridge heartbeat skipped: AOS_GAS_WEBHOOK_URL not configured")
+    if not HEARTBEAT_WEBHOOK_URL:
+        LOGGER.info("Bridge heartbeat skipped: no heartbeat webhook configured")
         return
     ok, err = await _send_bridge_heartbeat_once("bridge-startup")
     if ok:
@@ -594,8 +599,36 @@ def _core4_day_path(day_key: str) -> Path:
 
 
 def _core4_event_dir(base_dir: Path) -> Path:
-    # Canonical location for the event ledger
-    return base_dir / ".core4" / "events"
+    # Flat-first layout with legacy fallback.
+    flat = base_dir / "events"
+    legacy = base_dir / ".core4" / "events"
+    if flat.exists():
+        return flat
+    if legacy.exists():
+        return legacy
+    return flat
+
+
+def _core4_event_dirs(base_dir: Path) -> list[Path]:
+    # Include both layouts for reads during migration windows.
+    flat = base_dir / "events"
+    legacy = base_dir / ".core4" / "events"
+    dirs: list[Path] = []
+    for candidate in (flat, legacy):
+        if candidate.exists():
+            dirs.append(candidate)
+    if not dirs:
+        dirs.append(flat)
+    # Preserve order while removing duplicates.
+    out: list[Path] = []
+    seen: set[str] = set()
+    for d in dirs:
+        key = str(d.resolve()) if d.exists() else str(d)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(d)
+    return out
 
 
 def _core4_safe_filename(text: str) -> str:
@@ -691,16 +724,17 @@ def _core4_events_for_day(day_key: str) -> list[Dict[str, Any]]:
             bases.append(CORE4_MOUNT_DIR)
 
     for base in bases:
-        day_dir = _core4_event_dir(base) / day_key
-        if not day_dir.exists():
-            continue
-        for path in sorted(p for p in day_dir.glob("*.json") if p.is_file()):
-            ev = _core4_read_event(path)
-            if not ev:
+        for ev_root in _core4_event_dirs(base):
+            day_dir = ev_root / day_key
+            if not day_dir.exists():
                 continue
-            if str(ev.get("date") or "").strip() != day_key:
-                continue
-            out.append(ev)
+            for path in sorted(p for p in day_dir.glob("*.json") if p.is_file()):
+                ev = _core4_read_event(path)
+                if not ev:
+                    continue
+                if str(ev.get("date") or "").strip() != day_key:
+                    continue
+                out.append(ev)
     return out
 
 
@@ -857,7 +891,13 @@ def _core4_scores_csv_path() -> Path:
 
 
 def _core4_sealed_dir() -> Path:
-    return CORE4_LOCAL_DIR / ".core4" / "sealed"
+    flat = CORE4_LOCAL_DIR / "sealed"
+    legacy = CORE4_LOCAL_DIR / ".core4" / "sealed"
+    if flat.exists():
+        return flat
+    if legacy.exists():
+        return legacy
+    return flat
 
 
 def _core4_finalize_week(week: str, *, force: bool = False) -> dict[str, Any]:
@@ -2860,6 +2900,8 @@ async def handle_debug(request: web.Request) -> web.Response:
 
     debug_info["config"] = {
         "gas_webhook_url": "***" + GAS_WEBHOOK_URL[-20:] if GAS_WEBHOOK_URL else "not set",
+        "watchdog_webhook_url": "***" + WATCHDOG_WEBHOOK_URL[-20:] if WATCHDOG_WEBHOOK_URL else "not set",
+        "heartbeat_webhook_url": "***" + HEARTBEAT_WEBHOOK_URL[-20:] if HEARTBEAT_WEBHOOK_URL else "not set",
         "gas_tent_url": "***" + GAS_TENT_URL[-20:] if GAS_TENT_URL else "not set",
         "gas_chat_id": GAS_CHAT_ID if GAS_CHAT_ID else "not set",
         "gas_mode": GAS_MODE,

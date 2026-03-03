@@ -13,111 +13,196 @@
   <link rel="stylesheet" href="/pwa/game/style.css" />
 </head>
 <body>
-
-  <!-- App header -->
   <header class="appbar">
     <div class="appbar-left">
       <div class="app-kicker">αOS · THE GAME</div>
       <div class="app-title">The Game</div>
     </div>
     <div class="appbar-right">
-      <div class="app-subtitle" id="appSubtitle">—</div>
-      <div class="app-hint">Fact Maps Cascade</div>
+      <a class="app-link" href="/pwa/game/chapters/">Read Chapters</a>
     </div>
   </header>
-
-  <!-- Top Nav: Map Cascade -->
-  <nav class="topnav" aria-label="Map Cascade">
-    <button class="tn-tab active" data-map="frame">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <circle cx="7" cy="7" r="1.5"/>
-        <circle cx="17" cy="7" r="1.5"/>
-        <circle cx="7" cy="17" r="1.5"/>
-        <circle cx="17" cy="17" r="1.5"/>
-      </svg>
-      <span>FRAME</span>
-      <span class="tn-sub">Start</span>
-    </button>
-    <button class="tn-tab" data-map="freedom">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-      </svg>
-      <span>FREE</span>
-      <span class="tn-sub">Vision</span>
-    </button>
-    <button class="tn-tab" data-map="focus">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <circle cx="12" cy="12" r="4"/>
-        <line x1="12" y1="2" x2="12" y2="5"/>
-        <line x1="12" y1="19" x2="12" y2="22"/>
-        <line x1="2" y1="12" x2="5" y2="12"/>
-        <line x1="19" y1="12" x2="22" y2="12"/>
-      </svg>
-      <span>FOCUS</span>
-      <span class="tn-sub">Mission</span>
-    </button>
-    <button class="tn-tab" data-map="fire">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 2c0 0-6 6-6 12a6 6 0 0 0 12 0c0-6-6-12-6-12z"/>
-        <path d="M12 12c0 0-3 3-3 5a3 3 0 0 0 6 0c0-2-3-5-3-5z"/>
-      </svg>
-      <span>FIRE</span>
-      <span class="tn-sub">Execute</span>
-    </button>
-  </nav>
 
   <main class="wrap">
     <section class="hero">
       <div class="hero-copy">
-        <div class="hero-label">FACT MAPS</div>
-        <h1 class="hero-title">Start With Frame.</h1>
-        <p class="hero-sub">The Game begins at the Frame Map. From truth to vision to mission to daily execution: Freedom → Focus → Fire.</p>
+        <div class="hero-label">Alpha Odyssey</div>
+        <h1 class="hero-title">The Game</h1>
+        <div class="hero-actions">
+          <a class="btn primary" href="/pwa/frame/">Frame</a>
+          <a class="btn" href="/game/tent">Tent</a>
+        </div>
       </div>
-      <div class="hero-badge">
-        <div class="badge-title">Cascade</div>
-        <div class="badge-body">Frame → Freedom → Focus → Fire</div>
+      <div class="hero-panel">
+        <div class="panel-title">Daily Stack</div>
+        <div class="panel-row">
+          <a class="chip" href="/pwa/core4/">Core4</a>
+          <a class="chip" href="/memoirs/">Memoirs</a>
+          <a class="chip" href="/pwa/fire/">Fire</a>
+        </div>
       </div>
     </section>
 
-    <!-- Domain cards container -->
-    <section id="cards" class="cards" aria-live="polite">
-      <div class="loading">Loading...</div>
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Time Phases</div>
+      </div>
+      <div class="card-grid phases">
+        <div class="phase-card">
+          <div class="chapter-kicker">Daily</div>
+          <div class="chapter-title">DAILY</div>
+          <div class="phase-links">
+            <a class="chip" href="/pwa/core4/">Core4</a>
+            <a class="chip" href="/memoirs/">Memoirs</a>
+            <a class="chip" href="/pwa/fire/">Fire</a>
+          </div>
+        </div>
+        <div class="phase-card">
+          <div class="chapter-kicker">Weekly</div>
+          <div class="chapter-title">WEEKLY</div>
+          <div class="phase-links">
+            <a class="chip" href="/pwa/fire/">Fire</a>
+            <a class="chip" href="/pwa/door/">Door</a>
+            <a class="chip" href="/game/tent">Tent</a>
+          </div>
+        </div>
+        <div class="phase-card">
+          <div class="chapter-kicker">Monthly</div>
+          <div class="chapter-title">MISSION</div>
+          <div class="phase-links">
+            <a class="chip" href="/pwa/focus/">Mission</a>
+          </div>
+        </div>
+        <div class="phase-card">
+          <div class="chapter-kicker">Quarterly</div>
+          <div class="chapter-title">QUARTERLY</div>
+          <div class="phase-links">
+            <a class="chip" href="/pwa/freedom/">Freedom</a>
+            <a class="chip" href="/pwa/focus/">Focus</a>
+            <a class="chip" href="/game/tent">Tent</a>
+          </div>
+        </div>
+        <div class="phase-card">
+          <div class="chapter-kicker">Annual</div>
+          <div class="chapter-title">ANNUAL</div>
+          <div class="phase-links">
+            <a class="chip" href="/pwa/frame/">Frame</a>
+            <a class="chip" href="/pwa/freedom/">Freedom</a>
+            <a class="chip" href="/pwa/game/chapters/?id=42">Odyssey</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Fact Maps</div>
+      </div>
+      <div class="card-grid">
+        <a class="chapter-card" href="/pwa/frame/">
+          <div class="chapter-kicker">32</div>
+          <div class="chapter-title">Frame</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Enter</span>
+          </div>
+        </a>
+        <a class="chapter-card" href="/pwa/freedom/">
+          <div class="chapter-kicker">33</div>
+          <div class="chapter-title">Freedom</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Enter</span>
+          </div>
+        </a>
+        <a class="chapter-card" href="/pwa/focus/">
+          <div class="chapter-kicker">34</div>
+          <div class="chapter-title">Focus</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Enter</span>
+          </div>
+        </a>
+        <a class="chapter-card" href="/pwa/fire/">
+          <div class="chapter-kicker">35</div>
+          <div class="chapter-title">Fire</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Enter</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">The Game</div>
+      </div>
+      <div class="card-grid">
+        <div class="chapter-card">
+          <div class="chapter-kicker">36</div>
+          <div class="chapter-title">The Game</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Overview</span>
+          </div>
+        </div>
+        <div class="chapter-card">
+          <div class="chapter-kicker">37</div>
+          <div class="chapter-title">The Life</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Life</span>
+          </div>
+        </div>
+        <div class="chapter-card">
+          <div class="chapter-kicker">38</div>
+          <div class="chapter-title">The Mission</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Mission</span>
+          </div>
+        </div>
+        <div class="chapter-card">
+          <div class="chapter-kicker">39</div>
+          <div class="chapter-title">The Fire</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Fire</span>
+          </div>
+        </div>
+        <div class="chapter-card">
+          <div class="chapter-kicker">40</div>
+          <div class="chapter-title">The Daily</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Daily</span>
+          </div>
+        </div>
+        <a class="chapter-card tent" href="/game/tent">
+          <div class="chapter-kicker">41</div>
+          <div class="chapter-title">General’s Tent</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Enter</span>
+          </div>
+        </a>
+        <div class="chapter-card">
+          <div class="chapter-kicker">42</div>
+          <div class="chapter-title">Alpha Odyssey</div>
+          <div class="chapter-row">
+            <span class="chapter-cta">Odyssey</span>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
-  <!-- Bottom Nav: Centers -->
   <nav class="bottomnav">
     <button class="bn-btn" onclick="location.href='/pwa/core4/'">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
-      </svg>
-      <span>CORE</span>
+      <span>DAILY</span>
     </button>
-    <button class="bn-btn active">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-        <polyline points="9 12 11 14 15 10"/>
-      </svg>
-      <span>GAME</span>
+    <button class="bn-btn" onclick="location.href='/pwa/fire/'">
+      <span>WEEKLY</span>
     </button>
-    <button class="bn-btn" onclick="location.href='/pwa/door/'">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="2" width="18" height="20" rx="2"/>
-        <circle cx="16" cy="12" r="1"/>
-      </svg>
-      <span>DOOR</span>
+    <button class="bn-btn" onclick="location.href='/pwa/focus/'">
+      <span>MONTHLY</span>
     </button>
-    <button class="bn-btn" onclick="location.href='/pwa/score/'">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="20" x2="18" y2="10"/>
-        <line x1="12" y1="20" x2="12" y2="4"/>
-        <line x1="6" y1="20" x2="6" y2="14"/>
-      </svg>
-      <span>SCORE</span>
+    <button class="bn-btn" onclick="location.href='/pwa/freedom/'">
+      <span>QUARTERLY</span>
+    </button>
+    <button class="bn-btn" onclick="location.href='/pwa/frame/'">
+      <span>ANNUAL</span>
     </button>
   </nav>
 

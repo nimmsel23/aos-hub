@@ -44,6 +44,48 @@ HOT_TO_MD_SH="$DOOR_DIR/hot_to_md.sh"
 CREATE_WARSTACK_SH="$DOOR_DIR/create_warstack.sh"
 DOOR_FILE_WATCHER_SH="$DOOR_DIR/door_file_watcher.sh"
 DOOR_LIFECYCLE_SH="$DOOR_DIR/door_lifecycle.sh"
+DOOR_CURRENT_FILE="${AOS_DOOR_CURRENT_FILE:-$HOME/.aos/door.current}"
+DOOR_PRODUCTION_DIR="${AOS_DOOR_PRODUCTION_DIR:-$VAULT_DIR/Door/3-Production}"
+
+ensure_door_state_dir() {
+  local dir
+  dir="$(dirname "$DOOR_CURRENT_FILE")"
+  mkdir -p "$dir"
+}
+
+door_current_get() {
+  if [[ -f "$DOOR_CURRENT_FILE" ]]; then
+    cat "$DOOR_CURRENT_FILE"
+  fi
+}
+
+door_current_set() {
+  local value="${1:?}"
+  ensure_door_state_dir
+  printf "%s\n" "$value" >"$DOOR_CURRENT_FILE"
+}
+
+door_current_clear() {
+  if [[ -f "$DOOR_CURRENT_FILE" ]]; then
+    rm -f "$DOOR_CURRENT_FILE"
+  fi
+}
+
+door_stack_file_for() {
+  local door_name="${1:?}"
+  local dir="${DOOR_PRODUCTION_DIR}"
+  [[ -d "$dir" ]] || return 1
+  find "$dir" -maxdepth 1 -type f -name "STACK_*.md" 2>/dev/null \
+    | while IFS= read -r f; do
+        local base
+        base="$(basename "$f")"
+        if printf "%s" "$base" | grep -qi -- "$door_name"; then
+          printf "%s\n" "$f"
+          return 0
+        fi
+      done
+  return 1
+}
 
 #───────────────────────────────────────────────────────────────────────────────
 # Helpers / Flow Views
@@ -118,6 +160,7 @@ hotlist	hotlist [list|json|open|add]	Potential / Hot List flow (JSON source supp
 hot	hot [list|open|add|json]	Hot List frontdoor (interactive UI on TTY)
 doorwar	doorwar [list|status|review|activate|promote|<door>]	Plan-phase + HotList->WarStack activation
 warstack	warstack <door> [show|edit]	Alias for war (no door -> production report)
+current	current [<door>|clear]	Set or show the active Door (writes ~/.aos/door.current)
 review	review	Compact phase review + health + focus
 doctor	doctor	Environment + dependency + Task/Vault health checks
 commands	commands	Machine-friendly command catalog
@@ -154,6 +197,44 @@ cmd_commands() {
   print_command_catalog | while IFS=$'\t' read -r name usage summary; do
     printf "  %-10s %-30s %s\n" "$name" "$usage" "$summary"
   done
+}
+
+cmd_current() {
+  local arg="${1:-}"
+  if [[ -z "$arg" ]]; then
+    local cur
+    cur="$(door_current_get || true)"
+    if json_mode; then
+      require_jq || return 1
+      jq -n --arg door "$cur" '{door:$door}'
+    elif [[ -n "$cur" ]]; then
+      echo "$cur"
+    fi
+    return 0
+  fi
+
+  if [[ "$arg" == "clear" || "$arg" == "reset" ]]; then
+    door_current_clear
+    if json_mode; then
+      require_jq || return 1
+      jq -n '{cleared:true}'
+    fi
+    return 0
+  fi
+
+  local door_name="$*"
+  door_current_set "$door_name"
+  local stack_file=""
+  stack_file="$(door_stack_file_for "$door_name" || true)"
+  if [[ -z "$stack_file" ]]; then
+    ui_warn "No War Stack found in $DOOR_PRODUCTION_DIR for: $door_name"
+  fi
+  if json_mode; then
+    require_jq || return 1
+    jq -n --arg door "$door_name" --arg stack "$stack_file" '{door:$door, set:true, warstack:$stack}'
+  else
+    echo "$door_name"
+  fi
 }
 
 build_health_json() {
@@ -745,6 +826,8 @@ cmd_doorwar_activate() {
 
   render_warstack_from_hotlist_template \
     "$door_name" "$idea" "$hot_index" "$tw_uuid" "$hot_file" "$selected_at" "$hot_item_id" > "$warstack_file"
+
+  door_current_set "$door_name"
 
   local updated_index
   updated_index="$(
@@ -2357,6 +2440,7 @@ Commands:
   stalled                 List stalled doors only
   war <door> [show|edit]  View/edit war stack (with glow/bat/cat)
   note <door>             Edit door notes
+  current [door|clear]    Get/set active Door (writes ~/.aos/door.current)
 
   version                 Show version
   help                    Show this help
@@ -2395,11 +2479,13 @@ Examples:
   doorctl war Ausbildung edit
   doorctl note Ausbildung
   doorctl health
+  doorctl current Ausbildung
 
 Config (env vars):
   AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
   AOS_DOOR_STALLED_DAYS   Days before door is stalled (default: 7)
   AOS_DOOR_ATTENTION_DAYS Days before door needs attention (default: 3)
+  AOS_DOOR_CURRENT_FILE   Active Door file (default: ~/.aos/door.current)
   TASK_BIN                Taskwarrior binary (default: task)
   EDITOR                  Preferred editor (default: nano)
 
@@ -2481,6 +2567,7 @@ main() {
     chapters|chapter) cmd_chapters "$@" ;;
     doorwar) cmd_doorwar "$@" ;;
     warstack) cmd_warstack "$@" ;;
+    current) cmd_current "$@" ;;
     review) cmd_review ;;
     doctor) cmd_doctor ;;
     commands|cmds) cmd_commands ;;

@@ -33,13 +33,13 @@ cmd_show() { py show ${1:+--domain "$1"}; }
 cmd_list() { py list; }
 cmd_edit() {
   local domain="${1:-}"
-  local vault="$HOME/AlphaOS-Vault/Game/Frame"
+  local state_dir="$HOME/.aos/frame"
   if [[ -n "$domain" ]]; then
-    local file="$vault/${domain^^}_frame.md"
+    local file="$state_dir/${domain,,}.yaml"
     [[ -f "$file" ]] || { echo "Kein Frame für $domain. Erst: framectl new $domain"; exit 1; }
     "${EDITOR:-nano}" "$file"
   else
-    "${EDITOR:-nano}" "$vault/"
+    "${EDITOR:-nano}" "$state_dir/"
   fi
 }
 

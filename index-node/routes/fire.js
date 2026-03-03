@@ -7,7 +7,10 @@
 //
 // Routes:
 //   GET  /api/fire/week        → current week data + score
-//   GET  /api/fire/tasks       → pending tasks (TickTick → TW fallback)
+//   GET  /api/fire/tasks       → pending tasks (Taskwarrior → TickTick fallback)
+//   GET  /api/fire/tasks-week  → weekly tasks (Taskwarrior → TickTick fallback)
+//   GET  /api/fire/tasks-day   → daily tasks (Taskwarrior → TickTick fallback)
+//   GET  /api/fire/week-range  → week labels/range for calendar UI
 //   POST /api/fire/toggle      → { domain, index } toggle done
 //   POST /api/fire/rename      → { domain, index, title } rename strike
 //   POST /api/fire/reorder     → { domain, order: [0,2,1,3] } reorder strikes
@@ -107,6 +110,13 @@ function writeWeek(wk, data) {
 function score(data) {
   const all = Object.values(data.domains).flat();
   return { strikesDone: all.filter((s) => s.done).length, strikesMax: 16 };
+}
+
+function filterFireTasksByDomain(tasks, domainRaw) {
+  const domain = String(domainRaw || "").trim().toLowerCase();
+  if (!domain) return tasks;
+  if (!ALLOWED.has(domain)) return null;
+  return tasks.filter((task) => String(task.domain || "").toLowerCase() === domain);
 }
 
 // ── TickTick Helpers ──────────────────────────────────────────────────────────
@@ -359,6 +369,15 @@ function getWeekRangeLocal(date = new Date()) {
   return { start, end, week, rangeLabel };
 }
 
+function getDayRangeLocal(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const start = new Date(d);
+  const end = new Date(d);
+  end.setDate(start.getDate() + 1);
+  return { start, end, label: start.toLocaleDateString("de-DE") };
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET /api/fire/week
@@ -376,59 +395,60 @@ router.get("/week", (req, res) => {
   }
 });
 
-// GET /api/fire/tasks  – pending tasks (TickTick → TW fallback)
+// GET /api/fire/tasks  – pending tasks (Taskwarrior → TickTick fallback)
 router.get("/tasks", async (req, res) => {
   const { start, end } = getWeekRangeLocal();
   let tasks = [];
   let error = null;
-  let source = "ticktick";
+  let source = "taskwarrior";
 
-  // Try TickTick FIRST (primary cloud source)
+  // Try Taskwarrior FIRST (primary local source)
   try {
-    const raw = await ticktickListProjectTasks();
-    const filtered = raw
-      .filter((task) => !task.isCompleted && !task.completedTime)
-      .filter((task) => taskInRange(task, start, end))
-      .map((task) => {
-        const due = parseTickTickDue(task);
-        const title = task.title || "(no title)";
-        return {
-          id: task.id,
-          title,
-          description: title,
-          tags: task.tags || [],
-          due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
-          domain: detectDomainFromTags(task.tags),
-          overdue: due ? due < start : false
-        };
-      });
+    const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+    if (!ok) throw new Error(taskError || "task-export-failed");
+
+    const filtered = twTasks
+      .filter((task) => {
+        const st = String(task.status || "").toLowerCase();
+        return st === "pending" || st === "waiting";
+      })
+      .filter((task) => {
+        if (fireTaskInRange(task, start, end, true)) return true;
+        if (!FIRE_INCLUDE_UNDATED) return false;
+        if (fireTaskPrimaryDate(task)) return false;
+        return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+      })
+      .map((task) => normalizeFireTask(task, start));
 
     tasks = filtered.sort((a, b) => {
       const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
       const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
       return da - db;
     });
-  } catch (tickErr) {
-    // TickTick failed, try Taskwarrior as offline fallback
-    source = "taskwarrior";
-    error = tickErr?.message || String(tickErr);
+    error = null;
+  } catch (twErr) {
+    // Taskwarrior failed, try TickTick as fallback
+    source = "ticktick";
+    error = twErr?.message || String(twErr);
     try {
-      const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
-      if (!ok) throw new Error(taskError || "task-export-failed");
-
-      const filtered = twTasks
-        .filter((task) => {
-          const st = String(task.status || "").toLowerCase();
-          return st === "pending" || st === "waiting";
-        })
-        .filter((task) => {
-          if (fireTaskInRange(task, start, end, true)) return true;
-          if (!FIRE_INCLUDE_UNDATED) return false;
-          if (fireTaskPrimaryDate(task)) return false;
-          return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
-        })
-        .map((task) => normalizeFireTask(task, start));
+      const raw = await ticktickListProjectTasks();
+      const filtered = raw
+        .filter((task) => !task.isCompleted && !task.completedTime)
+        .filter((task) => taskInRange(task, start, end))
+        .map((task) => {
+          const due = parseTickTickDue(task);
+          const title = task.title || "(no title)";
+          return {
+            id: task.id,
+            title,
+            description: title,
+            tags: task.tags || [],
+            due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            domain: detectDomainFromTags(task.tags),
+            overdue: due ? due < start : false
+          };
+        });
 
       tasks = filtered.sort((a, b) => {
         const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -436,12 +456,203 @@ router.get("/tasks", async (req, res) => {
         return da - db;
       });
       error = null;
-    } catch (twErr) {
-      error = `TickTick: ${tickErr?.message || tickErr} | Taskwarrior: ${twErr?.message || twErr}`;
+    } catch (tickErr) {
+      error = `Taskwarrior: ${twErr?.message || twErr} | TickTick: ${tickErr?.message || tickErr}`;
     }
   }
 
   res.json({ ok: true, tasks, source, error });
+});
+
+// GET /api/fire/tasks-week
+router.get("/tasks-week", async (req, res) => {
+  const { start, end, week, rangeLabel } = getWeekRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "taskwarrior";
+
+  try {
+    const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+    if (!ok) throw new Error(taskError || "task-export-failed");
+
+    const filtered = twTasks
+      .filter((task) => {
+        const st = String(task.status || "").toLowerCase();
+        return st === "pending" || st === "waiting";
+      })
+      .filter((task) => {
+        if (fireTaskInRange(task, start, end, true)) return true;
+        if (!FIRE_INCLUDE_UNDATED) return false;
+        if (fireTaskPrimaryDate(task)) return false;
+        return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+      })
+      .map((task) => normalizeFireTask(task, start));
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+    error = null;
+  } catch (twErr) {
+    source = "ticktick";
+    error = twErr?.message || String(twErr);
+    try {
+      const raw = await ticktickListProjectTasks();
+      const filtered = raw
+        .filter((task) => !task.isCompleted && !task.completedTime)
+        .filter((task) => taskInRange(task, start, end))
+        .map((task) => {
+          const due = parseTickTickDue(task);
+          return {
+            id: task.id,
+            title: task.title || "(no title)",
+            tags: task.tags || [],
+            due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            domain: detectDomainFromTags(task.tags),
+            overdue: due ? due < start : false
+          };
+        });
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (tickErr) {
+      error = `Taskwarrior: ${twErr?.message || twErr} | TickTick: ${tickErr?.message || tickErr}`;
+    }
+  }
+
+  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (domainFiltered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
+  return res.json({
+    ok: tasks.length > 0 || !error,
+    source,
+    week,
+    rangeLabel,
+    tasks: domainFiltered,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
+});
+
+// GET /api/fire/tasks-day
+router.get("/tasks-day", async (req, res) => {
+  const { start, end, label } = getDayRangeLocal();
+  let tasks = [];
+  let error = null;
+  let source = "taskwarrior";
+
+  try {
+    const { ok, error: taskError, tasks: twTasks } = loadTaskwarriorExport();
+    if (!ok) throw new Error(taskError || "task-export-failed");
+
+    const filtered = twTasks
+      .filter((task) => {
+        const st = String(task.status || "").toLowerCase();
+        return st === "pending" || st === "waiting";
+      })
+      .filter((task) => {
+        if (fireTaskInRange(task, start, end, true)) return true;
+        if (!FIRE_INCLUDE_UNDATED) return false;
+        if (fireTaskPrimaryDate(task)) return false;
+        return fireTaskMatchesTags(task.tags, FIRE_TASK_TAGS);
+      })
+      .map((task) => normalizeFireTask(task, start));
+
+    tasks = filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
+    error = null;
+  } catch (twErr) {
+    source = "ticktick";
+    error = twErr?.message || String(twErr);
+    try {
+      const raw = await ticktickListProjectTasks();
+      const filtered = raw
+        .filter((task) => !task.isCompleted && !task.completedTime)
+        .filter((task) => taskInRange(task, start, end))
+        .map((task) => {
+          const due = parseTickTickDue(task);
+          return {
+            id: task.id,
+            title: task.title || "(no title)",
+            tags: task.tags || [],
+            due: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            date: due ? due.toISOString() : (task.dueDateTime || task.dueDate || ""),
+            domain: detectDomainFromTags(task.tags),
+            overdue: due ? due < start : false
+          };
+        });
+
+      tasks = filtered.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+        const db = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+        return da - db;
+      });
+      error = null;
+    } catch (tickErr) {
+      error = `Taskwarrior: ${twErr?.message || twErr} | TickTick: ${tickErr?.message || tickErr}`;
+    }
+  }
+
+  const domainFiltered = filterFireTasksByDomain(tasks, req.query.domain);
+  if (domainFiltered === null) {
+    return res.status(400).json({ ok: false, error: "invalid_domain" });
+  }
+
+  return res.json({
+    ok: tasks.length > 0 || !error,
+    source,
+    date: label,
+    tasks: domainFiltered,
+    error,
+    gcal_url: FIRE_GCAL_EMBED_URL || "",
+  });
+});
+
+// GET /api/fire/week-range
+router.get("/week-range", (req, res) => {
+  try {
+    const dateParam = req.query?.date;
+    const date = dateParam ? new Date(dateParam) : new Date();
+
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+
+    const { start, end, week, rangeLabel } = getWeekRangeLocal(date);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      days.push({
+        date: d.toISOString().split("T")[0],
+        label: d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }),
+        dayOfWeek: d.getDay()
+      });
+    }
+
+    return res.json({
+      ok: true,
+      week,
+      rangeLabel,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      days
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
 });
 
 // POST /api/fire/toggle  { domain, index }

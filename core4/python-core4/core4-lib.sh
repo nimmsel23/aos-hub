@@ -120,9 +120,5 @@ vaultctl_cmd() {
     echo "vaultctl"
     return 0
   fi
-  if [[ -x "$HOME/.dotfiles/bin/vaultctl" ]]; then
-    echo "$HOME/.dotfiles/bin/vaultctl"
-    return 0
-  fi
   return 1
 }

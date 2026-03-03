@@ -43,7 +43,7 @@ curl -I http://127.0.0.1:8799/voice
 ## API Spot Checks
 
 ```bash
-curl -fsS http://127.0.0.1:8799/api/fire/day | jq .
+curl -fsS http://127.0.0.1:8799/api/fire/tasks-day | jq .
 curl -fsS "http://127.0.0.1:8799/api/core4/day-state?date=$(date +%F)" | jq .
 curl -fsS "http://127.0.0.1:8799/api/core4/week-summary?date=$(date +%F)" | jq .
 curl -fsS "http://127.0.0.1:8799/api/voice/history?limit=5" | jq .

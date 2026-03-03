@@ -1,1181 +1,713 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Load global env (optional).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
-VAULT_ROOT="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
-if command -v realpath >/dev/null 2>&1; then
-  VAULT_ROOT="$(realpath -m -- "$VAULT_ROOT")"
-elif command -v readlink >/dev/null 2>&1; then
-  VAULT_ROOT="$(readlink -f -- "$VAULT_ROOT" 2>/dev/null || echo "$VAULT_ROOT")"
-fi
-LOG_DIR="${AOS_LOG_DIR:-$HOME/.local/share/alphaos/logs}"
-LOG_FILE="${AOS_VAULT_LOG_FILE:-}"
-if [ -z "${LOG_FILE}" ]; then
-  if [ -f "$HOME/.dotfiles/logs/vaultctl-sync.log" ]; then
-    LOG_FILE="$HOME/.dotfiles/logs/vaultctl-sync.log"
-  else
-    LOG_FILE="$LOG_DIR/vaultctl-sync.log"
+export CTL_APP_PREFIX="vaultctl"
+
+SYSTEMD_USER_DIR="${AOS_SYSTEMD_USER_DIR:-$HOME/.config/systemd/user}"
+STATE_DIR="${AOS_VAULTCTL_STATE_DIR:-$HOME/.local/state/vaultctl}"
+ENV_FILE="$STATE_DIR/push.env"
+LAST_SUCCESS_FILE="$STATE_DIR/last_success_epoch"
+LAST_RESULT_FILE="$STATE_DIR/last_result"
+LOG_FILE="$STATE_DIR/push.log"
+LOCK_FILE="$STATE_DIR/push.lock"
+
+PUSH_SERVICE="vaultctl-push.service"
+PUSH_TIMER="vaultctl-push.timer"
+MONITOR_SERVICE="vaultctl-push-monitor.service"
+MONITOR_TIMER="vaultctl-push-monitor.timer"
+
+VAULT_LOCAL_DEFAULT="${AOS_VAULT_ROOT:-${AOS_VAULT_DIR:-$HOME/vault}}"
+VAULT_REMOTE_DEFAULT="${AOS_VAULT_PUSH_REMOTE:-eldanioo:alpha/vault}"
+PUSH_CALENDAR_DEFAULT="${AOS_VAULT_PUSH_CALENDAR:-*:0/15}"
+MONITOR_INTERVAL_DEFAULT="${AOS_VAULT_MONITOR_INTERVAL:-5m}"
+STALE_AFTER_DEFAULT="${AOS_VAULT_STALE_AFTER_SECONDS:-1800}"
+LOCK_WAIT_SECONDS_DEFAULT="${AOS_VAULT_LOCK_WAIT_SECONDS:-0}"
+CHECK_SAMPLE_DEFAULT="${AOS_VAULT_CHECK_SAMPLE:-200}"
+ALERT_ON_ERROR_DEFAULT="${AOS_VAULT_ALERT_ON_ERROR:-0}"
+
+need_tooling() {
+  need_cmd rclone "install rclone and configure remote first"
+  need_cmd systemctl "systemd --user is required"
+}
+
+ensure_state_dir() {
+  mkdir -p "$STATE_DIR"
+}
+
+ensure_systemd_dir() {
+  mkdir -p "$SYSTEMD_USER_DIR"
+}
+
+realpath_safe() {
+  local p="$1"
+  if has_cmd realpath; then
+    realpath -m -- "$p"
+    return 0
   fi
-fi
-RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
-RCLONE_BIN="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
-SYSTEMCTL_BIN="${AOS_SYSTEMCTL_BIN:-$(command -v systemctl || true)}"
-SLEEP_BETWEEN="${AOS_VAULT_SLEEP_BETWEEN:-30}"
-COPY_LINKS_MODE="${AOS_VAULT_COPY_LINKS:-${AOS_COPY_LINKS:-1}}"
-BACKUP_DIR_REMOTE="${AOS_VAULT_BACKUP_DIR_REMOTE:-${AOS_VAULT_BACKUP_DIR:-}}"
-BACKUP_DIR_LOCAL="${AOS_VAULT_BACKUP_DIR_LOCAL:-}"
-BACKUP_SUFFIX="${AOS_VAULT_BACKUP_SUFFIX:-}"
-SYNC_BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-0}"
-SYNC_BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
-SYNC_BACKUP_BASE_LOCAL="${AOS_SYNC_BACKUP_BASE_LOCAL:-$HOME/.local/share/alphaos/overwrite-backups}"
-VAULT_SYNC_PULL_UNIT="${AOS_VAULT_SYNC_PULL_UNIT:-alphaos-vault-sync-pull.service}"
-VAULT_SYNC_PUSH_UNIT="${AOS_VAULT_SYNC_PUSH_UNIT:-alphaos-vault-sync-push.service}"
-VAULT_SYNC_UNIT_DIR="${AOS_VAULT_SYNC_UNIT_DIR:-/etc/systemd/system}"
-VAULT_SYNC_PULL_TEMPLATE="${AOS_VAULT_SYNC_PULL_TEMPLATE:-$ROOT_DIR/systemd/$VAULT_SYNC_PULL_UNIT}"
-VAULT_SYNC_PUSH_TEMPLATE="${AOS_VAULT_SYNC_PUSH_TEMPLATE:-$ROOT_DIR/systemd/$VAULT_SYNC_PUSH_UNIT}"
-VAULT_SYNC_PULL_INSTALLED="$VAULT_SYNC_UNIT_DIR/$VAULT_SYNC_PULL_UNIT"
-VAULT_SYNC_PUSH_INSTALLED="$VAULT_SYNC_UNIT_DIR/$VAULT_SYNC_PUSH_UNIT"
-VAULT_SYNC_ENV_FILE="${AOS_VAULT_SYNC_ENV_FILE:-/etc/aos/alphaos-vault-sync.env}"
-
-RCLONE_COMMON_OPTS=(--create-empty-src-dirs)
-if [ "${COPY_LINKS_MODE}" = "1" ]; then
-  RCLONE_COMMON_OPTS+=(--copy-links)
-else
-  RCLONE_COMMON_OPTS+=(--skip-links)
-fi
-
-LOCAL_PATHS=(
-  "$VAULT_ROOT/Game"
-  "$VAULT_ROOT/Door"
-  "$VAULT_ROOT/Voice"
-  "$VAULT_ROOT/Core4"
-)
-
-REMOTE_PATHS=(
-  "${AOS_VAULT_REMOTE_GAME:-eldanioo:Alpha_Game}"
-  "${AOS_VAULT_REMOTE_DOOR:-eldanioo:Alpha_Door}"
-  "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
-  "${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
-)
-
-LABELS=(
-  "Game"
-  "Door"
-  "Voice"
-  "Core4"
-)
-
-have_tty() {
-  [ -t 1 ]
+  if has_cmd readlink; then
+    readlink -f -- "$p" 2>/dev/null || printf "%s\n" "$p"
+    return 0
+  fi
+  printf "%s\n" "$p"
 }
 
-have_gum() {
-  command -v gum >/dev/null 2>&1
+write_env_file() {
+  local local_dir="$1"
+  local remote_dir="$2"
+  local push_calendar="$3"
+  local monitor_interval="$4"
+  local stale_after="$5"
+  local alert_on_error="$6"
+
+  ensure_state_dir
+  cat >"$ENV_FILE" <<EOT
+VAULT_LOCAL='$local_dir'
+VAULT_REMOTE='$remote_dir'
+PUSH_ON_CALENDAR='$push_calendar'
+MONITOR_ON_UNIT_ACTIVE_SEC='$monitor_interval'
+STALE_AFTER_SECONDS='$stale_after'
+AOS_VAULT_ALERT_ON_ERROR='$alert_on_error'
+EOT
 }
 
-is_remote_root() {
-  # Examples that mean "remote root":
-  #   eldanioo:
-  #   eldanioo:/
-  local p="${1:-}"
-  [[ "$p" =~ ^[^:]+:(/)?$ ]]
+load_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  fi
 }
 
-is_kebab_slug() {
-  local s="${1:-}"
-  [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+resolve_effective_local() {
+  printf "%s\n" "$(realpath_safe "${VAULT_LOCAL:-$VAULT_LOCAL_DEFAULT}")"
 }
 
-prompt() {
-  local label="$1"
-  local default="${2:-}"
+resolve_effective_remote() {
+  printf "%s\n" "${VAULT_REMOTE:-$VAULT_REMOTE_DEFAULT}"
+}
 
-  if have_gum && have_tty; then
-    if [[ -n "$default" ]]; then
-      gum input --prompt "$label: " --value "$default"
-    else
-      gum input --prompt "$label: "
-    fi
+resolve_effective_calendar() {
+  printf "%s\n" "${PUSH_ON_CALENDAR:-$PUSH_CALENDAR_DEFAULT}"
+}
+
+resolve_effective_monitor_interval() {
+  printf "%s\n" "${MONITOR_ON_UNIT_ACTIVE_SEC:-$MONITOR_INTERVAL_DEFAULT}"
+}
+
+resolve_effective_stale_after() {
+  printf "%s\n" "${STALE_AFTER_SECONDS:-$STALE_AFTER_DEFAULT}"
+}
+
+resolve_effective_lock_wait() {
+  printf "%s\n" "${AOS_VAULT_LOCK_WAIT_SECONDS:-$LOCK_WAIT_SECONDS_DEFAULT}"
+}
+
+resolve_effective_check_sample() {
+  printf "%s\n" "${AOS_VAULT_CHECK_SAMPLE:-$CHECK_SAMPLE_DEFAULT}"
+}
+
+resolve_effective_alert_on_error() {
+  printf "%s\n" "${AOS_VAULT_ALERT_ON_ERROR:-$ALERT_ON_ERROR_DEFAULT}"
+}
+
+send_error_alert() {
+  local message="$1"
+  local alert_on_error
+  alert_on_error="$(resolve_effective_alert_on_error)"
+  if [[ "$alert_on_error" != "1" ]]; then
     return 0
   fi
 
-  if [[ -n "$default" ]]; then
-    read -r -p "$label [$default]: " reply || return 1
-    printf "%s" "${reply:-$default}"
-  else
-    read -r -p "$label: " reply || return 1
-    printf "%s" "$reply"
+  if [[ -n "${AOS_VAULT_ALERT_CMD:-}" ]]; then
+    ALERT_MESSAGE="$message" bash -lc "$AOS_VAULT_ALERT_CMD" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if has_cmd telectl; then
+    telectl send "$message" >/dev/null 2>&1 || true
+    return 0
+  fi
+  if has_cmd tele; then
+    tele "$message" >/dev/null 2>&1 || true
+    return 0
   fi
 }
 
-confirm() {
-  local label="$1"
+write_units() {
+  local local_dir="$1"
+  local remote_dir="$2"
+  local push_calendar="$3"
+  local monitor_interval="$4"
+  local stale_after="$5"
+  local alert_on_error="$6"
 
-  if have_gum && have_tty; then
-    gum confirm "$label"
-    return $?
-  fi
+  ensure_systemd_dir
+  write_env_file "$local_dir" "$remote_dir" "$push_calendar" "$monitor_interval" "$stale_after" "$alert_on_error"
 
-  local reply=""
-  read -r -p "$label [y/N]: " reply || return 1
-  [[ "$reply" == "y" || "$reply" == "Y" ]]
-}
-
-scaffold_safe_push() {
-  local name="${1:-}"
-  local local_dir="${2:-}"
-  local remote_dir="${3:-}"
-  shift 3 || true
-
-  local force=0
-  local make_timer=0
-  local at="00:00"
-  local timer_flag_set=0
-  local at_flag_set=0
-  local interactive=0
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --force) force=1 ;;
-      --no-timer) make_timer=0; timer_flag_set=1 ;;
-      --timer) make_timer=1; timer_flag_set=1 ;;
-      --at)
-        shift
-        at="${1:-}"
-        make_timer=1
-        timer_flag_set=1
-        at_flag_set=1
-        ;;
-      *)
-        warn "unknown option: $1"
-        return 2
-        ;;
-    esac
-    shift || true
-  done
-
-  if [[ -z "$name" ]]; then
-    interactive=1
-    name="$(prompt "Script name (kebab-case, used in filenames)" "")"
-  fi
-  if ! is_kebab_slug "$name"; then
-    warn "invalid name: '$name' (use kebab-case like 'dokumente' or 'vault-game')"
-    return 2
-  fi
-
-  if [[ -z "$local_dir" ]]; then
-    interactive=1
-    local_dir="$(prompt "Local folder to push" "$VAULT_ROOT")"
-  fi
-  if [[ -z "$remote_dir" ]]; then
-    interactive=1
-    remote_dir="$(prompt "Remote folder (example: eldanioo:Dokumente)" "")"
-  fi
-
-  if [[ "$interactive" == "1" && "$timer_flag_set" == "0" ]]; then
-    if confirm "Create a daily systemd user timer for this push?"; then
-      make_timer=1
-      if [[ "$at_flag_set" == "0" ]]; then
-        at="$(prompt "Run daily at (HH:MM)" "$at")"
-      fi
-    else
-      make_timer=0
-    fi
-  fi
-
-  if [[ -z "$local_dir" || -z "$remote_dir" ]]; then
-    warn "local and remote must not be empty"
-    return 2
-  fi
-  if [[ ! "$remote_dir" =~ : ]]; then
-    warn "remote must look like 'remote:folder' (got: $remote_dir)"
-    return 2
-  fi
-  if is_remote_root "$remote_dir"; then
-    warn "refusing remote root destination: '$remote_dir' (choose a folder like 'eldanioo:Dokumente')"
-    return 2
-  fi
-  if [[ "$make_timer" == "1" ]]; then
-    if [[ ! "$at" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]]; then
-      warn "invalid --at time: '$at' (expected HH:MM)"
-      return 2
-    fi
-  fi
-
-  local scripts_dir="$ROOT_DIR/scripts/sync-utils"
-  local systemd_dir="$ROOT_DIR/systemd"
-  local user_systemd_dir="$HOME/.config/systemd/user"
-
-  local script_path="$scripts_dir/rclone-${name}-safe-push.sh"
-  local service_path="$systemd_dir/vault-${name}-safe-push.service"
-  local timer_path="$systemd_dir/vault-${name}-safe-push.timer"
-  local service_link="$user_systemd_dir/$(basename "$service_path")"
-  local timer_link="$user_systemd_dir/$(basename "$timer_path")"
-
-  if [[ "$force" != "1" ]]; then
-    if [[ -e "$script_path" || -e "$service_path" || -e "$service_link" ]]; then
-      warn "one or more output files already exist; re-run with --force to overwrite"
-      echo "  $script_path"
-      echo "  $service_path"
-      echo "  $service_link"
-      if [[ "$make_timer" == "1" ]]; then
-        echo "  $timer_path"
-        echo "  $timer_link"
-      fi
-      return 2
-    fi
-    if [[ "$make_timer" == "1" && ( -e "$timer_path" || -e "$timer_link" ) ]]; then
-      warn "timer output files already exist; re-run with --force to overwrite"
-      echo "  $timer_path"
-      echo "  $timer_link"
-      return 2
-    fi
-  fi
-
-  mkdir -p "$scripts_dir" "$systemd_dir" "$user_systemd_dir"
-
-  # Normalize paths (best-effort). realpath -m is non-destructive and works even if the folder doesn't exist yet.
-  if command -v realpath >/dev/null 2>&1; then
-    local_dir="$(realpath -m -- "$local_dir")"
-  fi
-
-  info "Creating safe push script"
-  cat >"$script_path" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Generated by: vaultctl scaffold-push
-#
-# This script uses rclone COPY (not sync). That means:
-# - it uploads new/changed files
-# - it does NOT delete files on the destination
-#
-# Symlinks:
-# - default: skipped (AOS_COPY_LINKS=0)
-# - if enabled: link target contents are copied (the symlink itself is not preserved)
-
-NAME="${name}"
-LOCAL_DIR="${local_dir}"
-REMOTE_DIR="${remote_dir}"
-
-RCLONE_CONFIG="\${AOS_RCLONE_CONFIG:-\$HOME/.config/rclone/rclone.conf}"
-RCLONE_BIN="\${AOS_RCLONE_BIN:-\$(command -v rclone || true)}"
-
-LOG_DIR="\${SYNCCTL_LOG_DIR:-\$HOME/.local/share/syncctl/logs}"
-LOG_FILE="\$LOG_DIR/\${NAME}-safe-push.log"
-
-is_remote_root() {
-  local p="\${1:-}"
-  [[ "\$p" =~ ^[^:]+:(/)?\$ ]]
-}
-
-usage() {
-  cat <<'USAGE'
-rclone-\${NAME}-safe-push.sh
-
-Push LOCAL_DIR -> REMOTE_DIR using rclone copy (no deletes).
-
-Options:
-  --dry-run       Print what would happen, but do not transfer anything.
-  --copy-links    Copy contents of symlink targets.
-  --skip-links    Skip symlinks (default).
-USAGE
-}
-
-DRY_RUN=0
-COPY_LINKS_MODE="\${AOS_COPY_LINKS:-0}"
-
-while [[ \$# -gt 0 ]]; do
-  case "\$1" in
-    -h|--help) usage; exit 0 ;;
-    --dry-run) DRY_RUN=1 ;;
-    --copy-links) COPY_LINKS_MODE=1 ;;
-    --skip-links) COPY_LINKS_MODE=0 ;;
-    *)
-      echo "Unknown arg: \$1" >&2
-      usage >&2
-      exit 2
-      ;;
-  esac
-  shift
-done
-
-if [[ -z "\$RCLONE_BIN" || ! -x "\$RCLONE_BIN" ]]; then
-  echo "rclone not found in PATH" >&2
-  exit 1
-fi
-if [[ ! -f "\$RCLONE_CONFIG" ]]; then
-  echo "rclone config missing: \$RCLONE_CONFIG" >&2
-  exit 1
-fi
-if [[ ! -d "\$LOCAL_DIR" ]]; then
-  echo "local folder missing: \$LOCAL_DIR" >&2
-  exit 1
-fi
-if is_remote_root "\$REMOTE_DIR"; then
-  echo "refusing remote root destination: '\$REMOTE_DIR' (choose a folder like 'eldanioo:Dokumente')" >&2
-  exit 2
-fi
-
-mkdir -p "\$LOG_DIR"
-
-LINK_OPTS=(--skip-links)
-if [[ "\$COPY_LINKS_MODE" == "1" ]]; then
-  LINK_OPTS=(--copy-links)
-fi
-
-DRY_OPTS=()
-if [[ "\$DRY_RUN" == "1" ]]; then
-  DRY_OPTS+=(--dry-run)
-fi
-
-echo "[\$(date +%F\\ %T)] safe push: \$LOCAL_DIR -> \$REMOTE_DIR (dry-run=\$DRY_RUN, copy_links=\$COPY_LINKS_MODE)" >>"\$LOG_FILE"
-if [[ -t 1 ]]; then
-  "\$RCLONE_BIN" --config "\$RCLONE_CONFIG" copy --create-empty-src-dirs "\${LINK_OPTS[@]}" "\${DRY_OPTS[@]}" "\$LOCAL_DIR" "\$REMOTE_DIR" 2>&1 | tee -a "\$LOG_FILE"
-else
-  "\$RCLONE_BIN" --config "\$RCLONE_CONFIG" copy --create-empty-src-dirs "\${LINK_OPTS[@]}" "\${DRY_OPTS[@]}" "\$LOCAL_DIR" "\$REMOTE_DIR" >>"\$LOG_FILE" 2>&1
-fi
-EOF
-  chmod +x "$script_path"
-
-  info "Creating systemd user unit files"
-  cat >"$service_path" <<EOF
+  cat >"$SYSTEMD_USER_DIR/$PUSH_SERVICE" <<EOT
 [Unit]
-Description=Vault safe push (${name})
+Description=Vault Push to GDrive (vaultctl)
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${script_path}
-EOF
+EnvironmentFile=%h/.local/state/vaultctl/push.env
+ExecStart=$SCRIPT_DIR/vaultctl _systemd-push
+WorkingDirectory=%h
+StandardOutput=journal
+StandardError=journal
+EOT
 
-  if [[ "$make_timer" == "1" ]]; then
-    cat >"$timer_path" <<EOF
+  cat >"$SYSTEMD_USER_DIR/$PUSH_TIMER" <<EOT
 [Unit]
-Description=Vault safe push (${name}) (daily)
+Description=Schedule vault push to GDrive (vaultctl)
 
 [Timer]
-OnCalendar=*-*-* ${at}:00
+OnCalendar=$push_calendar
 Persistent=true
+AccuracySec=1m
+RandomizedDelaySec=1m
+Unit=$PUSH_SERVICE
 
 [Install]
 WantedBy=timers.target
-EOF
+EOT
 
-    ln -sf "$timer_path" "$timer_link"
-  fi
+  cat >"$SYSTEMD_USER_DIR/$MONITOR_SERVICE" <<EOT
+[Unit]
+Description=Monitor vault push service health (vaultctl)
 
-  ln -sf "$service_path" "$service_link"
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.local/state/vaultctl/push.env
+ExecStart=$SCRIPT_DIR/vaultctl _systemd-monitor
+WorkingDirectory=%h
+StandardOutput=journal
+StandardError=journal
+EOT
 
-  echo ""
-  info "Done."
-  echo "Script:"
-  echo "  $script_path"
-  echo "Units:"
-  echo "  $service_path"
-  if [[ "$make_timer" == "1" ]]; then
-    echo "  $timer_path"
-  fi
-  echo "Linked into:"
-  echo "  $service_link"
-  if [[ "$make_timer" == "1" ]]; then
-    echo "  $timer_link"
-  fi
-  echo ""
-  echo "Next steps:"
-  echo "  1) Test (recommended):"
-  echo "     $script_path --dry-run"
-  if [[ "$make_timer" == "1" ]]; then
-    echo "  2) Enable timer:"
-    echo "     systemctl --user daemon-reload"
-    echo "     systemctl --user enable --now $(basename "$timer_path")"
-  else
-    echo "  (No timer was created because you chose --no-timer.)"
-  fi
+  cat >"$SYSTEMD_USER_DIR/$MONITOR_TIMER" <<EOT
+[Unit]
+Description=Monitor timer for vault push health (vaultctl)
+
+[Timer]
+OnBootSec=3m
+OnUnitActiveSec=$monitor_interval
+AccuracySec=30s
+Unit=$MONITOR_SERVICE
+
+[Install]
+WantedBy=timers.target
+EOT
 }
 
-info() {
-  if have_gum && have_tty; then
-    gum style --bold -- "$1"
-  else
-    echo "$1"
-  fi
+record_result() {
+  local status="$1"
+  ensure_state_dir
+  printf "%s\n" "$status" >"$LAST_RESULT_FILE"
 }
 
-warn() {
-  if have_gum && have_tty; then
-    gum style --foreground 214 -- "$1"
-  else
-    echo "WARN: $1"
-  fi
+record_success_now() {
+  ensure_state_dir
+  date +%s >"$LAST_SUCCESS_FILE"
+  record_result "ok"
 }
 
-has_cmd() {
-  command -v "$1" >/dev/null 2>&1
-}
+run_push() {
+  local dry_run="${1:-0}"
+  load_env_file
+  need_tooling
 
-sudo_cmd() {
-  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    if ! has_cmd sudo; then
-      warn "sudo not found; cannot run privileged command"
-      return 1
-    fi
-    sudo "$@"
-    return $?
-  fi
-  "$@"
-}
+  local local_dir remote_dir lock_wait lock_fd
+  local_dir="$(resolve_effective_local)"
+  remote_dir="$(resolve_effective_remote)"
+  lock_wait="$(resolve_effective_lock_wait)"
+  lock_fd=""
 
-install_cli_user() {
-  local src="$ROOT_DIR/scripts/sync-utils/vaultctl"
-  local bin_dir="${VAULTCTL_BIN_DIR:-$HOME/.local/bin}"
-  local dst="$bin_dir/vaultctl"
+  [[ -d "$local_dir" ]] || die "Local vault folder not found: $local_dir"
+  [[ "$remote_dir" == *:* ]] || die "Remote must match '<remote>:<path>' (got: $remote_dir)"
 
-  if [[ ! -x "$src" ]]; then
-    warn "source script missing or not executable: $src"
-    return 1
-  fi
+  ensure_state_dir
 
-  mkdir -p "$bin_dir" 2>/dev/null || {
-    warn "cannot create: $bin_dir"
-    return 1
-  }
-
-  if [[ -e "$dst" && ! -L "$dst" ]]; then
-    warn "refusing to overwrite non-symlink: $dst"
-    return 1
-  fi
-
-  ln -sfn "$src" "$dst"
-  info "installed: $dst -> $src"
-}
-
-install_cli_system() {
-  local src="$ROOT_DIR/scripts/sync-utils/vaultctl"
-  local bin_dir="/usr/local/bin"
-  local dst="$bin_dir/vaultctl"
-
-  if [[ ! -x "$src" ]]; then
-    warn "source script missing or not executable: $src"
-    return 1
-  fi
-
-  sudo_cmd install -d -m 755 "$bin_dir" || return 1
-  sudo_cmd ln -sfn "$src" "$dst" || return 1
-  info "installed: $dst -> $src"
-}
-
-cmd_install_cli() {
-  local mode="${1:---user}"
-  case "$mode" in
-    --user) install_cli_user ;;
-    --system) install_cli_system ;;
-    *)
-      warn "Usage: vaultctl install-cli [--user|--system]"
-      return 2
-      ;;
-  esac
-}
-
-cmd_uninstall_cli() {
-  local mode="${1:---user}"
-  local dst=""
-  case "$mode" in
-    --user)
-      dst="${VAULTCTL_BIN_DIR:-$HOME/.local/bin}/vaultctl"
-      if [[ -L "$dst" ]]; then
-        rm -f "$dst"
-        info "removed: $dst"
-      else
-        info "nothing to remove at: $dst"
-      fi
-      ;;
-    --system)
-      dst="/usr/local/bin/vaultctl"
-      sudo_cmd rm -f "$dst" || return 1
-      info "removed: $dst"
-      ;;
-    *)
-      warn "Usage: vaultctl uninstall-cli [--user|--system]"
-      return 2
-      ;;
-  esac
-}
-
-need_systemctl() {
-  if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
-    warn "systemctl not found"
-    return 1
-  fi
-}
-
-vault_sync_unit_path_for_edit() {
-  local unit="$1"
-  local installed="$VAULT_SYNC_UNIT_DIR/$unit"
-  local template="$ROOT_DIR/systemd/$unit"
-  if [[ -f "$installed" ]]; then
-    printf "%s\n" "$installed"
-    return 0
-  fi
-  printf "%s\n" "$template"
-}
-
-edit_path() {
-  local path="$1"
-  if [[ "$path" == /etc/* ]]; then
-    if has_cmd sudoedit; then
-      sudoedit "$path"
-    else
-      sudo_cmd "${EDITOR:-nano}" "$path"
-    fi
-    return $?
-  fi
-  "${EDITOR:-nano}" "$path"
-}
-
-ensure_vault_sync_env_file() {
-  if [[ -f "$VAULT_SYNC_ENV_FILE" ]]; then
-    return 0
-  fi
-  if [[ "$VAULT_SYNC_ENV_FILE" == /etc/* ]]; then
-    sudo_cmd mkdir -p "$(dirname -- "$VAULT_SYNC_ENV_FILE")"
-    sudo_cmd tee "$VAULT_SYNC_ENV_FILE" >/dev/null <<'EOF'
-# Optional overrides for vault-sync system services.
-# This file is loaded by:
-# - alphaos-vault-sync-pull.service
-# - alphaos-vault-sync-push.service
-#
-# VAULT_REMOTE=fabian:AlphaOS-Vault
-# VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups
-# VAULT_LOCAL=/home/alpha/AlphaOS-Vault
-# VAULT_LOCAL_BACKUP=/home/alpha/.local/share/alphaos/vault-backups
-# VAULT_RCLONE_FLAGS=--skip-links
-EOF
-    return $?
-  fi
-  mkdir -p "$(dirname -- "$VAULT_SYNC_ENV_FILE")"
-  cat >"$VAULT_SYNC_ENV_FILE" <<'EOF'
-# Optional overrides for vault-sync system services.
-# This file is loaded by:
-# - alphaos-vault-sync-pull.service
-# - alphaos-vault-sync-push.service
-#
-# VAULT_REMOTE=fabian:AlphaOS-Vault
-# VAULT_REMOTE_BACKUP=fabian:AlphaOS-Vault-backups
-# VAULT_LOCAL=/home/alpha/AlphaOS-Vault
-# VAULT_LOCAL_BACKUP=/home/alpha/.local/share/alphaos/vault-backups
-# VAULT_RCLONE_FLAGS=--skip-links
-EOF
-}
-
-vault_sync_system_status() {
-  info "vaultctl systemd status"
-  echo ""
-  info "pull unit template:    $VAULT_SYNC_PULL_TEMPLATE"
-  info "push unit template:    $VAULT_SYNC_PUSH_TEMPLATE"
-  info "pull unit installed:   $VAULT_SYNC_PULL_INSTALLED"
-  info "push unit installed:   $VAULT_SYNC_PUSH_INSTALLED"
-  info "vault sync env file:   $VAULT_SYNC_ENV_FILE"
-  echo ""
-
-  [[ -f "$VAULT_SYNC_PULL_TEMPLATE" ]] || warn "missing template: $VAULT_SYNC_PULL_TEMPLATE"
-  [[ -f "$VAULT_SYNC_PUSH_TEMPLATE" ]] || warn "missing template: $VAULT_SYNC_PUSH_TEMPLATE"
-  [[ -f "$VAULT_SYNC_PULL_INSTALLED" ]] || warn "not installed: $VAULT_SYNC_PULL_INSTALLED"
-  [[ -f "$VAULT_SYNC_PUSH_INSTALLED" ]] || warn "not installed: $VAULT_SYNC_PUSH_INSTALLED"
-  [[ -f "$VAULT_SYNC_ENV_FILE" ]] || warn "missing env: $VAULT_SYNC_ENV_FILE"
-
-  need_systemctl || return 1
-  echo ""
-  "$SYSTEMCTL_BIN" status "$VAULT_SYNC_PULL_UNIT" --no-pager || true
-  echo ""
-  "$SYSTEMCTL_BIN" status "$VAULT_SYNC_PUSH_UNIT" --no-pager || true
-}
-
-vault_sync_system_install() {
-  need_systemctl || return 1
-  [[ -f "$VAULT_SYNC_PULL_TEMPLATE" ]] || { warn "missing template: $VAULT_SYNC_PULL_TEMPLATE"; return 1; }
-  [[ -f "$VAULT_SYNC_PUSH_TEMPLATE" ]] || { warn "missing template: $VAULT_SYNC_PUSH_TEMPLATE"; return 1; }
-
-  sudo_cmd mkdir -p "$VAULT_SYNC_UNIT_DIR"
-  sudo_cmd cp "$VAULT_SYNC_PULL_TEMPLATE" "$VAULT_SYNC_PULL_INSTALLED"
-  sudo_cmd cp "$VAULT_SYNC_PUSH_TEMPLATE" "$VAULT_SYNC_PUSH_INSTALLED"
-  sudo_cmd "$SYSTEMCTL_BIN" daemon-reload
-  info "installed: $VAULT_SYNC_PULL_INSTALLED"
-  info "installed: $VAULT_SYNC_PUSH_INSTALLED"
-}
-
-vault_sync_system_enable() {
-  need_systemctl || return 1
-  sudo_cmd "$SYSTEMCTL_BIN" enable "$VAULT_SYNC_PULL_UNIT" "$VAULT_SYNC_PUSH_UNIT"
-}
-
-vault_sync_system_disable() {
-  need_systemctl || return 1
-  sudo_cmd "$SYSTEMCTL_BIN" disable "$VAULT_SYNC_PULL_UNIT" "$VAULT_SYNC_PUSH_UNIT"
-}
-
-vault_sync_system_run_pull() {
-  need_systemctl || return 1
-  sudo_cmd "$SYSTEMCTL_BIN" start "$VAULT_SYNC_PULL_UNIT"
-}
-
-vault_sync_system_run_push() {
-  need_systemctl || return 1
-  # Push happens on stop via ExecStop in the service definition.
-  sudo_cmd "$SYSTEMCTL_BIN" start "$VAULT_SYNC_PUSH_UNIT"
-  sudo_cmd "$SYSTEMCTL_BIN" stop "$VAULT_SYNC_PUSH_UNIT"
-}
-
-vault_sync_system_logs() {
-  local lines="${1:-100}"
-  local follow="${2:-0}"
-  if [[ "$follow" == "1" ]]; then
-    sudo_cmd journalctl -u "$VAULT_SYNC_PULL_UNIT" -u "$VAULT_SYNC_PUSH_UNIT" -n "$lines" -f
-  else
-    sudo_cmd journalctl -u "$VAULT_SYNC_PULL_UNIT" -u "$VAULT_SYNC_PUSH_UNIT" -n "$lines" --no-pager
-  fi
-}
-
-vault_sync_system_edit() {
-  local target="${1:-pull}"
-  case "$target" in
-    pull|push)
-      local unit=""
-      if [[ "$target" == "pull" ]]; then
-        unit="$VAULT_SYNC_PULL_UNIT"
-      else
-        unit="$VAULT_SYNC_PUSH_UNIT"
-      fi
-      local path=""
-      path="$(vault_sync_unit_path_for_edit "$unit")"
-      if [[ ! -f "$path" ]]; then
-        warn "unit file not found: $path"
-        return 1
-      fi
-      info "editing: $path"
-      edit_path "$path"
-      ;;
-    env|vars)
-      ensure_vault_sync_env_file
-      info "editing: $VAULT_SYNC_ENV_FILE"
-      edit_path "$VAULT_SYNC_ENV_FILE"
-      ;;
-    *)
-      warn "Usage: vaultctl systemd edit <pull|push|env>"
-      return 2
-      ;;
-  esac
-}
-
-vault_sync_system_cmd() {
-  local sub="${1:-status}"
-  shift || true
-  case "$sub" in
-    status) vault_sync_system_status ;;
-    install) vault_sync_system_install ;;
-    enable) vault_sync_system_enable ;;
-    disable) vault_sync_system_disable ;;
-    run-pull|pull) vault_sync_system_run_pull ;;
-    run-push|push) vault_sync_system_run_push ;;
-    logs)
-      local lines="100"
-      local follow=0
-      local arg=""
-      for arg in "$@"; do
-        case "$arg" in
-          --follow|-f) follow=1 ;;
-          '' ) ;;
-          *)
-            if [[ "$arg" =~ ^[0-9]+$ ]]; then
-              lines="$arg"
-            else
-              warn "unknown logs arg: $arg"
-              return 2
-            fi
-            ;;
-        esac
-      done
-      vault_sync_system_logs "$lines" "$follow"
-      ;;
-    edit) vault_sync_system_edit "${1:-pull}" ;;
-    env) vault_sync_system_edit env ;;
-    *)
-      warn "Usage: vaultctl systemd <status|install|enable|disable|run-pull|run-push|logs [n] [--follow]|edit <pull|push|env>|env>"
-      return 2
-      ;;
-  esac
-}
-
-run_cmd() {
-  local title="$1"
-  shift
-
-  if have_gum && have_tty; then
-    gum spin --spinner dot --title "$title" -- "$@"
-  else
-    echo "$title"
-    "$@"
-  fi
-}
-
-wait_between() {
-  if [ "${SLEEP_BETWEEN}" -le 0 ]; then
-    return 0
-  fi
-  if have_tty; then
-    info "waiting ${SLEEP_BETWEEN}s (press Enter to skip)"
-    read -r -t "$SLEEP_BETWEEN" _ || true
-  else
-    info "waiting ${SLEEP_BETWEEN}s"
-    sleep "$SLEEP_BETWEEN"
-  fi
-}
-
-status() {
-  info "vaultctl status"
-  echo ""
-
-  if [ -f "$RCLONE_CONFIG" ]; then
-    info "rclone config: present ($RCLONE_CONFIG)"
-  else
-    warn "rclone config: missing ($RCLONE_CONFIG)"
-  fi
-
-  echo ""
-  for i in "${!LOCAL_PATHS[@]}"; do
-    local local_state="MISSING"
-    if [ -d "${LOCAL_PATHS[$i]}" ]; then
-      local_state="OK"
-    fi
-    printf "  %-8s %-8s %s\n" "${LABELS[$i]}" "$local_state" "${LOCAL_PATHS[$i]}"
-    printf "  %-8s %-8s %s\n" "" "REMOTE" "${REMOTE_PATHS[$i]}"
-  done
-
-  echo ""
-  info "log file: $LOG_FILE"
-  if [ -f "$LOG_FILE" ]; then
-    local last_line
-    last_line="$(tail -n 1 "$LOG_FILE" 2>/dev/null || true)"
-    if [ -n "$last_line" ]; then
-      info "last log: $last_line"
-    else
-      info "last log: (empty)"
-    fi
-  else
-    warn "log file missing"
-  fi
-}
-
-short_line() {
-  local line="${1:-}"
-  local max_len="${2:-120}"
-  if [ "${#line}" -le "$max_len" ]; then
-    printf "%s\n" "$line"
-    return 0
-  fi
-  printf "%s...\n" "${line:0:max_len-3}"
-}
-
-status_brief() {
-  echo "vaultctl summary"
-
-  local rclone_state="missing"
-  [ -n "$RCLONE_BIN" ] && [ -x "$RCLONE_BIN" ] && rclone_state="present"
-  echo "  rclone: $rclone_state"
-
-  local config_state="missing"
-  [ -f "$RCLONE_CONFIG" ] && config_state="present"
-  echo "  config: $config_state ($RCLONE_CONFIG)"
-
-  local links_mode="skip-links"
-  [ "$COPY_LINKS_MODE" = "1" ] && links_mode="copy-links"
-  echo "  links:  $links_mode"
-  echo "  backup-overwrites: $SYNC_BACKUP_OVERWRITES"
-
-  for i in "${!LOCAL_PATHS[@]}"; do
-    local local_state="MISS"
-    [ -d "${LOCAL_PATHS[$i]}" ] && local_state="OK"
-    printf "  %-8s %-4s %s -> %s\n" "${LABELS[$i]}" "$local_state" "${LOCAL_PATHS[$i]}" "${REMOTE_PATHS[$i]}"
-  done
-
-  local timer_unit="${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
-  local timer_enabled="-"
-  local timer_active="-"
-  if [ -n "$SYSTEMCTL_BIN" ] && [ -x "$SYSTEMCTL_BIN" ]; then
-    timer_enabled="$("$SYSTEMCTL_BIN" --user is-enabled "$timer_unit" 2>/dev/null || true)"
-    timer_active="$("$SYSTEMCTL_BIN" --user is-active "$timer_unit" 2>/dev/null || true)"
-    [ -z "$timer_enabled" ] && timer_enabled="-"
-    [ -z "$timer_active" ] && timer_active="-"
-  fi
-  echo "  timer:  $timer_unit enabled=$timer_enabled active=$timer_active"
-
-  if [ -f "$LOG_FILE" ]; then
-    local last_line
-    last_line="$(tail -n 1 "$LOG_FILE" 2>/dev/null || true)"
-    [ -z "$last_line" ] && last_line="(empty)"
-    echo "  log:    $LOG_FILE"
-    echo "  last:   $(short_line "$last_line" 110)"
-  else
-    echo "  log:    missing ($LOG_FILE)"
-  fi
-}
-
-copy_direction() {
-  local direction="$1"
-  local dry_run="${2:-false}"
-
-  mkdir -p "$LOG_DIR"
-
-  if [ -z "$RCLONE_BIN" ] || [ ! -x "$RCLONE_BIN" ]; then
-    warn "rclone not found in PATH"
-    exit 1
-  fi
-
-  if [ ! -f "$RCLONE_CONFIG" ]; then
-    warn "rclone config missing; nothing to do"
-    exit 0
-  fi
-
-  if [ "$dry_run" = "true" ]; then
-    info "vaultctl ${direction} (copy, dry-run)"
-  else
-    info "vaultctl ${direction} (copy)"
-  fi
-  echo ""
-
-  for i in "${!LOCAL_PATHS[@]}"; do
-    local_path="${LOCAL_PATHS[$i]}"
-    remote_path="${REMOTE_PATHS[$i]}"
-    label="${LABELS[$i]}"
-    filter_from=()
-    ignore_file="$local_path/.rcloneignore"
-    if [ "$label" = "Core4" ]; then
-      # Core4: sync only the append-only ledger (`.core4/**`).
-      # Derived files like `core4_week_*.json` are rebuildable and should not be pushed to Drive,
-      # otherwise Google Drive can create duplicate-name copies.
-      filter_from=(--filter "+ .core4/**" --filter "- *")
-    elif [ -f "$ignore_file" ]; then
-      filter_from=(--filter-from "$ignore_file")
-    fi
-    backup_dir=""
-    backup_opts=()
-    label_slug="$(printf "%s" "$label" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
-    label_slug="${label_slug%-}"
-    label_slug="${label_slug#-}"
-    if [ "$direction" = "push" ]; then
-      backup_dir="$BACKUP_DIR_REMOTE"
-      if [ -z "$backup_dir" ] && [ "$SYNC_BACKUP_OVERWRITES" = "1" ]; then
-        backup_dir="${remote_path%%:*}:${SYNC_BACKUP_BASE_REMOTE%/}/vault/${label_slug}/push/$(date +%Y%m%d-%H%M%S)"
+  if has_cmd flock; then
+    exec {lock_fd}>"$LOCK_FILE"
+    if [[ "$lock_wait" =~ ^[0-9]+$ ]] && (( lock_wait > 0 )); then
+      if ! flock -w "$lock_wait" "$lock_fd"; then
+        record_result "skipped_locked"
+        ui_warn "Push already running (lock busy) -> skip"
+        exec {lock_fd}>&-
+        return 0
       fi
     else
-      backup_dir="$BACKUP_DIR_LOCAL"
-      if [ -z "$backup_dir" ] && [ "$SYNC_BACKUP_OVERWRITES" = "1" ]; then
-        backup_dir="${SYNC_BACKUP_BASE_LOCAL%/}/vault/${label_slug}/pull/$(date +%Y%m%d-%H%M%S)"
-      fi
-      if [ -n "$backup_dir" ]; then
-        mkdir -p "$backup_dir"
-      fi
-    fi
-    if [ -n "$backup_dir" ]; then
-      info "backup-dir for $label: $backup_dir"
-      backup_opts+=(--backup-dir "$backup_dir")
-      if [ -n "$BACKUP_SUFFIX" ]; then
-        backup_opts+=(--suffix "$BACKUP_SUFFIX")
-      else
-        backup_opts+=(--suffix ".bak-$(date +%Y%m%d-%H%M%S)")
+      if ! flock -n "$lock_fd"; then
+        record_result "skipped_locked"
+        ui_warn "Push already running (lock busy) -> skip"
+        exec {lock_fd}>&-
+        return 0
       fi
     fi
+  else
+    ui_warn "flock not found; continuing without process lock"
+  fi
 
-    case "$direction" in
-      push)
-        if [ ! -d "$local_path" ]; then
-          warn "skip $label; missing $local_path"
-          continue
-        fi
-        if [ "$dry_run" = "true" ]; then
-          run_cmd "copy $label -> $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run "$local_path" "$remote_path"
-        else
-          run_cmd "copy $label -> $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "$local_path" "$remote_path"
-        fi
+  local -a cmd
+  cmd=(
+    rclone copy
+    "$local_dir/"
+    "$remote_dir/"
+    --create-empty-src-dirs
+    --fast-list
+    --transfers "${AOS_VAULT_RCLONE_TRANSFERS:-4}"
+    --checkers "${AOS_VAULT_RCLONE_CHECKERS:-8}"
+    --stats 20s
+    --stats-one-line
+    --log-file "$LOG_FILE"
+    --log-level INFO
+  )
+
+  if [[ "$dry_run" == "1" ]]; then
+    cmd+=(--dry-run)
+    ui_info "Dry-run push: $local_dir -> $remote_dir"
+  else
+    ui_info "Push: $local_dir -> $remote_dir"
+  fi
+
+  if "${cmd[@]}"; then
+    if [[ "$dry_run" != "1" ]]; then
+      record_success_now
+    fi
+    if [[ -n "$lock_fd" ]]; then
+      exec {lock_fd}>&-
+    fi
+    ui_ok "Push completed"
+    return 0
+  fi
+
+  record_result "failed"
+  if [[ -n "$lock_fd" ]]; then
+    exec {lock_fd}>&-
+  fi
+  send_error_alert "vaultctl push failed on $(hostname) at $(date '+%Y-%m-%d %H:%M:%S %Z')"
+  ui_err "Push failed"
+  return 1
+}
+
+run_check() {
+  load_env_file
+  need_tooling
+
+  local full_mode="0"
+  local sample_n
+  sample_n="$(resolve_effective_check_sample)"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --full)
+        full_mode="1"
+        shift
         ;;
-      pull)
-        mkdir -p "$local_path"
-        if [ "$dry_run" = "true" ]; then
-          run_cmd "copy $label <- $remote_path (dry-run)" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run "$remote_path" "$local_path"
-        else
-          run_cmd "copy $label <- $remote_path" "$RCLONE_BIN" --config "$RCLONE_CONFIG" copy "${RCLONE_COMMON_OPTS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "$remote_path" "$local_path"
-        fi
+      --sample)
+        sample_n="${2:-}"
+        shift 2
         ;;
       *)
-        warn "Unknown direction: $direction"
-        exit 1
+        die "Unknown check option: $1"
         ;;
     esac
-
-    if [ "$i" -lt $(( ${#LOCAL_PATHS[@]} - 1 )) ]; then
-      wait_between
-    fi
   done
-}
 
-sync() {
-  copy_direction push "${1:-false}"
-}
+  local local_dir remote_dir
+  local_dir="$(resolve_effective_local)"
+  remote_dir="$(resolve_effective_remote)"
+  [[ -d "$local_dir" ]] || die "Local vault folder not found: $local_dir"
+  [[ "$remote_dir" == *:* ]] || die "Remote must match '<remote>:<path>' (got: $remote_dir)"
+  [[ "$sample_n" =~ ^[0-9]+$ ]] || die "--sample must be an integer"
 
-pull() {
-  copy_direction pull "${1:-false}"
-}
-
-timers() {
-  info "vaultctl timers"
-  echo ""
-
-  if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
-    warn "systemctl not found"
-    exit 1
-  fi
-
-  "$SYSTEMCTL_BIN" --user status alphaos-vault-sync.timer || true
-  echo ""
-  "$SYSTEMCTL_BIN" --user list-timers --all | rg -i "alphaos-vault-sync|vaultctl" || true
-}
-
-timers_brief() {
-  local timer_unit="${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
-  echo "vaultctl timers"
-  if [ -z "$SYSTEMCTL_BIN" ] || [ ! -x "$SYSTEMCTL_BIN" ]; then
-    echo "  systemctl: missing"
+  if systemctl --user is-active --quiet "$PUSH_SERVICE"; then
+    record_result "skipped_check_push_active"
+    ui_warn "Push service is active; check skipped to avoid false negatives"
     return 0
   fi
 
-  local enabled active
-  enabled="$("$SYSTEMCTL_BIN" --user is-enabled "$timer_unit" 2>/dev/null || true)"
-  active="$("$SYSTEMCTL_BIN" --user is-active "$timer_unit" 2>/dev/null || true)"
-  [ -z "$enabled" ] && enabled="-"
-  [ -z "$active" ] && active="-"
-  echo "  $timer_unit enabled=$enabled active=$active"
+  local tmp_files tmp_all total pick
+  tmp_files=""
+  tmp_all=""
+  total=0
+  pick=0
 
-  local next_line=""
-  if command -v rg >/dev/null 2>&1; then
-    next_line="$("$SYSTEMCTL_BIN" --user list-timers --all 2>/dev/null | rg -i "$timer_unit" | head -n 1 || true)"
+  if [[ "$full_mode" != "1" ]]; then
+    tmp_all="$(mktemp)"
+    tmp_files="$(mktemp)"
+    (
+      cd "$local_dir"
+      find . -type f -printf '%P\n'
+    ) >"$tmp_all"
+    total="$(wc -l <"$tmp_all" | tr -d ' ')"
+    if [[ "$total" == "0" ]]; then
+      rm -f "$tmp_all" "$tmp_files"
+      ui_warn "No files found for check"
+      return 0
+    fi
+    if (( sample_n <= 0 || sample_n >= total )); then
+      pick="$total"
+      cp "$tmp_all" "$tmp_files"
+    else
+      pick="$sample_n"
+      if has_cmd shuf; then
+        shuf -n "$pick" "$tmp_all" >"$tmp_files"
+      else
+        head -n "$pick" "$tmp_all" >"$tmp_files"
+      fi
+    fi
+    ui_info "Check sample: ${pick}/${total} files"
   else
-    next_line="$("$SYSTEMCTL_BIN" --user list-timers --all 2>/dev/null | grep -Ei "$timer_unit" | head -n 1 || true)"
+    ui_info "Check full dataset"
   fi
-  if [ -n "$next_line" ]; then
-    echo "  next: $(short_line "$next_line" 120)"
+
+  local -a cmd
+  cmd=(
+    rclone check
+    "$local_dir/"
+    "$remote_dir/"
+    --one-way
+    --checkers "${AOS_VAULT_RCLONE_CHECKERS:-8}"
+    --log-file "$LOG_FILE"
+    --log-level INFO
+  )
+  if [[ "$full_mode" != "1" ]]; then
+    cmd+=(--files-from "$tmp_files")
+  fi
+
+  if "${cmd[@]}"; then
+    rm -f "${tmp_all:-}" "${tmp_files:-}"
+    ui_ok "Check completed"
+    return 0
+  fi
+
+  rm -f "${tmp_all:-}" "${tmp_files:-}"
+  record_result "failed_check"
+  send_error_alert "vaultctl check failed on $(hostname) at $(date '+%Y-%m-%d %H:%M:%S %Z')"
+  ui_err "Check failed"
+  return 1
+}
+
+systemd_reload_enable() {
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$PUSH_TIMER" "$MONITOR_TIMER"
+}
+
+run_monitor() {
+  load_env_file
+  need_cmd systemctl "systemd --user is required"
+
+  local stale_after now last age
+  stale_after="$(resolve_effective_stale_after)"
+  now="$(date +%s)"
+
+  if systemctl --user is-failed --quiet "$PUSH_SERVICE"; then
+    ui_warn "$PUSH_SERVICE is failed -> reset + retry"
+    systemctl --user reset-failed "$PUSH_SERVICE" || true
+    systemctl --user start --no-block "$PUSH_SERVICE"
+    return 0
+  fi
+
+  if [[ ! -f "$LAST_SUCCESS_FILE" ]]; then
+    ui_warn "No successful push recorded yet -> triggering push"
+    systemctl --user start --no-block "$PUSH_SERVICE"
+    return 0
+  fi
+
+  last="$(cat "$LAST_SUCCESS_FILE" 2>/dev/null || echo 0)"
+  if ! [[ "$last" =~ ^[0-9]+$ ]]; then
+    ui_warn "Invalid last_success value -> triggering push"
+    systemctl --user start --no-block "$PUSH_SERVICE"
+    return 0
+  fi
+
+  age=$((now - last))
+  if (( age > stale_after )); then
+    ui_warn "Last push is stale (${age}s > ${stale_after}s) -> triggering push"
+    systemctl --user start --no-block "$PUSH_SERVICE"
+    return 0
+  fi
+
+  ui_ok "Push health OK (last success ${age}s ago)"
+}
+
+render_status() {
+  load_env_file
+  local local_dir remote_dir calendar monitor_interval stale_after lock_wait check_sample alert_on_error
+  local_dir="$(resolve_effective_local)"
+  remote_dir="$(resolve_effective_remote)"
+  calendar="$(resolve_effective_calendar)"
+  monitor_interval="$(resolve_effective_monitor_interval)"
+  stale_after="$(resolve_effective_stale_after)"
+  lock_wait="$(resolve_effective_lock_wait)"
+  check_sample="$(resolve_effective_check_sample)"
+  alert_on_error="$(resolve_effective_alert_on_error)"
+
+  printf "vaultctl push-only status\n"
+  printf "local:   %s\n" "$local_dir"
+  printf "remote:  %s\n" "$remote_dir"
+  printf "push:    %s (%s / %s)\n" "$calendar" \
+    "$(systemctl --user is-enabled "$PUSH_TIMER" 2>/dev/null || echo disabled)" \
+    "$(systemctl --user is-active "$PUSH_TIMER" 2>/dev/null || echo inactive)"
+  printf "monitor: %s (%s / %s)\n" "$monitor_interval" \
+    "$(systemctl --user is-enabled "$MONITOR_TIMER" 2>/dev/null || echo disabled)" \
+    "$(systemctl --user is-active "$MONITOR_TIMER" 2>/dev/null || echo inactive)"
+  printf "stale-after-seconds: %s\n" "$stale_after"
+  printf "lock-file: %s\n" "$LOCK_FILE"
+  printf "lock-wait-seconds: %s\n" "$lock_wait"
+  printf "check-sample-default: %s\n" "$check_sample"
+  printf "alert-on-error: %s\n" "$alert_on_error"
+
+  if [[ -f "$LAST_SUCCESS_FILE" ]]; then
+    local ts
+    ts="$(cat "$LAST_SUCCESS_FILE" 2>/dev/null || true)"
+    if [[ "$ts" =~ ^[0-9]+$ ]]; then
+      printf "last-success: %s (%s)\n" "$ts" "$(date -d "@$ts" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo n/a)"
+    else
+      printf "last-success: invalid (%s)\n" "$ts"
+    fi
+  else
+    printf "last-success: never\n"
+  fi
+
+  if [[ -f "$LAST_RESULT_FILE" ]]; then
+    printf "last-result: %s\n" "$(cat "$LAST_RESULT_FILE" 2>/dev/null || echo unknown)"
+  fi
+
+  if [[ -f "$LOG_FILE" ]]; then
+    printf "log-file: %s\n" "$LOG_FILE"
   fi
 }
 
-logs() {
-  local lines="${1:-50}"
+show_logs() {
+  local lines="${1:-80}"
+  local follow="${2:-0}"
+  need_cmd journalctl "journalctl is required"
 
-  if [ -f "$LOG_FILE" ]; then
-    info "vaultctl logs ($LOG_FILE)"
-    tail -n "$lines" "$LOG_FILE"
-  else
-    warn "log file missing: $LOG_FILE"
+  local -a cmd
+  cmd=(journalctl --user -u "$PUSH_SERVICE" -u "$MONITOR_SERVICE" -n "$lines" --no-pager)
+  if [[ "$follow" == "1" ]]; then
+    cmd=(journalctl --user -u "$PUSH_SERVICE" -u "$MONITOR_SERVICE" -n "$lines" -f)
   fi
+  "${cmd[@]}"
 }
 
-watch() {
-  if have_gum && have_tty; then
-    gum watch --interval 3s -- "vaultctl _render"
-  else
-    while true; do
-      clear
-      status
-      sleep 3
-    done
+do_init() {
+  local local_dir="${VAULT_LOCAL_DEFAULT}"
+  local remote_dir="${VAULT_REMOTE_DEFAULT}"
+  local push_calendar="${PUSH_CALENDAR_DEFAULT}"
+  local monitor_interval="${MONITOR_INTERVAL_DEFAULT}"
+  local stale_after="${STALE_AFTER_DEFAULT}"
+  local alert_on_error="${ALERT_ON_ERROR_DEFAULT}"
+  local run_now="0"
+  local assume_yes="0"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --local)
+        local_dir="${2:-}"
+        shift 2
+        ;;
+      --remote)
+        remote_dir="${2:-}"
+        shift 2
+        ;;
+      --calendar)
+        push_calendar="${2:-}"
+        shift 2
+        ;;
+      --monitor-interval)
+        monitor_interval="${2:-}"
+        shift 2
+        ;;
+      --stale-after)
+        stale_after="${2:-}"
+        shift 2
+        ;;
+      --alert-on-error)
+        alert_on_error="${2:-}"
+        shift 2
+        ;;
+      --run-now)
+        run_now="1"
+        shift
+        ;;
+      --yes|-y)
+        assume_yes="1"
+        shift
+        ;;
+      *)
+        die "Unknown init option: $1"
+        ;;
+    esac
+  done
+
+  local_dir="$(realpath_safe "$local_dir")"
+
+  if [[ "$assume_yes" != "1" ]]; then
+    ui_title "vaultctl init (push-only to gdrive)"
+    local_dir="$(ui_input "Local vault path:" "$local_dir")"
+    remote_dir="$(ui_input "Remote path (<remote>:<path>):" "$remote_dir")"
+    push_calendar="$(ui_input "Push schedule (OnCalendar):" "$push_calendar")"
+    monitor_interval="$(ui_input "Monitor interval (OnUnitActiveSec):" "$monitor_interval")"
+    stale_after="$(ui_input "Stale threshold in seconds:" "$stale_after")"
+    alert_on_error="$(ui_input "Alert on error (0/1):" "$alert_on_error")"
+    if ui_confirm "Initial push direkt ausfuehren?"; then
+      run_now="1"
+    fi
+  fi
+
+  [[ -d "$local_dir" ]] || die "Local vault folder not found: $local_dir"
+  [[ "$remote_dir" == *:* ]] || die "Remote must match '<remote>:<path>'"
+  [[ "$stale_after" =~ ^[0-9]+$ ]] || die "--stale-after must be an integer"
+  [[ "$alert_on_error" == "0" || "$alert_on_error" == "1" ]] || die "--alert-on-error must be 0 or 1"
+
+  need_tooling
+  write_units "$local_dir" "$remote_dir" "$push_calendar" "$monitor_interval" "$stale_after" "$alert_on_error"
+  systemd_reload_enable
+  ui_ok "Installed and enabled: $PUSH_TIMER + $MONITOR_TIMER"
+
+  if [[ "$run_now" == "1" ]]; then
+    ui_info "Starting initial push via systemd service"
+    systemctl --user start "$PUSH_SERVICE"
+    systemctl --user status "$PUSH_SERVICE" --no-pager || true
   fi
 }
 
 menu() {
-  if ! have_gum || ! have_tty; then
-    warn "menu requires gum and a TTY"
-    return 1
-  fi
-
+  local choice=""
   while true; do
-    local choice
-    choice="$(printf "%s\n" \
+    choice="$(ctl_choose_one "vaultctl" \
       "Status" \
-      "Push now (copy)" \
-      "Push dry-run (copy)" \
-      "Pull now (copy)" \
-      "Pull dry-run (copy)" \
-      "Systemd: status" \
-      "Systemd: install units" \
-      "Systemd: enable pull+push" \
-      "Systemd: disable pull+push" \
-      "Systemd: run pull now" \
-      "Systemd: run push now" \
-      "Systemd: edit pull unit" \
-      "Systemd: edit push unit" \
-      "Systemd: edit env" \
-      "Timers" \
+      "Init" \
+      "Push now" \
+      "Push dry-run" \
+      "Check sample" \
+      "Check full" \
       "Logs" \
       "Watch" \
-      "Exit" \
-      | gum choose --header "vaultctl menu")"
+      "Exit")" || return 0
 
     case "$choice" in
-      "Status") status ;;
-      "Push now (copy)") sync ;;
-      "Push dry-run (copy)") sync true ;;
-      "Pull now (copy)") pull ;;
-      "Pull dry-run (copy)") pull true ;;
-      "Systemd: status") vault_sync_system_cmd status ;;
-      "Systemd: install units") vault_sync_system_cmd install ;;
-      "Systemd: enable pull+push") vault_sync_system_cmd enable ;;
-      "Systemd: disable pull+push") vault_sync_system_cmd disable ;;
-      "Systemd: run pull now") vault_sync_system_cmd run-pull ;;
-      "Systemd: run push now") vault_sync_system_cmd run-push ;;
-      "Systemd: edit pull unit") vault_sync_system_cmd edit pull ;;
-      "Systemd: edit push unit") vault_sync_system_cmd edit push ;;
-      "Systemd: edit env") vault_sync_system_cmd edit env ;;
-      "Timers") timers ;;
-      "Logs") logs ;;
-      "Watch") watch ;;
-      "Exit") break ;;
+      "Status") render_status ;;
+      "Init") do_init ;;
+      "Push now") systemctl --user start "$PUSH_SERVICE" ;;
+      "Push dry-run") run_push 1 ;;
+      "Check sample") run_check ;;
+      "Check full") run_check --full ;;
+      "Logs") show_logs 120 0 ;;
+      "Watch") watch_status ;;
+      "Exit") return 0 ;;
     esac
+
+    ui_pause
   done
 }
 
-render() {
-  if ! have_gum || ! have_tty; then
-    status
-    return
-  fi
-
-  local rclone_status="missing"
-  if [ -f "$RCLONE_CONFIG" ]; then
-    rclone_status="present"
-  fi
-
-  local paths_block=""
-  for i in "${!LOCAL_PATHS[@]}"; do
-    if [ -d "${LOCAL_PATHS[$i]}" ]; then
-      paths_block+="${LABELS[$i]}: ${LOCAL_PATHS[$i]} -> ${REMOTE_PATHS[$i]}\n"
-    else
-      paths_block+="${LABELS[$i]}: missing (${LOCAL_PATHS[$i]})\n"
+watch_status() {
+  local i=0
+  while true; do
+    clear || true
+    render_status
+    printf "\n(next refresh in 5s, Ctrl+C to stop)\n"
+    sleep 5
+    i=$((i + 1))
+    if (( i % 6 == 0 )); then
+      run_monitor || true
     fi
   done
-
-  local timers_block
-  timers_block="$($SYSTEMCTL_BIN --user list-timers --all 2>/dev/null | rg -i "alphaos-vault-sync" || true)"
-
-  local log_block="(no log)"
-  if [ -f "$LOG_FILE" ]; then
-    log_block="$(tail -n 10 "$LOG_FILE")"
-  fi
-
-  gum style --border normal --padding "0 1" --margin "1 0" --bold -- "vaultctl watch"
-  gum style --border normal --padding "0 1" --margin "1 0" -- "rclone config: $rclone_status"
-  gum style --border normal --padding "0 1" --margin "1 0" -- "$(printf "%b" "$paths_block")"
-
-  if [ -n "$timers_block" ]; then
-    gum style --border normal --padding "0 1" --margin "1 0" -- "timer:\n$timers_block"
-  else
-    gum style --border normal --padding "0 1" --margin "1 0" -- "timer: not found"
-  fi
-
-  gum style --border normal --padding "0 1" --margin "1 0" -- "log tail:\n$log_block"
 }
 
-case "${1:-sync}" in
-  sync|"")
-    if [ "${2:-}" = "--dry-run" ]; then
-      sync true
-    else
-      sync
-    fi
-    ;;
-  scaffold-push|scaffold_safe_push|new-push|make-push)
-    # Usage:
-    #   vaultctl scaffold-push <name> <local_dir> <remote_dir> [--at HH:MM] [--no-timer] [--force]
-    scaffold_safe_push "${2:-}" "${3:-}" "${4:-}" "${@:5}"
-    ;;
-  pull)
-    if [ "${2:-}" = "--dry-run" ]; then
-      pull true
-    else
-      pull
-    fi
-    ;;
-  status)
-    if [ "${2:-}" = "--brief" ] || [ "${2:-}" = "-b" ]; then
-      status_brief
-    else
-      status
-    fi
-    ;;
-  summary|brief)
-    status_brief
-    ;;
-  watch)
-    watch
-    ;;
-  menu)
-    menu
-    ;;
-  timers)
-    if [ "${2:-}" = "--brief" ] || [ "${2:-}" = "-b" ]; then
-      timers_brief
-    else
-      timers
-    fi
-    ;;
-  logs)
-    logs "${2:-50}"
-    ;;
-  install-cli)
-    cmd_install_cli "${2:---user}"
-    ;;
-  uninstall-cli)
-    cmd_uninstall_cli "${2:---user}"
-    ;;
-  systemd|units|unit)
-    vault_sync_system_cmd "${2:-status}" "${@:3}"
-    ;;
-  _render)
-    render
-    ;;
-  help|-h|--help)
-    echo "vaultctl - Vault copy manager"
-    echo ""
-    echo "Usage:"
-    echo "  vaultctl [command]"
-    echo ""
-    echo "Commands:"
-    echo "  sync    Push local -> remote with rclone copy (default)"
-    echo "  sync --dry-run  Dry-run push"
-    echo "  pull    Pull remote -> local with rclone copy"
-    echo "  pull --dry-run  Dry-run pull"
-    echo "  status [--brief]  Show paths and recent log lines"
-    echo "  summary           Compact status output"
-    echo "  watch   Live status view"
-    echo "  menu    Gum menu (interactive)"
-    echo "  timers [--brief]  Show alphaos-vault-sync timer status"
-    echo "  logs    Show recent log lines (default: 50)"
-    echo "  install-cli [--user|--system]    Install vaultctl symlink into PATH"
-    echo "  uninstall-cli [--user|--system]  Remove installed vaultctl symlink"
-    echo "  systemd status                      Show pull/push unit status"
-    echo "  systemd install                     Install pull/push unit files to /etc/systemd/system"
-    echo "  systemd enable|disable              Enable or disable pull/push services"
-    echo "  systemd run-pull|run-push           Trigger pull now / push now"
-    echo "  systemd edit pull|push|env          Edit installed unit/env (fallback: repo template)"
-    echo "  scaffold-push  Create a new safe 'rclone-*-safe-push.sh' + systemd timer"
-    echo "  help    Show this help"
-    ;;
-  *)
-    echo "Unknown command: $1"
-    echo "Run 'vaultctl help' for usage."
-    exit 1
-    ;;
-esac
+usage() {
+  cat <<'EOT'
+vaultctl - push-only ~/vault -> gdrive (systemd + monitoring)
+
+Usage:
+  vaultctl                    # interactive menu
+  vaultctl init [opts]        # install/update user units
+  vaultctl push [--dry-run]   # run push immediately (direct, not systemd)
+  vaultctl check [--full|--sample N]
+  vaultctl status             # show push + monitor status
+  vaultctl logs [n] [--follow]
+  vaultctl watch
+  vaultctl systemd-run        # start push via systemd service
+  vaultctl systemd-restart    # restart timers
+
+Init options:
+  --local <path>
+  --remote <remote:path>
+  --calendar <OnCalendar>
+  --monitor-interval <sec|min>
+  --stale-after <seconds>
+  --alert-on-error <0|1>
+  --run-now
+  --yes
+EOT
+}
+
+main() {
+  local cmd="${1:-menu}"
+  shift || true
+
+  case "$cmd" in
+    menu) menu ;;
+    init) do_init "$@" ;;
+    push)
+      if [[ "${1:-}" == "--dry-run" ]]; then
+        run_push 1
+      else
+        run_push 0
+      fi
+      ;;
+    check)
+      run_check "$@"
+      ;;
+    status) render_status ;;
+    logs)
+      local n="80"
+      local f="0"
+      if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+        n="$1"
+        shift
+      fi
+      if [[ "${1:-}" == "--follow" ]]; then
+        f="1"
+      fi
+      show_logs "$n" "$f"
+      ;;
+    watch) watch_status ;;
+    systemd-run)
+      systemctl --user start "$PUSH_SERVICE"
+      ;;
+    systemd-restart)
+      systemctl --user daemon-reload
+      systemctl --user restart "$PUSH_TIMER" "$MONITOR_TIMER"
+      ;;
+    _systemd-push)
+      run_push 0
+      ;;
+    _systemd-monitor)
+      run_monitor
+      ;;
+    help|-h|--help) usage ;;
+    *)
+      die "Unknown command: $cmd"
+      ;;
+  esac
+}
+
+main "$@"

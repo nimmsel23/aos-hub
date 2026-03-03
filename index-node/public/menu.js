@@ -1,6 +1,7 @@
 const grid = document.getElementById("menuGrid");
 const docGrid = document.getElementById("docGrid");
 const gptGrid = document.getElementById("gptGrid");
+const pwaLauncherMenu = document.getElementById("pwaLauncherMenu");
 
 let lastHash = "";
 let hadError = false;
@@ -23,15 +24,37 @@ function hashLinks(links) {
   return JSON.stringify(links.map((x) => ({ label: x.label, url: x.url, cmd: x.cmd })));
 }
 
+function hashMobileLinks(links) {
+  return JSON.stringify((links || []).map((x) => ({ label: x.label, url: x.url, target: x.target })));
+}
+
+function renderMobileLinks(links) {
+  if (!pwaLauncherMenu) return;
+  const items = Array.isArray(links) ? links : [];
+  if (!items.length) {
+    pwaLauncherMenu.innerHTML = `<span class="pwa-launcher-dim">No mobile links configured</span>`;
+    return;
+  }
+  pwaLauncherMenu.innerHTML = items
+    .map((x) => {
+      const label = escapeHtml(x.label);
+      const url = escapeHtml(x.url);
+      const target = escapeHtml(x.target || "_self");
+      return `<a class="pwa-launcher-item" href="${url}" target="${target}" rel="noopener noreferrer">${label}</a>`;
+    })
+    .join("");
+}
+
 async function loadMenu() {
   try {
     const res = await fetch("/menu", { cache: "no-store" });
     const data = await res.json();
     const links = Array.isArray(data?.links) ? data.links : [];
+    const mobileLinks = Array.isArray(data?.mobile_links) ? data.mobile_links : [];
     const gptLinks = links.filter((x) => /gpt/i.test(x.label || ""));
     const mainLinks = links.filter((x) => !/gpt/i.test(x.label || ""));
 
-    const h = hashLinks(links);
+    const h = `${hashLinks(links)}|${hashMobileLinks(mobileLinks)}`;
     if (h === lastHash) return;
 
     if (lastHash !== "") {
@@ -45,6 +68,7 @@ async function loadMenu() {
     if (!links.length) {
       grid.innerHTML = `<div class="loading">No links configured.</div>`;
       if (gptGrid) gptGrid.innerHTML = "";
+      renderMobileLinks(mobileLinks);
       return;
     }
 
@@ -66,10 +90,12 @@ async function loadMenu() {
         })
         .join("");
     }
+    renderMobileLinks(mobileLinks);
   } catch (_) {
     if (!hadError) {
       grid.innerHTML = `<div class="loading">Menu load failed</div>`;
       if (gptGrid) gptGrid.innerHTML = "";
+      renderMobileLinks([]);
       hadError = true;
     }
   }

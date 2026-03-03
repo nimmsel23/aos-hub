@@ -20,9 +20,16 @@ status() {
   "$CORE4_TRACKER" -d --quiet || true
   "$CORE4_TRACKER" -w --quiet || true
   msg ""
-  if [[ -d "$CORE4_LOCAL_DIR/.core4/events" ]]; then
+  local events_flat="$CORE4_LOCAL_DIR/events"
+  local events_legacy="$CORE4_LOCAL_DIR/.core4/events"
+  if [[ -d "$events_flat" || -d "$events_legacy" ]]; then
     msg "events (local):"
-    find "$CORE4_LOCAL_DIR/.core4/events" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l | awk '{print "  files=" $1}'
+    local files=0
+    files=$(( \
+      $(find "$events_flat" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l) + \
+      $(find "$events_legacy" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l) \
+    ))
+    printf "  files=%s\n" "$files"
   fi
   if [[ -f "$CORE4_LOCAL_DIR/core4_daily.csv" ]]; then
     msg "daily csv: $CORE4_LOCAL_DIR/core4_daily.csv"

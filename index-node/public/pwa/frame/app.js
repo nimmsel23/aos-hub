@@ -82,8 +82,25 @@ function showToast(msg) {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let state = {
-  domain:  "body",
+  domain:  null,
   domains: {},
+  fullContent: "",
+};
+
+const DOMAIN_ORDER = ["body", "being", "balance", "business"];
+const QUESTION_ORDER = [
+  { key: "where_am_i_now", label: "Where am I now?" },
+  { key: "how_did_i_get_here", label: "How did I get here?" },
+  { key: "how_do_i_feel_about_where_i_am", label: "How do I feel about where I am?" },
+  { key: "what_is_working_about_where_i_am_now", label: "What is working about where I am now?" },
+  { key: "what_is_not_working_about_where_i_am", label: "What is not working about where I am?" },
+];
+
+const wizard = {
+  active: false,
+  step: 0,
+  steps: [],
+  answers: {},
 };
 
 // ── Domain icons ──────────────────────────────────────────────────────────────
@@ -145,14 +162,95 @@ function renderDomainCards() {
 
 // ── Load domains ──────────────────────────────────────────────────────────────
 
+function showGeneral() {
+  state.domain = null;
+  $("editorTitle").textContent = "GENERAL · FRAME";
+  $("editor").value = state.fullContent || "";
+  $("editor").readOnly = true;
+  $("btnSave").disabled = true;
+  renderDomainCards();
+  if (isMobile()) showView("list");
+}
+
+function setMode(mode) {
+  document.querySelector(".shell").dataset.mode = mode;
+}
+
+function buildWizardSteps() {
+  const steps = [];
+  for (const q of QUESTION_ORDER) {
+    for (const domain of DOMAIN_ORDER) {
+      steps.push({ domain, question: q });
+    }
+  }
+  return steps;
+}
+
+function initWizardAnswers() {
+  const answers = {};
+  for (const domain of DOMAIN_ORDER) {
+    answers[domain] = {};
+    for (const q of QUESTION_ORDER) {
+      answers[domain][q.key] = "";
+    }
+  }
+  return answers;
+}
+
+function updateWizardUI() {
+  const step = wizard.steps[wizard.step];
+  const total = wizard.steps.length;
+  const domainUpper = step.domain.toUpperCase();
+  const q = step.question;
+  $("wizardProgress").textContent = `${wizard.step + 1} / ${total}`;
+  $("wizardDomain").textContent = domainUpper;
+  $("wizardQuestion").textContent = q.label;
+  $("wizardInput").value = wizard.answers[step.domain][q.key] || "";
+  $("wizardBack").disabled = wizard.step === 0;
+  $("wizardNext").textContent = wizard.step === total - 1 ? "Finish" : "Next";
+}
+
+function startWizard() {
+  wizard.active = true;
+  wizard.step = 0;
+  wizard.steps = buildWizardSteps();
+  wizard.answers = initWizardAnswers();
+  setMode("wizard");
+  showView("editor");
+  updateWizardUI();
+}
+
+async function completeWizard() {
+  $("wizardNext").disabled = true;
+  $("wizardBack").disabled = true;
+  try {
+    await apiFetch("/api/frame/full/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers: wizard.answers }),
+    });
+    wizard.active = false;
+    setMode("editor");
+    await loadDomains();
+  } catch (err) {
+    showToast("Save failed");
+    console.error(err);
+    $("wizardNext").disabled = false;
+    $("wizardBack").disabled = false;
+  }
+}
+
 async function loadDomains() {
   const res = await apiFetch("/api/frame/domains");
   state.domains = res.domains || {};
 
   renderDomainCards();
 
-  // Auto-load selected domain
-  await loadDomain(state.domain);
+  const full = await apiFetch("/api/frame/full");
+  state.fullContent = full.content || "";
+
+  setMode("editor");
+  showGeneral();
 }
 
 // ── Load domain ───────────────────────────────────────────────────────────────
@@ -165,6 +263,8 @@ async function loadDomain(domain) {
   const domainUpper = domain.toUpperCase();
   $("editorTitle").textContent = `${domainUpper} · Current Frame`;
   $("editor").value = res.content || "";
+  $("editor").readOnly = false;
+  $("btnSave").disabled = false;
 
   // Mobile: switch to editor view
   if (isMobile()) showView("editor");
@@ -173,6 +273,10 @@ async function loadDomain(domain) {
 // ── Save ──────────────────────────────────────────────────────────────────────
 
 async function saveCurrent() {
+  if (!state.domain) {
+    showToast("Select a domain first");
+    return;
+  }
   const content = $("editor").value;
   const btn     = $("btnSave");
   btn.disabled  = true;
@@ -198,6 +302,29 @@ async function saveCurrent() {
 $("btnBack").addEventListener("click", () => showView("list"));
 
 $("btnSave").addEventListener("click", saveCurrent);
+
+// Wizard controls
+$("wizardBack").addEventListener("click", () => {
+  if (!wizard.active) return;
+  const step = wizard.steps[wizard.step];
+  wizard.answers[step.domain][step.question.key] = $("wizardInput").value || "";
+  if (wizard.step > 0) {
+    wizard.step -= 1;
+    updateWizardUI();
+  }
+});
+
+$("wizardNext").addEventListener("click", () => {
+  if (!wizard.active) return;
+  const step = wizard.steps[wizard.step];
+  wizard.answers[step.domain][step.question.key] = $("wizardInput").value || "";
+  if (wizard.step < wizard.steps.length - 1) {
+    wizard.step += 1;
+    updateWizardUI();
+  } else {
+    completeWizard();
+  }
+});
 
 // Cmd/Ctrl+S
 document.addEventListener("keydown", (e) => {

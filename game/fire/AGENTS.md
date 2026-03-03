@@ -21,7 +21,7 @@ Das zugehörige `firectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
   - `game/fire/gcal-setup.sh` (writes `game/fire/fire.env`)
   - `game/fire/gcal-due.sh` / `game/fire/gcal-push-due.sh` (daily push)
   - `game/fire/gcal-auto.sh` (daily systemd timer for GCal push)
-- Index Node Fire API/UI: `index-node/server.js` (`/api/fire/day`, `/api/fire/week`, `/game/fire`)
+- Index Node Fire API/UI: `index-node/routes/fire.js` (`/api/fire/tasks-day`, `/api/fire/tasks-week`, `/game/fire`)
 - Router trigger: `router/extensions/firemap_commands.py` (triggers systemd units first)
 
 ## Conventions

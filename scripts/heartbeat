@@ -23,7 +23,7 @@ if ! aos_env_load "" "$ROOT_DIR"; then
 fi
 
 HB_NAME="${HB_NAME:-alphaos-heartbeat}"
-HB_URL="${HB_URL:-${AOS_GAS_WEBHOOK_URL:-}}"
+HB_URL="${HB_URL:-${AOS_WATCHDOG_WEBHOOK_URL:-${AOS_GAS_WEBHOOK_URL:-}}}"
 HB_HOST="${HB_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 HB_BOOT_DELAY="${HB_BOOT_DELAY:-30s}"
 HB_INTERVAL="${HB_INTERVAL:-2min}"
@@ -97,7 +97,7 @@ status_timer() {
 logs_timer() { journalctl --user -u "${HB_NAME}.service" -n 200 -f; }
 
 ping_once() {
-  [[ -n "$HB_URL" ]] || die "Missing heartbeat URL (set HB_URL or AOS_GAS_WEBHOOK_URL)"
+  [[ -n "$HB_URL" ]] || die "Missing heartbeat URL (set HB_URL, AOS_WATCHDOG_WEBHOOK_URL, or AOS_GAS_WEBHOOK_URL)"
   if has_cmd gasctl; then
     msg "Pinging GAS (via gasctl)..."
     HB_URL="$HB_URL" HB_HOST="$HB_HOST" gasctl ping
@@ -128,7 +128,7 @@ Usage:
 
 Env overrides:
   HB_NAME=alphaos-heartbeat
-  HB_URL=https://.../exec   (or set AOS_GAS_WEBHOOK_URL)
+  HB_URL=https://.../exec   (or set AOS_WATCHDOG_WEBHOOK_URL / AOS_GAS_WEBHOOK_URL)
   HB_HOST=\$(hostname -s)
   HB_BOOT_DELAY=30s
   HB_INTERVAL=2min

@@ -75,7 +75,7 @@ war_stack_create_sh	war_stack_create.sh	door/create_warstack.sh	script	aos-hub
 git_sync_enforcer	git-sync-enforcer	git-sync-enforcer	script	dotfiles_bin	
 syncctl	syncctl	syncctl	script	dotfiles_bin	
 repo_auto_push	repo-auto-push	repo-auto-push	script	dotfiles_bin	
-vaultctl	vaultctl	vaultctl	script	dotfiles_bin	
+vaultctl	vaultctl	vaultctl	script	dotfiles_bin	Push-only ~/vault -> gdrive via systemd user timer + monitor
 backupctl	backupctl	backupctl	script	dotfiles_bin	
 claude_compact_summary_hook	claude-compact-summary-hook	claude-compact-summary-hook	script	dotfiles_bin	
 syncvaultctl	syncvaultctl	syncvaultctl	script	dotfiles_bin	

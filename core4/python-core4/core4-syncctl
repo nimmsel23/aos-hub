@@ -18,20 +18,35 @@ sync_all() {
 
 push_core4() {
   [[ -d "$CORE4_LOCAL_DIR" ]] || die "missing local Core4 dir: $CORE4_LOCAL_DIR"
-  # Only push the ledger; avoid Drive duplicates for derived JSON.
-  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" --filter "+ .core4/**" --filter "- *"
+  # Only push ledger/seal metadata; avoid Drive duplicates for derived JSON.
+  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" \
+    --filter "+ events/**" \
+    --filter "+ sealed/**" \
+    --filter "+ sealed-months/**" \
+    --filter "+ .core4/**" \
+    --filter "- *"
 }
 
 pull_core4() {
   mkdir -p "$CORE4_LOCAL_DIR"
 
   # Primary: Pull from Alpha_HQ (private HQ)
-  run_rclone_copy "pull" "$CORE4_REMOTE_HQ" "$CORE4_LOCAL_DIR" --filter "+ .core4/**" --filter "- *"
+  run_rclone_copy "pull" "$CORE4_REMOTE_HQ" "$CORE4_LOCAL_DIR" \
+    --filter "+ events/**" \
+    --filter "+ sealed/**" \
+    --filter "+ sealed-months/**" \
+    --filter "+ .core4/**" \
+    --filter "- *"
 
   # Secondary (optional): Pull from Alpha_Core4 (standalone multi-user tracker)
   # Events merge automatically (different filenames due to different sources)
   if [[ "${AOS_CORE4_PULL_STANDALONE:-1}" == "1" ]]; then
-    run_rclone_copy "pull" "$CORE4_REMOTE_STANDALONE" "$CORE4_LOCAL_DIR" --filter "+ .core4/**" --filter "- *" || true
+    run_rclone_copy "pull" "$CORE4_REMOTE_STANDALONE" "$CORE4_LOCAL_DIR" \
+      --filter "+ events/**" \
+      --filter "+ sealed/**" \
+      --filter "+ sealed-months/**" \
+      --filter "+ .core4/**" \
+      --filter "- *" || true
   fi
 
   # Rebuild derived artifacts locally from all available sources.
@@ -40,7 +55,12 @@ pull_core4() {
   # Desktop notification
   if command -v notify-send >/dev/null 2>&1; then
     local today_events
-    today_events=$(find "$CORE4_LOCAL_DIR/.core4/events/$(date +%Y-%m-%d)" -type f 2>/dev/null | wc -l)
+    local day
+    day="$(date +%Y-%m-%d)"
+    today_events=$(( \
+      $(find "$CORE4_LOCAL_DIR/events/$day" -type f 2>/dev/null | wc -l) + \
+      $(find "$CORE4_LOCAL_DIR/.core4/events/$day" -type f 2>/dev/null | wc -l) \
+    ))
     notify-send -u low "Core4" "Synced from Drive (${today_events} events today)"
   fi
 }

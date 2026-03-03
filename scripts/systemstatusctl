@@ -16,11 +16,12 @@ ENV_FILE="${AOS_ENV_FILE:-}"
 usage() {
   cat <<EOF
 Usage:
-  systemstatusctl [trigger|doctor|help] [--cmd /systemstatus] [--env FILE] [--json]
+  systemstatusctl [trigger|doctor|registry|help] [--cmd /systemstatus] [--env FILE] [--json]
 
 Commands:
   trigger   Trigger GAS system status via Bridge (default)
   doctor    Call Bridge /bridge/doctor (active probes)
+  registry  Write local status registry JSON (default: ~/.aos/system-status.json)
   help      Show this help
 
 Options:
@@ -32,6 +33,7 @@ Env:
   AOS_ENV_FILE                  Global env file (default: $ROOT_DIR/.env/aos.env)
   AOS_BRIDGE_HOST, AOS_BRIDGE_PORT, AOS_BRIDGE_URL
   AOS_BRIDGE_TOKEN, AOS_BRIDGE_TOKEN_HEADER
+  AOS_SYSTEM_STATUS_FILE        Registry file (default: ~/.aos/system-status.json)
 EOF
 }
 
@@ -69,17 +71,96 @@ except Exception:
 PY
 }
 
+status_icon_for() {
+  local state="$1"
+  case "$state" in
+    up) echo "●" ;;
+    active) echo "◐" ;;
+    *) echo "○" ;;
+  esac
+}
+
+local_status_json() {
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)"
+  local hub_state="down"
+  local router_state="down"
+  local bridge_state="down"
+  local pwa_state="down"
+  local tailnet_state="missing"
+  local tailnet_url=""
+
+  if curl -s --max-time 0.5 http://127.0.0.1:8799/health >/dev/null 2>&1; then
+    hub_state="up"
+  elif systemctl --user is-active aos-hub >/dev/null 2>&1; then
+    hub_state="active"
+  fi
+
+  if systemctl --user is-active aos-router >/dev/null 2>&1; then
+    router_state="up"
+  elif pgrep -f "python.*router" >/dev/null 2>&1; then
+    router_state="active"
+  fi
+
+  if curl -s --max-time 0.5 http://127.0.0.1:8080/health >/dev/null 2>&1; then
+    bridge_state="up"
+  elif systemctl --user is-active aos-bridge >/dev/null 2>&1; then
+    bridge_state="active"
+  fi
+
+  if curl -s --max-time 0.5 http://127.0.0.1:8780/health >/dev/null 2>&1; then
+    pwa_state="up"
+  elif systemctl --user is-active aos-pwa-dev.service >/dev/null 2>&1; then
+    pwa_state="active"
+  elif systemctl --user is-active aos-pwa >/dev/null 2>&1; then
+    pwa_state="active"
+  fi
+
+  if command -v tailscale >/dev/null 2>&1; then
+    local ts_status
+    ts_status="$(tailscale serve status 2>/dev/null || true)"
+    tailnet_url="$(printf "%s\n" "$ts_status" | awk '/^https:\/\//{print $1; exit}')"
+    if [[ -n "$tailnet_url" ]]; then
+      tailnet_state="funnel"
+    else
+      local ts_dns
+      ts_dns="$(tailscale status --json 2>/dev/null | sed -n 's/^[[:space:]]*"DNSName": "\\([^"]*\\)\\.",$/\\1/p' | head -n 1)"
+      if [[ -n "$ts_dns" ]]; then
+        tailnet_state="dns"
+        tailnet_url="https://${ts_dns}"
+      else
+        tailnet_state="inactive"
+      fi
+    fi
+  fi
+
+  python - <<PY
+import json, sys
+data = {
+  "timestamp": "${now}",
+  "hub": {"state": "${hub_state}", "port": 8799, "health": "http://127.0.0.1:8799/health"},
+  "router": {"state": "${router_state}", "kind": "telegram"},
+  "bridge": {"state": "${bridge_state}", "port": 8080, "health": "http://127.0.0.1:8080/health"},
+  "pwa": {"state": "${pwa_state}", "port": 8780, "health": "http://127.0.0.1:8780/health"},
+  "tailnet": {"state": "${tailnet_state}", "url": "${tailnet_url}"},
+}
+print(json.dumps(data, indent=2))
+PY
+}
+
 cmd="${1:-trigger}"
 shift || true
 
 telegram_cmd="/systemstatus"
 print_json=0
 env_override=""
+quiet=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cmd) telegram_cmd="${2:-}"; shift 2 ;;
     --json) print_json=1; shift ;;
+    --quiet) quiet=1; shift ;;
     --env) env_override="${2:-}"; shift 2 ;;
     -h|--help|help) usage; exit 0 ;;
     *) die "unknown arg: $1" ;;
@@ -135,6 +216,17 @@ case "$cmd" in
     fi
     printf "%s\n" "$res"
     exit 2
+    ;;
+  registry)
+    STATUS_FILE="${AOS_SYSTEM_STATUS_FILE:-$HOME/.aos/system-status.json}"
+    mkdir -p "$(dirname "$STATUS_FILE")"
+    payload="$(local_status_json)"
+    printf "%s\n" "$payload" >"$STATUS_FILE"
+    if (( print_json )); then
+      printf "%s\n" "$payload"
+    elif (( ! quiet )); then
+      printf "OK: wrote %s\n" "$STATUS_FILE"
+    fi
     ;;
   help|-h|--help)
     usage

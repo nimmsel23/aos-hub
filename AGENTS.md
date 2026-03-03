@@ -154,9 +154,39 @@ All `*ctl` entrypoints currently under `aos-hub/`:
 - It is acceptable for `aos` to wrap `doorctl` internally (or for `doorctl` to wrap lower-level scripts), but the user-facing command should avoid exposing unnecessary internal tool names.
 - When replacing an assumed path with a real one during implementation, document the canonical path in help text and/or AGENTS comments so future refactors do not regress to dummy routes.
 
+## Vaultctl Policy (Push-Only Rebuild, 2026-03-02)
+- Canonical implementation: `scripts/sync-utils/vaultctl` (full rewrite, push-only).
+- Scope is intentionally narrow:
+  - monitor only push state of local `~/vault` to GDrive remote target
+  - execute pushes via `systemd --user` service/timer
+  - monitor service health via dedicated monitor service/timer
+  - provide integrity verification via `vaultctl check` (`rclone check`, sample/default or `--full`)
+- Active user units:
+  - `vaultctl-push.service`
+  - `vaultctl-push.timer`
+  - `vaultctl-push-monitor.service`
+  - `vaultctl-push-monitor.timer`
+- Runtime state/log files:
+  - `~/.local/state/vaultctl/push.env`
+  - `~/.local/state/vaultctl/last_success_epoch`
+  - `~/.local/state/vaultctl/last_result`
+  - `~/.local/state/vaultctl/push.log`
+  - `~/.local/state/vaultctl/push.lock` (single-run guard via `flock`)
+- Optional error alerting:
+  - `AOS_VAULT_ALERT_ON_ERROR=1` enables alerts on push/check failure.
+  - Default notifier uses `telectl send` (fallback: `tele`).
+  - Custom notifier command supported via `AOS_VAULT_ALERT_CMD` (`ALERT_MESSAGE` is exported).
+- Legacy `vaultctl` content is not SSOT anymore; cleanup can happen only after the new flow is verified stable.
+- Implementation safety rule: monitor-triggered starts must use non-blocking systemctl start to avoid hanging monitor jobs.
+
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
 - Example checks: `curl http://127.0.0.1:8799/health` and `curl http://127.0.0.1:8080/bridge/core4/today`.
+- PWA launcher + ctx checks (index-node):
+  - `/menu` must include both `links` and `mobile_links` (MOBILE hover menu is driven by `mobile_links`, no hardcoded links in `public/index.html`).
+  - `GET /api/pwa/mobile-links` returns launcher-only links for lightweight consumers (UI/Telegram/router integrations).
+  - `GET /api/pwa/ctx` returns per-app ctx status (`core4|fire|focus|frame|freedom|door|game|memoirs`).
+  - `POST /api/pwa/ctx/:app` accepts `status|start|stop|restart|enable|disable` (local-only unless `AOS_PWA_CTX_ALLOW_REMOTE=1`).
 - For `scripts/*ctl` changes, run `scripts/scripts-lint.sh` and at least `bash -n` on changed scripts.
 - For public access, use Tailscale funnel on `/bridge` and set GAS `LAPTOP_URL` to `https://<host>.ts.net/bridge`.
 - Telegram Mini App URL: `https://ideapad.tail7a15d6.ts.net/tele.html` (BotFather domain: `https://ideapad.tail7a15d6.ts.net`).

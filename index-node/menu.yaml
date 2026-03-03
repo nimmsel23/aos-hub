@@ -115,4 +115,27 @@
 
 
   ]
+  ,
+  "mobile_links": [
+    { "label": "CORE4", "url": "https://ideapad.tail7a15d6.ts.net/pwa/core4/", "target": "_self" },
+    { "label": "FIRE", "url": "https://ideapad.tail7a15d6.ts.net/pwa/fire/", "target": "_self" },
+    { "label": "FOCUS", "url": "https://ideapad.tail7a15d6.ts.net/pwa/focus/", "target": "_self" },
+    { "label": "FRAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/frame/", "target": "_self" },
+    { "label": "FREEDOM", "url": "https://ideapad.tail7a15d6.ts.net/pwa/freedom/", "target": "_self" },
+    { "label": "DOOR", "url": "https://ideapad.tail7a15d6.ts.net/pwa/door/", "target": "_self" },
+    { "label": "GAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/game/", "target": "_self" },
+    { "label": "FITNESS", "url": "https://ideapad.tail7a15d6.ts.net/fitnessctx", "target": "_self" },
+    { "label": "MEMOIRS", "url": "https://ideapad.tail7a15d6.ts.net/pwa/memoirs/", "target": "_self" },
+    { "label": "LINKS", "url": "/links.html", "target": "_self" }
+  ],
+  "pwa_ctx": {
+    "core4": { "port": 8781, "service": "aos-pwa-core4-ctx.service" },
+    "fire": { "port": 8782, "service": "aos-pwa-fire-ctx.service" },
+    "focus": { "port": 8783, "service": "aos-pwa-focus-ctx.service" },
+    "frame": { "port": 8784, "service": "aos-pwa-frame-ctx.service" },
+    "freedom": { "port": 8785, "service": "aos-pwa-freedom-ctx.service" },
+    "door": { "port": 8786, "service": "aos-pwa-door-ctx.service" },
+    "game": { "port": 8787, "service": "aos-pwa-game-ctx.service" },
+    "memoirs": { "port": 8790, "service": "aos-pwa-memoirs-ctx.service" }
+  }
 }

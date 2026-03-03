@@ -57,17 +57,33 @@ if [[ ! -f "$DAY_FILE" ]]; then
   exit 0
 fi
 
+# Load habit order from core4_types.py (single source of truth), fallback to default.
+declare -a HABIT_ORDER=()
+if command -v python3 >/dev/null 2>&1; then
+  while IFS= read -r h; do
+    [[ -n "$h" ]] || continue
+    HABIT_ORDER+=("$h")
+  done < <(python3 - <<'PY'
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    import core4_types
+    for h in core4_types.HABIT_ORDER:
+        print(h)
+except Exception:
+    pass
+PY
+  )
+fi
+if [[ ${#HABIT_ORDER[@]} -eq 0 ]]; then
+  HABIT_ORDER=(fitness fuel meditation memoirs person1 person2 discover declare)
+fi
+
 # Parse entries using jq
-declare -A habits=(
-  [memoirs]=0
-  [partner]=0
-  [posterity]=0
-  [meditation]=0
-  [fitness]=0
-  [fuel]=0
-  [discover]=0
-  [declare]=0
-)
+declare -A habits=()
+for h in "${HABIT_ORDER[@]}"; do
+  habits["$h"]=0
+done
 
 # Parse entries and mark completed habits
 while IFS= read -r entry; do
@@ -76,9 +92,8 @@ while IFS= read -r entry; do
 
   # Map task names to habit keys
   case "$task" in
-    person1|partner) habit="partner" ;;
-    person2|posterity) habit="posterity" ;;
-    posterity) habit="posterity" ;;
+    person1|partner) habit="person1" ;;
+    person2|posterity) habit="person2" ;;
     memoirs) habit="memoirs" ;;
     meditation) habit="meditation" ;;
     fitness) habit="fitness" ;;
@@ -95,7 +110,7 @@ done < <(jq -c '.entries[]' "$DAY_FILE" 2>/dev/null || echo "")
 
 # Day total from recognized Core4 habits only (ignores test/probe events)
 done_count=0
-for habit in memoirs partner posterity meditation fitness fuel discover declare; do
+for habit in "${HABIT_ORDER[@]}"; do
   if [[ "${habits[$habit]}" == "1" ]]; then
     ((done_count+=1))
   fi
@@ -109,7 +124,7 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Habit status
-for habit in memoirs partner posterity meditation fitness fuel discover declare; do
+for habit in "${HABIT_ORDER[@]}"; do
   if [[ "${habits[$habit]}" == "1" ]]; then
     echo -e "  ${GREEN}✓${RESET} $habit"
   else

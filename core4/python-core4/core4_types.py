@@ -48,8 +48,8 @@ HABIT_TO_DOMAIN = {
 }
 
 DISPLAY_HABIT = {
-    "person1": "partner",
-    "person2": "posterity",
+    "person1": "person1",
+    "person2": "person2",
 }
 
 HABIT_ORDER = ["fitness", "fuel", "meditation", "memoirs", "person1", "person2", "discover", "declare"]
