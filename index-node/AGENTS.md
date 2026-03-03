@@ -69,6 +69,7 @@ See `api-map.md` for full reference. Short version:
 - Local-only terminal is served via `/ws/terminal` and blocked for non-local IPs unless `TERMINAL_ALLOW_REMOTE=1`.
 - Routes rely on `menu.yaml`; treat it as read-only input for UI consumers.
 - Bridge handoff uses `AOS_BRIDGE_URL` (or `BRIDGE_URL`) when set.
+- For stable access from non-local devices, prefer the Tailnet address `100.76.197.55:8799`.
 - PWA ctx control endpoints are local-only by default:
   - `GET /api/pwa/ctx` (status for all dedicated ctx runtimes)
   - `POST /api/pwa/ctx/:app` with `{"action":"status|start|stop|restart|enable|disable"}`
@@ -120,6 +121,10 @@ Desktop / Legacy Centres (Main index-node, port 8799):
 Tailnet/Funnel note:
 - In tailnet, the PWA base might be exposed at `https://<host>.ts.net/pwa` → `http://127.0.0.1:8780/pwa`.
 - Because some proxies strip the `/pwa` prefix, the direct alias routes above are required and are treated as first-class.
+- Funnel base: `https://ideapad.tail7a15d6.ts.net` → `http://127.0.0.1:8799`
+- Funnel PWA base: `https://ideapad.tail7a15d6.ts.net/pwa` → `http://127.0.0.1:8780/pwa`
+- Funnel bridge: `https://ideapad.tail7a15d6.ts.net/bridge` → `http://127.0.0.1:8080`
+- Funnel fitness ctx: `https://ideapad.tail7a15d6.ts.net/fitnessctx` → `http://127.0.0.1:8780/pwa/fitness/`
 
 Menu/API note:
 - `/menu` now returns both:
