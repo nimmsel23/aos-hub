@@ -4,6 +4,9 @@ Das zugehörige `gamectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 
 Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, wenn lokale Tent-Reports oder Services angepasst werden.
 
+## Repo Topology
+- `game/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 ## Scope
 - `game/` owns Game pillar domain logic and center-specific behavior (Frame/Freedom/Focus/Fire/Tent).
 - Keep Game-specific implementation in this pillar.

@@ -2,6 +2,9 @@
 
 Das zugehörige `bridgectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
 
+## Repo Topology
+- `bridge/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 **See also:**
 - `CLAUDE.md` — Development guidelines and workflows
 - `TODO.md` — Pending tasks and technical debt

@@ -8,6 +8,9 @@ Wichtig für Änderungen:
 - **`core4ctl` ist Kompatibilitäts-/Ops-Shim:** nicht als primäre Daily-UX behandeln.
 - **AGENTS.md knapp halten:** Arbeitsregeln hier, lange Blueprint-/Kapiteltexte lieber in `CORE4.md` / `DOCS/core4.md`.
 
+## Repo Topology
+- `core4/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 ## Scope
 - `core4/` owns Core4 domain logic, data flow, and tooling behavior.
 - Keep Core4-specific implementation in this pillar.

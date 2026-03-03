@@ -138,6 +138,9 @@ All `*ctl` entrypoints currently under `aos-hub/`:
   - `./hubctl doctor` (multi-service)
 - Bridge CLI is intentionally split for readability but kept stable:
   - `bridge/bridgectl` (dispatcher) → `bridge/bridge-servicectl`, `bridge/bridge-apictl`, `bridge/bridge-tsctl`.
+- Git subtree push policy:
+  - Use `gitctl split push` (or `scripts/gitctl split push`) from the `aos-hub` repo root.
+  - Do not use ad-hoc manual `git subtree split` + `git push` for routine subtree publishing.
 
 ## Coding Style & Naming Conventions
 - Follow component-specific guides in `index-node/AGENTS.md`, `router/AGENTS.md`, `bridge/AGENTS.md`, and `gas/AGENTS.md`.

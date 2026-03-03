@@ -4,6 +4,9 @@ Das zugehörige `voicectl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 
 Guidelines for Claude Code when working on THE VOICE component.
 
+## Repo Topology
+- `voice/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 ## Architecture Overview
 
 THE VOICE follows the standard αOS component architecture:

@@ -2,6 +2,9 @@
 
 Das zugehörige `routerctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
 
+## Repo Topology
+- `router/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 ## Project Structure & Purpose
 - `router_bot.py` is the aiogram router (Telegram commands → centre URLs).
 - `extensions/` holds opt-in command modules (e.g., warstack trigger).

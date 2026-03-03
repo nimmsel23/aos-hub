@@ -2,6 +2,9 @@
 
 Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet und bei Bedarf weiterentwickelt.
 
+## Repo Topology
+- `index-node/` is maintained as an `aos-hub` subtree and published via `gitctl split push` from the `aos-hub` repo root.
+
 ## Project Structure & Module Organization
 - `server.js` runs the local router API and serves static files from `public/`.
 - `menu.yaml` is the single source of truth for routes shown on the index UI.
