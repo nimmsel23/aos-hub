@@ -54,10 +54,14 @@ Priority H (12) > Due-Date (10) > +next (8) > Blocking (6)
 |-----|------|--------|-------|
 | `pillar` | string | code, core, voice, door, game | αOS 5 Pillars |
 | `domain` | string | body, being, balance, business | Core Four Domains |
-| `alphatype` | string | daily, door, strike, hit, big, little, sand, focus, freedom, frame, ipw, voice, map, warstack | Task-Typ |
+| `alphatype` | string | daily, door, hit, strike, bigrock, littlerock, warstack, focus, freedom, frame, fire, voice, mission, map, ipw, big, little, sand | Task-Typ |
 | `points` | numeric | (default: 0) | Core4 28-or-Die |
 | `door_name` | string | (frei) | Door-Name |
 | `hit_number` | numeric | 1, 2, 3, 4 | War Stack Hit# |
+
+Hinweis:
+- Hooks normalisieren Legacy-Werte (`big -> bigrock`, `little -> littlerock`).
+- `+core4`/Habit-Tags werden als `alphatype:daily` klassifiziert, wenn kein expliziter `alphatype` gesetzt ist.
 
 ---
 

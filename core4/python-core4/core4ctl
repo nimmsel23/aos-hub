@@ -98,9 +98,26 @@ Sync:
 Systemd:
   core4ctl install-timers
 
+PWA ctx:
+  core4ctl ctx [open|start|stop|restart|status|logs|menu]
+
 Legacy (rarely needed):
   core4ctl mount-status|mount-enable|mount-disable|mount-restart|mount-logs
 EOF
+}
+
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v core4ctx >/dev/null 2>&1; then
+    core4ctx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx core4 "$action"
+    return $?
+  fi
+  echo "core4ctx/pwactx not found" >&2
+  return 1
 }
 
 cmd="${1:-}"
@@ -122,6 +139,9 @@ case "$cmd" in
   help)
     shim_notice
     usage
+    ;;
+  ctx)
+    cmd_ctx "${1:-}"
     ;;
   menu)
     case "${1:-}" in

@@ -302,6 +302,9 @@ async function saveCurrent() {
 $("btnBack").addEventListener("click", () => showView("list"));
 
 $("btnSave").addEventListener("click", saveCurrent);
+$("btnFullFrame").addEventListener("click", () => {
+  startWizard();
+});
 
 // Wizard controls
 $("wizardBack").addEventListener("click", () => {

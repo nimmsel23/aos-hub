@@ -370,13 +370,31 @@ app.get("/api/pin/status", (_req, res) => {
 
 app.use("/api", pinBarrier);
 
+function fitnessCtxTarget(req) {
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+    .split(",")[0]
+    .trim();
+  const rawHost = forwardedHost || String(req.headers.host || "").trim();
+  const out = new URL("http://127.0.0.1/");
+  try {
+    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
+    out.hostname = parsed.hostname || "127.0.0.1";
+  } catch (_) {
+    out.hostname = "127.0.0.1";
+  }
+  out.port = "8788";
+  out.pathname = "/";
+  return out.toString();
+}
+
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
-// Fitness context shortcut should land on the current fitness PWA.
-app.get("/fitnessctx", (_req, res) => res.redirect(302, "/pwa/fitness/"));
-app.get("/fitnessctx/", (_req, res) => res.redirect(302, "/pwa/fitness/"));
-app.get(/^\/pwa\/fitness$/, (_req, res) => res.redirect(302, "/pwa/fitness/"));
+// Fitness context shortcut should land on the dedicated fitness service.
+app.get(["/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, res) =>
+  res.redirect(302, fitnessCtxTarget(req))
+);
+app.get(/^\/pwa\/fitness\/.+$/, (req, res) => res.redirect(302, fitnessCtxTarget(req)));
 
 // PWAs: dev (public/pwa) first, then AOS_PWA_DIR fallback (prod deploy cache)
 app.use("/pwa", express.static(path.join("public", "pwa"), { extensions: ["html"] }));
@@ -5679,22 +5697,22 @@ app.get("/api/door/warstack/:id", (req, res) => {
 
 app.get("/fire/day", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/tasks-day${query}`);
+  return res.redirect(302, `/api/fire/day${query}`);
 });
 
 app.get("/fire/week", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/tasks-week${query}`);
+  return res.redirect(302, `/api/fire/week${query}`);
 });
 
 app.get("/fired", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/tasks-day${query}`);
+  return res.redirect(302, `/api/fire/day${query}`);
 });
 
 app.get("/firew", (req, res) => {
   const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-  return res.redirect(302, `/api/fire/tasks-week${query}`);
+  return res.redirect(302, `/api/fire/week${query}`);
 });
 
 
@@ -6444,11 +6462,15 @@ app.post("/api/taskwarrior/add", async (req, res) => {
       const due = String(t?.due || "").trim();
       const scheduled = String(t?.scheduled || "").trim();
       const project = String(t?.project || "").trim();
+      const domain = String(t?.domain || "").trim().toLowerCase();
       const tags = Array.isArray(t?.tags) ? t.tags : [];
       const args = ["add", description];
       if (due) args.push(`due:${due}`);
       if (scheduled) args.push(`scheduled:${scheduled}`);
       if (project) args.push(`project:${project}`);
+      if (["body", "being", "balance", "business"].includes(domain)) {
+        args.push(`domain:${domain}`);
+      }
       tags
         .map((tag) => String(tag || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, ""))
         .filter(Boolean)
@@ -6468,6 +6490,48 @@ app.post("/api/taskwarrior/add", async (req, res) => {
       total: results.length,
       results,
     });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Update Taskwarrior task (local CLI)
+app.post("/api/taskwarrior/update", async (req, res) => {
+  try {
+    const taskBin = process.env.TASK_BIN || "task";
+    const uuid = String(req.body?.uuid || "").trim();
+    if (!uuid) {
+      return res.status(400).json({ ok: false, error: "missing uuid" });
+    }
+
+    const scheduled = String(req.body?.scheduled || "").trim();
+    const due = String(req.body?.due || "").trim();
+    const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+    const clearScheduled = Boolean(req.body?.clear_scheduled);
+    const clearDue = Boolean(req.body?.clear_due);
+
+    const args = ["modify", uuid];
+    if (scheduled) args.push(`scheduled:${scheduled}`);
+    if (due) args.push(`due:${due}`);
+    if (clearScheduled) args.push("scheduled:");
+    if (clearDue) args.push("due:");
+    tags
+      .map((tag) => String(tag || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, ""))
+      .filter(Boolean)
+      .forEach((tag) => args.push(`+${tag}`));
+
+    try {
+      await execFileAsync(taskBin, args);
+      return res.json({
+        ok: true,
+        uuid,
+        scheduled: scheduled || (clearScheduled ? null : undefined),
+        due: due || (clearDue ? null : undefined),
+        tags
+      });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

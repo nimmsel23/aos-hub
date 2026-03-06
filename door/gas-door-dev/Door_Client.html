@@ -361,21 +361,26 @@ function generateDoorWarFromMatrix() {
   }
 
   const lines = [];
+  const hCount = q1.length;
+  const mCount = q2.length;
+  const lCount = q3.length;
+  const noneCount = q4.length;
+  const priority = quad === 'q1' ? 'H' : quad === 'q2' ? 'M' : quad === 'q3' ? 'L' : '';
   lines.push('# Door War – Eisenhower Matrix');
   lines.push('');
   lines.push('## Backlog');
   lines.push(backlog.length ? backlog.map(i => `- ${i}`).join('\n') : '- (leer)');
   lines.push('');
-  lines.push('## Q1 – Urgent & Important');
+  lines.push('## Priority H (Urgent & Important)');
   lines.push(q1.length ? q1.map(i => `- ${i}`).join('\n') : '- (leer)');
   lines.push('');
-  lines.push('## Q2 – Not Urgent & Important');
+  lines.push('## Priority M (Not Urgent & Important)');
   lines.push(q2.length ? q2.map(i => `- ${i}`).join('\n') : '- (leer)');
   lines.push('');
-  lines.push('## Q3 – Urgent & Not Important');
+  lines.push('## Priority L (Urgent & Not Important)');
   lines.push(q3.length ? q3.map(i => `- ${i}`).join('\n') : '- (leer)');
   lines.push('');
-  lines.push('## Q4 – Not Urgent & Not Important');
+  lines.push('## No Priority (Not Urgent & Not Important)');
   lines.push(q4.length ? q4.map(i => `- ${i}`).join('\n') : '- (leer)');
   lines.push('');
   lines.push('---');
@@ -383,13 +388,14 @@ function generateDoorWarFromMatrix() {
   lines.push('## Domino Door');
   lines.push('');
   lines.push(`**Door:** ${door || '_'}`);
+  lines.push(`**Priority:** ${priority || '-'}`);
   lines.push('');
 
   const md = lines.join('\n');
   const out = document.getElementById('doorwaroutput');
   if (out) out.textContent = md;
 
-  const meta = `q1:${q1.length};q2:${q2.length};q3:${q3.length};q4:${q4.length};door:${door || ''};hotlist_file_id:${fileId || ''};quad:${quad || ''}`;
+  const meta = `h:${hCount};m:${mCount};l:${lCount};none:${noneCount};priority:${priority || ''};q1:${q1.length};q2:${q2.length};q3:${q3.length};q4:${q4.length};door:${door || ''};hotlist_file_id:${fileId || ''};quad:${quad || ''}`;
   syncDoorToDrive('DoorWar', md, meta);
 }
 
@@ -725,11 +731,12 @@ if (doorWarForm) {
 
     const weekStr = isoWeek(date);
     const domainTag = domain ? domain.toLowerCase() : '';
+    const stackTitle = title || door || '';
 
     lines.push('---');
     lines.push(`date: ${dateStr}`);
     lines.push(`week: ${weekStr}`);
-    lines.push(`title: "${door || ''}"`);
+    lines.push(`title: "${stackTitle}"`);
     lines.push(`domain: ${domain || ''}`);
     lines.push(`subdomain: ${sub || ''}`);
     lines.push(`door: "${door || ''}"`);
@@ -739,7 +746,7 @@ if (doorWarForm) {
     lines.push(`tags: [war-stack, door, production${domainTag ? ', ' + domainTag : ''}]`);
     lines.push('---');
     lines.push('');
-    lines.push(`# War Stack - ${door || ''}`);
+    lines.push(`# War Stack - ${stackTitle}`);
     lines.push('');
     lines.push('## Domain & Sub-domain');
     lines.push(`- Domain: ${domain || ''}`);
@@ -803,7 +810,7 @@ if (doorWarForm) {
   out.style.display = 'block';
 
   saveWarStackDraft_('submit');
-  syncDoorToDrive('WarStack', md, title || '');
+  syncDoorToDrive('WarStack', md, stackTitle);
 });
 }
 

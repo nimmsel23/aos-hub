@@ -2221,6 +2221,32 @@ async def _run_task_add(task: Dict[str, Any]) -> Dict[str, Any]:
     if wait:
         args.append(f"wait:{wait}")
 
+    # Optional: explicit UDA/custom attributes for Taskwarrior.
+    # Keep this allowlisted to avoid accidental injection of unsupported keys.
+    uda_allowlist = ("pillar", "domain", "alphatype", "door_name", "hit_number", "points")
+    uda_values: Dict[str, Any] = {}
+
+    raw_uda = task.get("uda")
+    if isinstance(raw_uda, dict):
+        for key, value in raw_uda.items():
+            if key in uda_allowlist:
+                uda_values[key] = value
+
+    for key in uda_allowlist:
+        if key in task and task.get(key) is not None:
+            uda_values[key] = task.get(key)
+
+    for key in uda_allowlist:
+        if key not in uda_values:
+            continue
+        value = uda_values.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        args.append(f"{key}:{text}")
+
     proc = await asyncio.create_subprocess_exec(
         *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )

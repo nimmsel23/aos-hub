@@ -95,7 +95,7 @@ function door_getWeekWarStacks(weekKey) {
   });
 
   // Count completed Doors (Profit Reviews this week)
-  // 1 Door = 1 War Stack = 4 Hits (always)
+  // Typical flow: 1 Door -> 1 War Stack with 4 primary hits.
   try {
     const folder = doorGetCentreFolder();
     const profitFolder = doorGetOrCreateSubfolder(folder, '4-Profit');
@@ -274,7 +274,7 @@ function doorExtractDoor(markdown) {
       }
     }
   }
-  return '-';
+  return '';
 }
 
 function door_buildWarStackTasks_(markdown) {
@@ -283,15 +283,22 @@ function door_buildWarStackTasks_(markdown) {
   var cleanDomain = String(domain || '').trim();
   var domainTag = cleanDomain ? cleanDomain.toLowerCase() : '';
   var doorTitle = doorExtractTitle(markdown);
-  var doorName = doorExtractDoor(markdown);
+  var doorName = String(doorExtractDoor(markdown) || '').trim();
+  if (doorName === '-') doorName = '';
+  if (!doorName) doorName = doorTitle;
   var project = doorName ? String(doorName).replace(/[^A-Za-z0-9 _-]/g, '').trim() : '';
   if (!project) project = cleanDomain ? cleanDomain.replace(/[^A-Za-z0-9 _-]/g, '').trim() : '';
-  var doorDesc = doorTitle ? ('Door: ' + doorTitle) : 'Door Task';
+  var doorDesc = doorTitle ? ('Door: ' + doorTitle) : (doorName ? ('Door: ' + doorName) : 'Door Task');
   var opts = arguments.length > 1 && arguments[1] ? arguments[1] : {};
   var metaBase = {
     warstack_session_id: opts.sessionId || '',
     warstack_file_id: opts.fileId || '',
     warstack_title: opts.title || ''
+  };
+  var udaBase = {
+    pillar: 'door',
+    domain: domainTag || undefined,
+    door_name: doorName || undefined
   };
 
   var tasks = [];
@@ -312,6 +319,11 @@ function door_buildWarStackTasks_(markdown) {
       description: desc,
       tags: tags,
       project: project || undefined,
+      pillar: udaBase.pillar,
+      domain: udaBase.domain,
+      door_name: udaBase.door_name,
+      alphatype: 'hit',
+      hit_number: String(idx + 1),
       due: (function() {
         // Hit1..Hit4 -> today+1..4 days
         var offs = idx + 1;
@@ -333,6 +345,10 @@ function door_buildWarStackTasks_(markdown) {
     description: doorDesc,
     tags: ['door', 'production'].concat(domainTag ? [domainTag] : []),
     project: project || undefined,
+    pillar: udaBase.pillar,
+    domain: udaBase.domain,
+    door_name: udaBase.door_name,
+    alphatype: 'door',
     meta: {
       warstack_session_id: metaBase.warstack_session_id,
       warstack_file_id: metaBase.warstack_file_id,
@@ -347,6 +363,10 @@ function door_buildWarStackTasks_(markdown) {
     description: 'Profit: ' + (doorTitle || 'Door'),
     tags: ['profit'].concat(domainTag ? [domainTag] : []),
     project: project || undefined,
+    pillar: udaBase.pillar,
+    domain: udaBase.domain,
+    door_name: udaBase.door_name,
+    alphatype: 'profit',
     wait: '+5d',
     meta: {
       warstack_session_id: metaBase.warstack_session_id,

@@ -39,8 +39,8 @@ class FireMapCommandsExtension(Extension):
             "no",
             "off",
         )
-        self.daily_unit = str(config.get("daily_unit", "alphaos-fire-daily.service")).strip()
-        self.weekly_unit = str(config.get("weekly_unit", "alphaos-fire-weekly.service")).strip()
+        self.daily_unit = str(config.get("daily_unit", "aos-fire-daily.service")).strip()
+        self.weekly_unit = str(config.get("weekly_unit", "aos-fire-weekly.service")).strip()
         self.python_bin = config.get("python_bin", "python3")
         self.script = config.get("script", "game/fire/firemap_bot.py")
         self.daily_mode = config.get("daily_mode", "daily")

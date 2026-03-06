@@ -50,8 +50,8 @@ rg -n "app\\.(get|post|put|delete)\\(\"/" server.js
 
 | Method | Path |
 |---|---|
-| `GET` | `/api/fire/tasks-day` |
-| `GET` | `/api/fire/tasks-week` |
+| `GET` | `/api/fire/day` |
+| `GET` | `/api/fire/week` |
 | `GET` | `/api/fire/week-range` |
 | `POST` | `/api/game/export` |
 | `GET` | `/api/game/focus/list` |

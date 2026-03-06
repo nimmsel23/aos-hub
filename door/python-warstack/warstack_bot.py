@@ -11,6 +11,7 @@ import json
 import datetime
 import logging
 import asyncio
+import shlex
 import urllib.request
 import urllib.error
 import time
@@ -65,10 +66,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Conversation states
-(DOMAIN_SELECT, SUBDOMAIN_SELECT, DOMINO_DOOR, TRIGGER, NARRATIVE, 
+# Keep existing state numbering stable for persistence compatibility.
+(DOMAIN_SELECT, SUBDOMAIN_SELECT, DOMINO_DOOR, TRIGGER, NARRATIVE,
  VALIDATION, IMPACT, CONSEQUENCES, HIT1_FACT, HIT1_OBSTACLE, HIT1_STRIKE,
  HIT2_FACT, HIT2_OBSTACLE, HIT2_STRIKE, HIT3_FACT, HIT3_OBSTACLE, HIT3_STRIKE,
- HIT4_FACT, HIT4_OBSTACLE, HIT4_STRIKE, INSIGHTS, LESSONS) = range(22)
+ HIT4_FACT, HIT4_OBSTACLE, HIT4_STRIKE, INSIGHTS, LESSONS, TITLE) = range(23)
 
 # ================================================================
 # DATA MODELS
@@ -329,11 +331,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Ich führe dich durch die Erstellung eines strategischen War Stacks für diese Woche!
 
 **Der War Stack Prozess:**
-1️⃣ Wähle deinen Domain-Fokus (KWML)
-2️⃣ Definiere deine Domino Door
-3️⃣ Plane 4 strategische Hits
-4️⃣ Erstelle Tasks in Taskwarrior
-5️⃣ Generiere Obsidian-Notiz
+1️⃣ Definiere den War Stack Title
+2️⃣ Wähle deinen Domain-Fokus
+3️⃣ Definiere deine Domino Door
+4️⃣ Plane 4 strategische Hits
+5️⃣ Erstelle Tasks in Taskwarrior
+6️⃣ Generiere Obsidian-Notiz
 
 **Verfügbare Kommandos:**
 /warstack - War Stack erstellen
@@ -357,28 +360,30 @@ async def start_war_stack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     war_stack = WarStack(user_id=user_id)
     save_war_stack(war_stack)
     
-    # Create inline keyboard for domains
-    keyboard = []
-    for domain, config in DOMAIN_CONFIG.items():
-        keyboard.append([InlineKeyboardButton(
-            f"{config['emoji']} {domain}", 
-            callback_data=f"domain_{domain}"
-        )])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
-        "🚪 **DOOR WAR** - Wähle deinen Domain-Fokus für diese Woche:\n\n"
-        "Welcher Bereich braucht deine strategische Aufmerksamkeit am meisten?\n\n"
-        "💪 **BODY** - Fitness, Gesundheit, Energie\n"
-        "🧘 **BEING** - Spiritualität, mentale Klarheit\n" 
-        "💚 **BALANCE** - Beziehungen, Familie\n"
-        "💼 **BUSINESS** - Karriere, Geld, Wachstum",
-        reply_markup=reply_markup,
+        "📝 **WAR STACK TITLE**\n\n"
+        "Wie nennt sich dieser Stack?\n\n"
+        "Der Title beschreibt den Stack als Ganzes.\n"
+        "Die Domino Door definierst du im nächsten Schritt separat.",
         parse_mode='Markdown'
     )
-    
-    return DOMAIN_SELECT
+    return TITLE
+
+async def title_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle War Stack title input"""
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    is_valid, error_msg = validate_input(text)
+    if not is_valid:
+        await send_validation_error(update, error_msg)
+        return TITLE
+
+    war_stack = get_war_stack(user_id)
+    war_stack.title = text.strip()
+    save_war_stack(war_stack)
+
+    return await prompt_domain(update)
 
 async def domain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle domain selection via callback"""
@@ -426,6 +431,7 @@ async def subdomain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await query.edit_message_text(
         f"⚔️ **WAR STACK ERSTELLUNG**\n\n"
+        f"**Title**: {war_stack.title or '—'}\n"
         f"**Domain**: {war_stack.domain}\n"
         f"**Sub-domain**: {war_stack.subdomain}\n\n"
         f"🎯 **DIE DOMINO DOOR**\n\n"
@@ -597,6 +603,11 @@ async def consequences_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def render_war_stack_markdown(war_stack: WarStack) -> str:
     """Render War Stack markdown (minimal YAML frontmatter)"""
+    stack_title = (war_stack.title or "").strip()
+    domino_door = (war_stack.domino_door or "").strip()
+    if not stack_title:
+        stack_title = domino_door or "Untitled War Stack"
+
     content = f"""---
 tw_uuid: null
 taskwarrior_door_uuid: null
@@ -612,11 +623,13 @@ taskwarrior_hits:
     uuid: null
 ---
 
-# ⚔️ WAR STACK — {war_stack.domino_door}
+# ⚔️ WAR STACK — {stack_title}
 
 **Generiert:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} (Telegram Bot)
 **Woche:** {war_stack.week}
 **Domain:** {war_stack.domain} → {war_stack.subdomain}
+**Title:** {stack_title}
+**Domino Door:** {domino_door}
 
 ---
 
@@ -642,9 +655,9 @@ taskwarrior_hits:
 ## 🎯 Die Vier Hits
 
 """
-        
-        for i, hit in enumerate(war_stack.hits, 1):
-            content += f"""### Hit {i}
+
+    for i, hit in enumerate(war_stack.hits, 1):
+        content += f"""### Hit {i}
 - **Fakt**: {hit.fact}
 - **Hindernis**: {hit.obstacle}
 - **Schlag**: {hit.strike}
@@ -652,7 +665,8 @@ taskwarrior_hits:
 
 """
 
-        content += f"""---
+    tw_commands = create_taskwarrior_commands(war_stack)
+    content += f"""---
 
 ## 🧠 Erkenntnisse
 {war_stack.insights}
@@ -676,18 +690,8 @@ taskwarrior_hits:
 ## 📋 Taskwarrior Implementation (manual)
 
 ```bash
-# Weekly Door
-task add "Weekly Door: {war_stack.domain} Focus" pillar:door project:{war_stack.domain} due:friday
-
-# Strategic Hits
-"""
-        
-        days = ['tuesday', 'wednesday', 'thursday', 'friday']
-        for i, hit in enumerate(war_stack.hits):
-            fact_short = hit.fact[:50] + "..." if len(hit.fact) > 50 else hit.fact
-            content += f'task add "Hit{i+1}: {fact_short}" project:{war_stack.domain} due:{days[i]}\n'
-        
-        content += f"""```
+{tw_commands}
+```
 
 **Erstellt**: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
@@ -700,7 +704,8 @@ def create_obsidian_war_stack(war_stack: WarStack, content: Optional[str] = None
         markdown = content or render_war_stack_markdown(war_stack)
 
         # Safe file creation
-        title_slug = "".join(c for c in war_stack.domino_door[:60] if c.isalnum() or c in "-_") or "warstack"
+        stack_title = (war_stack.title or war_stack.domino_door or "warstack").strip()
+        title_slug = "".join(c for c in stack_title[:60] if c.isalnum() or c in "-_") or "warstack"
         filename = f"{war_stack.week}-WarStack-{war_stack.domain}-{title_slug}.md"
         filename = "".join(c for c in filename if c.isalnum() or c in ".-_")
 
@@ -721,16 +726,48 @@ def create_taskwarrior_commands(war_stack: WarStack) -> str:
     """Create Taskwarrior commands with error handling"""
     try:
         commands = []
-        
-        # Weekly Door
-        commands.append(f'task add "Weekly Door: {war_stack.domain} Focus" pillar:door project:{war_stack.domain} due:friday')
-        
-        # Strategic Hits
+
+        domain = (war_stack.domain or "").strip()
+        domain_uda = domain.lower()
+        door_name = (war_stack.domino_door or war_stack.title or "").strip()
+        stack_title = (war_stack.title or war_stack.domino_door or "War Stack").strip()
+
+        # Weekly Door task (stack anchor)
+        weekly_parts = [
+            "task", "add", f"War Stack: {stack_title}",
+            "+door", "+production",
+            "pillar:door",
+            "alphatype:door",
+            "due:friday",
+        ]
+        if domain:
+            weekly_parts.append(f"project:{domain}")
+        if domain_uda:
+            weekly_parts.append(f"domain:{domain_uda}")
+        if door_name:
+            weekly_parts.append(f"door_name:{door_name}")
+        commands.append(" ".join(shlex.quote(str(p)) for p in weekly_parts))
+
+        # Strategic Hits (Production)
         days = ['tuesday', 'wednesday', 'thursday', 'friday']
         for i, hit in enumerate(war_stack.hits):
             if hit.fact:  # Only add if fact is not empty
                 fact_short = hit.fact[:60] + "..." if len(hit.fact) > 60 else hit.fact
-                commands.append(f'task add "Hit{i+1}: {fact_short}" project:{war_stack.domain} due:{days[i]}')
+                hit_parts = [
+                    "task", "add", f"Hit{i+1}: {fact_short}",
+                    "+door", "+hit", "+production",
+                    "pillar:door",
+                    "alphatype:hit",
+                    f"hit_number:{i+1}",
+                    f"due:{days[i]}",
+                ]
+                if domain:
+                    hit_parts.append(f"project:{domain}")
+                if domain_uda:
+                    hit_parts.append(f"domain:{domain_uda}")
+                if door_name:
+                    hit_parts.append(f"door_name:{door_name}")
+                commands.append(" ".join(shlex.quote(str(p)) for p in hit_parts))
         
         return '\n'.join(commands)
         
@@ -748,13 +785,22 @@ def read_war_stack_markdown(path: str) -> str:
 
 
 def build_task_payloads(war_stack: WarStack) -> list[dict]:
+    domain = (war_stack.domain or "").strip()
+    domain_uda = domain.lower()
+    door_name = (war_stack.domino_door or war_stack.title or "").strip()
+    stack_title = (war_stack.title or war_stack.domino_door or "War Stack").strip()
+
     tasks = []
     tasks.append(
         {
-            "description": f"Weekly Door: {war_stack.domain} Focus",
-            "project": war_stack.domain,
-            "tags": ["door"],
+            "description": f"War Stack: {stack_title}",
+            "project": domain,
+            "tags": ["door", "production"],
             "due": "friday",
+            "pillar": "door",
+            "alphatype": "door",
+            "domain": domain_uda,
+            "door_name": door_name,
         }
     )
     days = ["tuesday", "wednesday", "thursday", "friday"]
@@ -764,9 +810,14 @@ def build_task_payloads(war_stack: WarStack) -> list[dict]:
         tasks.append(
             {
                 "description": f"Hit{i+1}: {hit.fact}",
-                "project": war_stack.domain,
-                "tags": ["hit", "production"],
+                "project": domain,
+                "tags": ["door", "hit", "production"],
                 "due": days[i],
+                "pillar": "door",
+                "alphatype": "hit",
+                "domain": domain_uda,
+                "door_name": door_name,
+                "hit_number": i + 1,
             }
         )
     return tasks
@@ -832,6 +883,8 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         war_stack.hits = (war_stack.hits or []) + [Hit() for _ in range(4 - len(war_stack.hits or []))]
         save_war_stack(war_stack)
 
+    if not war_stack.title:
+        return await prompt_title(update)
     if not war_stack.domain:
         return await prompt_domain(update)
     if not war_stack.subdomain:
@@ -909,6 +962,17 @@ async def prompt_domain(update: Update) -> int:
     return DOMAIN_SELECT
 
 
+async def prompt_title(update: Update) -> int:
+    await update.message.reply_text(
+        "📝 **WAR STACK TITLE**\n\n"
+        "Wie nennt sich dieser Stack?\n\n"
+        "Der Title beschreibt den Stack als Ganzes.\n"
+        "Die Domino Door definierst du im nächsten Schritt separat.",
+        parse_mode='Markdown'
+    )
+    return TITLE
+
+
 async def prompt_subdomain(update: Update, domain: str) -> int:
     if domain not in DOMAIN_CONFIG:
         return await prompt_domain(update)
@@ -932,6 +996,7 @@ async def prompt_subdomain(update: Update, domain: str) -> int:
 async def prompt_domino_door(update: Update, war_stack: WarStack) -> int:
     await update.message.reply_text(
         f"⚔️ **WAR STACK ERSTELLUNG**\n\n"
+        f"**Title**: {war_stack.title or '—'}\n"
         f"**Domain**: {war_stack.domain}\n"
         f"**Sub-domain**: {war_stack.subdomain}\n\n"
         f"🎯 **DIE DOMINO DOOR**\n\n"
@@ -1163,7 +1228,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Calculate completion percentage
-    fields = [war_stack.domain, war_stack.subdomain, war_stack.domino_door, 
+    fields = [war_stack.title, war_stack.domain, war_stack.subdomain, war_stack.domino_door,
              war_stack.trigger, war_stack.narrative, war_stack.validation,
              war_stack.impact, war_stack.consequences, war_stack.insights, war_stack.lessons]
     
@@ -1175,6 +1240,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"📊 **War Stack Status**\n\n"
+        f"**Title**: {war_stack.title[:40] + '...' if war_stack.title and len(war_stack.title) > 40 else (war_stack.title or '❌')}\n"
         f"**Domain**: {war_stack.domain or '❌'}\n"
         f"**Sub-domain**: {war_stack.subdomain or '❌'}\n"
         f"**Door**: {war_stack.domino_door[:30] + '...' if war_stack.domino_door else '❌'}\n"
@@ -1210,11 +1276,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /help - Diese Hilfe anzeigen
 
 **Funktionsweise:**
-1. Wähle deinen Domain-Fokus (BODY/BEING/BALANCE/BUSINESS)
-2. Beantworte strategische Fragen zu deiner Door
-3. Plane 4 strategische Hits mit Fakt-Hindernis-Schlag
-4. Erhalte Obsidian-Notiz + Taskwarrior-Kommandos
-5. Führe die ganze Woche aus!
+1. Setze den War Stack Title
+2. Wähle deinen Domain-Fokus (BODY/BEING/BALANCE/BUSINESS)
+3. Beantworte strategische Fragen zu deiner Door
+4. Plane 4 strategische Hits mit Fakt-Hindernis-Schlag
+5. Erhalte Obsidian-Notiz + Taskwarrior-Kommandos
+6. Führe die ganze Woche aus!
 
 **Integration:**
 ✅ Erstellt Obsidian War Stack Notizen
@@ -1514,8 +1581,9 @@ async def lessons_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     war_stack = get_war_stack(user_id)
     war_stack.lessons = text.strip()
     
-    # Generate War Stack title
-    war_stack.title = f"{war_stack.domain} - {war_stack.domino_door[:50]}"
+    # Keep user-defined War Stack title; fallback only if legacy draft has none.
+    if not (war_stack.title or "").strip():
+        war_stack.title = (war_stack.domino_door or f"{war_stack.domain} War Stack").strip()
     save_war_stack(war_stack)
     
     # Create outputs with error handling
@@ -1529,6 +1597,7 @@ async def lessons_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
         summary = f"""
 🔥 **WAR STACK KOMPLETT!** ⚔️
 
+**Title**: {war_stack.title}
 **Domain**: {war_stack.domain} - {war_stack.subdomain}
 **Door**: {war_stack.domino_door}
 
@@ -1582,6 +1651,7 @@ Bereit, diese Woche zu dominieren! 💪💀
                 "payload": {
                     "user_id": war_stack.user_id,
                     "week": war_stack.week,
+                    "title": war_stack.title,
                     "domain": war_stack.domain,
                     "subdomain": war_stack.subdomain,
                     "door": war_stack.domino_door,
@@ -1671,6 +1741,7 @@ def main():
             CommandHandler('resume', resume_command)
         ],
         states={
+            TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title_set)],
             DOMAIN_SELECT: [CallbackQueryHandler(domain_callback, pattern="^domain_")],
             SUBDOMAIN_SELECT: [CallbackQueryHandler(subdomain_callback, pattern="^subdomain_")],
             DOMINO_DOOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, domino_door_set)],

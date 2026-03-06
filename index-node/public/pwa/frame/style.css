@@ -107,6 +107,22 @@ body {
   opacity: .8;
 }
 
+.fullframe-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.fullframe-btn:hover { border-color: var(--accent); }
+
 /* Domain cards */
 .domain-cards {
   display: grid;

@@ -1,314 +1,120 @@
 "use strict";
 window.aosGasFallback?.init?.("fire");
 
-// ── Config ────────────────────────────────────────────────────────────────────
 const DOMAINS = [
-  { key: "body",     label: "BODY",     icon: "🏋" },
-  { key: "being",    label: "BEING",    icon: "🧘" },
-  { key: "balance",  label: "BALANCE",  icon: "👥" },
-  { key: "business", label: "BUSINESS", icon: "⚡" },
+  {
+    key: "body",
+    label: "BODY",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 10h3v4H3zM18 10h3v4h-3zM6 11h3v2H6zM15 11h3v2h-3zM9 9h6v6H9z"/>
+    </svg>`
+  },
+  {
+    key: "being",
+    label: "BEING",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4c-3 2-4 5-4 8 0 3 2 6 4 6s4-3 4-6c0-3-1-6-4-8z"/>
+      <path d="M5 14c2 0 3 1 4 3m10-3c-2 0-3 1-4 3"/>
+    </svg>`
+  },
+  {
+    key: "balance",
+    label: "BALANCE",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4v3m-6 2h12m-9 9h6m-3-11-4 8h8l-4-8z"/>
+    </svg>`
+  },
+  {
+    key: "business",
+    label: "BUSINESS",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16v11H4z"/>
+      <path d="M9 7V5h6v2"/>
+    </svg>`
+  },
 ];
 
-const CIRCUMFERENCE = 2 * Math.PI * 52; // 326.7
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let fireData    = null;   // current week JSON
-let taskPool    = [];     // pending TW tasks
-let pendingTask = null;   // task selected for slot assignment
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const $       = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 const escHtml = (s) => String(s)
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const taskText = (task) => String(task?.description || task?.title || "(ohne Titel)");
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;");
 
 async function apiFetch(path, opts = {}) {
-  const netFetch = window.aosGasFallback?.fetch
-    ? window.aosGasFallback.fetch
-    : fetch;
+  const netFetch = window.aosGasFallback?.fetch ? window.aosGasFallback.fetch : fetch;
   const res = await netFetch(path, opts, { app: "fire" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-let toastTimer = null;
-function showToast(msg) {
-  const el = $("toast");
-  el.textContent = msg;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2000);
-}
+function renderDomainGrid(containerId, tasks) {
+  const container = $(containerId);
+  if (!container) return;
 
-// ── Ring ──────────────────────────────────────────────────────────────────────
-function updateRing(done, max) {
-  const pct    = max > 0 ? done / max : 0;
-  const offset = CIRCUMFERENCE * (1 - pct);
-  $("ringTrack").style.strokeDashoffset = offset.toFixed(2);
-  $("strikesDone").textContent = done;
-  $("strikePct").textContent   = Math.round(pct * 100) + "%";
-}
-
-// ── Inline Edit ───────────────────────────────────────────────────────────────
-function activateInlineEdit(titleEl, domain, index) {
-  if (titleEl.querySelector("input")) return; // already editing
-
-  const current = titleEl.dataset.title;
-  titleEl.innerHTML = `<input class="inline-input" value="${escHtml(current)}" maxlength="80" />`;
-  const input = titleEl.querySelector("input");
-  input.focus();
-  input.select();
-
-  async function commit() {
-    const val = input.value.trim();
-    if (!val || val === current) { render(fireData); return; }
-    try {
-      const res = await apiFetch("/api/fire/rename", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ domain, index, title: val }),
-      });
-      if (res.ok) {
-        fireData = res.data;
-        updateRing(res.score.strikesDone, res.score.strikesMax);
-      }
-    } catch { showToast("Save failed"); }
-    render(fireData);
-  }
-
-  input.addEventListener("blur", commit);
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter")  { input.blur(); }
-    if (e.key === "Escape") { render(fireData); }
+  const grouped = { body: [], being: [], balance: [], business: [] };
+  (tasks || []).forEach((task) => {
+    const domain = ["body", "being", "balance", "business"].includes(task.domain)
+      ? task.domain
+      : "";
+    if (!domain) return;
+    grouped[domain].push(task);
   });
-}
 
-// ── Render ────────────────────────────────────────────────────────────────────
-function render(data) {
-  if (!data) return;
-  fireData = data;
-  $("weekLabel").textContent = data.week || "—";
-  $("appWeek").textContent   = data.week || "—";
+  container.innerHTML = "";
 
-  const root = $("cards");
-  root.innerHTML = "";
-
-  for (const d of DOMAINS) {
-    const strikes   = data.domains[d.key] || [];
-    const doneCount = strikes.filter((s) => s.done).length;
-    const allDone   = doneCount === 4;
+  DOMAINS.forEach((domain) => {
+    const list = grouped[domain.key] || [];
+    if (!list.length) return;
 
     const card = document.createElement("div");
-    card.className = `domain-card${allDone ? " done" : ""}`;
+    card.className = `domain-card ${domain.key}`;
 
     card.innerHTML = `
       <div class="domain-header">
-        <div class="domain-icon">${d.icon}</div>
+        <div class="domain-icon">${domain.icon}</div>
         <div class="domain-info">
-          <div class="domain-name">${d.label}</div>
-          <div class="domain-score"><span class="pts">${doneCount}</span> / 4 Strikes</div>
+          <div class="domain-name">${domain.label}</div>
         </div>
       </div>
-      <div class="strike-list" data-domain="${d.key}"></div>
+      <ul class="task-list"></ul>
     `;
 
-    root.appendChild(card);
-
-    const list = card.querySelector(".strike-list");
-
-    strikes.forEach((s, idx) => {
-      const row = document.createElement("div");
-      row.className = `strike-row${s.done ? " done" : ""}`;
-      row.dataset.index = idx;
-
-      const isPlaceholder = /^Strike #\d$/.test(s.title);
-
-      row.innerHTML = `
-        <button class="strike-check${s.done ? " on" : ""}"
-                data-domain="${d.key}" data-index="${idx}"></button>
-        <div class="strike-title${s.done ? " done" : ""}${isPlaceholder ? " placeholder" : ""}"
-             data-domain="${d.key}" data-index="${idx}" data-title="${escHtml(s.title)}"
-             title="Tap to edit">${escHtml(s.title)}</div>
-        <button class="strike-drag" title="Drag to reorder">⠿</button>
+    const ul = card.querySelector(".task-list");
+    list.forEach((task) => {
+      const item = document.createElement("li");
+      item.className = "task-item";
+      const dueText = task.date ? new Date(task.date).toLocaleDateString("de-DE") : "kein Due";
+      item.innerHTML = `
+        <div class="task-title">${escHtml(task.title || "(ohne Titel)")}</div>
+        <div class="task-meta">${escHtml(dueText)}</div>
       `;
-      list.appendChild(row);
+      ul.appendChild(item);
     });
 
-    // Toggle
-    list.querySelectorAll(".strike-check").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const domain = btn.dataset.domain;
-        const index  = Number(btn.dataset.index);
-        try {
-          const res = await apiFetch("/api/fire/toggle", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ domain, index }),
-          });
-          if (res.ok) {
-            fireData = res.data;
-            updateRing(res.score.strikesDone, res.score.strikesMax);
-            render(res.data);
-            const isDone = res.data.domains[domain][index].done;
-            showToast(`${domain.toUpperCase()} · Strike ${index + 1} ${isDone ? "✓" : "—"}`);
-          }
-        } catch { showToast("Error"); }
-      });
-    });
-
-    // Inline edit on title tap
-    list.querySelectorAll(".strike-title").forEach((el) => {
-      el.addEventListener("click", () => {
-        activateInlineEdit(el, el.dataset.domain, Number(el.dataset.index));
-      });
-    });
-
-    // Sortable for reordering within domain
-    Sortable.create(list, {
-      handle:    ".strike-drag",
-      animation: 150,
-      onEnd: async (evt) => {
-        if (evt.oldIndex === evt.newIndex) return;
-        const rows  = [...list.querySelectorAll(".strike-row")];
-        const order = rows.map((r) => Number(r.dataset.index));
-        try {
-          const res = await apiFetch("/api/fire/reorder", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ domain: d.key, order }),
-          });
-          if (res.ok) {
-            fireData = res.data;
-            updateRing(res.score.strikesDone, res.score.strikesMax);
-            render(res.data);
-          }
-        } catch { showToast("Reorder failed"); render(fireData); }
-      },
-    });
-  }
-}
-
-// ── Bottom Sheet ──────────────────────────────────────────────────────────────
-function openSheet() {
-  $("sheet").classList.add("open");
-  $("sheetBackdrop").classList.add("show");
-  showTaskList();
-}
-
-function closeSheet() {
-  $("sheet").classList.remove("open");
-  $("sheetBackdrop").classList.remove("show");
-  pendingTask = null;
-  $("slotPicker").hidden = true;
-  $("taskPool").hidden   = false;
-}
-
-function showTaskList() {
-  $("slotPicker").hidden = true;
-  $("taskPool").hidden   = false;
-  $("sheetTitle").textContent = "Task Pool";
-}
-
-function showSlotPicker(task) {
-  pendingTask = task;
-  $("sheetTitle").textContent = "→ " + taskText(task).slice(0, 30);
-  $("taskPool").hidden   = true;
-  $("slotPicker").hidden = false;
-
-  const grid = $("slotPickerGrid");
-  grid.innerHTML = "";
-
-  for (const d of DOMAINS) {
-    const strikes = fireData?.domains[d.key] || [];
-    const section = document.createElement("div");
-    section.className = "picker-domain";
-    section.innerHTML = `<div class="picker-domain-label">${d.icon} ${d.label}</div>`;
-
-    strikes.forEach((s, idx) => {
-      const btn = document.createElement("button");
-      btn.className = "picker-slot";
-      const isPlaceholder = /^Strike #\d$/.test(s.title);
-      btn.textContent = isPlaceholder ? `Slot ${idx + 1}` : s.title.slice(0, 24);
-      if (isPlaceholder) btn.classList.add("empty");
-      if (s.done) btn.classList.add("done");
-      btn.addEventListener("click", () => assignTask(d.key, idx, taskText(task)));
-      section.appendChild(btn);
-    });
-
-    grid.appendChild(section);
-  }
-}
-
-async function assignTask(domain, index, title) {
-  try {
-    const res = await apiFetch("/api/fire/rename", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ domain, index, title }),
-    });
-    if (res.ok) {
-      fireData = res.data;
-      updateRing(res.score.strikesDone, res.score.strikesMax);
-      render(res.data);
-      showToast(`Assigned to ${domain.toUpperCase()} ✓`);
-      closeSheet();
-    }
-  } catch { showToast("Assign failed"); }
-}
-
-function renderTaskPool() {
-  const pool = $("taskPool");
-  const loading = $("poolLoading");
-  if (loading) loading.remove();
-
-  if (!taskPool.length) {
-    pool.innerHTML = `<div class="pool-empty">No pending tasks found.<br>Add tasks in Taskwarrior.</div>`;
-    return;
-  }
-
-  pool.innerHTML = "";
-  taskPool.forEach((task) => {
-    const item = document.createElement("div");
-    item.className = "pool-item";
-    const title = taskText(task);
-    item.innerHTML = `
-      <div class="pool-item-main">
-        <div class="pool-item-title">${escHtml(title)}</div>
-        ${task.project ? `<div class="pool-item-meta">${escHtml(task.project)}</div>` : ""}
-      </div>
-      <button class="pool-item-assign" title="Assign to slot">→</button>
-    `;
-    item.querySelector(".pool-item-assign").addEventListener("click", () => showSlotPicker(task));
-    pool.appendChild(item);
+    container.appendChild(card);
   });
 }
 
-// ── Event listeners ───────────────────────────────────────────────────────────
-$("sheetTrigger").addEventListener("click", openSheet);
-$("sheetClose").addEventListener("click", closeSheet);
-$("sheetBackdrop").addEventListener("click", closeSheet);
-$("slotPickerBack").addEventListener("click", showTaskList);
-
-// ── Boot ──────────────────────────────────────────────────────────────────────
 async function load() {
-  const [weekRes, tasksRes] = await Promise.all([
+  const [weekRes, dayRes] = await Promise.all([
     apiFetch("/api/fire/week"),
-    apiFetch("/api/fire/tasks").catch(() => ({ ok: true, tasks: [] })),
+    apiFetch("/api/fire/day"),
   ]);
 
-  if (!weekRes.ok) throw new Error(weekRes.error || "load failed");
+  if (!weekRes.ok) throw new Error(weekRes.error || "week load failed");
+  if (!dayRes.ok) throw new Error(dayRes.error || "day load failed");
 
-  fireData = weekRes.data;
-  taskPool = tasksRes.tasks || [];
+  $("weekLabel").textContent = weekRes.week || "—";
+  const appWeek = $("appWeek");
+  if (appWeek) appWeek.textContent = weekRes.week || "—";
+  $("dayLabel").textContent = dayRes.date || "Today";
 
-  updateRing(weekRes.score.strikesDone, weekRes.score.strikesMax);
-  render(fireData);
-  renderTaskPool();
+  renderDomainGrid("weekly-content", weekRes.tasks || []);
+  renderDomainGrid("daily-content", dayRes.tasks || []);
 }
 
 load().catch((err) => {
   console.error(err);
-  $("cards").innerHTML =
-    `<p style="padding:20px;color:#f66;font-size:14px">Fehler: ${err.message}</p>`;
+  const el = $("fireError");
+  if (el) el.textContent = `Fehler: ${err.message}`;
 });

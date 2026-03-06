@@ -3,8 +3,18 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import crypto from "crypto";
+import { execFileSync } from "child_process";
+import { fileURLToPath } from "url";
 
 const router = express.Router();
+
+const ROUTE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const HUB_DIR = String(process.env.AOS_HUB_DIR || path.resolve(ROUTE_DIR, "..", "..")).trim();
+const CORE4_TRACKER = String(
+  process.env.CORE4_TRACKER || path.join(HUB_DIR, "core4", "python-core4", "tracker.py")
+).trim();
+const CORE4_TRACKER_ENABLED = process.env.AOS_CORE4_TRACKER !== "0";
+const CORE4_TRACKER_PYTHON = String(process.env.AOS_PYTHON_BIN || "python3").trim();
 
 const CORE4_DIR = String(
   process.env.AOS_CORE4_LOCAL_DIR ||
@@ -189,6 +199,18 @@ function listDayEvents(dateKey) {
   return out;
 }
 
+function hasCore4Entry(dateKey, domain, task) {
+  const entries = dedupEntries(listDayEvents(dateKey));
+  return entries.some(
+    (entry) =>
+      entry &&
+      entry.date === dateKey &&
+      entry.domain === domain &&
+      entry.task === task &&
+      entry.done !== false
+  );
+}
+
 function dedupEntries(entries) {
   const keep = new Map();
   entries.forEach((entry) => {
@@ -357,6 +379,38 @@ router.post("/log", (req, res) => {
     const tsDate = tsRaw ? new Date(tsRaw) : new Date(`${date}T12:00:00`);
     const ts = Number.isNaN(tsDate.getTime()) ? new Date(`${date}T12:00:00`) : tsDate;
     const source = String(req.body?.source || "core4-pwa").trim() || "core4-pwa";
+
+    if (CORE4_TRACKER_ENABLED && CORE4_TRACKER && fs.existsSync(CORE4_TRACKER)) {
+      const duplicate = hasCore4Entry(date, domain, task);
+      try {
+        execFileSync(
+          CORE4_TRACKER_PYTHON,
+          [CORE4_TRACKER, task, "done", "--date", date],
+          { stdio: "ignore", env: { ...process.env, AOS_CORE4_LOCAL_DIR: CORE4_DIR } }
+        );
+      } catch (err) {
+        return res.status(500).json({
+          ok: false,
+          error: "core4-tracker-failed",
+          details: String(err?.message || err),
+        });
+      }
+
+      const dayPayload = dayStateForDate(date);
+      const weekData = weekDataForDate(date);
+      if (!dayPayload || !weekData) {
+        return res.status(500).json({ ok: false, error: "state-build-failed" });
+      }
+
+      return res.json({
+        ok: true,
+        duplicate,
+        tracker: "core4-tracker",
+        day: dayPayload,
+        week: { ok: true, week: weekData.week, totals: weekData.totals },
+        total_today: dayPayload.total,
+      });
+    }
 
     const key = entryKey(date, domain, task);
     const eventPath = eventFilePath(date, key);

@@ -6,7 +6,7 @@ This folder is the documentation home for everything Fire-related in `aos-hub`.
 
 - **`task fire`**: terminal report for “what must execute now”.
 - **Firemap (Telegram)**: daily/weekly snapshots sent via `firectl` (and timers).
-- **Index Node Fire Centre**: local UI + `/api/fire/tasks-day|tasks-week` (TickTick first; Taskwarrior fallback).
+- **Index Node Fire Centre**: local UI + `/api/fire/day|week` (Taskwarrior SSOT).
 - **Router `/fire`**: on-demand trigger (starts the same systemd units as the timers).
 
 ## Where The Code Lives
@@ -19,7 +19,7 @@ This folder is the documentation home for everything Fire-related in `aos-hub`.
 - Firemap engine: `game/fire/firemap.py`
 - Firemap sender: `game/fire/firemap_bot.py`
 - Python requirements placeholder: `game/fire/requirements.txt` (stdlib-only)
-- Index Node endpoints: `index-node/routes/fire.js` (`/api/fire/tasks-day`, `/api/fire/tasks-week`)
+- Index Node endpoints: `index-node/routes/fire.js` (`/api/fire/day`, `/api/fire/week`)
 - Router trigger extension: `router/extensions/firemap_commands.py`
 
 ## Expected Semantics (Taskwarrior Fallback)
@@ -65,6 +65,7 @@ Index Node Fire Taskwarrior fallback can be tuned via:
 - `FIRE_INCLUDE_UNDATED=1`
 - `FIRE_TASK_TAGS=production,hit,fire`
 - `FIRE_TASK_TAGS_MODE=any|all`
+- `FIRE_TASK_EXCLUDE_TAGS=door,mission`
 
 ## Troubleshooting
 

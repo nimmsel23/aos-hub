@@ -20,73 +20,21 @@
   </header>
 
   <main class="wrap">
-
-    <!-- Hero -->
-    <section class="hero">
-      <div class="ring-wrap">
-        <svg class="ring-svg" viewBox="0 0 120 120">
-          <circle class="ring-bg"    cx="60" cy="60" r="52" />
-          <circle class="ring-track" cx="60" cy="60" r="52" id="ringTrack" />
-        </svg>
-        <div class="ring-center">
-          <div class="ring-score" id="strikesDone">0</div>
-          <div class="ring-label">/ 16</div>
-        </div>
-      </div>
-      <div class="scores">
-        <div class="score-card">
-          <div class="sc-label">STRIKES</div>
-          <div class="sc-value"><span id="strikePct">0%</span></div>
-        </div>
-        <div class="score-card">
-          <div class="sc-label">WEEK</div>
-          <div class="sc-value sc-week" id="weekLabel">—</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Section head -->
     <div class="section-head">
-      <span class="sh-title">FIRE</span>
-      <span class="sh-sub">STRUCTURED BLAZE · 4×4</span>
+      <span class="sh-title">TODAY</span>
+      <span class="sh-sub" id="dayLabel">—</span>
     </div>
+    <section id="daily-content" class="cards"></section>
 
-    <!-- Domain cards -->
-    <section id="cards" class="cards"></section>
+    <div class="section-head">
+      <span class="sh-title">WEEK</span>
+      <span class="sh-sub" id="weekLabel">—</span>
+    </div>
+    <section id="weekly-content" class="cards"></section>
 
-    <!-- Add from tasks button -->
-    <button class="sheet-trigger" id="sheetTrigger">
-      <span class="sheet-trigger-icon">＋</span> Tasks
-    </button>
-
-    <!-- Toast -->
-    <div class="toast" id="toast"></div>
-
+    <div class="toast" id="fireError"></div>
   </main>
 
-  <!-- ── Bottom Sheet ── -->
-  <div class="sheet-backdrop" id="sheetBackdrop"></div>
-  <div class="sheet" id="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <div class="sheet-title" id="sheetTitle">Task Pool</div>
-      <button class="sheet-close" id="sheetClose">✕</button>
-    </div>
-
-    <!-- Slot picker (shown when task is selected) -->
-    <div class="slot-picker" id="slotPicker" hidden>
-      <div class="slot-picker-label">Assign to slot:</div>
-      <div class="slot-picker-grid" id="slotPickerGrid"></div>
-      <button class="slot-picker-back" id="slotPickerBack">← Back to tasks</button>
-    </div>
-
-    <!-- Task list -->
-    <div class="task-pool" id="taskPool">
-      <div class="pool-loading" id="poolLoading">Loading tasks…</div>
-    </div>
-  </div>
-
-  <!-- Bottom Nav -->
   <nav class="bottomnav">
     <button class="bn-btn" onclick="location.href='/pwa/core4/'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
@@ -106,7 +54,6 @@
     </button>
   </nav>
 
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
   <script src="/pwa/gas-fallback.js"></script>
   <script src="/pwa/fire/app.js"></script>
   <script>

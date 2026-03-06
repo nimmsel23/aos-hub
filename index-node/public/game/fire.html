@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fire Map - αOS Terminplaner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #070707;
@@ -15,6 +16,22 @@
       --border: rgba(255, 255, 255, 0.12);
       --muted: rgba(255,255,255,0.65);
       --cinder: rgba(0, 0, 0, 0.85);
+    }
+
+    body.theme-modern {
+      --bg: #0b0d10;
+      --panel: #12161c;
+      --text: #f2f6ff;
+      --accent: #ff6a00;
+      --ember: rgba(255, 106, 0, 0.35);
+      --petrol: rgba(0, 200, 210, 0.2);
+      --border: rgba(255, 255, 255, 0.08);
+      --muted: rgba(255,255,255,0.7);
+      --cinder: rgba(0, 0, 0, 0.6);
+      font-family: "Space Grotesk", "Oswald", sans-serif;
+      background-image: radial-gradient(circle at 15% 20%, rgba(255,100,0,0.08), transparent 38%),
+                        radial-gradient(circle at 80% 10%, rgba(0,180,200,0.08), transparent 32%),
+                        radial-gradient(circle at 60% 80%, rgba(255,200,0,0.06), transparent 36%);
     }
 
     * { box-sizing: border-box; }
@@ -90,6 +107,12 @@
       background: rgba(0,0,0,0.65);
     }
 
+    body.theme-modern .controls {
+      background: rgba(18,20,26,0.85);
+      border-left-color: #ff9f0a;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
     .control-row {
       display: flex;
       gap: 12px;
@@ -101,6 +124,8 @@
       color: var(--muted);
       font-size: 0.95rem;
     }
+
+    .control-row .spacer { flex: 1; }
 
     .control-row input[type="date"],
     .control-row select {
@@ -168,6 +193,12 @@
       box-shadow: inset 0 0 14px var(--cinder);
     }
 
+    body.theme-modern .domain-card {
+      background: rgba(17,20,28,0.9);
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+
     .domain-card.body { border-left: 4px solid #ff4500; }
     .domain-card.being { border-left: 4px solid #00bfff; }
     .domain-card.balance { border-left: 4px solid #32cd32; }
@@ -206,9 +237,226 @@
       font-size: 0.85rem;
     }
 
+    .task-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .task-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .planner {
+      max-width: 1400px;
+      margin: 24px auto 0;
+      display: grid;
+      grid-template-columns: 1.2fr 2fr;
+      gap: 18px;
+    }
+
+    .pool {
+      background: rgba(0,0,0,0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .pool h3 { margin: 0 0 10px; }
+
+    .pool-item {
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.03);
+      cursor: grab;
+    }
+
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .plan-day {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 180px;
+    }
+
+    .plan-day h4 {
+      margin: 0 0 8px;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+
+    .slot {
+      border: 1px dashed rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 6px;
+      min-height: 40px;
+      margin-bottom: 6px;
+    }
+
+    .slot.filled {
+      border-style: solid;
+      background: rgba(255,255,255,0.04);
+    }
+
     .task-overdue {
       color: #ff4500;
       font-weight: 800;
+    }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .task-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .planner {
+      max-width: 1400px;
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 1.1fr 2fr;
+      gap: 18px;
+    }
+
+    .pool, .plan {
+      background: rgba(0,0,0,0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .pool-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin: 12px 0 8px;
+      font-weight: 700;
+    }
+
+    .pool-list, .slot-list {
+      min-height: 40px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .pool-item, .slot-item {
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      cursor: grab;
+    }
+
+    .pool-item.dragging,
+    .slot-item.dragging { opacity: 0.6; }
+
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .plan-day {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 180px;
+    }
+
+    .plan-day h4 {
+      margin: 0 0 8px;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .slot-item .remove-date {
+      float: right;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .daily-layout {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0 18px;
+    }
+
+    .layout-btn {
+      background: rgba(255,255,255,0.12);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    .layout-btn.active {
+      background: linear-gradient(90deg, #ff6600, #ff0000);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    .timeline .slot-item {
+      position: relative;
+      padding-left: 18px;
+    }
+
+    .timeline .slot-item::before {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      width: 2px;
+      height: calc(100% - 16px);
+      background: rgba(255,255,255,0.2);
     }
 
     .empty-state {
@@ -459,9 +707,9 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('daily')">TODAY</div>
-    <div class="tab" onclick="switchTab('weekly')">7DAYS</div>
-    <div class="tab" onclick="switchTab('capture')">IGNITE</div>
+    <div class="tab active" onclick="switchTab('daily', event)">TODAY</div>
+    <div class="tab" onclick="switchTab('weekly', event)">7DAYS</div>
+    <div class="tab" onclick="switchTab('capture', event)">IGNITE</div>
   </div>
 
   <div class="controls">
@@ -475,6 +723,14 @@
       </label>
       <span id="week-info" class="week-info"></span>
       <button onclick="refreshView()" class="secondary">🔄 Refresh</button>
+      <span class="spacer"></span>
+      <label>
+        Style:
+        <select id="style-switch" onchange="switchStyle()">
+          <option value="classic">Classic</option>
+          <option value="modern">Modern</option>
+        </select>
+      </label>
     </div>
   </div>
 
@@ -489,20 +745,47 @@
   <!-- DAILY VIEW -->
   <div id="view-daily" class="view active">
     <div class="week-info" id="daily-date">Loading...</div>
-    <div id="daily-content" class="domain-grid"></div>
+    <div class="daily-layout">
+      <button class="layout-btn active" id="layout-list" onclick="setDailyLayout('list')">LIST</button>
+      <button class="layout-btn" id="layout-timeline" onclick="setDailyLayout('timeline')">TIMELINE</button>
+    </div>
+    <div class="planner">
+      <div class="pool">
+        <h3>POOL</h3>
+        <div class="pool-title">Overdue</div>
+        <div id="daily-pool-overdue" class="pool-list" data-pool="overdue"></div>
+        <div class="pool-title">Due Today</div>
+        <div id="daily-pool-today" class="pool-list" data-pool="today"></div>
+      </div>
+      <div class="plan">
+        <h3>TODAY PLAN</h3>
+        <div id="daily-slots" class="slot-list"></div>
+      </div>
+    </div>
     <div id="daily-empty" class="empty-state" style="display:none;">
-      🔥 No strikes today. Time to IGNITE!
+      🔥 No tasks today. Time to IGNITE!
     </div>
   </div>
 
   <!-- WEEKLY VIEW -->
   <div id="view-weekly" class="view">
     <div class="week-info" id="weekly-range">Loading...</div>
-
-    <div id="weekly-calendar" class="weekly-calendar"></div>
-    <div id="weekly-content" class="domain-grid"></div>
+    <div class="planner">
+      <div class="pool">
+        <h3>POOL</h3>
+        <div class="pool-title">Overdue</div>
+        <div id="pool-overdue" class="pool-list" data-pool="overdue"></div>
+        <div class="pool-title">Due This Week</div>
+        <div id="pool-week" class="pool-list" data-pool="week"></div>
+        <div class="pool-title">Undated</div>
+        <div id="pool-undated" class="pool-list" data-pool="undated"></div>
+      </div>
+      <div class="plan">
+        <div id="plan-grid" class="plan-grid"></div>
+      </div>
+    </div>
     <div id="weekly-empty" class="empty-state" style="display:none;">
-      🔥 No strikes this week. Fire Map is empty!
+      🔥 No tasks this week. Fire Map is empty!
     </div>
   </div>
 
@@ -581,410 +864,470 @@
     <p>Kein Zurück. Kein Mitleid.<br>Nur Feuer.</p>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
   <script>
-  let currentView = 'daily';
-  let currentWeekOffset = 0; // 0 = current, 1 = next
-  let currentWeekData = null;
+    const DOMAIN_ICONS = {
+      body: `<svg viewBox="0 0 24 24"><path d="M3 10h3v4H3zM18 10h3v4h-3zM6 11h3v2H6zM15 11h3v2h-3zM9 9h6v6H9z"/></svg>`,
+      being: `<svg viewBox="0 0 24 24"><path d="M12 4c-3 2-4 5-4 8 0 3 2 6 4 6s4-3 4-6c0-3-1-6-4-8z"/><path d="M5 14c2 0 3 1 4 3m10-3c-2 0-3 1-4 3"/></svg>`,
+      balance: `<svg viewBox="0 0 24 24"><path d="M12 4v3m-6 2h12m-9 9h6m-3-11-4 8h8l-4-8z"/></svg>`,
+      business: `<svg viewBox="0 0 24 24"><path d="M4 7h16v11H4z"/><path d="M9 7V5h6v2"/></svg>`
+    };
 
-  function hideGcalPanel() {
-    const panel = document.getElementById('gcal-panel');
-    if (panel) panel.style.display = 'none';
-  }
+    let currentWeekOffset = 0;
+    let currentView = 'daily';
+    let currentWeekData = null;
+    let currentWeekTasks = [];
+    let currentDayTasks = [];
+    let dailyLayout = 'list';
 
-  function gcalUrlWithMode(rawUrl, mode) {
-    const url = String(rawUrl || '').trim();
-    if (!url) return '';
-    try {
-      const parsed = new URL(url, window.location.origin);
-      parsed.searchParams.set('mode', mode);
-      return parsed.toString();
-    } catch {
-      if (url.includes('mode=')) {
-        return url.replace(/mode=[^&]*/g, `mode=${mode}`);
-      }
-      return `${url}${url.includes('?') ? '&' : '?'}mode=${mode}`;
-    }
-  }
-
-  function showGcalPanel(baseUrl, view) {
-    const panel = document.getElementById('gcal-panel');
-    const frame = document.getElementById('gcal-iframe');
-    const title = document.getElementById('gcal-title');
-    const badge = document.getElementById('gcal-mode-badge');
-    const safeUrl = String(baseUrl || '').trim();
-
-    if (!panel || !frame || !title || !badge || !safeUrl) {
-      hideGcalPanel();
-      return;
+    function switchStyle() {
+      const select = document.getElementById('style-switch');
+      const mode = select?.value || 'classic';
+      document.body.classList.toggle('theme-modern', mode === 'modern');
+      localStorage.setItem('fire_style', mode);
     }
 
-    const isDaily = view === 'daily';
-    const mode = isDaily ? 'AGENDA' : 'WEEK';
-    frame.src = gcalUrlWithMode(safeUrl, mode);
-    title.textContent = isDaily ? '📅 FIRE CALENDAR · DAILY' : '📅 FIRE CALENDAR · WEEKLY';
-    badge.textContent = isDaily ? 'DAILY' : 'WEEKLY';
-    panel.style.display = 'block';
-  }
-
-  async function switchTab(tab) {
-    currentView = tab;
-    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-
-    event.target.classList.add('active');
-    document.getElementById(`view-${tab}`).classList.add('active');
-
-    if (tab === 'daily') {
-      await loadDaily();
-    } else if (tab === 'weekly') {
-      await loadWeekly();
-    } else {
-      hideGcalPanel();
+    function initStyle() {
+      const saved = localStorage.getItem('fire_style') || 'classic';
+      const select = document.getElementById('style-switch');
+      if (select) select.value = saved;
+      document.body.classList.toggle('theme-modern', saved === 'modern');
     }
-  }
 
-  function getTargetDate() {
-    if (currentWeekOffset === 0) return new Date();
-    const next = new Date();
-    next.setDate(next.getDate() + 7);
-    return next;
-  }
+    function setDailyLayout(mode) {
+      dailyLayout = mode;
+      document.getElementById('layout-list').classList.toggle('active', mode === 'list');
+      document.getElementById('layout-timeline').classList.toggle('active', mode === 'timeline');
+      document.getElementById('daily-slots').classList.toggle('timeline', mode === 'timeline');
+    }
 
-  async function onWeekChange() {
-    const selector = document.getElementById('week-selector');
-    currentWeekOffset = selector.value === 'next' ? 1 : 0;
-    await refreshView();
-  }
+    function getTargetDate() {
+      if (currentWeekOffset === 0) return new Date();
+      const next = new Date();
+      next.setDate(next.getDate() + 7);
+      return next;
+    }
 
-  async function onCaptureWeekChange() {
-    const date = getTargetDate();
-    try {
-      const res = await fetch(`/api/fire/week-range?date=${date.toISOString()}`);
-      const data = await res.json();
-      if (data.ok) {
-        document.getElementById('capture-week-info').textContent = `${data.week} (${data.rangeLabel})`;
-        currentWeekData = data;
+    async function onWeekChange() {
+      const selector = document.getElementById('week-selector');
+      currentWeekOffset = selector.value === 'next' ? 1 : 0;
+      await refreshView();
+    }
 
-        // Set due date to friday of that week
-        const friday = data.days.find(d => d.dayOfWeek === 5);
-        if (friday) {
-          document.getElementById('capture-due-date').value = friday.date;
+    async function refreshView() {
+      if (currentView === 'daily') await loadDaily();
+      else if (currentView === 'weekly') await loadWeekly();
+    }
+
+    function switchTab(tab, evt) {
+      currentView = tab;
+      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+
+      if (evt && evt.target) evt.target.classList.add('active');
+      document.getElementById(`view-${tab}`).classList.add('active');
+
+      if (tab === 'daily') loadDaily();
+      if (tab === 'weekly') loadWeekly();
+      if (tab === 'capture') onCaptureWeekChange();
+    }
+
+    async function apiFetch(path, opts = {}) {
+      const res = await fetch(path, opts);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function fmtDate(dateStr) {
+      if (!dateStr) return '';
+      return new Date(dateStr).toLocaleDateString('de-DE');
+    }
+
+    function taskCard(task, withRemove = false) {
+      const icon = DOMAIN_ICONS[task.domain] || '';
+      const dueText = task.date ? fmtDate(task.date) : 'kein Datum';
+      return `
+        <div class="task-row">
+          <span class="task-icon">${icon}</span>
+          <div>
+            <div class="task-title">${task.title || '(ohne Titel)'}</div>
+            <div class="task-meta">${task.overdue ? 'OVERDUE · ' : ''}${dueText}</div>
+          </div>
+          ${withRemove ? `<button class="remove-date" title="Remove date">×</button>` : ''}
+        </div>
+      `;
+    }
+
+    async function updateTask(uuid, scheduled, addFire = true, clearScheduled = false) {
+      if (!uuid) return;
+      const body = { uuid };
+      if (scheduled) body.scheduled = scheduled;
+      if (addFire) body.tags = ['fire'];
+      if (clearScheduled) body.clear_scheduled = true;
+      await apiFetch('/api/taskwarrior/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+
+    function classifyWeekly(tasks, weekStart, weekEnd) {
+      const overdue = [];
+      const week = [];
+      const undated = [];
+      tasks.forEach(task => {
+        if (!task.date) {
+          undated.push(task);
+          return;
         }
-      }
-    } catch (err) {
-      console.error('Week range failed:', err);
+        const d = new Date(task.date);
+        if (d < weekStart) overdue.push(task);
+        else if (d >= weekStart && d < weekEnd) week.push(task);
+      });
+      return { overdue, week, undated };
     }
-  }
 
-  async function refreshView() {
-    if (currentView === 'daily') await loadDaily();
-    else if (currentView === 'weekly') await loadWeekly();
-  }
-
-  async function loadDaily() {
-    try {
-      const res = await fetch('/api/fire/tasks-day');
-      const data = await res.json();
-
-      document.getElementById('daily-date').textContent = data.date || 'Today';
-      showGcalPanel(data.gcal_url, 'daily');
-
-      if (!data.tasks || data.tasks.length === 0) {
-        document.getElementById('daily-content').innerHTML = '';
-        document.getElementById('daily-empty').style.display = 'block';
-        return;
-      }
-
-      document.getElementById('daily-empty').style.display = 'none';
-      renderDomainGrid('daily-content', data.tasks);
-    } catch (err) {
-      console.error('Daily load failed:', err);
-      alert('Failed to load daily tasks: ' + err.message);
+    function renderPool(listId, tasks) {
+      const el = document.getElementById(listId);
+      el.innerHTML = '';
+      tasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = 'pool-item';
+        item.dataset.uuid = task.uuid || '';
+        item.innerHTML = taskCard(task);
+        el.appendChild(item);
+      });
     }
-  }
 
-  async function loadWeekly() {
-    try {
-      const date = getTargetDate();
-      const [tasksRes, rangeRes] = await Promise.all([
-        fetch('/api/fire/tasks-week'),
-        fetch(`/api/fire/week-range?date=${date.toISOString()}`)
-      ]);
-
-      const tasksData = await tasksRes.json();
-      const rangeData = await rangeRes.json();
-
-      currentWeekData = rangeData;
-
-      document.getElementById('weekly-range').textContent =
-        `${rangeData.week} (${rangeData.rangeLabel})`;
-      document.getElementById('week-info').textContent = rangeData.week;
-      showGcalPanel(tasksData.gcal_url, 'weekly');
-
-      if (!tasksData.tasks || tasksData.tasks.length === 0) {
-        document.getElementById('weekly-calendar').innerHTML = '';
-        document.getElementById('weekly-content').innerHTML = '';
-        document.getElementById('weekly-empty').style.display = 'block';
-        return;
-      }
-
-      document.getElementById('weekly-empty').style.display = 'none';
-      renderWeeklyCalendar(rangeData.days, tasksData.tasks);
-      renderDomainGrid('weekly-content', tasksData.tasks);
-    } catch (err) {
-      console.error('Weekly load failed:', err);
-      alert('Failed to load weekly tasks: ' + err.message);
+    function renderDailySlots(tasks) {
+      const el = document.getElementById('daily-slots');
+      el.innerHTML = '';
+      tasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = 'slot-item';
+        item.dataset.uuid = task.uuid || '';
+        item.innerHTML = taskCard(task, true);
+        item.querySelector('.remove-date')?.addEventListener('click', async () => {
+          await updateTask(task.uuid, null, false, true);
+          await loadDaily();
+        });
+        el.appendChild(item);
+      });
     }
-  }
 
-  function renderDomainGrid(containerId, tasks) {
-    const container = document.getElementById(containerId);
-    const grouped = groupByDomain(tasks);
-
-    container.innerHTML = '';
-
-    ['body', 'being', 'balance', 'business'].forEach(domain => {
-      const domainTasks = grouped[domain] || [];
-      if (domainTasks.length === 0) return;
-
-      const card = document.createElement('div');
-      card.className = `domain-card ${domain}`;
-
-      const title = document.createElement('div');
-      title.className = 'domain-title';
-      title.textContent = domain.toUpperCase();
-      card.appendChild(title);
-
-      const list = document.createElement('ul');
-      list.className = 'task-list';
-
-      domainTasks.forEach(task => {
-        const item = document.createElement('li');
-        item.className = 'task-item';
-
-        const taskTitle = document.createElement('div');
-        taskTitle.className = 'task-title';
-        taskTitle.textContent = task.title || '(ohne Titel)';
-
-        const taskMeta = document.createElement('div');
-        taskMeta.className = task.overdue ? 'task-meta task-overdue' : 'task-meta';
-        const dueText = task.date ? new Date(task.date).toLocaleDateString('de-DE') : 'kein Due';
-        taskMeta.textContent = task.overdue ? `⚠️ OVERDUE: ${dueText}` : dueText;
-
-        item.appendChild(taskTitle);
-        item.appendChild(taskMeta);
-        list.appendChild(item);
+    function renderWeeklyPlan(days, tasks) {
+      const grid = document.getElementById('plan-grid');
+      grid.innerHTML = '';
+      const tasksByDate = {};
+      tasks.forEach(task => {
+        if (!task.date) return;
+        const dateKey = task.date.split('T')[0];
+        if (!tasksByDate[dateKey]) tasksByDate[dateKey] = [];
+        tasksByDate[dateKey].push(task);
       });
 
-      card.appendChild(list);
-      container.appendChild(card);
-    });
-  }
+      days.forEach(day => {
+        const card = document.createElement('div');
+        card.className = 'plan-day';
+        card.dataset.date = day.date;
+        card.innerHTML = `<h4>${day.label}</h4><div class="slot-list" id="slots-${day.date}"></div>`;
+        grid.appendChild(card);
 
-  function renderWeeklyCalendar(days, tasks) {
-    const container = document.getElementById('weekly-calendar');
-    container.innerHTML = '';
-
-    const tasksByDate = {};
-    tasks.forEach(task => {
-      if (!task.date) return;
-      const dateKey = task.date.split('T')[0];
-      if (!tasksByDate[dateKey]) tasksByDate[dateKey] = [];
-      tasksByDate[dateKey].push(task);
-    });
-
-    days.forEach(day => {
-      const card = document.createElement('div');
-      card.className = 'day-card';
-
-      const title = document.createElement('div');
-      title.className = 'day-card-title';
-      title.textContent = day.label;
-      card.appendChild(title);
-
-      const dayTasks = tasksByDate[day.date] || [];
-      if (dayTasks.length > 0) {
+        const list = card.querySelector('.slot-list');
+        const dayTasks = (tasksByDate[day.date] || []).slice(0, 4);
         dayTasks.forEach(task => {
-          const taskEl = document.createElement('div');
-          taskEl.className = 'day-task';
-          taskEl.textContent = task.title;
-          card.appendChild(taskEl);
+          const item = document.createElement('div');
+          item.className = 'slot-item';
+          item.dataset.uuid = task.uuid || '';
+          item.innerHTML = taskCard(task, true);
+          item.querySelector('.remove-date')?.addEventListener('click', async () => {
+            await updateTask(task.uuid, null, false, true);
+            await loadWeekly();
+          });
+          list.appendChild(item);
+        });
+      });
+    }
+
+    function attachSortableWeekly() {
+      const poolLists = ['pool-overdue', 'pool-week', 'pool-undated'];
+      poolLists.forEach(id => {
+        const el = document.getElementById(id);
+        Sortable.create(el, {
+          group: 'fire',
+          animation: 150,
+          onAdd: async (evt) => {
+            const uuid = evt.item.dataset.uuid;
+            if (id === 'pool-undated') {
+              await updateTask(uuid, null, false, true);
+              await loadWeekly();
+              return;
+            }
+            evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+          }
+        });
+      });
+
+      document.querySelectorAll('.plan-day .slot-list').forEach(list => {
+        Sortable.create(list, {
+          group: 'fire',
+          animation: 150,
+          onAdd: async (evt) => {
+            const date = evt.to.closest('.plan-day')?.dataset?.date;
+            if (!date) return;
+            const items = evt.to.querySelectorAll('.slot-item');
+            if (items.length > 4) {
+              evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+              return;
+            }
+            await updateTask(evt.item.dataset.uuid, date, true, false);
+            await loadWeekly();
+          }
+        });
+      });
+    }
+
+    function attachSortableDaily(today) {
+      const overdue = document.getElementById('daily-pool-overdue');
+      const dueToday = document.getElementById('daily-pool-today');
+      [overdue, dueToday].forEach(el => {
+        Sortable.create(el, {
+          group: 'fire-daily',
+          animation: 150
+        });
+      });
+
+      const slots = document.getElementById('daily-slots');
+      Sortable.create(slots, {
+        group: 'fire-daily',
+        animation: 150,
+        onAdd: async (evt) => {
+          await updateTask(evt.item.dataset.uuid, today, true, false);
+          await loadDaily();
+        }
+      });
+    }
+
+    async function loadWeekly() {
+      try {
+        const date = getTargetDate();
+        const [tasksRes, rangeRes] = await Promise.all([
+          apiFetch(`/api/fire/week?date=${date.toISOString()}`),
+          apiFetch(`/api/fire/week-range?date=${date.toISOString()}`)
+        ]);
+
+        currentWeekTasks = tasksRes.tasks || [];
+        currentWeekData = rangeRes;
+
+        document.getElementById('weekly-range').textContent = `${rangeRes.week} (${rangeRes.rangeLabel})`;
+        document.getElementById('week-info').textContent = rangeRes.week;
+
+        const weekStart = new Date(rangeRes.start);
+        const weekEnd = new Date(rangeRes.end);
+        const pool = classifyWeekly(currentWeekTasks, weekStart, weekEnd);
+
+        renderPool('pool-overdue', pool.overdue);
+        renderPool('pool-week', pool.week);
+        renderPool('pool-undated', pool.undated);
+        renderWeeklyPlan(rangeRes.days, currentWeekTasks);
+        attachSortableWeekly();
+      } catch (err) {
+        console.error('Weekly load failed:', err);
+        alert('Failed to load weekly tasks: ' + err.message);
+      }
+    }
+
+    async function loadDaily() {
+      try {
+        const res = await apiFetch('/api/fire/day');
+        currentDayTasks = res.tasks || [];
+        document.getElementById('daily-date').textContent = res.date || 'Today';
+
+        const today = new Date().toISOString().split('T')[0];
+        const overdue = currentDayTasks.filter(t => t.overdue);
+        const todayTasks = currentDayTasks.filter(t => t.date && t.date.startsWith(today));
+
+        renderPool('daily-pool-overdue', overdue);
+        renderPool('daily-pool-today', todayTasks);
+        renderDailySlots(todayTasks);
+        attachSortableDaily(today);
+      } catch (err) {
+        console.error('Daily load failed:', err);
+        alert('Failed to load daily tasks: ' + err.message);
+      }
+    }
+
+    function getCaptureAnchorDate() {
+      const selector = document.getElementById('capture-week-selector');
+      const mode = selector?.value || 'current';
+      const d = new Date();
+      if (mode === 'next') d.setDate(d.getDate() + 7);
+      return d;
+    }
+
+    function normalizeDomain(domain) {
+      return ['body', 'being', 'balance', 'business'].includes(domain) ? domain : '';
+    }
+
+    async function onCaptureWeekChange() {
+      try {
+        const anchor = getCaptureAnchorDate();
+        const week = await apiFetch(`/api/fire/week-range?date=${anchor.toISOString()}`);
+        const info = document.getElementById('capture-week-info');
+        if (info) info.textContent = `${week.week} (${week.rangeLabel})`;
+
+        const dueInput = document.getElementById('capture-due-date');
+        if (dueInput && !dueInput.value) {
+          const selector = document.getElementById('capture-week-selector');
+          if ((selector?.value || 'current') === 'next') {
+            dueInput.value = week?.days?.[0]?.date || '';
+          } else {
+            dueInput.value = new Date().toISOString().slice(0, 10);
+          }
+        }
+      } catch (err) {
+        console.error('Capture week init failed:', err);
+      }
+    }
+
+    async function captureStrikes(domainRaw) {
+      try {
+        const domain = normalizeDomain(String(domainRaw || '').toLowerCase());
+        if (!domain) {
+          alert('Invalid domain.');
+          return;
+        }
+        const values = [1, 2, 3, 4]
+          .map(i => document.getElementById(`${domain}_strike_${i}`))
+          .filter(Boolean)
+          .map(el => String(el.value || '').trim())
+          .filter(Boolean);
+
+        if (!values.length) {
+          alert('No strikes entered.');
+          return;
+        }
+
+        const dueInput = document.getElementById('capture-due-date');
+        const scheduled = String(dueInput?.value || '').trim();
+        const tasks = values.map((description) => {
+          const task = {
+            description,
+            project: `${domain.toUpperCase()}.Fire`,
+            domain,
+            tags: ['fire', domain]
+          };
+          if (scheduled) task.scheduled = scheduled;
+          return task;
+        });
+
+        const res = await apiFetch('/api/taskwarrior/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tasks }),
+        });
+
+        [1, 2, 3, 4].forEach(i => {
+          const input = document.getElementById(`${domain}_strike_${i}`);
+          if (input) input.value = '';
+        });
+
+        await Promise.all([loadDaily(), loadWeekly()]);
+        alert(`Captured ${res.created || 0}/${res.total || tasks.length} strikes in ${domain.toUpperCase()}.`);
+      } catch (err) {
+        console.error('Capture failed:', err);
+        alert('Failed to capture strikes: ' + err.message);
+      }
+    }
+
+    function buildWeeklyMarkdown() {
+      const week = currentWeekData?.week || 'unknown-week';
+      const rangeLabel = currentWeekData?.rangeLabel || '';
+      const start = currentWeekData?.start || '';
+      const end = currentWeekData?.end || '';
+      const generated = new Date().toISOString();
+      const byDate = {};
+      (currentWeekTasks || []).forEach((task) => {
+        if (!task.date) return;
+        const key = task.date.split('T')[0];
+        byDate[key] = byDate[key] || [];
+        byDate[key].push(task);
+      });
+      const undated = (currentWeekTasks || []).filter(t => !t.date);
+
+      const lines = [
+        '---',
+        `week: ${week}`,
+        'type: fire-map',
+        'status: locked',
+        `generated_at: ${generated}`,
+        `range: "${rangeLabel}"`,
+        `start: "${start}"`,
+        `end: "${end}"`,
+        '---',
+        '',
+        `# FIRE MAP ${week}`,
+        ''
+      ];
+
+      (currentWeekData?.days || []).forEach((day) => {
+        lines.push(`## ${day.label} (${day.date})`);
+        const list = (byDate[day.date] || []).slice(0, 4);
+        if (!list.length) {
+          lines.push('- (empty)');
+          lines.push('');
+          return;
+        }
+        list.forEach((task) => {
+          const domain = normalizeDomain(task.domain || '').toUpperCase() || 'UNSET';
+          const tagText = (task.tags || []).map(t => `+${t}`).join(' ');
+          lines.push(`- [ ] ${task.title || '(ohne Titel)'} · ${domain}${tagText ? ` · ${tagText}` : ''}`);
+        });
+        lines.push('');
+      });
+
+      lines.push('## Undated Pool');
+      if (!undated.length) {
+        lines.push('- (empty)');
+      } else {
+        undated.forEach((task) => {
+          const domain = normalizeDomain(task.domain || '').toUpperCase() || 'UNSET';
+          const tagText = (task.tags || []).map(t => `+${t}`).join(' ');
+          lines.push(`- [ ] ${task.title || '(ohne Titel)'} · ${domain}${tagText ? ` · ${tagText}` : ''}`);
         });
       }
+      lines.push('');
 
-      container.appendChild(card);
-    });
-  }
-
-  function groupByDomain(tasks) {
-    const grouped = { body: [], being: [], balance: [], business: [], other: [] };
-    tasks.forEach(task => {
-      const domain = task.domain || 'other';
-      grouped[domain].push(task);
-    });
-    return grouped;
-  }
-
-  function collectStrikes(domain) {
-    const strikes = [];
-    for (let i = 1; i <= 4; i++) {
-      const el = document.getElementById(`${domain}_strike_${i}`);
-      const text = el?.value.trim() || '';
-      if (text) strikes.push(text);
-    }
-    return strikes;
-  }
-
-  async function captureStrikes(domain) {
-    const strikes = collectStrikes(domain);
-    if (strikes.length === 0) {
-      alert('Enter at least one strike.');
-      return;
+      return lines.join('\n');
     }
 
-    const dueDate = document.getElementById('capture-due-date').value || '';
-    const week = currentWeekData?.week || isoWeekString();
-
-    // Build tasks array for /api/taskwarrior/add
-    const tasks = strikes.map(strikeText => ({
-      description: strikeText,
-      project: `fire.${week}`,
-      tags: ['fire', 'production', 'hit', domain.toLowerCase()],
-      due: dueDate || undefined,
-      scheduled: dueDate || undefined
-    }));
-
-    try {
-      const res = await fetch('/api/taskwarrior/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks })
-      });
-
-      const data = await res.json();
-
-      if (data.ok) {
-        alert(`✅ ${domain.toUpperCase()} STRIKE!\n${data.created} tasks created.\n\nTaskwarrior → on-add hook → TickTick → GCal`);
-        // Clear inputs
-        for (let i = 1; i <= 4; i++) {
-          const el = document.getElementById(`${domain}_strike_${i}`);
-          if (el) el.value = '';
-        }
-        // Refresh views to show new tasks
-        await refreshView();
-      } else {
-        alert(`Error: ${data.error}\nCreated: ${data.created}/${data.total}`);
+    async function exportWeekToMarkdown() {
+      try {
+        if (!currentWeekData) await loadWeekly();
+        const markdown = buildWeeklyMarkdown();
+        const title = `fire-${currentWeekData?.week || 'weekly'}`;
+        const res = await apiFetch('/api/game/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            map: 'fire',
+            title,
+            format: 'markdown',
+            markdown
+          }),
+        });
+        alert(`Fire map exported: ${res.filename}`);
+      } catch (err) {
+        console.error('Fire export failed:', err);
+        alert('Failed to export Fire map: ' + err.message);
       }
-    } catch (err) {
-      alert('Strike failed: ' + err.message);
-    }
-  }
-
-  async function exportWeekToMarkdown() {
-    const domains = ['body', 'being', 'balance', 'business'];
-    const allStrikes = {};
-    let totalStrikes = 0;
-
-    domains.forEach(domain => {
-      const strikes = collectStrikes(domain);
-      allStrikes[domain] = strikes;
-      totalStrikes += strikes.length;
-    });
-
-    if (totalStrikes === 0) {
-      alert('No strikes entered. Add at least one strike.');
-      return;
     }
 
-    const now = new Date();
-    const week = currentWeekData?.week || isoWeekString();
-    const timestamp = now.toISOString();
-    const dateFormatted = now.toLocaleDateString('de-DE');
-    const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    const yamlFrontMatter = [
-      '---',
-      `week: ${week}`,
-      `date: ${dateFormatted}`,
-      `created: ${timestamp}`,
-      `type: fire-map`,
-      `status: locked`,
-      `focus_maps:`,
-      `  body: BODY_focus_${monthName.replace(/\s+/g, '_')}`,
-      `  being: BEING_focus_${monthName.replace(/\s+/g, '_')}`,
-      `  balance: BALANCE_focus_${monthName.replace(/\s+/g, '_')}`,
-      `  business: BUSINESS_focus_${monthName.replace(/\s+/g, '_')}`,
-      `tags:`,
-      `  - alphaos`,
-      `  - fire`,
-      `  - weekly`,
-      `  - ${week}`,
-      '---',
-      ''
-    ].join('\n');
-
-    const header = [
-      `# 🔥 FIRE MAP – ${week}`,
-      `**Week:** ${week}`,
-      `**Date:** ${dateFormatted}`,
-      `**Focus Month:** ${monthName}`,
-      '',
-      '---',
-      ''
-    ].join('\n');
-
-    const body = domains.map(domain => {
-      const strikes = allStrikes[domain];
-      if (strikes.length === 0) return '';
-      const strikesList = strikes.map((s, i) => `${i+1}. ${s}`).join('\n');
-      return `## ${domain.toUpperCase()}\n\n${strikesList}`;
-    }).filter(Boolean).join('\n\n');
-
-    const markdown = yamlFrontMatter + header + body;
-    const title = `fire_${week}`;
-
-    try {
-      const res = await fetch('/api/game/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          map: 'fire',
-          title,
-          markdown,
-          ticktick: false,
-          bundleCascade: true,
-          meta: {
-            week,
-            month: monthName,
-            created: timestamp,
-            type: 'fire-map'
-          }
-        })
-      });
-
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'save failed');
-
-      alert(`🔥 Fire Map ${week} LOCKED!\n\nTotal Strikes: ${totalStrikes}\nFile: ${data.path}`);
-    } catch (err) {
-      alert('Export failed: ' + err.message);
-    }
-  }
-
-  function isoWeekString(date = new Date()) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-  }
-
-  // Initialize
-  document.addEventListener('DOMContentLoaded', async () => {
-    await loadDaily();
-    await onCaptureWeekChange();
-  });
+    initStyle();
+    setDailyLayout('list');
+    onCaptureWeekChange();
+    loadDaily();
   </script>
+
 </body>
 </html>

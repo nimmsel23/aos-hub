@@ -20,6 +20,7 @@ Usage:
   framectl show [BODY|BEING|BALANCE|BUSINESS]  Frame anzeigen
   framectl list                                Alle Frames auflisten
   framectl edit [DOMAIN]                       Frame im Editor öffnen
+  framectl ctx  [open|start|stop|restart|status|logs|menu]  Frame PWA ctx (via framectx)
 
 EOF
 }
@@ -42,12 +43,26 @@ cmd_edit() {
     "${EDITOR:-nano}" "$state_dir/"
   fi
 }
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v framectx >/dev/null 2>&1; then
+    framectx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx frame "$action"
+    return $?
+  fi
+  echo "framectx/pwactx not found" >&2
+  return 1
+}
 
 case "${1:-}" in
   new)   shift; cmd_new  "$@" ;;
   show)  shift; cmd_show "${1:-}" ;;
   list)  cmd_list ;;
   edit)  shift; cmd_edit "${1:-}" ;;
+  ctx)   shift; cmd_ctx  "${1:-}" ;;
   help|--help|-h) usage ;;
   *) usage ;;
 esac

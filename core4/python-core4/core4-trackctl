@@ -130,7 +130,7 @@ edit_habit() {
 }
 
 tw_list() { exec task +core4 "$@"; }
-tw_today() { exec task +core4 due:today "$@"; }
+tw_today() { exec task +core4 status:completed due:today "$@"; }
 tw_week() { exec task +core4 due:thisweek "$@"; }
 tw_done() { exec task +core4 status:completed "$@"; }
 

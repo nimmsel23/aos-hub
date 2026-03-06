@@ -278,6 +278,7 @@ Usage:
   gamectl paths [YYYY-Www]
   gamectl history [frame|freedom|focus|fire|core4score|tent|all]
   gamectl ui [frame|freedom|focus|fire|tent]
+  gamectl ctx [open|start|stop|restart|status|logs|menu]
   gamectl <map> <cmd> [DOMAIN] [options]
   gamectl version
 
@@ -304,12 +305,27 @@ Dashboard snapshots (immutable):
 EOF
 }
 
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v gamectx >/dev/null 2>&1; then
+    gamectx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx game "$action"
+    return $?
+  fi
+  echo "gamectx/pwactx not found" >&2
+  return 1
+}
+
 case "${1:-}" in
   ""|dashboard|status) shift || true; cmd_dashboard "${1:-}" ;;
   doctor) shift; cmd_doctor "${1:-}" ;;
   paths) shift; cmd_paths "${1:-}" ;;
   history) shift; cmd_history "${1:-all}" ;;
   ui) shift; cmd_ui "$@" ;;
+  ctx) shift; cmd_ctx "${1:-}" ;;
   version) echo "gamectl $GAMECTL_VERSION" ;;
   frame)    shift; exec_map_entry frame   "$@" ;;
   freedom)  shift; exec_map_entry freedom "$@" ;;

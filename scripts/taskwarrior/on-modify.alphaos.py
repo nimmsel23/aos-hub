@@ -269,10 +269,44 @@ def detect_habit(tags) -> str:
     return ""
 
 
-def detect_alphatype(tags) -> str:
-    for tag in ("door", "hit", "strike", "bigrock", "fire", "warstack"):
+_ALPHATYPE_ALIASES = {
+    "big": "bigrock",
+    "little": "littlerock",
+}
+
+_ALPHATYPE_BY_TAG = (
+    ("strike", "strike"),
+    ("hit", "hit"),
+    ("door", "door"),
+    ("bigrock", "bigrock"),
+    ("littlerock", "littlerock"),
+    ("warstack", "warstack"),
+    ("freedom", "freedom"),
+    ("focus", "focus"),
+    ("frame", "frame"),
+    ("voice", "voice"),
+    ("fire", "fire"),
+    ("map", "map"),
+    ("mission", "mission"),
+)
+
+
+def normalize_alphatype(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    return _ALPHATYPE_ALIASES.get(raw, raw)
+
+
+def detect_alphatype(task: dict, tags: list[str], habit: str = "") -> str:
+    explicit = normalize_alphatype(task.get("alphatype"))
+    if explicit:
+        return explicit
+    if "core4" in tags or habit:
+        return "daily"
+    for tag, alphatype in _ALPHATYPE_BY_TAG:
         if tag in tags:
-            return tag
+            return alphatype
     return ""
 
 
@@ -441,7 +475,7 @@ def main() -> int:
     project = task.get("project", "")
     domain = detect_domain(tags, project)
     habit = detect_habit(tags)
-    alphatype = detect_alphatype(tags)
+    alphatype = detect_alphatype(task, tags, habit)
     status = str(task.get("status", "")).lower()
     old_status = str((old_task or {}).get("status", "")).lower()
     completed_transition = status == "completed" and old_status != "completed"

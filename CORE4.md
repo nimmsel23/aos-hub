@@ -12,6 +12,16 @@ Historical notes were moved to `CORE4.legacy.md`.
 - Daily max: `4.0` points
 - Weekly max: `28.0` points
 
+## 1.1) Taskwarrior Mechanism (What It Actually Does)
+
+Core4 is **ledger‑first** and **multi‑writer**. Nothing is allowed to be a single point of failure.
+
+- **Taskwarrior is the best task backend**, and Core4 uses it when it is available.
+- Core4 logging creates **one‑off** TW tasks and immediately marks them **done**.
+- **No recurring tasks** are created by Core4 logging.
+- These one‑off tasks carry `+core4`, the habit tag (e.g. `+fitness`), and a date tag (`core4_YYYYMMDD`).
+- If Taskwarrior is not available, Core4 still logs directly to the ledger (via Bridge or local fallback).
+
 ## 2) Usage Categories
 
 ### Daily Commands
@@ -20,6 +30,10 @@ Historical notes were moved to `CORE4.legacy.md`.
 - `c4`: fast ledger/day status (read-focused)
 - `c4d`: explicit shortcut to dashboard behavior
 - `wcore4`: weekly view (`task 28` + `core4 -w`)
+
+**Important:** `core4ctl today` reads Taskwarrior (pending due:today).  
+If no tasks were created, it will show “No matches.”  
+Use `c4` for ledger status or `core4ctl done` for completed TW tasks.
 
 ### Domain Workflow
 
@@ -73,6 +87,10 @@ Compatibility layer kept for old consumers:
   - `core4_week_*`
   - CSV exports
 - Read commands should not rely on derived files being complete.
+
+Taskwarrior is a **mechanism**, not SSOT:
+- Core4 **writes via Taskwarrior** when available.
+- The **ledger** is the truth for status and scoring.
 
 ## 5) Sync Rules
 
@@ -130,3 +148,7 @@ Common units:
   - `readlink -f ~/.core4`
   - expected: `~/vault/.core4`
 
+## 10) TODO (Process)
+
+- After Sunday Tent review (Core4 score), generate weekly CSV from ledger.
+- Once weekly CSV is archived, delete that week's daily JSONs (to reduce clutter).

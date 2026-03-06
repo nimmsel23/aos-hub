@@ -22,6 +22,7 @@ import yaml    from "js-yaml";
 const router = express.Router();
 
 const FREEDOM_DIR = process.env.FREEDOM_DIR || path.join(os.homedir(), ".aos", "freedom");
+const FRAME_DIR = process.env.FRAME_DIR || path.join(os.homedir(), ".aos", "frame");
 
 const VALID_DOMAINS = ["body", "being", "balance", "business"];
 const DOMAIN_META = {
@@ -70,6 +71,34 @@ function parseFrontmatter(md) {
   let front = {};
   try { front = yaml.load(m[1]) || {}; } catch { front = {}; }
   return { front, body: text.slice(m[0].length) };
+}
+
+function frameJsonPath(domain) {
+  return path.join(FRAME_DIR, `${domain}.json`);
+}
+
+function frameYamlPath(domain) {
+  return path.join(FRAME_DIR, `${domain}.yaml`);
+}
+
+function loadFrameState(domain) {
+  const key = String(domain || "").toLowerCase();
+  if (!VALID_DOMAINS.includes(key)) return null;
+  try {
+    const jsonPath = frameJsonPath(key);
+    if (fs.existsSync(jsonPath)) {
+      const parsed = JSON.parse(readText(jsonPath, "{}"));
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  } catch (_) {}
+  try {
+    const yamlPath = frameYamlPath(key);
+    if (fs.existsSync(yamlPath)) {
+      const parsed = yaml.load(readText(yamlPath, ""));
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  } catch (_) {}
+  return null;
 }
 
 function buildMarkdown(frontmatter, body) {
@@ -128,6 +157,7 @@ function defaultEditorBody(domain, year) {
 function composeFreedomMarkdown(domain, year, editorBody, existingFront = {}) {
   const meta = DOMAIN_META[domain] || { label: String(domain || "").toUpperCase() };
   const today = new Date().toISOString().slice(0, 10);
+  const frameState = loadFrameState(domain);
   const front = {
     ...existingFront,
     domain: meta.label,
@@ -141,6 +171,7 @@ function composeFreedomMarkdown(domain, year, editorBody, existingFront = {}) {
       chapter: "Game Chapter 33 - Freedom",
       ...(existingFront.source_refs && typeof existingFront.source_refs === "object" ? existingFront.source_refs : {}),
     },
+    ...(frameState ? { frame: frameState } : {}),
   };
   return buildMarkdown(front, editorBody);
 }

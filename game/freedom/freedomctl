@@ -19,6 +19,7 @@ Usage:
   freedomctl show [DOMAIN]                 Freedom Map anzeigen
   freedomctl list                          Alle Freedom Maps auflisten
   freedomctl edit [DOMAIN]                 Im Editor öffnen
+  freedomctl ctx  [open|start|stop|restart|status|logs|menu]  Freedom PWA ctx (via freedomctx)
 
 Domain: BODY | BEING | BALANCE | BUSINESS  (optional — alle wenn weggelassen)
 EOF
@@ -32,11 +33,25 @@ cmd_new()  {
 cmd_show() { py show ${1:+--domain "$1"}; }
 cmd_list() { py list; }
 cmd_edit() { py edit ${1:+--domain "$1"}; }
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v freedomctx >/dev/null 2>&1; then
+    freedomctx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx freedom "$action"
+    return $?
+  fi
+  echo "freedomctx/pwactx not found" >&2
+  return 1
+}
 case "${1:-}" in
   new)   shift; cmd_new  "$@" ;;
   show)  shift; cmd_show "${1:-}" ;;
   list)  cmd_list ;;
   edit)  shift; cmd_edit "${1:-}" ;;
+  ctx)   shift; cmd_ctx  "${1:-}" ;;
   help|--help|-h) usage ;;
   *) usage ;;
 esac

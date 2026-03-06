@@ -89,9 +89,9 @@ get_next_hits() {
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
 
   if [[ -n "$door_name" ]]; then
-    "$TASK_BIN" export door_name:"$door_name" status:pending limit:"$limit" 2>/dev/null
+    "$TASK_BIN" export door_name:"$door_name" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   else
-    "$TASK_BIN" export +door status:pending limit:"$limit" 2>/dev/null
+    "$TASK_BIN" export "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   fi
 }
 

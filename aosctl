@@ -1507,7 +1507,7 @@ fire_cmd() {
   local sub="${1:-}"
   shift || true
   local fire_timer fire_service
-  fire_timer="$(pick_user_unit_file "${AOS_FIREMAP_TIMER_UNIT:-}" "aos-firemap-weekly.timer" "alphaos-firemap-weekly.timer")"
+  fire_timer="$(pick_user_unit_file "${AOS_FIREMAP_TIMER_UNIT:-}" "aos-fire-weekly.timer" "aos-firemap-weekly.timer")"
   fire_service="${fire_timer%.timer}.service"
 
   case "$sub" in

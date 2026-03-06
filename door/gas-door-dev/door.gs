@@ -574,15 +574,21 @@ function door_buildDoorWarTask_(markdown, meta, ctx) {
   var depends = door_getHotlistDepends_(metaMap);
   var context = ctx || {};
   var quad = String(metaMap.quad || '').trim().toLowerCase();
-  var priority = '';
-  if (quad === 'q1') priority = 'H';
-  else if (quad === 'q2') priority = 'M';
-  else if (quad === 'q3') priority = 'L';
+  var priority = String(metaMap.priority || '').trim().toUpperCase();
+  if (priority !== 'H' && priority !== 'M' && priority !== 'L') {
+    priority = '';
+    if (quad === 'q1') priority = 'H';
+    else if (quad === 'q2') priority = 'M';
+    else if (quad === 'q3') priority = 'L';
+  }
   var task = {
     description: 'Door War: ' + doorTitle,
     project: 'DoorWar',
     tags: ['plan', 'door'],
     priority: priority || undefined,
+    pillar: 'door',
+    door_name: doorTitle,
+    alphatype: 'door',
     meta: {
       doorwar: true,
       door_title: doorTitle,
@@ -593,6 +599,11 @@ function door_buildDoorWarTask_(markdown, meta, ctx) {
   };
   if (depends) task.depends = depends;
   return task;
+}
+
+function door_shouldCreateDoorWarTask_() {
+  var sp = PropertiesService.getScriptProperties();
+  return String(sp.getProperty('DOORWAR_CREATE_TASK') || '').trim() === '1';
 }
 
 function door_createDoorWarTask_(markdown, meta, ctx) {
@@ -695,12 +706,18 @@ function saveDoorEntry_(payload) {
   var telegram = null;
   var doorwarTask = null;
   if (String(tool || '').toLowerCase() === 'doorwar') {
-    doorwarTask = door_createDoorWarTask_(fullMd, meta, {
-      sessionId: sessionId,
-      fileId: result && result.id ? result.id : ''
-    });
-    if (doorwarTask && doorwarTask.ok && doorwarTask.results) {
-      door_updateDoorWarTaskwarriorUuids_(doorwarTask.results);
+    // Canonical Door flow: Plan prioritizes, Production creates tasks.
+    // Keep optional legacy task creation behind explicit feature flag.
+    if (door_shouldCreateDoorWarTask_()) {
+      doorwarTask = door_createDoorWarTask_(fullMd, meta, {
+        sessionId: sessionId,
+        fileId: result && result.id ? result.id : ''
+      });
+      if (doorwarTask && doorwarTask.ok && doorwarTask.results) {
+        door_updateDoorWarTaskwarriorUuids_(doorwarTask.results);
+      }
+    } else {
+      doorwarTask = { ok: true, skipped: true, reason: 'doorwar-task-disabled' };
     }
   }
   if (String(tool || '').toLowerCase() === 'warstack') {

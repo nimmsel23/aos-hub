@@ -84,6 +84,7 @@ def task_add(target: Target) -> None:
         title,
         f"project:{habit_tag}",
         f"due:{target.date_key}",
+        "+core4",
         f"+{habit_tag}",
         f"+{target.date_tag}",
     ]

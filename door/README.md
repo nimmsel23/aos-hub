@@ -20,7 +20,7 @@ doorctl show Ausbildung
 # Check door health
 doorctl health
 
-# Today's focus (top 3 hits)
+# Today's focus (top 7 door tasks)
 doorctl focus
 
 # Mark hit done
@@ -51,6 +51,15 @@ door/
 
 ## Commands
 
+### Door Flow Modules (4 Phases)
+
+```bash
+doorctl potential        # Phase 1: Potential
+doorctl plan             # Phase 2: Plan
+doorctl production       # Phase 3: Production
+doorctl profit           # Phase 4: Profit
+```
+
 ### List & Overview
 
 ```bash
@@ -67,7 +76,7 @@ doorctl hits [door]       # List hits for door (or all)
 doorctl hitlist           # All pending hits
 doorctl next [door]       # Next hit to work on
 doorctl done <uuid>       # Mark hit complete
-doorctl focus             # Top 3 priorities
+doorctl focus             # Top 7 priorities in door scope
 ```
 
 ## Door Phases
@@ -75,8 +84,8 @@ doorctl focus             # Top 3 priorities
 | Phase | Emoji | Description |
 |-------|-------|-------------|
 | **Potential** | 💡 | Ideas in Hot List, no plan yet |
-| **Plan** | 📋 | War Stack created, ready to execute |
-| **Production** | 🔨 | Active work, hitting hits |
+| **Plan** | 📋 | Door War prioritization (H/M/L or none) |
+| **Production** | 🔨 | War Stack execution and hit delivery |
 | **Profit** | 💰 | Achieved, reflection time |
 
 **Phase Detection:**
@@ -106,6 +115,25 @@ export AOS_DOOR_ATTENTION_DAYS=3
 task config uda.door_name.type string
 task config uda.door_name.label Door
 ```
+
+**Pragmatic model (large Doors):**
+- `door_name` is the primary grouping key.
+- A Door can contain many tasks (not only 4 hits).
+- Use `alphatype` only where it adds clarity (`bigrock`, `littlerock`, `strike`, `freedom`, ...).
+- Do not force every task into `hit/strike` if that increases complexity.
+
+**Door scoped views (new):**
+```bash
+doorctl scope Vitaltrainer all
+doorctl scope Vitaltrainer today
+doorctl scope Vitaltrainer focus
+doorctl scope Vitaltrainer h
+doorctl scope Vitaltrainer m
+doorctl scope Vitaltrainer l
+doorctl scope --current focus
+```
+
+`doorwar` is a compatibility alias for Plan activation (`list|review|activate|promote`). Canonical flow is `doorctl plan ...`.
 
 **Creating Door Tasks:**
 ```bash

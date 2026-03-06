@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-DOORCTL_VERSION="2.1.0"
+DOORCTL_VERSION="2.2.1"
 DOORCTL_OUTPUT_FORMAT="text"
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -141,7 +141,21 @@ select_editor() {
 
 warstack_path() {
   local door_name="${1:?}"
-  printf "%s/Door/War-Stacks/%s.md" "$VAULT_DIR" "$door_name"
+  local slug
+  slug="$(slugify_door_name "$door_name")"
+  local primary legacy
+  primary="${DOOR_PRODUCTION_DIR}/STACK_${slug}.md"
+  legacy="${VAULT_DIR}/Door/War-Stacks/${door_name}.md"
+  if [[ -f "$primary" ]]; then
+    printf "%s\n" "$primary"
+    return 0
+  fi
+  if [[ -f "$legacy" ]]; then
+    printf "%s\n" "$legacy"
+    return 0
+  fi
+  # Prefer canonical 3-Production location for new stacks.
+  printf "%s\n" "$primary"
 }
 
 note_path() {
@@ -151,34 +165,36 @@ note_path() {
 
 print_command_catalog() {
   cat <<'EOF'
+potential	potential [subcmd]	Phase 1: Potential (Hot List / Possibilities)
+plan	plan [subcmd]	Phase 2: Plan (Door War / prioritization)
+production	production [subcmd]	Phase 3: Production (War Stack / execution)
+profit	profit [subcmd]	Phase 4: Profit (review / outcomes)
 menu	menu	Interactive terminal menu (TTY default when no args)
 dashboard	dashboard	Compact Door dashboard (hotlist + focus + health)
 chapters	chapters [blueprints|alphaos]	Door chapter reader/list (offline, local vault)
+scope	scope [door|--current] [all|today|focus|week|done|h|m|l]	Door-name scoped task view (works for large Doors)
 list	list	List all active doors with status
 show	show <door>	Show detail view for a specific door
-hotlist	hotlist [list|json|open|add]	Potential / Hot List flow (JSON source supported)
-hot	hot [list|open|add|json]	Hot List frontdoor (interactive UI on TTY)
-doorwar	doorwar [list|status|review|activate|promote|<door>]	Plan-phase + HotList->WarStack activation
-warstack	warstack <door> [show|edit]	Alias for war (no door -> production report)
+hotlist	hotlist [list|json|open|add]	Phase 1 alias: Potential / Hot List flow
+hot	hot [list|open|add|json]	Phase 1 alias: Hot List frontdoor (interactive UI on TTY)
+doorwar	doorwar [list|status|review|activate|promote|<selector>]	Compatibility alias for Plan activation
+warstack	warstack <door> [show|edit]	War Stack view/edit (no door -> production report)
 current	current [<door>|clear]	Set or show the active Door (writes ~/.aos/door.current)
 review	review	Compact phase review + health + focus
 doctor	doctor	Environment + dependency + Task/Vault health checks
 commands	commands	Machine-friendly command catalog
-potential	potential [subcmd]	Potential frontdoor (Hot List / Possibilities)
-plan	plan [subcmd]	Plan frontdoor (Door War / War Stack)
-production	production [subcmd]	Production frontdoor (Hits / execution)
-profit	profit [subcmd]	Profit frontdoor (Review / achieved & done)
 hits	hits [door] [status]	List hits (all or scoped to a door)
 next	next [door]	Show next hit(s)
 done	done <uuid>	Mark hit as completed
 edit	edit <uuid>	Edit hit in Taskwarrior
 open	open <uuid>	Open hit with taskopen
 hitlist	hitlist	Show all pending hits
-focus	focus	Show top 3 pending hits
+focus	focus	Show top 7 pending hits
 health	health	Door health overview (stalled/attention/healthy)
 stalled	stalled	List stalled doors only
 war	war <door> [show|edit]	View/edit war stack markdown
 note	note <door>	View/edit door note markdown
+ctx	ctx [open|start|stop|restart|status|logs|menu]	PWA ctx (via doorctx/pwactx)
 version	version	Show version
 help	help	Show help
 EOF
@@ -235,6 +251,20 @@ cmd_current() {
   else
     echo "$door_name"
   fi
+}
+
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v doorctx >/dev/null 2>&1; then
+    doorctx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx door "$action"
+    return $?
+  fi
+  echo "doorctx/pwactx not found" >&2
+  return 1
 }
 
 build_health_json() {
@@ -355,21 +385,18 @@ cmd_plan() {
 
   case "$sub" in
     list|show|status|"")
-      cmd_doorwar list "$@"
+      cmd_phase_report plan pending
       ;;
     activate|promote)
       cmd_doorwar_activate "$@"
       ;;
-    war)
-      cmd_war "$@"
-      ;;
-    warstack)
-      cmd_warstack "$@"
+    war|warstack)
+      # Compatibility alias: War Stack belongs to Production.
+      cmd_production warstack "$@"
       ;;
     automate)
-      [[ $# -ge 1 ]] || { ui_err "Usage: doorctl plan automate <war-stack-file.md>"; return 1; }
-      require_exec_script "$CREATE_WARSTACK_SH" "create_warstack.sh" || return 1
-      "$CREATE_WARSTACK_SH" "$@"
+      # Compatibility alias: canonical entrypoint is `doorctl production automate`.
+      cmd_production automate "$@"
       ;;
     transition)
       [[ $# -ge 2 ]] || { ui_err "Usage: doorctl plan transition <task_id> <title...>"; return 1; }
@@ -387,14 +414,16 @@ cmd_plan() {
       cat <<'EOF'
 doorctl plan
 
-Plan = Door War / War Stack (Chapter 27/28)
+Plan = Door War (Chapter 27)
 
 Usage:
   doorctl plan [list]
   doorctl plan activate <hot-selector> [door-name] [--force]
+  doorctl plan report [status]
+
+Compatibility aliases:
   doorctl plan war <door> [show|edit]
   doorctl plan automate <war-stack-file.md>
-  doorctl plan report [status]
 EOF
       ;;
     *)
@@ -431,6 +460,14 @@ cmd_production() {
     open)
       cmd_open "$@"
       ;;
+    war|warstack)
+      cmd_warstack "$@"
+      ;;
+    automate)
+      [[ $# -ge 1 ]] || { ui_err "Usage: doorctl production automate <war-stack-file.md>"; return 1; }
+      require_exec_script "$CREATE_WARSTACK_SH" "create_warstack.sh" || return 1
+      "$CREATE_WARSTACK_SH" "$@"
+      ;;
     watch)
       require_exec_script "$DOOR_FILE_WATCHER_SH" "door_file_watcher.sh" || return 1
       "$DOOR_FILE_WATCHER_SH" "$@"
@@ -449,6 +486,8 @@ Production = Hit execution / progress sync (Chapter 29)
 
 Usage:
   doorctl production [focus]
+  doorctl production warstack <door> [show|edit]
+  doorctl production automate <war-stack-file.md>
   doorctl production hitlist
   doorctl production hits [door] [status]
   doorctl production next [door]
@@ -645,6 +684,25 @@ iso_now() {
   date -Iseconds
 }
 
+sync_hot_task_plan() {
+  local tw_uuid="${1:-}"
+  local door_name="${2:-}"
+  [[ -n "$tw_uuid" ]] || return 0
+  have_task || return 0
+  # Keep this lightweight: promote HotList item into plan lane and set door_name.
+  "$TASK_BIN" rc.hooks=0 "$tw_uuid" modify +door +plan -potential "door_name:$door_name" alphatype:door >/dev/null 2>&1 || true
+}
+
+scope_priority_filter_for_mode() {
+  local mode="${1:-}"
+  case "$mode" in
+    h|high) echo "priority:H" ;;
+    m|medium) echo "priority:M" ;;
+    l|low) echo "priority:L" ;;
+    *) echo "" ;;
+  esac
+}
+
 render_warstack_from_hotlist_template() {
   local door_name="${1:?}"
   local idea="${2:?}"
@@ -827,6 +885,7 @@ cmd_doorwar_activate() {
   render_warstack_from_hotlist_template \
     "$door_name" "$idea" "$hot_index" "$tw_uuid" "$hot_file" "$selected_at" "$hot_item_id" > "$warstack_file"
 
+  sync_hot_task_plan "$tw_uuid" "$door_name"
   door_current_set "$door_name"
 
   local updated_index
@@ -1003,24 +1062,27 @@ cmd_doorwar() {
   local sub="${1:-list}"
   shift || true
   case "$sub" in
-    list|show|status) cmd_phase_report plan pending ;;
-    review) cmd_phase_report plan pending ;;
-    activate|promote) cmd_doorwar_activate "$@" ;;
+    list|show|status|"") cmd_plan list ;;
+    review) cmd_plan report pending ;;
+    activate|promote) cmd_plan activate "$@" ;;
     help|-h|--help)
       cat <<'EOF'
 doorctl doorwar
 
-Terminal plan-phase view (Door War / 2-Plan).
+Compatibility alias for Plan activation (Door War).
 
 Usage:
   doorctl doorwar [list|status|review]
   doorctl doorwar activate <hot-index|tw_uuid|idea|file> [door-name] [--force]
   doorctl doorwar promote  <hot-index|tw_uuid|idea|file> [door-name] [--force]
+
+Tip:
+  doorctl plan ... is canonical.
 EOF
       ;;
     *)
-      # Allow convenience: `doorctl doorwar <door>` opens war stack file if a door name is given.
-      cmd_war "$sub" "$@"
+      # Convenience: `doorctl doorwar <selector>` -> activate selector.
+      cmd_plan activate "$sub" "$@"
       ;;
   esac
 }
@@ -1041,7 +1103,7 @@ cmd_review() {
     doors_json="$(get_doors 2>/dev/null || echo '[]')"
     health_json="$(build_health_json "$doors_json")"
     if have_task; then
-      focus_json="$("$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null || echo '[]')"
+      focus_json="$("$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
     else
       focus_json='[]'
     fi
@@ -1123,7 +1185,7 @@ cmd_menu_phase() {
           "show hotlist json" \
           "add hotlist idea..." \
           "open hotlist item..." \
-          "activate hotlist -> doorwar..." \
+          "activate hotlist -> plan..." \
           "phase report (potential)" \
           "review dashboard" \
           "back")" || return 0
@@ -1140,15 +1202,15 @@ cmd_menu_phase() {
             ref="$(ui_input "Hotlist task number" "")" || true
             [[ -n "${ref:-}" ]] && cmd_hotlist open "$ref"
             ;;
-          "activate hotlist -> doorwar...")
+          "activate hotlist -> plan...")
             local selector door
             selector="$(ui_input "Hot List selector (index/uuid/idea)" "")" || true
             if [[ -n "${selector:-}" ]]; then
               door="$(ui_input "Door name (optional)" "")" || true
               if [[ -n "${door:-}" ]]; then
-                cmd_doorwar activate "$selector" "$door"
+                cmd_plan activate "$selector" "$door"
               else
-                cmd_doorwar activate "$selector"
+                cmd_plan activate "$selector"
               fi
             fi
             ;;
@@ -1161,7 +1223,7 @@ cmd_menu_phase() {
       plan)
         prompt="Plan (Door War)"
         action="$(door_menu_pick "$prompt" \
-          "doorwar list" \
+          "plan list" \
           "activate from hotlist..." \
           "phase report (plan)" \
           "show warstack..." \
@@ -1169,16 +1231,16 @@ cmd_menu_phase() {
           "review dashboard" \
           "back")" || return 0
         case "$action" in
-          "doorwar list") cmd_doorwar list ;;
+          "plan list") cmd_plan list ;;
           "activate from hotlist...")
             local selector door
             selector="$(ui_input "Hot List selector (index/uuid/idea)" "")" || true
             if [[ -n "${selector:-}" ]]; then
               door="$(ui_input "Door name (optional)" "")" || true
               if [[ -n "${door:-}" ]]; then
-                cmd_doorwar activate "$selector" "$door"
+                cmd_plan activate "$selector" "$door"
               else
-                cmd_doorwar activate "$selector"
+                cmd_plan activate "$selector"
               fi
             fi
             ;;
@@ -1203,7 +1265,7 @@ cmd_menu_phase() {
         action="$(door_menu_pick "$prompt" \
           "phase report (production)" \
           "hitlist" \
-          "focus (top 3)" \
+          "focus (top 7)" \
           "next hit" \
           "mark hit done..." \
           "edit hit..." \
@@ -1214,7 +1276,7 @@ cmd_menu_phase() {
         case "$action" in
           "phase report (production)") cmd_phase_report production pending ;;
           "hitlist") cmd_hitlist ;;
-          "focus (top 3)") cmd_focus ;;
+          "focus (top 7)") cmd_focus ;;
           "next hit")
             local door
             door="$(ui_input "Door name (optional)" "")" || true
@@ -1285,20 +1347,19 @@ cmd_menu() {
   while true; do
     ui_title "doorctl"
     local action
-    action="$(door_menu_pick "Door Flow" \
+    action="$(door_menu_pick "Door Flow (4 Phases)" \
       "dashboard" \
-      "phase > potential" \
-      "phase > plan" \
-      "phase > production" \
-      "phase > profit" \
+      "potential (phase 1)" \
+      "plan (phase 2)" \
+      "production (phase 3)" \
+      "profit (phase 4)" \
+      "scope --current today" \
+      "scope --current focus" \
+      "scope --current H" \
+      "scope --current M" \
+      "scope --current L" \
       "review" \
-      "hotlist" \
-      "doorwar" \
-      "production" \
-      "profit" \
       "health" \
-      "focus" \
-      "hitlist" \
       "list doors" \
       "show door..." \
       "warstack show..." \
@@ -1310,18 +1371,17 @@ cmd_menu() {
 
     case "$action" in
       "dashboard") cmd_dashboard ;;
-      "phase > potential") cmd_menu_phase potential ;;
-      "phase > plan") cmd_menu_phase plan ;;
-      "phase > production") cmd_menu_phase production ;;
-      "phase > profit") cmd_menu_phase profit ;;
+      "potential (phase 1)") cmd_menu_phase potential ;;
+      "plan (phase 2)") cmd_menu_phase plan ;;
+      "production (phase 3)") cmd_menu_phase production ;;
+      "profit (phase 4)") cmd_menu_phase profit ;;
+      "scope --current today") cmd_scope --current today ;;
+      "scope --current focus") cmd_scope --current focus ;;
+      "scope --current H") cmd_scope --current H ;;
+      "scope --current M") cmd_scope --current M ;;
+      "scope --current L") cmd_scope --current L ;;
       "review") cmd_review ;;
-      "hotlist") cmd_hotlist list ;;
-      "doorwar") cmd_doorwar list ;;
-      "production") cmd_phase_report production pending ;;
-      "profit") cmd_phase_report profit pending ;;
       "health") cmd_health ;;
-      "focus") cmd_focus ;;
-      "hitlist") cmd_hitlist ;;
       "list doors") cmd_list ;;
       "show door...")
         local door
@@ -1421,9 +1481,9 @@ dashboard_render_snapshot() {
   fi
 
   echo
-  ui_info "Focus (Top 3 pending hits)"
+  ui_info "Focus (Top 7 pending Door tasks)"
   if have_task; then
-    "$TASK_BIN" +door +hit status:pending limit:3 2>/dev/null || true
+    "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 2>/dev/null || true
   else
     printf "  Taskwarrior not found\n"
   fi
@@ -1435,7 +1495,7 @@ dashboard_render_snapshot() {
 
   echo
   ui_info "Hotkeys"
-  printf "  [m] menu  [h] hot UI  [a] add hot  [o] open hot  [w] doorwar  [l] list doors\n"
+  printf "  [m] menu  [h] hot UI  [a] add hot  [o] open hot  [w] plan  [l] list doors\n"
   printf "  [v] review [f] focus  [c] chapters [C] alphaos chapter  [r]/[Enter] refresh  [q] quit\n"
 }
 
@@ -1733,7 +1793,7 @@ cmd_dashboard() {
     if have_task; then
       doors_json="$(get_doors 2>/dev/null || echo '[]')"
       health_json="$(build_health_json "$doors_json" 2>/dev/null || echo "$health_json")"
-      focus_json="$("$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null || echo '[]')"
+      focus_json="$("$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
     fi
 
     jq -n \
@@ -1801,7 +1861,7 @@ cmd_dashboard() {
         ui_pause
         ;;
       w|W)
-        cmd_doorwar list || true
+        cmd_plan list || true
         ui_pause
         ;;
       l|L)
@@ -1946,6 +2006,83 @@ cmd_show() {
   done
 }
 
+cmd_scope() {
+  local door_name=""
+  local mode="all"
+  local mode_lc=""
+  local arg1="${1:-}"
+
+  case "$arg1" in
+    --current|-c)
+      door_name="$(door_current_get || true)"
+      shift || true
+      ;;
+    all|today|focus|week|done|h|m|l|high|medium|low|"")
+      ;;
+    *)
+      door_name="$arg1"
+      shift || true
+      ;;
+  esac
+
+  if [[ -z "$door_name" ]]; then
+    door_name="$(door_current_get || true)"
+  fi
+  [[ -n "$door_name" ]] || { ui_err "Usage: doorctl scope [door-name|--current] [all|today|focus|week|done|h|m|l]"; return 1; }
+
+  mode="${1:-all}"
+  mode_lc="$(printf "%s" "$mode" | tr '[:upper:]' '[:lower:]')"
+  require_task || return 1
+
+  local -a query
+  local priority_filter=""
+  case "$mode_lc" in
+    all)
+      query=("door_name:$door_name" "(status:pending or status:waiting)")
+      ;;
+    today)
+      query=("door_name:$door_name" "(status:pending or status:waiting)" "(due.before:tomorrow or scheduled.before:tomorrow)")
+      ;;
+    week)
+      query=("door_name:$door_name" "(status:pending or status:waiting)" "((due.after:sow and due.before:eow+1day) or (scheduled.after:sow and scheduled.before:eow+1day))")
+      ;;
+    focus)
+      query=("door_name:$door_name" "(status:pending or status:waiting)")
+      ;;
+    done|review)
+      query=("door_name:$door_name" "status:completed" "end.after:today-7days")
+      ;;
+    h|high|m|medium|l|low)
+      priority_filter="$(scope_priority_filter_for_mode "$mode_lc")"
+      [[ -n "$priority_filter" ]] || { ui_err "Unknown priority scope: $mode"; return 2; }
+      query=("door_name:$door_name" "(status:pending or status:waiting)" "$priority_filter")
+      ;;
+    *)
+      ui_err "Unknown scope mode: $mode (use all|today|focus|week|done|h|m|l)"
+      return 2
+      ;;
+  esac
+
+  if json_mode; then
+    require_jq || return 1
+    local out
+    out="$("$TASK_BIN" "${query[@]}" export 2>/dev/null || echo '[]')"
+    if [[ "$mode_lc" == "focus" ]]; then
+      printf "%s\n" "$out" | jq 'sort_by((.urgency // 0)) | reverse | .[:7]'
+      return 0
+    fi
+    printf "%s\n" "$out"
+    return 0
+  fi
+
+  ui_title "Door Scope: $door_name ($mode)"
+  if [[ "$mode_lc" == "focus" ]]; then
+    "$TASK_BIN" "${query[@]}" limit:7 2>/dev/null || true
+    return 0
+  fi
+  "$TASK_BIN" "${query[@]}"
+}
+
 cmd_hits() {
   local door_name="${1:-}"
   local status_filter="${2:-pending}"
@@ -1993,21 +2130,19 @@ cmd_next() {
 
   if json_mode; then
     if [[ -n "$door_name" ]]; then
-      "$TASK_BIN" +door +hit "door_name:$door_name" status:pending limit:1 export 2>/dev/null
+      "$TASK_BIN" "door_name:$door_name" "(status:pending or status:waiting)" limit:1 export 2>/dev/null
     else
-      "$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null
+      "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:3 export 2>/dev/null
     fi
     return 0
   fi
 
-  ui_title "Next Hit"
+  ui_title "Next Door Task"
 
   if [[ -n "$door_name" ]]; then
-    # Next hit for specific door
-    "$TASK_BIN" next door_name:"$door_name" limit:1 2>/dev/null
+    "$TASK_BIN" next door_name:"$door_name" "(status:pending or status:waiting)" limit:1 2>/dev/null
   else
-    # Next hit across all doors
-    "$TASK_BIN" next +door limit:3 2>/dev/null
+    "$TASK_BIN" next "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:3 2>/dev/null
   fi
 }
 
@@ -2130,11 +2265,11 @@ cmd_stalled() {
 cmd_focus() {
   require_task || return 1
   if json_mode; then
-    "$TASK_BIN" +door +hit status:pending limit:3 export 2>/dev/null
+    "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null
     return 0
   fi
-  ui_title "Today's Focus (Top 3 Hits)"
-  "$TASK_BIN" +door +hit status:pending limit:3
+  ui_title "Today's Focus (Top 7 Door Tasks)"
+  "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7
 }
 
 cmd_edit() {
@@ -2406,41 +2541,43 @@ show_help() {
   fi
 
   cat <<'EOF'
-doorctl v2.1.0 - Door Task Management System
+doorctl v2.2.1 - Door Task Management System
 
 Usage:
   doorctl [--json] <command> [args...]
 
 Commands:
+  potential               Phase 1 frontdoor (Hot List / Possibilities)
+  plan                    Phase 2 frontdoor (Door War / prioritization)
+  production              Phase 3 frontdoor (War Stack / execution)
+  profit                  Phase 4 frontdoor (Review / achieved & done)
+                          Use: <phase> report [status] for Taskwarrior phase report
   dashboard               Compact door dashboard (hotlist + focus + health)
   list                    List all active doors with status
   show <door>             Show detail view for specific door
-  hot [subcmd]            Hot List frontdoor (TTY UI by default)
-  hotlist [subcmd]        Potential/Hot List flow (list/open/add)
+  hot [subcmd]            Phase 1 alias: Hot List frontdoor (TTY UI by default)
+  hotlist [subcmd]        Phase 1 alias: Potential/Hot List flow (list/open/add)
   chapters [source]       Door chapter reader/list (blueprints|alphaos)
-  doorwar [subcmd]        Plan-phase terminal view (Door War)
-  warstack <door> [...]   Alias for war (or production view if no door)
+  doorwar [subcmd]        Compatibility alias for plan activation
+  warstack <door> [...]   War Stack view/edit (or production view if no door)
   review                  Compact phase review + health + focus
   doctor                  Check dependencies + vault/task readiness
   commands                List command catalog (supports --json)
   menu                    Interactive terminal menu
-  potential               Potential frontdoor (Hot List / Chapter 26)
-  plan                    Plan frontdoor (Door War / Chapter 27-28)
-  production              Production frontdoor (Hits / Chapter 29)
-  profit                  Profit frontdoor (Review / Chapter 30)
-                          Use: <phase> report [status] for Taskwarrior phase report
+  scope [door] [mode]     Door-name scoped task view (mode: all|today|focus|week|done|h|m|l)
   hits [door] [status]    List hits for door (default: pending)
   next [door]             Show next hit to work on
   done <uuid>             Mark hit as completed
   edit <uuid>             Edit hit in editor (nano/micro/$EDITOR)
   open <uuid>             Open hit with taskopen
   hitlist                 Show all pending hits across all doors
-  focus                   Show today's focus (top 3 hits)
+  focus                   Show today's focus (top 7 door tasks)
   health                  Check door health (stalled, needs attention)
   stalled                 List stalled doors only
   war <door> [show|edit]  View/edit war stack (with glow/bat/cat)
   note <door>             Edit door notes
   current [door|clear]    Get/set active Door (writes ~/.aos/door.current)
+  ctx [open|start|stop|restart|status|logs|menu]
 
   version                 Show version
   help                    Show this help
@@ -2454,18 +2591,21 @@ Examples:
   doorctl hot
   doorctl hot "Idea ..."
   doorctl hotlist json active
-  doorctl doorwar activate 1
-  doorctl --json doorwar activate 1
+  doorctl plan activate 1
+  doorctl --json plan activate 1
   doorctl potential
   doorctl potential report
   doorctl plan activate 1
   doorctl production focus
   doorctl profit review
+  doorctl scope Vitaltrainer today
+  doorctl scope --current focus
+  doorctl scope Vitaltrainer h
   doorctl --json review
   doorctl doctor
   doorctl hotlist
   doorctl hotlist add "Idea ..."
-  doorctl doorwar
+  doorctl plan
   doorctl production
   doorctl review
   doorctl menu
@@ -2480,6 +2620,7 @@ Examples:
   doorctl note Ausbildung
   doorctl health
   doorctl current Ausbildung
+  doorctl ctx open
 
 Config (env vars):
   AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
@@ -2498,10 +2639,10 @@ Optional tools:
 
 Notes:
   - Requires Taskwarrior with door_name UDA
-  - Tasks must have +door or +hit tags
+  - door_name UDA is primary; +door/+hit remain supported
   - Uses task export for data
   - Logic in: door/lib/*.sh (reusable by Index Node)
-  - JSON mode works for: list/show/review/doctor/commands/hits/next/hitlist/focus/health/stalled
+  - JSON mode works for: list/show/review/doctor/commands/scope/hits/next/hitlist/focus/health/stalled
 EOF
 }
 
@@ -2575,6 +2716,7 @@ main() {
     plan) cmd_plan "$@" ;;
     production) cmd_production "$@" ;;
     profit) cmd_profit "$@" ;;
+    scope) cmd_scope "$@" ;;
     hits) cmd_hits "$@" ;;
     next) cmd_next "$@" ;;
     done) cmd_done "$@" ;;
@@ -2586,6 +2728,7 @@ main() {
     stalled) cmd_stalled ;;
     war) cmd_war "$@" ;;
     note|notes) cmd_note "$@" ;;
+    ctx) cmd_ctx "${1:-}" ;;
     version)
       if json_mode; then
         require_jq || return 1

@@ -37,8 +37,8 @@ door_flow:
 firemap_commands:
   # Prefer triggering existing user units (recommended; consistent env/logs):
   # prefer_systemd: true
-  # daily_unit: alphaos-fire-daily.service
-  # weekly_unit: alphaos-fire-weekly.service
+  # daily_unit: aos-fire-daily.service
+  # weekly_unit: aos-fire-weekly.service
   #
   # Fallback subprocess mode (if systemd units are missing/unavailable):
   python_bin: python3

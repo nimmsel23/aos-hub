@@ -182,15 +182,26 @@ body {
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
-  font-size: 20px;
   flex-shrink: 0;
   transition: background .25s, border-color .25s;
+}
+
+.domain-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: var(--text);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .domain-card.done .domain-icon {
   background: var(--fire-dim);
   border-color: var(--fire-ring);
 }
+
+.domain-card.done .domain-icon svg { stroke: var(--fire); }
 
 .domain-info { flex: 1; }
 .domain-name { font-size: 16px; font-weight: 900; letter-spacing: .07em; }

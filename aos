@@ -58,7 +58,7 @@ FIRECTL="$(resolve_bin "$PILLAR_GAME_DIR/fire/firectl" "$SCRIPT_DIR/scripts/fire
 ROUTERCTL="$(resolve_bin "$SCRIPT_DIR/routerctl" "$SCRIPT_DIR/router/routerctl" || true)"
 BRIDGECTL="$(resolve_bin "$SCRIPT_DIR/bridgectl" "$SCRIPT_DIR/bridge/bridgectl" || true)"
 NODE_RESTART="$SCRIPT_DIR/scripts/ctl/node-restart.sh"
-AOS_DASHBOARD_EXT="${AOS_DASHBOARD_EXT:-$HOME/.config/aos/dashboard.sh}"
+AOS_DASHBOARD_EXT="${AOS_DASHBOARD_EXT:-$SCRIPT_DIR/scripts/aos-dashboard.sh}"
 
 pick_exec_token() {
   local resolved="$1"
