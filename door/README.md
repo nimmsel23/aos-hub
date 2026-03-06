@@ -119,17 +119,16 @@ export AOS_DOOR_ATTENTION_DAYS=3
 
 **Required UDA:**
 ```bash
-task config uda.door_name.type string
-task config uda.door_name.label Door
+task config uda.domino_door.type string
+task config uda.domino_door.label Domino
 ```
 
 **Pragmatic model (large Doors):**
-- `door_name` is the primary grouping key.
+- `project:Potential` is intake.
+- `project:Plan` is the weekly War Stack / Plan container.
+- `domino_door` is the primary grouping key across tasks.
 - A Door can contain many tasks (not only 4 hits).
-- Use `project` for modules, subjects, or workstreams inside one large Door.
 - Use `depends` where completion order matters (for example: deadline extension before exams/final submission).
-- Use `alphatype` only where it adds clarity (`bigrock`, `littlerock`, `strike`, `freedom`, ...).
-- Do not force every task into `hit/strike` if that increases complexity.
 - Door is strategic; the Daily Fire Map is the execution surface for day/week work.
 - War Stack is a planning artifact; the Hit List is what feeds Production.
 - Production tasks can route into the terminal War Stack wizard when you are working on the plan artifact itself.
@@ -152,7 +151,7 @@ doorctl scope --current focus
 **Creating Door Tasks:**
 ```bash
 # Add hit to door
-task add "Theorieblock 1" +hit +door door_name:Ausbildung project:BUSINESS.Ausbildung due:2026-03-15
+task add "Theorieblock 1" +hit +door domino_door:"Vitaltrainer Diplom 2026" project:Plan due:2026-03-15
 
 # Mark door task done
 task 123 done
@@ -262,7 +261,7 @@ export AOS_DOOR_ATTENTION_DAYS=3
 
 **Required:**
 - bash 4.0+
-- Taskwarrior 2.6+ (with `door_name` UDA)
+- Taskwarrior 2.6+ (with `domino_door` UDA)
 - jq (JSON parsing)
 - bc (calculations)
 
@@ -319,11 +318,11 @@ curl localhost:8799/api/door/list | jq
 
 **No doors found:**
 ```bash
-# Check Taskwarrior has tasks with door_name
-task door_name:Ausbildung list
+# Check Taskwarrior has tasks with domino_door
+task domino_door:"Vitaltrainer Diplom 2026" list
 
 # Verify UDA is configured
-task show | grep door_name
+task show | grep domino_door
 ```
 
 **Stalled detection not working:**

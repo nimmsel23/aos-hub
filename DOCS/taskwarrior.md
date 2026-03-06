@@ -54,22 +54,22 @@ Priority H (12) > Due-Date (10) > +next (8) > Blocking (6)
 | `domain` | string | body, being, balance, business | Core Four Domains |
 | `alphatype` | string | daily, door, hit, strike, bigrock, littlerock, warstack, focus, freedom, frame, fire, voice, mission, map, ipw, big, little, sand | Task-Typ |
 | `points` | numeric | (default: 0) | Core4 28-or-Die |
-| `door_name` | string | (frei) | Door-Name |
+| `domino_door` | string | (frei) | Naechste Door / strategische Door-Klammer |
 | `hit_number` | numeric | 1, 2, 3, 4 | War Stack Hit# |
 
 Hinweis:
 - Hooks normalisieren Legacy-Werte (`big -> bigrock`, `little -> littlerock`).
 - `+core4`/Habit-Tags werden als `alphatype:daily` klassifiziert, wenn kein expliziter `alphatype` gesetzt ist.
-- `pillar` ist kein Pflichtfeld fuer Door. Fuer Door reichen `door_name`, `alphatype`, `domain`, `hit_number`, `priority`, Tags und Project.
+- `pillar` ist kein Pflichtfeld fuer Door. Fuer Door reichen `domino_door`, `domain`, `hit_number`, `priority`, Tags und Project.
 
 ---
 
 ## Project vs Tags
 
-- **Door** als eigenes `project:"<DoorName>"` (z.B. `project:Vitaltrainer-Ausbildung`), plus Tags: `+door +plan +business` usw.
+- **Potential**: `project:Potential +hot +potential`
+- **Plan**: `project:Plan domino_door:"<Door>"`, `priority:H|M|L`
 - **Fire Hits** als `project:DOMAIN.Fire` (z.B. `project:BODY.Fire`), Tags: `+fire +hit`
 - **Core4**: `alphatype:daily` + Domain-Tag. Project optional.
-- **HotList**: `project:HotList +hot +potential`
 
 ---
 
@@ -218,14 +218,14 @@ task add "FADARO Landing Page" project:BUSINESS +door \
 task add "Core4 BODY Training" domain:body alphatype:daily +core4
 
 # Hot List Eintrag
-task add "Podcast starten" project:HotList +hot +potential priority:L
+task add "Podcast starten" project:Potential +hot +potential
 ```
 
 ### Nuetzliche Queries
 
 ```bash
 task +fire +hit status:pending list          # Alle Fire Hits
-task project:HotList +potential list          # Hot List
+task project:Potential +potential list        # Hot List
 task +door +business list                    # Business Doors
 task +warstack list                          # War Stack Tasks
 task priority:H status:pending list          # Alles mit Priority H
@@ -238,7 +238,7 @@ task domain:body status:pending list         # Alles fuer BODY
 
 | Context | Filter | Aktivieren |
 |---------|--------|------------|
-| `hot` | `(project:HotList or project:HOTLIST or +hot or +potential) -plan` | `task context hot` |
+| `hot` | `(project:Potential or project:POTENTIAL or +hot or +potential)` | `task context hot` |
 
 ---
 

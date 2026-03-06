@@ -70,11 +70,19 @@
 
 - Updated `README.md`, `ARCHITECTURE.md`, and `AGENTS.md` to reflect:
   - the 4P mapping above
-  - large Door handling via `door_name` + `project` + `depends`
+  - large Door handling via `domino_door` + `project` + `depends`
   - terminal wizard flow for Production
   - `taskopen` remaining relevant for Profit
   - Chapter 31 framing: Plan = Door War + War Stack, Production = Hit List execution, Fire Map = daily execution surface
   - `doorctx` as user-side frontdoor and `doorctl` as system-side CLI
+
+### Taskwarrior Model
+
+- Active Door runtime now treats:
+  - `project:Potential` as Hot List / Potential
+  - `project:Plan` as the weekly Plan / War Stack container
+  - `domino_door` as the canonical Door grouping UDA
+- `door_name` is no longer the active Door field in the main runtime path.
 
 ### Removed
 
@@ -83,8 +91,7 @@
 ### Known Gap
 
 - The intended `Potential -> Plan` promotion rule is now clarified:
-  - Potential lives in `project:HotList`
-  - once selected into Plan, the task's `project` should become the Door itself
-- Current implementation still partially models Plan as `HotList + priority` in `taskrc`/reports.
-- This needs a follow-up refactor in the Taskwarrior Plan/report layer and in the remaining legacy Door-War activation code.
+  - Potential lives in `project:Potential`
+  - once selected into Plan, the task's `project` becomes `Plan`
+  - `domino_door` carries the actual strategic Door target
 - `Door/3-Production` still contains historical non-War-Stack material; only the clear War Stack files were migrated.

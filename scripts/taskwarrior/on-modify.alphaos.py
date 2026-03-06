@@ -111,7 +111,7 @@ def _format_human_message(payload: dict) -> str:
     priority = str(data.get("priority") or "").strip()
     due = _format_due(data.get("due"))
     status = str((data.get("changes") or {}).get("status", {}).get("new") or data.get("status") or "").strip()
-    domino_door = str(data.get("domino_door") or data.get("door_name") or "").strip()
+    domino_door = str(data.get("domino_door") or "").strip()
 
     lines = []
     if prefix == "Core4":
@@ -488,7 +488,7 @@ def main() -> int:
         "priority": task.get("priority"),
         "due": task.get("due"),
         "end": task.get("end"),
-        "domino_door": task.get("domino_door") or task.get("door_name") or "",
+        "domino_door": task.get("domino_door") or "",
         "alphatype": alphatype,
         "changes": {"status": {"old": old_status, "new": status}},
     }

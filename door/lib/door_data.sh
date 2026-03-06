@@ -16,7 +16,7 @@ get_doors() {
   # Avoid deleted tasks so counts remain useful for CLI dashboards.
   "$TASK_BIN" export 2>/dev/null | jq -r '
     map(select((.status // "") != "deleted"))
-    | map(.door_key = (.domino_door // .door_name // ""))
+    | map(.door_key = (.domino_door // ""))
     | map(select(.door_key != ""))
     | group_by(.door_key)
     | map({
@@ -43,7 +43,7 @@ get_door_tasks() {
 
   "$TASK_BIN" export 2>/dev/null | jq -c --arg domino_door "$domino_door" '
     map(select((.status // "") != "deleted"))
-    | map(select(((.domino_door // .door_name // "")) == $domino_door))
+    | map(select(((.domino_door // "")) == $domino_door))
   '
 }
 
@@ -61,7 +61,7 @@ get_door_metadata() {
   fi
 
   echo "$tasks" | jq -r '{
-    name: (.[0].domino_door // .[0].door_name // ""),
+    name: (.[0].domino_door // ""),
     count: length,
     done: [.[] | select(.status == "completed")] | length,
     pending: [.[] | select(.status == "pending")] | length,
@@ -90,9 +90,9 @@ get_next_hits() {
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
 
   if [[ -n "$domino_door" ]]; then
-    "$TASK_BIN" export "(domino_door:$domino_door or door_name:$domino_door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
+    "$TASK_BIN" export "domino_door:$domino_door" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   else
-    "$TASK_BIN" export "((domino_door.not:) or (door_name.not:) or +door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
+    "$TASK_BIN" export "(domino_door.not: or +door or +hit or +strike)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   fi
 }
 

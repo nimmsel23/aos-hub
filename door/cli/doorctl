@@ -328,7 +328,7 @@ cmd_phase_report() {
       query+=("(project:Potential or project:POTENTIAL or project:HotList or project:HOTLIST)")
       ;;
     plan)
-      query+=("(((project:Potential or project:POTENTIAL or project:HotList or project:HOTLIST) and (priority:H or priority:M or priority:L)) or project:Plan)")
+      query+=("(((project:Potential or project:POTENTIAL or project:HotList or project:HOTLIST) (priority:H or priority:M or priority:L)) or project:Plan)")
       ;;
     production)
       query+=("$(door_scope_filter_any)")
@@ -684,7 +684,7 @@ hotlist_select_entry_json() {
       or (.id // "" | startswith($s))
       or (.idea // "" == $s)
       or (.title // "" == $s)
-      or (.domino_door // .door_name // "" == $s)
+      or (.domino_door // "" == $s)
       or (.file // "" == $s)
       or (.md_name // "" == $s)
       or ((.file // "") | endswith("/" + $s))
@@ -693,12 +693,12 @@ hotlist_select_entry_json() {
 }
 
 door_scope_filter_any() {
-  echo "(domino_door.not: or door_name.not: or +door or +hit or +strike)"
+  echo "(domino_door.not: or +door or +hit or +strike)"
 }
 
 door_scope_filter_named() {
   local name="${1:-}"
-  echo "(domino_door:$name or door_name:$name)"
+  echo "domino_door:$name"
 }
 
 slugify_door_name() {
@@ -741,7 +741,7 @@ cmd_hotlist_json() {
       (.hot_index|tostring),
       (.status // "active"),
       (.phase // "potential"),
-      (.domino_door // .door_name // "-"),
+      (.domino_door // "-"),
       (.idea // .title // "-")
     ] | @tsv
   ' | while IFS=$'\t' read -r idx status phase door idea; do
@@ -2421,7 +2421,7 @@ Notes:
   - Door War lives on HotList tasks via built-in priority (`prio:H/M/L`)
   - Production tasks route into the terminal War Stack wizard
   - Profit notes still open through taskopen
-  - domino_door UDA is primary; door_name is legacy-only if present
+  - domino_door UDA is the canonical Door grouping field
   - Uses task export for data
   - Logic in: door/lib/*.sh (reusable by Index Node)
   - JSON mode works for: list/show/review/doctor/commands/scope/hits/next/hitlist/focus/health/stalled
