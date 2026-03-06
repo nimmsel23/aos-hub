@@ -194,7 +194,7 @@ health	health	Door health overview (stalled/attention/healthy)
 stalled	stalled	List stalled doors only
 war	war <door> [show|edit]	View/edit war stack markdown
 note	note <door>	View/edit door note markdown
-ctx	ctx [open|start|stop|restart|status|logs|menu]	PWA ctx (via doorctx/pwactx)
+ctx	ctx [open|start|stop|restart|status|logs|menu]	User-side file ctx (via doorctx/pwactx)
 version	version	Show version
 help	help	Show help
 EOF
