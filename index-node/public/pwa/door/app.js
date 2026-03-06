@@ -198,6 +198,13 @@ function makeDraft(phase) {
   };
 }
 
+function maybeRetitleDraftContent(phase, oldTitle, nextTitle, content) {
+  const config = PHASES[phase];
+  const previous = config.template(oldTitle || config.draftTitle);
+  if (String(content || "") !== previous) return content;
+  return config.template(nextTitle || config.draftTitle);
+}
+
 function currentEditor(phase) {
   if (!state.editors[phase]) {
     state.editors[phase] = makeDraft(phase);
@@ -424,7 +431,13 @@ function renderPhase(phase) {
   });
 
   $("editorTitle")?.addEventListener("input", (event) => {
-    currentEditor(phase).title = event.target.value;
+    const active = currentEditor(phase);
+    const nextTitle = event.target.value;
+    if (active.isDraft) {
+      active.content = maybeRetitleDraftContent(phase, active.title, nextTitle, active.content);
+      $("editorContent").value = active.content;
+    }
+    active.title = nextTitle;
   });
 
   $("editorContent")?.addEventListener("input", (event) => {
