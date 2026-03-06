@@ -12,16 +12,36 @@
 - **PRODUCTION** — Hit List (4 Hits execution)
 - **PROFIT** — Review & Reflection
 
-**Frontend:** COMPLETE
-- Shared shell/app: `public/pwa/door/index.html` + `app.js` + `style.css` + `sw.js`
-- Dedicated phase shells:
-  - `public/pwa/door/potential/`
-  - `public/pwa/door/plan/`
+**Current Frontend Direction**
+- `Potential` remains Phase 1 of The Door, but now has its own standalone install route:
+  - frontend: `public/pwa/potential/`
+  - canonical route: `/pwa/potential/`
+- `Plan` remains Phase 2 of The Door, but now has its own standalone install route:
+  - frontend: `public/pwa/plan/`
+  - canonical route: `/pwa/plan/`
+- `Door Hub` remains the umbrella entry:
+  - frontend: `public/pwa/door/index.html`
+  - canonical route: `/pwa/door/`
+- current Door phase shells still exist under:
   - `public/pwa/door/production/`
   - `public/pwa/door/profit/`
-- Main Door PWA keeps the 4-phase nav
-- Phase PWAs lock directly into one phase and are installable separately
+- old `public/pwa/door/potential/` and `public/pwa/door/plan/` paths are compatibility-only and must not become the primary install surface again
 - PWA surfaces must remain offline-capable for cached static assets and cached `GET /api/door/*` reads
+
+**Build Order (important)**
+1. Stabilize `Potential`
+2. Build `Plan` as its own real PWA
+3. Build `Production` as its own real PWA
+4. Build `Profit` as its own real PWA
+5. Only then reduce `/pwa/door/` into a thin Door Hub / launcher
+
+**Hub Rule**
+- The Door Hub is not the primary work surface.
+- The Door Hub should end up as launcher, status board, and handoff layer across the four phases.
+- Do not grow `/pwa/door/` back into a giant monolithic UI if the same work belongs into a phase-specific app.
+
+**Reference**
+- Longer roadmap: `../../../../DOCS/node/door-pwa-roadmap.md`
 
 **Backend:** YOUR JOB
 - Location: `routes/door.js` (to be created)

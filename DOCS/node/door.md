@@ -3,8 +3,16 @@
 ## Purpose
 Local Door Centre (vault-first) with optional TickTick push.
 
+## Current PWA Direction
+- `Potential` now has a standalone install route: `/pwa/potential/`
+- `Door Hub` remains under `/pwa/door/`
+- `Plan`, `Production`, `Profit` currently remain under `/pwa/door/*`
+- detailed build order and target architecture: `door-pwa-roadmap.md`
+
 ## Entry
 - UI: `http://127.0.0.1:8799/door`
+- Potential PWA: `http://127.0.0.1:8799/pwa/potential/`
+- Door Hub PWA: `http://127.0.0.1:8799/pwa/door/`
 - Backend: `index-node/server.js`
 
 ## Storage

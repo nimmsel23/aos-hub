@@ -17,6 +17,7 @@ Main runtime repo path:
 ## Centre Docs (Node)
 
 - `door.md`
+- `door-pwa-roadmap.md`
 - `game.md`
 - `frame.md`
 - `freedom.md`
