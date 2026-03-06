@@ -18,6 +18,7 @@ import freedomRouter from "./routes/freedom.js";
 import frameRouter   from "./routes/frame.js";
 import doorRouter    from "./routes/door.js";
 import fitnessCentreRouter from "./routes/fitness-centre.js";
+import { addHotlistEntry } from "./routes/door/hotlist-backend.js";
 
 const app = express();
 
@@ -32,6 +33,7 @@ const PWA_CTX_ALLOW_REMOTE = process.env.AOS_PWA_CTX_ALLOW_REMOTE === "1";
 const PWA_CTX_BIN = String(
   process.env.AOS_PWA_CTX_BIN || path.join(os.homedir(), ".dotfiles", "bin", "pwactx")
 ).trim();
+const DOORCTX_PROXY_BASE = String(process.env.AOS_DOORCTX_PROXY_BASE || "http://127.0.0.1:8786").trim();
 const UI_BASIC_AUTH_ENABLED = process.env.AOS_UI_BASIC_AUTH === "1";
 const UI_BASIC_AUTH_USER = String(process.env.AOS_UI_BASIC_USER || "").trim();
 const UI_BASIC_AUTH_PASS = String(process.env.AOS_UI_BASIC_PASS || "");
@@ -387,6 +389,77 @@ function fitnessCtxTarget(req) {
   return out.toString();
 }
 
+function isDoorCtxUiPath(pathname) {
+  const p = String(pathname || "");
+  return (
+    p === "/door" ||
+    p === "/door/" ||
+    p.startsWith("/door/") ||
+    p === "/pwa/door" ||
+    p === "/pwa/door/" ||
+    p.startsWith("/pwa/door/")
+  );
+}
+
+function isDoorCtxApiPath(pathname) {
+  const p = String(pathname || "");
+  if (!p.startsWith("/api/door/")) return false;
+  return !/^\/api\/door\/(?:chapters|export|flow)(?:\/|$)/.test(p);
+}
+
+async function proxyToUpstream(req, res, baseUrl) {
+  const upstream = new URL(req.originalUrl || req.url || "/", baseUrl);
+  const method = String(req.method || "GET").toUpperCase();
+  const headers = new Headers();
+
+  for (const [key, value] of Object.entries(req.headers || {})) {
+    const lower = String(key || "").toLowerCase();
+    if (!value || lower === "host" || lower === "content-length" || lower === "connection") continue;
+    headers.set(key, Array.isArray(value) ? value.join(",") : String(value));
+  }
+  headers.set("x-forwarded-host", String(req.headers.host || ""));
+  headers.set("x-forwarded-proto", req.protocol || "http");
+
+  let body;
+  if (!["GET", "HEAD"].includes(method) && req.body != null) {
+    if (Buffer.isBuffer(req.body)) {
+      body = req.body;
+    } else if (typeof req.body === "string") {
+      body = req.body;
+    } else {
+      body = JSON.stringify(req.body);
+      if (!headers.has("content-type")) {
+        headers.set("content-type", "application/json; charset=utf-8");
+      }
+    }
+  }
+
+  const upstreamRes = await fetch(upstream, {
+    method,
+    headers,
+    body,
+    redirect: "manual",
+  });
+  const payload = Buffer.from(await upstreamRes.arrayBuffer());
+  const skipHeaders = new Set(["content-length", "transfer-encoding", "connection", "keep-alive"]);
+
+  res.status(upstreamRes.status);
+  upstreamRes.headers.forEach((value, key) => {
+    if (!skipHeaders.has(String(key || "").toLowerCase())) {
+      res.setHeader(key, value);
+    }
+  });
+  return res.send(payload);
+}
+
+async function proxyDoorctx(req, res, next) {
+  try {
+    await proxyToUpstream(req, res, DOORCTX_PROXY_BASE);
+  } catch (err) {
+    return next();
+  }
+}
+
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
@@ -395,6 +468,13 @@ app.get(["/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, 
   res.redirect(302, fitnessCtxTarget(req))
 );
 app.get(/^\/pwa\/fitness\/.+$/, (req, res) => res.redirect(302, fitnessCtxTarget(req)));
+app.use((req, res, next) => {
+  const pathname = String(req.path || req.url || "");
+  if (!isDoorCtxUiPath(pathname) && !isDoorCtxApiPath(pathname)) {
+    return next();
+  }
+  return void proxyDoorctx(req, res, next);
+});
 
 // PWAs: dev (public/pwa) first, then AOS_PWA_DIR fallback (prod deploy cache)
 app.use("/pwa", express.static(path.join("public", "pwa"), { extensions: ["html"] }));
@@ -6055,30 +6135,24 @@ app.post("/api/voice/export", (req, res) => {
   }
 });
 
-// Hot List quick add (local markdown)
+// Hot List quick add
 app.post("/api/hotlist", (req, res) => {
   try {
     const idea = String(req.body?.idea || "").trim();
     const source = String(req.body?.source || "web").trim();
+    const description = String(req.body?.description || "").trim();
     if (!idea) {
       return res.status(400).json({ ok: false, error: "missing idea" });
     }
 
-    const dir = resolveDoorExportDir("hotlist");
-    ensureDir(dir);
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `HotList_${stamp}.md`;
-    const filepath = path.join(dir, filename);
-    const md = [
-      "# Hot List – Quick Add",
-      "",
-      `- [ ] ${idea}`,
-      "",
-      `**Source:** ${source}`,
-      `**Date:** ${new Date().toLocaleString("de-DE")}`,
-    ].join("\n");
-    fs.writeFileSync(filepath, md + "\n", "utf8");
-    return res.json({ ok: true, path: filepath });
+    const created = addHotlistEntry({ title: idea, description, source });
+    return res.json({
+      ok: true,
+      path: created.file,
+      item: created,
+      task_uuid: created.task_uuid || "",
+      task_id: created.task_id || "",
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }

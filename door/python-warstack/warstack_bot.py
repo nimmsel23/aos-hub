@@ -53,7 +53,7 @@ IDLE_TIMEOUT_SECONDS = int(os.getenv("WARSTACK_IDLE_TIMEOUT", "900"))
 # Paths
 OBSIDIAN_VAULT = Path(os.getenv("OBSIDIAN_VAULT", "~/AlphaOS-Vault")).expanduser()
 WARSTACK_OUTPUT_DIR = Path(
-    os.getenv("WARSTACK_OUTPUT_DIR", OBSIDIAN_VAULT / "Door" / "3-Production")
+    os.getenv("WARSTACK_OUTPUT_DIR", OBSIDIAN_VAULT / "Door" / "War-Stacks")
 )
 PERSISTENCE_DIR = Path(os.getenv("WARSTACK_DATA_DIR", "~/.local/share/warstack")).expanduser()
 PERSISTENCE_DIR.mkdir(parents=True, exist_ok=True)

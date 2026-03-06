@@ -20,7 +20,7 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
   - `focus` -> port `8783` -> `aos-pwa-focus-ctx.service`
   - `frame` -> port `8784` -> `aos-pwa-frame-ctx.service`
   - `freedom` -> port `8785` -> `aos-pwa-freedom-ctx.service`
-  - `door` -> port `8786` -> `aos-pwa-door-ctx.service`
+  - `door` -> port `8786` -> `aos-doorctx.service`
   - `game` -> port `8787` -> `aos-pwa-game-ctx.service`
   - `memoirs` -> port `8790` -> `aos-pwa-memoirs-ctx.service`
   - runtime implementation: `index-node/pwa-app-server.js`
@@ -42,6 +42,61 @@ Das zugehörige `hubctl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet 
   - `scripts/` is the orchestration/frontdoor layer and should avoid embedding pillar-specific business logic.
   - Legacy root-level scripts for pillar behavior should be migrated into the pillar folder and kept as wrappers only during transition.
 - `DOCS/` is a portal + archive. SSOT pillar docs live in the pillar roots (see `DOCS/DOC_SYSTEM.md`).
+- Root-level developer docs are preferred for active systems/tools:
+  - `CORE4.md`
+  - `HOT.md`
+  - `DOOR.md`
+  - `FIRE.md`
+- Pillar-local `AGENTS.md` files should stay concise and point back to those root docs where appropriate.
+
+## UX / CLI / Docs Contract (Universal)
+
+- `ctx` means the **Center interface / UX runtime** for a domain.
+  - Example: `doorctx` = Door Centre UX/runtime.
+  - Use `ctx` only when the domain has its own UX frontend/webapp with its own runtime characteristics, typically including:
+    - a dedicated web UI / centre interface
+    - its own local port
+    - its own service/runtime process
+  - A `ctx` executable is the user-facing launcher/control surface for that runtime and may combine:
+    - terminal TUI/dashboard
+    - launching/controlling the dedicated PWA/web runtime
+    - opening the centre UI
+    - other user-facing interaction flows for that centre
+- `ctl` means the **terminal CLI / ops / backend layer** for a domain.
+  - Example: `doorctl` = lower-level Door engine, reports, diagnostics, automation.
+  - `ctl` commands are still terminal tools, but they should not become the main human-facing concept when a cleaner bare-domain frontdoor exists.
+- Bare domain commands (for example `door`, `fire`, `core4`) should be treated as the **canonical human frontdoor** when they exist.
+  - Preferred pattern:
+    - `<domain>` = human frontdoor
+    - `<domain>ctx` = UX implementation / compatibility alias
+    - `<domain>ctl` = lower-level engine
+  - In practice this means:
+    - humans should usually type `<domain>`
+    - `ctx` exists when there is a real centre/runtime behind it
+    - `ctl` may remain for direct ops, scripts, automation, JSON output, or compatibility
+    - over time, if `<domain>` fully covers human usage, `ctl` can be treated as subordinate/internal rather than a separate conceptual layer
+- Wrapper/frontdoor scripts should stay self-documenting but short:
+  - keep a compact contract header in the executable
+  - point to the root system doc as SSOT
+  - avoid long duplicated methodology/help text inside wrapper scripts
+- Root system docs (for example `DOOR.md`, `HOT.md`, `CORE4.md`) are the place for:
+  - mental model / methodology
+  - chapter summaries
+  - command map
+  - practical runbook notes
+  - lightweight changelog notes when useful
+- Preferred doc pattern for wrappers/frontdoors:
+  - `<domain> help|docs` should render the root doc when practical
+  - do not maintain a second long-form help world inside the wrapper
+- Service naming should preserve the same semantics:
+  - if a service exists specifically to back a Centre UX/runtime with its own port/webapp, prefer `ctx` in the unit name
+  - examples:
+    - good: `doorctx.service`, `aos-doorctx.service`
+    - avoid overly generic names like `door.service` when the unit is specifically the Centre/UX runtime
+- Preferred deployment pattern for active centres:
+  - `<domain>ctx` owns its own runtime + port
+  - HQ / `index-node` may proxy that centre under `:8799`
+  - result: domain-only frontend/API changes should usually require restarting only `<domain>ctx`, not the whole HQ
 
 ## AGENTS Index
 

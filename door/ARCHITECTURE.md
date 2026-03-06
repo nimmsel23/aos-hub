@@ -4,7 +4,7 @@ This is the source-of-truth “mental model” for the Door pillar inside `aos-h
 
 ## What Door is
 
-Door is the **weekly tactics system** that turns idea abundance into execution:
+Door is the **strategic system** for larger stories and commitments:
 
 **Potential → Plan → Production → Profit**
 
@@ -15,15 +15,22 @@ Door is the **weekly tactics system** that turns idea abundance into execution:
 - **No hardcoded centre URLs:** Index Node routes are defined in `index-node/menu.yaml`.
 - **Safe writes:** never overwrite non-rebuildable user content; derived views must be rebuildable.
 
-## Data model (current)
+## Chapter model
 
-Door is primarily driven by Taskwarrior:
+- **Potential** = Hot List
+- **Plan** = Door War + War Stack
+- **Production** = Hit List execution
+- **Profit** = Achieved / Done / review
 
-- **Potential** lives in `project:HotList`.
-- **Plan / Door War** lives on the Hot List task via built-in `priority` (`prio:H/M/L`).
-- **Production / War Stack** uses door-scoped tasks plus `taskopen` to reach `Door/3-Production`.
-- **Profit** uses `taskopen` to reach `Door/4-Profit` from `+profit` tasks or completed door work.
-- `door_name` is the primary linkage UDA for Door-related tasks.
+Operationally:
+- Door is the strategic layer.
+- The Daily Fire Map is the daily execution surface.
+- War Stack informs the Hit List; Fire carries day/week execution.
+- `door` is the canonical user-side frontdoor / dashboard.
+- `doorctx` is the compatibility alias for that user-side frontdoor.
+- `doorctl` is the lower-level/system-side CLI.
+- `aos-doorctx.service` owns the dedicated Door runtime on `:8786`.
+- HQ on `:8799` proxies Door UI/API to that runtime.
 
 ## Components in this repo
 
@@ -39,9 +46,13 @@ doorctl list
 doorctl health
 doorctl show <DoorName>
 
-# Index-side
+# Index-side / gateway
 curl http://127.0.0.1:8799/health
-curl http://127.0.0.1:8799/api/door/health
+curl http://127.0.0.1:8799/api/door/plan/doorwars
+
+# Direct Door runtime
+curl http://127.0.0.1:8786/health
+curl http://127.0.0.1:8786/api/door/plan/doorwars
 ```
 
 ## Where docs live

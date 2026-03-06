@@ -10,7 +10,7 @@ This file is the **operational SSOT** for how The Door works in this repo.
 - Relevant chapters (local symlinks in `door/`):
   - `25 - Door.md`
   - `26 - Possibilities.md` (Hot List)
-  - `27 - Door War.md` (Q1–Q4 / Eisenhower)
+  - `27 - Door War.md` (H/M/L / Eisenhower)
   - `28 - War Stack.md`
   - `29 - Production.md`
   - `30 - Profit.md`
@@ -22,27 +22,29 @@ This file is the **operational SSOT** for how The Door works in this repo.
 - CLI: `door/cli/doorctl`
 - API: `door/api/*` (Index Node only, no business logic)
 
-## Operational Model (Chapters → Practice)
-- **Hot List** = unfiltered intake (Ideas/Potential).
-- **Door War (Q1–Q4 / Eisenhower)** = the filter (Plan), stored on the Hot List task via `priority` / `prio`.
-- **War Stack** = the justification/story for a chosen Door (Production), opened from Taskwarrior via `taskopen`.
-- **Review / Profit** = the resume + results (Profit), also opened from Taskwarrior via `taskopen`.
+## Chapter Mapping
+- `26 - Possibilities.md` → Hot List / Potential
+- `27 - Door War.md` → Door War / Plan
+- `28 - War Stack.md` → War Stack
+- `29 - Production.md` → Production
+- `30 - Profit.md` → Profit / Review
 
 ## Canonical Storage (Vault Root = `~/vault` unless `AOS_VAULT_DIR`)
 - `Door/1-Potential/`
   - Hot List items (MD per entry)
   - `hotlist_index.json` (Hot List index)
 - `Door/2-Plan/`
-  - Door War / Q1–Q4 artifacts
+  - Door War / H/M/L artifacts
+- `Door/War-Stacks/`
+  - War Stack artifacts (`STACK_*.md` and legacy markdown war stacks)
 - `Door/3-Production/`
-  - War Stack artifacts (`STACK_*.md`)
+  - Production / execution-facing artifacts
 - `Door/4-Profit/`
   - Review / Profit summaries
 
 ## Active Door State (System-wide)
 - File: `~/.aos/door.current`
 - Set via: `doorctl current <door>`
-- Also set automatically by: `doorctl doorwar activate`
 - Used by: fish greeting + prompt
 
 ## Current Implementations (Reality Check)
@@ -50,17 +52,20 @@ This file is the **operational SSOT** for how The Door works in this repo.
   - `door/python-potential/hot.py` writes:
     - `Door/1-Potential/<uuid>-<slug>.md`
     - `Door/1-Potential/hotlist_index.json`
-- Door War activation:
-  - `doorctl doorwar activate` writes War Stack and marks Hot List entry as promoted
-  - Also sets `~/.aos/door.current`
+- Door / current state:
+  - `doorctl current <door>` writes `~/.aos/door.current`
 - War Stack:
-  - Stored in `Door/3-Production` as `STACK_*.md`
+  - Stored in `Door/War-Stacks` as `STACK_*.md`
+  - Built/edited through the terminal wizard (`doorctl war <door> edit`)
   - **Do not change War Stack formats unless explicitly requested.**
+- Runtime:
+  - `aos-doorctx.service` serves Door directly on `:8786`
+  - HQ `:8799` proxies `/door`, `/pwa/door/*`, and active `/api/door/*` traffic to that runtime
 
 ## CLI Reference (doorctl)
 - `doorctl hot` / `doorctl hotlist` → Hot List
-- `doorctl doorwar` / `doorctl plan` → Door War (Q1–Q4)
-- `doorctl war` / `doorctl warstack` → War Stack
+- `doorctl doorwar` / `doorctl plan` → Door War
+- `doorctl war` / `doorctl warstack` → War Stack / terminal wizard
 - `doorctl review` / `doorctl profit` → Review/Profit
 - `doorctl current <door>` → Active Door
 
@@ -78,8 +83,8 @@ This file is the **operational SSOT** for how The Door works in this repo.
 ./door/cli/doorctl current
 
 # API (Index Node)
-curl http://127.0.0.1:8799/api/door/list | jq
-curl http://127.0.0.1:8799/api/door/health | jq
+curl http://127.0.0.1:8799/api/door/plan/doorwars | jq
+curl http://127.0.0.1:8799/api/door/files?phase=plan | jq
 ```
 
 ## Non-Negotiables

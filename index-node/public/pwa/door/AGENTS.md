@@ -12,10 +12,16 @@
 - **PRODUCTION** — Hit List (4 Hits execution)
 - **PROFIT** — Review & Reflection
 
-**Frontend:** COMPLETE (built by claude-fire-forge)
-- Location: `public/pwa/door/index.html` + `app.js` + `style.css`
-- Bottom Nav: POTENTIAL | PLAN | PRODUCTION | PROFIT tabs
-- Content: Phase-specific UI (currently with placeholder data)
+**Frontend:** COMPLETE
+- Shared shell/app: `public/pwa/door/index.html` + `app.js` + `style.css` + `sw.js`
+- Dedicated phase shells:
+  - `public/pwa/door/potential/`
+  - `public/pwa/door/plan/`
+  - `public/pwa/door/production/`
+  - `public/pwa/door/profit/`
+- Main Door PWA keeps the 4-phase nav
+- Phase PWAs lock directly into one phase and are installable separately
+- PWA surfaces must remain offline-capable for cached static assets and cached `GET /api/door/*` reads
 
 **Backend:** YOUR JOB
 - Location: `routes/door.js` (to be created)
@@ -29,26 +35,28 @@
 Create Express router with these endpoints:
 
 **POTENTIAL API (Hot List):**
-- `GET /api/door/hotlist` → all items
-- `POST /api/door/hotlist` → add item
-- `DELETE /api/door/hotlist/:id` → remove item
+- `GET /api/door/potential/hotlist` → all items
+- `POST /api/door/potential/hotlist` → add item
+- `DELETE /api/door/potential/hotlist/:id` → remove item
 
 **PLAN API (Door War + War Stack):**
-- `POST /api/door/doorwar` → run Eisenhower Matrix, select Domino Door
-- `GET /api/door/warstacks` → list War Stacks
-- `POST /api/door/warstack/start` → start new War Stack (returns session_id + first question)
-- `POST /api/door/warstack/answer` → submit answer, get next question
-- `GET /api/door/warstack/:id` → fetch completed War Stack
+- `POST /api/door/plan/doorwar` → run Eisenhower Matrix, select Domino Door
+- `GET /api/door/plan/doorwars` → list recent Door Wars
+- `GET /api/door/plan/warstacks` → list War Stacks
+- `POST /api/door/plan/warstack/start` → start new War Stack (returns session_id + first question)
+- `POST /api/door/plan/warstack/answer` → submit answer, get next question
+- `GET /api/door/plan/warstack/:id` → fetch completed War Stack
+- `GET /api/door/plan/warstack/sessions` → list active sessions
 
 **PRODUCTION API (Hit List):**
-- `GET /api/door/hits` → all active Hits (from current week War Stacks)
-- `POST /api/door/hits/:id/toggle` → toggle hit completion
-- `GET /api/door/hits/week` → weekly summary
+- `GET /api/door/production/hits` → all active Hits (from current week War Stacks)
+- `POST /api/door/production/hits/:id/toggle` → toggle hit completion
+- `GET /api/door/production/hits/week` → weekly summary
 
 **PROFIT API (Review):**
-- `GET /api/door/completed` → list completed Doors
-- `POST /api/door/reflection` → save reflection markdown
-- `GET /api/door/reflections` → list reflections
+- `GET /api/door/profit/completed` → list completed Doors
+- `POST /api/door/profit/reflection` → save reflection markdown
+- `GET /api/door/profit/reflections` → list reflections
 
 ### 2. Storage Pattern
 
@@ -168,7 +176,7 @@ War Stack creation is **conversational** (4 inquiry steps + auto-generate 4 hits
 
 ### DO NOT
 ❌ Modify `routes/fire.js` or `routes/game.js` (other sessions)
-❌ Touch frontend files (`public/pwa/door/*`) without asking
+❌ Touch frontend files (`public/pwa/door/*`) casually without checking the shared-shell + phase-shell structure first
 ❌ Change Vault structure without confirming with claude-fire-forge
 ❌ Commit without setting git identity first
 
@@ -192,13 +200,13 @@ cd ~/aos-hub/index-node
 npm run dev
 
 # In another terminal:
-curl http://127.0.0.1:8799/api/door/hotlist | jq
+curl http://127.0.0.1:8799/api/door/potential/hotlist | jq
 
-curl -X POST http://127.0.0.1:8799/api/door/hotlist \
+curl -X POST http://127.0.0.1:8799/api/door/potential/hotlist \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Door"}' | jq
 
-curl -X POST http://127.0.0.1:8799/api/door/warstack/start \
+curl -X POST http://127.0.0.1:8799/api/door/plan/warstack/start \
   -H "Content-Type: application/json" \
   -d '{"door_title":"Vitaltrainer"}' | jq
 ```

@@ -112,7 +112,7 @@ PWA Runtime C (Dedicated ctx per app, independent services):
   - `focus:8783` (`aos-pwa-focus-ctx.service`)
   - `frame:8784` (`aos-pwa-frame-ctx.service`)
   - `freedom:8785` (`aos-pwa-freedom-ctx.service`)
-  - `door:8786` (`aos-pwa-door-ctx.service`)
+  - `door:8786` (`aos-doorctx.service`)
   - `game:8787` (`aos-pwa-game-ctx.service`)
   - `memoirs:8790` (`aos-pwa-memoirs-ctx.service`)
 - Purpose: each key PWA remains reachable even if shared runtime (`:8780`) is broken.

@@ -134,7 +134,7 @@
     "focus": { "port": 8783, "service": "aos-pwa-focus-ctx.service" },
     "frame": { "port": 8784, "service": "aos-pwa-frame-ctx.service" },
     "freedom": { "port": 8785, "service": "aos-pwa-freedom-ctx.service" },
-    "door": { "port": 8786, "service": "aos-pwa-door-ctx.service" },
+    "door": { "port": 8786, "service": "aos-doorctx.service" },
     "game": { "port": 8787, "service": "aos-pwa-game-ctx.service" },
     "memoirs": { "port": 8790, "service": "aos-pwa-memoirs-ctx.service" }
   }

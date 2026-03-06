@@ -34,7 +34,7 @@ doorctl done 123abc
 **Key Concepts:**
 - **4P Flow**: Potential → Plan → Production → Profit
 - **War Stack**: FACT/OBSTACLE/STRIKE/RESPONSIBILITY framework
-- **Hits**: Actionable tasks (4 per War Stack)
+- **Hits**: Strategic outputs from a War Stack; large Doors can still have many normal tasks underneath
 - **Domino Doors**: One door opens many others
 
 ## Architecture
@@ -54,11 +54,18 @@ door/
 ### Door Flow Modules (4 Phases)
 
 ```bash
+door                    # user-side Door frontdoor / docs / TUI
+doorctx                 # compatibility alias
 doorctl potential        # Phase 1: Potential
 doorctl plan             # Phase 2: Plan
 doorctl production       # Phase 3: Production
 doorctl profit           # Phase 4: Profit
 ```
+
+**Frontdoor split:**
+- `door` = preferred user-side frontdoor / docs / TUI
+- `doorctx` = compatibility alias for the same user-side TUI
+- `doorctl` = system side / reports / lower-level operations
 
 ### List & Overview
 
@@ -84,15 +91,15 @@ doorctl focus             # Top 7 priorities in door scope
 | Phase | Emoji | Description |
 |-------|-------|-------------|
 | **Potential** | 💡 | Ideas in Hot List, no plan yet |
-| **Plan** | 📋 | Door War prioritization (H/M/L or none) |
-| **Production** | 🔨 | War Stack execution and hit delivery |
-| **Profit** | 💰 | Achieved, reflection time |
+| **Plan** | 📋 | Door War plus War Stack planning |
+| **Production** | 🔨 | Hit List execution; daily work runs on the Fire Map |
+| **Profit** | 💰 | Achieved / Done / review |
 
-**Phase Detection:**
-- `project:HotList` → Potential
-- `project:HotList` + `priority` / `prio` = `H|M|L` → Plan / Door War
-- `door_name` or `+door` / `+hit` / `+strike` → Production
-- `+profit` or completed Door work → Profit
+**Chapter-based phase view:**
+- `Potential` = Hot List
+- `Plan` = Door War + War Stack
+- `Production` = Hit List execution
+- `Profit` = Achieved List + Done List + review
 
 ## Health Status
 
@@ -119,10 +126,15 @@ task config uda.door_name.label Door
 **Pragmatic model (large Doors):**
 - `door_name` is the primary grouping key.
 - A Door can contain many tasks (not only 4 hits).
+- Use `project` for modules, subjects, or workstreams inside one large Door.
+- Use `depends` where completion order matters (for example: deadline extension before exams/final submission).
 - Use `alphatype` only where it adds clarity (`bigrock`, `littlerock`, `strike`, `freedom`, ...).
 - Do not force every task into `hit/strike` if that increases complexity.
-- Door War is not a separate task type; it is the `priority` / `prio` on the Hot List task.
-- War Stack and Profit notes are opened from Taskwarrior via `taskopen`.
+- Door is strategic; the Daily Fire Map is the execution surface for day/week work.
+- War Stack is a planning artifact; the Hit List is what feeds Production.
+- Production tasks can route into the terminal War Stack wizard when you are working on the plan artifact itself.
+- Profit notes are still opened from Taskwarrior via `taskopen`.
+- Existing Hit/Fire separation is also documented in `game/README_HITS_STRIKES.md`.
 
 **Door scoped views (new):**
 ```bash
@@ -135,7 +147,7 @@ doorctl scope Vitaltrainer l
 doorctl scope --current focus
 ```
 
-`doorwar` is a compatibility alias for Plan activation (`list|review|activate|promote`). Canonical flow is `doorctl plan ...`.
+`doorwar` is a compatibility alias for the Plan / Door War view.
 
 **Creating Door Tasks:**
 ```bash
