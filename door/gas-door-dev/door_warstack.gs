@@ -296,7 +296,6 @@ function door_buildWarStackTasks_(markdown) {
     warstack_title: opts.title || ''
   };
   var udaBase = {
-    pillar: 'door',
     domain: domainTag || undefined,
     door_name: doorName || undefined
   };
@@ -319,7 +318,6 @@ function door_buildWarStackTasks_(markdown) {
       description: desc,
       tags: tags,
       project: project || undefined,
-      pillar: udaBase.pillar,
       domain: udaBase.domain,
       door_name: udaBase.door_name,
       alphatype: 'hit',
@@ -345,7 +343,6 @@ function door_buildWarStackTasks_(markdown) {
     description: doorDesc,
     tags: ['door', 'production'].concat(domainTag ? [domainTag] : []),
     project: project || undefined,
-    pillar: udaBase.pillar,
     domain: udaBase.domain,
     door_name: udaBase.door_name,
     alphatype: 'door',
@@ -363,7 +360,6 @@ function door_buildWarStackTasks_(markdown) {
     description: 'Profit: ' + (doorTitle || 'Door'),
     tags: ['profit'].concat(domainTag ? [domainTag] : []),
     project: project || undefined,
-    pillar: udaBase.pillar,
     domain: udaBase.domain,
     door_name: udaBase.door_name,
     alphatype: 'profit',

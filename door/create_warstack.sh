@@ -276,7 +276,6 @@ create_taskwarrior_tasks() {
         +plan \
         alphatype:door \
         door_name:"$WS_TITLE" \
-        pillar:door \
         domain:"$WS_DOMAIN" \
         "Door: $WS_TITLE" \
         | grep -oP 'Created task \K\d+' || echo "")
@@ -324,7 +323,6 @@ create_taskwarrior_tasks() {
             hit_number:"$hit_num" \
             depends:"$door_task_id" \
             alphatype:hit \
-            pillar:door \
             domain:"$WS_DOMAIN" \
             responsibility:"$responsibility" \
             due:"$due_date" \

@@ -736,7 +736,6 @@ def create_taskwarrior_commands(war_stack: WarStack) -> str:
         weekly_parts = [
             "task", "add", f"War Stack: {stack_title}",
             "+door", "+production",
-            "pillar:door",
             "alphatype:door",
             "due:friday",
         ]
@@ -756,7 +755,6 @@ def create_taskwarrior_commands(war_stack: WarStack) -> str:
                 hit_parts = [
                     "task", "add", f"Hit{i+1}: {fact_short}",
                     "+door", "+hit", "+production",
-                    "pillar:door",
                     "alphatype:hit",
                     f"hit_number:{i+1}",
                     f"due:{days[i]}",
@@ -797,7 +795,6 @@ def build_task_payloads(war_stack: WarStack) -> list[dict]:
             "project": domain,
             "tags": ["door", "production"],
             "due": "friday",
-            "pillar": "door",
             "alphatype": "door",
             "domain": domain_uda,
             "door_name": door_name,
@@ -813,7 +810,6 @@ def build_task_payloads(war_stack: WarStack) -> list[dict]:
                 "project": domain,
                 "tags": ["door", "hit", "production"],
                 "due": days[i],
-                "pillar": "door",
                 "alphatype": "hit",
                 "domain": domain_uda,
                 "door_name": door_name,

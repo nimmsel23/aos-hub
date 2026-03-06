@@ -586,7 +586,6 @@ function door_buildDoorWarTask_(markdown, meta, ctx) {
     project: 'DoorWar',
     tags: ['plan', 'door'],
     priority: priority || undefined,
-    pillar: 'door',
     door_name: doorTitle,
     alphatype: 'door',
     meta: {

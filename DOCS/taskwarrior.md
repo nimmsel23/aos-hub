@@ -1,7 +1,7 @@
 # Taskwarrior in αOS (AOS)
 
 **Config:** `~/.taskrc` | **Data:** `~/.task/` | **Version:** 3.4.x
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-03-06
 
 ---
 
@@ -41,7 +41,6 @@ Priority H (12) > Due-Date (10) > +next (8) > Blocking (6)
 |------|------|----------|
 | `project:` | UPPERCASE | `project:BODY.Fire` |
 | `domain:` (UDA) | lowercase | `domain:body` |
-| `pillar:` (UDA) | lowercase | `pillar:game` |
 | `alphatype:` (UDA) | lowercase | `alphatype:hit` |
 | `priority:` | UPPERCASE | `priority:H` |
 | Tags | lowercase | `+fire`, `+warstack` |
@@ -52,7 +51,6 @@ Priority H (12) > Due-Date (10) > +next (8) > Blocking (6)
 
 | UDA | Type | Values | Zweck |
 |-----|------|--------|-------|
-| `pillar` | string | code, core, voice, door, game | αOS 5 Pillars |
 | `domain` | string | body, being, balance, business | Core Four Domains |
 | `alphatype` | string | daily, door, hit, strike, bigrock, littlerock, warstack, focus, freedom, frame, fire, voice, mission, map, ipw, big, little, sand | Task-Typ |
 | `points` | numeric | (default: 0) | Core4 28-or-Die |
@@ -62,6 +60,7 @@ Priority H (12) > Due-Date (10) > +next (8) > Blocking (6)
 Hinweis:
 - Hooks normalisieren Legacy-Werte (`big -> bigrock`, `little -> littlerock`).
 - `+core4`/Habit-Tags werden als `alphatype:daily` klassifiziert, wenn kein expliziter `alphatype` gesetzt ist.
+- `pillar` ist kein Pflichtfeld fuer Door. Fuer Door reichen `door_name`, `alphatype`, `domain`, `hit_number`, `priority`, Tags und Project.
 
 ---
 
@@ -85,8 +84,11 @@ Hinweis:
 | **door** | `task door` | Active Doors mit Hit Lists |
 | **hit** | `task hit` | Weekly Hit List (4 Hits per Door) |
 | **war** | `task war` | Completed Hits diese Woche |
-| **hot** | `task hot` | Hot List (War Stack candidates) |
-| **hotlist** | `task hotlist` | Hot List (Potential Phase) |
+| **hot** | `task hot` | Hot List / Potential |
+| **hotlist** | `task hotlist` | Alias von `task hot` |
+| **plan** | `task plan` | Plan-Lane / Door-War-Auswahl |
+| **production** | `task production` | Aktive Door-Produktionsarbeit |
+| **profit** | `task profit` | Abgeschlossene Door-Ergebnisse |
 | **voice-strikes** | `task voice-strikes` | Tasks aus VOICE Sessions |
 | **focus** | `task focus` | Monthly Focus Mission |
 | **freedom** | `task freedom` | Annual Freedom Map |
@@ -130,7 +132,7 @@ Ohne `ensure_ascii=False` werden Umlaute zu `u00e4` (statt ae) escaped und so in
 Erstellt pro Hit:
 ```
 project:DOMAIN.Fire  +fire +hit  due:SONNTAG_DER_KW
-pillar:game  domain:domain_lowercase  alphatype:hit  priority:H
+domain:domain_lowercase  alphatype:hit  priority:H
 hit_number:N  +domain_tag
 ```
 
@@ -206,7 +208,7 @@ task firew    # ganze Woche
 ```bash
 # Fire Hit
 task add "Sprint Review" project:BUSINESS.Fire +fire +hit \
-  domain:business pillar:game alphatype:hit priority:H hit_number:1 due:sunday
+  domain:business alphatype:hit priority:H hit_number:1 due:sunday
 
 # Door Task
 task add "FADARO Landing Page" project:BUSINESS +door \
@@ -236,7 +238,7 @@ task domain:body status:pending list         # Alles fuer BODY
 
 | Context | Filter | Aktivieren |
 |---------|--------|------------|
-| `hot` | `+hot` | `task context hot` |
+| `hot` | `(project:HotList or project:HOTLIST or +hot or +potential) -plan` | `task context hot` |
 
 ---
 
@@ -255,7 +257,7 @@ task domain:body status:pending list         # Alles fuer BODY
 ### 2026-02-10: fire-to-tasks.sh setzte keine Priority
 
 **Ursache:** Script hatte kein `priority:` Feld im `task add`.
-**Fix:** `priority:H`, `hit_number:$HIT_COUNTER`, `pillar:game` (lowercase) hinzugefuegt.
+**Fix:** `priority:H` und `hit_number:$HIT_COUNTER` hinzugefuegt.
 
 ### 2026-02-10: Doppelte Report-Definitionen in .taskrc
 
