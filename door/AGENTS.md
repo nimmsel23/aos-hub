@@ -24,9 +24,9 @@ This file is the **operational SSOT** for how The Door works in this repo.
 
 ## Operational Model (Chapters → Practice)
 - **Hot List** = unfiltered intake (Ideas/Potential).
-- **Door War (Q1–Q4 / Eisenhower)** = the filter (Plan).
-- **War Stack** = the justification/story for a chosen Door (Production).
-- **Review / Profit** = the resume + results (Profit).
+- **Door War (Q1–Q4 / Eisenhower)** = the filter (Plan), stored on the Hot List task via `priority` / `prio`.
+- **War Stack** = the justification/story for a chosen Door (Production), opened from Taskwarrior via `taskopen`.
+- **Review / Profit** = the resume + results (Profit), also opened from Taskwarrior via `taskopen`.
 
 ## Canonical Storage (Vault Root = `~/vault` unless `AOS_VAULT_DIR`)
 - `Door/1-Potential/`

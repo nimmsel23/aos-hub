@@ -362,7 +362,6 @@ function door_buildWarStackTasks_(markdown) {
     project: project || undefined,
     domain: udaBase.domain,
     door_name: udaBase.door_name,
-    alphatype: 'profit',
     wait: '+5d',
     meta: {
       warstack_session_id: metaBase.warstack_session_id,

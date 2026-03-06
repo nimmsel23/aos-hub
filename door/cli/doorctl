@@ -177,7 +177,7 @@ list	list	List all active doors with status
 show	show <door>	Show detail view for a specific door
 hotlist	hotlist [list|json|open|add]	Phase 1 alias: Potential / Hot List flow
 hot	hot [list|open|add|json]	Phase 1 alias: Hot List frontdoor (interactive UI on TTY)
-doorwar	doorwar [list|status|review|activate|promote|<selector>]	Compatibility alias for Plan activation
+doorwar	doorwar [list|status|review|activate|promote|<selector>]	Compatibility alias for Door War selection from HotList
 warstack	warstack <door> [show|edit]	War Stack view/edit (no door -> production report)
 current	current [<door>|clear]	Set or show the active Door (writes ~/.aos/door.current)
 review	review	Compact phase review + health + focus
@@ -187,7 +187,7 @@ hits	hits [door] [status]	List hits (all or scoped to a door)
 next	next [door]	Show next hit(s)
 done	done <uuid>	Mark hit as completed
 edit	edit <uuid>	Edit hit in Taskwarrior
-open	open <uuid>	Open hit with taskopen
+open	open <uuid>	Open task with taskopen
 hitlist	hitlist	Show all pending hits
 focus	focus	Show top 7 pending hits
 health	health	Door health overview (stalled/attention/healthy)
@@ -313,19 +313,41 @@ build_health_json() {
 cmd_phase_report() {
   local phase="${1:?}"
   local status_filter="${2:-pending}"
+  local -a query=()
 
   require_task || return 1
 
+  case "$phase" in
+    potential)
+      query+=("(project:HotList or project:HOTLIST)")
+      ;;
+    plan)
+      query+=("(project:HotList or project:HOTLIST)")
+      query+=("(priority:H or priority:M or priority:L)")
+      ;;
+    production)
+      query+=("(door_name.not: or +door or +hit or +strike)")
+      ;;
+    profit)
+      query+=("(door_name.not: or +door or +hit or +strike)")
+      ;;
+    *)
+      query+=("+$phase")
+      ;;
+  esac
+
+  if [[ "$status_filter" != "all" ]]; then
+    query+=("status:$status_filter")
+  fi
+
   if json_mode; then
     require_jq || return 1
-    "$TASK_BIN" "+$phase" "status:$status_filter" export 2>/dev/null
+    "$TASK_BIN" "${query[@]}" export 2>/dev/null
     return 0
   fi
 
   ui_title "Door Phase: ${phase^}"
-
-  # Tag-based phase view keeps this portable across older setups while UDA migration settles.
-  "$TASK_BIN" "+$phase" "status:$status_filter"
+  "$TASK_BIN" "${query[@]}"
 }
 
 cmd_potential() {
@@ -684,13 +706,14 @@ iso_now() {
   date -Iseconds
 }
 
-sync_hot_task_plan() {
+sync_hot_task_selection() {
   local tw_uuid="${1:-}"
   local door_name="${2:-}"
   [[ -n "$tw_uuid" ]] || return 0
   have_task || return 0
-  # Keep this lightweight: promote HotList item into plan lane and set door_name.
-  "$TASK_BIN" rc.hooks=0 "$tw_uuid" modify +door +plan -potential "door_name:$door_name" alphatype:door >/dev/null 2>&1 || true
+  # Door War is represented by task priority on the HotList task itself.
+  # Activation must not create a synthetic plan lane in Taskwarrior.
+  "$TASK_BIN" rc.hooks=0 "$tw_uuid" modify "door_name:$door_name" >/dev/null 2>&1 || true
 }
 
 scope_priority_filter_for_mode() {
@@ -718,7 +741,7 @@ render_warstack_from_hotlist_template() {
 ---
 type: "door-war-stack"
 status: "active"
-phase: "plan"
+phase: "production"
 door_name: $(yaml_quote "$door_name")
 title: $(yaml_quote "$idea")
 created: $(yaml_quote "$selected_at")
@@ -747,7 +770,7 @@ profit_review:
 
 ---
 
-## PLAN / Door War
+## PRODUCTION / War Stack
 
 ### Objective
 
@@ -885,7 +908,7 @@ cmd_doorwar_activate() {
   render_warstack_from_hotlist_template \
     "$door_name" "$idea" "$hot_index" "$tw_uuid" "$hot_file" "$selected_at" "$hot_item_id" > "$warstack_file"
 
-  sync_hot_task_plan "$tw_uuid" "$door_name"
+  sync_hot_task_selection "$tw_uuid" "$door_name"
   door_current_set "$door_name"
 
   local updated_index
@@ -893,7 +916,7 @@ cmd_doorwar_activate() {
     hotlist_load_index | jq -c \
       --argjson idx "$hot_index0" \
       --arg status "promoted" \
-      --arg phase "plan" \
+      --arg phase "production" \
       --arg door_name "$door_name" \
       --arg warstack_file "$warstack_file" \
       --arg promoted_at "$selected_at" '
@@ -1069,7 +1092,7 @@ cmd_doorwar() {
       cat <<'EOF'
 doorctl doorwar
 
-Compatibility alias for Plan activation (Door War).
+Compatibility alias for Door War selection from HotList.
 
 Usage:
   doorctl doorwar [list|status|review]
@@ -1077,7 +1100,9 @@ Usage:
   doorctl doorwar promote  <hot-index|tw_uuid|idea|file> [door-name] [--force]
 
 Tip:
-  doorctl plan ... is canonical.
+  Door War lives on the HotList task via priority / prio.
+  Activation initializes Production by creating the War Stack file.
+  `doorctl plan ...` remains the canonical CLI entrypoint.
 EOF
       ;;
     *)
@@ -2292,7 +2317,7 @@ cmd_open() {
     return 1
   fi
 
-  taskopen "$uuid_prefix"
+  taskopen --All batch "$uuid_prefix"
 }
 
 cmd_war() {
@@ -2558,7 +2583,7 @@ Commands:
   hot [subcmd]            Phase 1 alias: Hot List frontdoor (TTY UI by default)
   hotlist [subcmd]        Phase 1 alias: Potential/Hot List flow (list/open/add)
   chapters [source]       Door chapter reader/list (blueprints|alphaos)
-  doorwar [subcmd]        Compatibility alias for plan activation
+  doorwar [subcmd]        Compatibility alias for Door War selection from HotList
   warstack <door> [...]   War Stack view/edit (or production view if no door)
   review                  Compact phase review + health + focus
   doctor                  Check dependencies + vault/task readiness
@@ -2569,7 +2594,7 @@ Commands:
   next [door]             Show next hit to work on
   done <uuid>             Mark hit as completed
   edit <uuid>             Edit hit in editor (nano/micro/$EDITOR)
-  open <uuid>             Open hit with taskopen
+  open <uuid>             Open task with taskopen
   hitlist                 Show all pending hits across all doors
   focus                   Show today's focus (top 7 door tasks)
   health                  Check door health (stalled, needs attention)
@@ -2639,7 +2664,9 @@ Optional tools:
 
 Notes:
   - Requires Taskwarrior with door_name UDA
-  - door_name UDA is primary; +door/+hit remain supported
+  - Door War lives on HotList tasks via built-in priority (`prio:H/M/L`)
+  - War Stack and Profit notes open through taskopen
+  - door_name UDA is primary; +door/+hit/+strike/+profit remain supported
   - Uses task export for data
   - Logic in: door/lib/*.sh (reusable by Index Node)
   - JSON mode works for: list/show/review/doctor/commands/scope/hits/next/hitlist/focus/health/stalled

@@ -19,8 +19,11 @@ Door is the **weekly tactics system** that turns idea abundance into execution:
 
 Door is primarily driven by Taskwarrior:
 
-- Tags indicate phase (`+potential`, `+plan`, `+hit`, `+strike`, `+profit`, …).
-- UDAs and tags carry linkage (door name, related artefacts, external IDs).
+- **Potential** lives in `project:HotList`.
+- **Plan / Door War** lives on the Hot List task via built-in `priority` (`prio:H/M/L`).
+- **Production / War Stack** uses door-scoped tasks plus `taskopen` to reach `Door/3-Production`.
+- **Profit** uses `taskopen` to reach `Door/4-Profit` from `+profit` tasks or completed door work.
+- `door_name` is the primary linkage UDA for Door-related tasks.
 
 ## Components in this repo
 
@@ -46,4 +49,3 @@ curl http://127.0.0.1:8799/api/door/health
 - Entry: `door/README.md`
 - Commands: `door/CHEATSHEET.md`
 - Changes: `door/CHANGELOG.md`
-

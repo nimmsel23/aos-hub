@@ -129,7 +129,7 @@ door.domino         # yes|no
 
 - `door/README.md` - Full documentation
 - `door/AGENTS.md` - Development guidelines
-- `door/taskrc.template` - Taskwarrior config
+- `~/.dotfiles/config/.taskrc` - global Taskwarrior backend config
 
 ## THE GAME (gamectl)
 

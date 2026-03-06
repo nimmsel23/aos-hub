@@ -89,10 +89,10 @@ doorctl focus             # Top 7 priorities in door scope
 | **Profit** | 💰 | Achieved, reflection time |
 
 **Phase Detection:**
-- Tags `+potential` → Potential
-- Tags `+plan` → Plan
-- Tags `+hit` or `+strike` → Production
-- Tags `+profit` or `+done` → Profit
+- `project:HotList` → Potential
+- `project:HotList` + `priority` / `prio` = `H|M|L` → Plan / Door War
+- `door_name` or `+door` / `+hit` / `+strike` → Production
+- `+profit` or completed Door work → Profit
 
 ## Health Status
 
@@ -121,6 +121,8 @@ task config uda.door_name.label Door
 - A Door can contain many tasks (not only 4 hits).
 - Use `alphatype` only where it adds clarity (`bigrock`, `littlerock`, `strike`, `freedom`, ...).
 - Do not force every task into `hit/strike` if that increases complexity.
+- Door War is not a separate task type; it is the `priority` / `prio` on the Hot List task.
+- War Stack and Profit notes are opened from Taskwarrior via `taskopen`.
 
 **Door scoped views (new):**
 ```bash
@@ -148,8 +150,7 @@ task 123 done
 - `+door` - Door-related task
 - `+hit` - Specific hit from War Stack
 - `+strike` - Critical action from STRIKE
-- `+potential` - In Potential phase
-- `+plan` - In Plan phase
+- `+profit` - Explicit Profit review task (optional)
 
 ## Output Examples
 
