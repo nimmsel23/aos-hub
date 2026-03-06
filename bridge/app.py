@@ -2223,7 +2223,7 @@ async def _run_task_add(task: Dict[str, Any]) -> Dict[str, Any]:
 
     # Optional: explicit UDA/custom attributes for Taskwarrior.
     # Keep this allowlisted to avoid accidental injection of unsupported keys.
-    uda_allowlist = ("pillar", "domain", "alphatype", "door_name", "hit_number", "points")
+    uda_allowlist = ("pillar", "domain", "alphatype", "domino_door", "hit_number", "points")
     uda_values: Dict[str, Any] = {}
 
     raw_uda = task.get("uda")

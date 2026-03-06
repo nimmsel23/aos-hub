@@ -12,14 +12,15 @@ get_doors() {
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
   command -v jq >/dev/null 2>&1 || return 1
 
-  # Get all tasks with door_name UDA, group by door.
+  # Get all tasks with domino_door UDA, group by Door.
   # Avoid deleted tasks so counts remain useful for CLI dashboards.
   "$TASK_BIN" export 2>/dev/null | jq -r '
     map(select((.status // "") != "deleted"))
-    | map(select(.door_name != null and .door_name != ""))
-    | group_by(.door_name)
+    | map(.door_key = (.domino_door // .door_name // ""))
+    | map(select(.door_key != ""))
+    | group_by(.door_key)
     | map({
-        name: .[0].door_name,
+        name: .[0].door_key,
         count: length,
         done: map(select(.status == "completed")) | length,
         pending: map(select(.status == "pending")) | length,
@@ -33,26 +34,26 @@ get_doors() {
 }
 
 # Get tasks for specific door
-# Args: door_name
+# Args: domino_door
 # Output: JSON array of tasks (deleted excluded)
 get_door_tasks() {
-  local door_name="$1"
+  local domino_door="$1"
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
   command -v jq >/dev/null 2>&1 || return 1
 
-  "$TASK_BIN" export 2>/dev/null | jq -c --arg door_name "$door_name" '
+  "$TASK_BIN" export 2>/dev/null | jq -c --arg domino_door "$domino_door" '
     map(select((.status // "") != "deleted"))
-    | map(select((.door_name // "") == $door_name))
+    | map(select(((.domino_door // .door_name // "")) == $domino_door))
   '
 }
 
 # Get door metadata
-# Args: door_name
+# Args: domino_door
 # Output: JSON object with door metadata
 get_door_metadata() {
-  local door_name="$1"
+  local domino_door="$1"
   local tasks
-  tasks=$(get_door_tasks "$door_name")
+  tasks=$(get_door_tasks "$domino_door")
 
   if [[ "$tasks" == "[]" || -z "$tasks" ]]; then
     echo "{}"
@@ -60,7 +61,7 @@ get_door_metadata() {
   fi
 
   echo "$tasks" | jq -r '{
-    name: .[0].door_name,
+    name: (.[0].domino_door // .[0].door_name // ""),
     count: length,
     done: [.[] | select(.status == "completed")] | length,
     pending: [.[] | select(.status == "pending")] | length,
@@ -80,18 +81,18 @@ get_all_hits() {
 }
 
 # Get next hit (highest priority, soonest due)
-# Args: [door_name] (optional)
+# Args: [domino_door] (optional)
 # Output: JSON array of top N tasks
 get_next_hits() {
-  local door_name="${1:-}"
+  local domino_door="${1:-}"
   local limit="${2:-3}"
 
   command -v "$TASK_BIN" >/dev/null 2>&1 || return 1
 
-  if [[ -n "$door_name" ]]; then
-    "$TASK_BIN" export door_name:"$door_name" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
+  if [[ -n "$domino_door" ]]; then
+    "$TASK_BIN" export "(domino_door:$domino_door or door_name:$domino_door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   else
-    "$TASK_BIN" export "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
+    "$TASK_BIN" export "((domino_door.not:) or (door_name.not:) or +door)" "(status:pending or status:waiting)" limit:"$limit" 2>/dev/null
   fi
 }
 
@@ -110,11 +111,11 @@ get_door_count() {
 }
 
 # Check if door exists
-# Args: door_name
+# Args: domino_door
 door_exists() {
-  local door_name="$1"
+  local domino_door="$1"
   local tasks
-  tasks=$(get_door_tasks "$door_name")
+  tasks=$(get_door_tasks "$domino_door")
 
   [[ "$tasks" != "[]" && -n "$tasks" ]]
 }

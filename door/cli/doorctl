@@ -325,17 +325,16 @@ cmd_phase_report() {
 
   case "$phase" in
     potential)
-      query+=("(project:HotList or project:HOTLIST)")
+      query+=("(project:Potential or project:POTENTIAL or project:HotList or project:HOTLIST)")
       ;;
     plan)
-      query+=("(project:HotList or project:HOTLIST)")
-      query+=("(priority:H or priority:M or priority:L)")
+      query+=("(((project:Potential or project:POTENTIAL or project:HotList or project:HOTLIST) and (priority:H or priority:M or priority:L)) or project:Plan)")
       ;;
     production)
-      query+=("(door_name.not: or +door or +hit or +strike)")
+      query+=("$(door_scope_filter_any)")
       ;;
     profit)
-      query+=("(door_name.not: or +door or +hit or +strike)")
+      query+=("$(door_scope_filter_any)")
       ;;
     *)
       query+=("+$phase")
@@ -685,12 +684,21 @@ hotlist_select_entry_json() {
       or (.id // "" | startswith($s))
       or (.idea // "" == $s)
       or (.title // "" == $s)
-      or (.door_name // "" == $s)
+      or (.domino_door // .door_name // "" == $s)
       or (.file // "" == $s)
       or (.md_name // "" == $s)
       or ((.file // "") | endswith("/" + $s))
     )) | .[0] // empty
   '
+}
+
+door_scope_filter_any() {
+  echo "(domino_door.not: or door_name.not: or +door or +hit or +strike)"
+}
+
+door_scope_filter_named() {
+  local name="${1:-}"
+  echo "(domino_door:$name or door_name:$name)"
 }
 
 slugify_door_name() {
@@ -733,7 +741,7 @@ cmd_hotlist_json() {
       (.hot_index|tostring),
       (.status // "active"),
       (.phase // "potential"),
-      (.door_name // "-"),
+      (.domino_door // .door_name // "-"),
       (.idea // .title // "-")
     ] | @tsv
   ' | while IFS=$'\t' read -r idx status phase door idea; do
@@ -927,7 +935,7 @@ cmd_review() {
     doors_json="$(get_doors 2>/dev/null || echo '[]')"
     health_json="$(build_health_json "$doors_json")"
     if have_task; then
-      focus_json="$("$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
+      focus_json="$("$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
     else
       focus_json='[]'
     fi
@@ -1282,7 +1290,7 @@ dashboard_render_snapshot() {
   echo
   ui_info "Focus (Top 7 pending Door tasks)"
   if have_task; then
-    "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 2>/dev/null || true
+    "$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:7 2>/dev/null || true
   else
     printf "  Taskwarrior not found\n"
   fi
@@ -1592,7 +1600,7 @@ cmd_dashboard() {
     if have_task; then
       doors_json="$(get_doors 2>/dev/null || echo '[]')"
       health_json="$(build_health_json "$doors_json" 2>/dev/null || echo "$health_json")"
-      focus_json="$("$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
+      focus_json="$("$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null || echo '[]')"
     fi
 
     jq -n \
@@ -1837,24 +1845,24 @@ cmd_scope() {
   local priority_filter=""
   case "$mode_lc" in
     all)
-      query=("door_name:$door_name" "(status:pending or status:waiting)")
+      query=("$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)")
       ;;
     today)
-      query=("door_name:$door_name" "(status:pending or status:waiting)" "(due.before:tomorrow or scheduled.before:tomorrow)")
+      query=("$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)" "(due.before:tomorrow or scheduled.before:tomorrow)")
       ;;
     week)
-      query=("door_name:$door_name" "(status:pending or status:waiting)" "((due.after:sow and due.before:eow+1day) or (scheduled.after:sow and scheduled.before:eow+1day))")
+      query=("$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)" "((due.after:sow and due.before:eow+1day) or (scheduled.after:sow and scheduled.before:eow+1day))")
       ;;
     focus)
-      query=("door_name:$door_name" "(status:pending or status:waiting)")
+      query=("$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)")
       ;;
     done|review)
-      query=("door_name:$door_name" "status:completed" "end.after:today-7days")
+      query=("$(door_scope_filter_named "$door_name")" "status:completed" "end.after:today-7days")
       ;;
     h|high|m|medium|l|low)
       priority_filter="$(scope_priority_filter_for_mode "$mode_lc")"
       [[ -n "$priority_filter" ]] || { ui_err "Unknown priority scope: $mode"; return 2; }
-      query=("door_name:$door_name" "(status:pending or status:waiting)" "$priority_filter")
+      query=("$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)" "$priority_filter")
       ;;
     *)
       ui_err "Unknown scope mode: $mode (use all|today|focus|week|done|h|m|l)"
@@ -1929,9 +1937,9 @@ cmd_next() {
 
   if json_mode; then
     if [[ -n "$door_name" ]]; then
-      "$TASK_BIN" "door_name:$door_name" "(status:pending or status:waiting)" limit:1 export 2>/dev/null
+      "$TASK_BIN" "$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)" limit:1 export 2>/dev/null
     else
-      "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:3 export 2>/dev/null
+      "$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:3 export 2>/dev/null
     fi
     return 0
   fi
@@ -1939,9 +1947,9 @@ cmd_next() {
   ui_title "Next Door Task"
 
   if [[ -n "$door_name" ]]; then
-    "$TASK_BIN" next door_name:"$door_name" "(status:pending or status:waiting)" limit:1 2>/dev/null
+    "$TASK_BIN" next "$(door_scope_filter_named "$door_name")" "(status:pending or status:waiting)" limit:1 2>/dev/null
   else
-    "$TASK_BIN" next "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:3 2>/dev/null
+    "$TASK_BIN" next "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:3 2>/dev/null
   fi
 }
 
@@ -2064,11 +2072,11 @@ cmd_stalled() {
 cmd_focus() {
   require_task || return 1
   if json_mode; then
-    "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null
+    "$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:7 export 2>/dev/null
     return 0
   fi
   ui_title "Today's Focus (Top 7 Door Tasks)"
-  "$TASK_BIN" "(door_name.not: or +door)" "(status:pending or status:waiting)" limit:7
+  "$TASK_BIN" "$(door_scope_filter_any)" "(status:pending or status:waiting)" limit:7
 }
 
 cmd_edit() {
@@ -2409,11 +2417,11 @@ Optional tools:
   bat                     Pretty file viewer
 
 Notes:
-  - Requires Taskwarrior with door_name UDA
+  - Requires Taskwarrior with domino_door UDA
   - Door War lives on HotList tasks via built-in priority (`prio:H/M/L`)
   - Production tasks route into the terminal War Stack wizard
   - Profit notes still open through taskopen
-  - door_name UDA is primary; +door/+hit/+strike/+profit remain supported
+  - domino_door UDA is primary; door_name is legacy-only if present
   - Uses task export for data
   - Logic in: door/lib/*.sh (reusable by Index Node)
   - JSON mode works for: list/show/review/doctor/commands/scope/hits/next/hitlist/focus/health/stalled

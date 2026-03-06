@@ -256,6 +256,10 @@
 <script>
   // Door-specific navigation
   function openPhase(phase) {
+    if (phase === 'potential') {
+      window.location.href = '/pwa/door/potential/';
+      return;
+    }
     window.location.href = `/door/${phase}`;
   }
 

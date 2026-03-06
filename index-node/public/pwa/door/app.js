@@ -1377,6 +1377,8 @@ function bindPlanInteractions() {
 
   $("warstackStartBtn")?.addEventListener("click", async () => {
     const doorTitle = String(phaseState.selectedDoorTitle || "").trim();
+    const selectedTaskUuid = String(phaseState.doorwarResult?.selected?.task_uuid || "").trim();
+    const selectedId = String(phaseState.doorwarResult?.selected?.id || "").trim();
     if (!doorTitle) {
       setStatus("Door title required before starting War Stack.", "error");
       $("warstackTitle")?.focus();
@@ -1386,7 +1388,11 @@ function bindPlanInteractions() {
       setStatus("Starting War Stack inquiry ...", "info");
       const data = await apiJson("/api/door/plan/warstack/start", {
         method: "POST",
-        body: JSON.stringify({ door_title: doorTitle }),
+        body: JSON.stringify({
+          door_title: doorTitle,
+          selected_id: selectedId,
+          selected_task_uuid: selectedTaskUuid,
+        }),
       });
       phaseState.warstackSession = {
         session_id: data.session_id,
