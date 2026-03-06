@@ -4948,6 +4948,7 @@ app.get("/pwa/fire",    (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/pwa/focus",   (_req, res) => res.redirect(301, "/pwa/focus/"));
 app.get("/pwa/freedom", (_req, res) => res.redirect(301, "/pwa/freedom/"));
 app.get("/pwa/frame",   (_req, res) => res.redirect(301, "/pwa/frame/"));
+app.get("/pwa/potential", (_req, res) => res.redirect(301, "/pwa/potential/"));
 // Legacy short paths → permanent redirect to new canonical paths
 app.get("/core4",  (_req, res) => res.redirect(301, "/pwa/core4/"));
 app.get("/core4/", (_req, res) => res.redirect(301, "/pwa/core4/"));
@@ -4955,6 +4956,8 @@ app.get("/fire",   (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/fire/",  (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/focus",  (_req, res) => res.redirect(301, "/pwa/focus/"));
 app.get("/focus/", (_req, res) => res.redirect(301, "/pwa/focus/"));
+app.get("/potential", (_req, res) => res.redirect(301, "/pwa/potential/"));
+app.get("/potential/", (_req, res) => res.redirect(301, "/pwa/potential/"));
 app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
 app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
