@@ -1,53 +1,48 @@
 # AlphaOS Terminology
 
-## Critical: The Door's 4 Phases (NOT "AlphaOS 4P Flow")
+## The Door's 4 Phases (NOT "AlphaOS 4P Flow")
 
-### Correct Understanding
+### The Structure
 
-**AlphaOS Structure:**
-
+**AlphaOS:**
 ```
-THE FOUNDATION (Elliott Hulse's 42 Blueprints)
+THE FOUNDATION
+(Elliott Hulse's foundational teachings - Chapters 2-4 + Principles)
        │
        └─── 5 PILLARS standing on The Foundation:
-               ├─ Pillar #1: The Code
-               ├─ Pillar #2: The Core (4 Domains)
-               ├─ Pillar #3: The Voice (4 Steps)
-               ├─ Pillar #4: The Door (4 Phases)
-               └─ Pillar #5: The Game (Map hierarchy)
+               1. The Code
+               2. The Core
+               3. The Voice
+               4. The Door (has 4 phases)
+               5. The Game
 ```
 
 **The Door's 4 Phases:**
-- Potential (Hot List)
-- Plan (Door War + War Stack)
-- Production (Hit List execution)
-- Profit (Reflection & review)
+- Potential → Plan → Production → Profit
 
-### Correct Terminology ✅
+### Correct Usage
 
-- "The Door's 4 phases"
-- "The Door 4-phase flow"
-- "Door phases: Potential → Plan → Production → Profit"
-- "The Door (Pillar #4 of the 5 Pillars)"
+✅ "The Door's 4 phases"
+✅ "The Door: Potential → Plan → Production → Profit"
+✅ "The Door (Pillar #4) has 4 phases"
 
-### Incorrect Terminology ❌
+### Incorrect Usage
 
-- ~~"AlphaOS 4P Flow"~~ (implies AlphaOS-wide concept)
-- ~~"AlphaOS 4P Flow architecture"~~ (wrong - it's Door-specific)
+❌ "AlphaOS 4P Flow"
+❌ "AlphaOS 4P Flow architecture"
+
+The 4 phases belong to The Door pillar specifically, not to AlphaOS as a whole.
 
 ### Why This Matters
 
-The 4 phases are **implementation details of The Door pillar**, not a top-level AlphaOS concept.
+Each pillar has its own internal structure:
+- The Core → 4 Domains
+- The Voice → 4 Steps
+- The Door → 4 Phases
+- The Game → Maps hierarchy
 
-**Each pillar has its own structure:**
-- **The Code:** Principles (real, raw, relevant, results)
-- **The Core:** 4 Domains (Body/Being/Balance/Business)
-- **The Voice:** 4 Steps (Stop/Submit/Struggle/Strike)
-- **The Door:** 4 Phases (Potential/Plan/Production/Profit) ← THIS
-- **The Game:** Map hierarchy (Frame/IPW/Freedom/Focus/Fire)
+The phases are implementation details of one pillar, not a system-wide concept.
 
 ## Historical Note
 
-Commit `07af292` incorrectly stated "Follows AlphaOS 4P Flow architecture" in the Door route refactoring. This should have been "Follows The Door's 4 phases architecture".
-
-This document clarifies the correct terminology going forward.
+Commit 07af292 incorrectly stated "Follows AlphaOS 4P Flow architecture". This was wrong. The correct term is "The Door's 4 phases".
