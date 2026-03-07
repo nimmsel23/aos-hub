@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # shellcheck disable=SC1091
@@ -267,6 +268,42 @@ record_success_now() {
   record_result "ok"
 }
 
+run_with_spinner() {
+  local label="$1"
+  shift
+  local -a cmd=("$@")
+
+  if ! [[ -t 1 || -t 2 ]]; then
+    "${cmd[@]}"
+    return $?
+  fi
+
+  local pid elapsed frame_index
+  local -a frames=('|' '/' '-' '\\')
+  frame_index=0
+
+  "${cmd[@]}" &
+  pid=$!
+  local start_ts
+  start_ts="$(date +%s)"
+
+  while kill -0 "$pid" 2>/dev/null; do
+    elapsed=$(( $(date +%s) - start_ts ))
+    printf "\r[%s] %s (%ss)" "${frames[$frame_index]}" "$label" "$elapsed" >&2
+    frame_index=$(( (frame_index + 1) % ${#frames[@]} ))
+    sleep 0.2
+  done
+
+  wait "$pid"
+  local rc=$?
+  if [[ $rc -eq 0 ]]; then
+    printf "\r[+] %s done (%ss)\n" "$label" "$(( $(date +%s) - start_ts ))" >&2
+  else
+    printf "\r[x] %s failed (%ss)\n" "$label" "$(( $(date +%s) - start_ts ))" >&2
+  fi
+  return $rc
+}
+
 run_push() {
   local dry_run="${1:-0}"
   load_env_file
@@ -330,7 +367,7 @@ run_push() {
     ui_info "Push: $local_dir -> $remote_dir"
   fi
 
-  if "${cmd[@]}"; then
+  if run_with_spinner "Vault push running" "${cmd[@]}"; then
     if [[ "$dry_run" != "1" ]]; then
       record_success_now
     fi
@@ -651,7 +688,7 @@ do_init() {
 menu() {
   local choice=""
   while true; do
-    choice="$(ctl_choose_one "vaultctl" \
+    choice="$(ui_choose "vaultctl" \
       "Status" \
       "Init" \
       "Push now" \
