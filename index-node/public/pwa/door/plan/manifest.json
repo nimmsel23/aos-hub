@@ -1,0 +1,24 @@
+{
+  "name": "AlphaOS Door Plan",
+  "short_name": "PLAN",
+  "description": "AlphaOS Door Plan Centre",
+  "start_url": "/pwa/door/plan/",
+  "scope": "/pwa/door/plan/",
+  "display": "standalone",
+  "theme_color": "#0b0c0f",
+  "background_color": "#0b0c0f",
+  "icons": [
+    {
+      "src": "/pwa/door/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/door/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

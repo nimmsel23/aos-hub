@@ -1,0 +1,740 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# nodectl — compatibility frontdoor for index-node + PWA convenience.
+# Canonical index-node service control lives in scripts/indexctl.
+# Compatibility wrappers may forward here from scripts/nodectl.
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+INDEX_ROOT_DEFAULT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+ROOT_DIR="$(cd "$INDEX_ROOT_DEFAULT/.." && pwd)"
+
+# If called via a symlink outside the canonical repo path, prefer ~/aos-hub.
+if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  ROOT_DIR="$HOME/aos-hub"
+  INDEX_ROOT_DEFAULT="$ROOT_DIR/index-node"
+fi
+
+# Optional shared libs (UI helpers, env loading).
+# shellcheck disable=SC1090
+source "$ROOT_DIR/scripts/ctl-lib.sh" 2>/dev/null || true
+# shellcheck disable=SC1090
+source "$ROOT_DIR/scripts/lib/aos-env.sh" 2>/dev/null || true
+aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+
+# Config
+: "${CTL_CHOOSE_PROMPT:=nodectl}"
+: "${CTL_CHOOSE_PREFER:=gum}"
+
+INDEX_ROOT="${AOS_INDEX_ROOT:-$INDEX_ROOT_DEFAULT}"
+if [[ ! -d "$INDEX_ROOT" && -d "$INDEX_ROOT_DEFAULT" ]]; then
+  INDEX_ROOT="$INDEX_ROOT_DEFAULT"
+fi
+NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
+NODE_PORT="${AOS_INDEX_PORT:-8799}"
+INDEXCTL_BIN="${INDEXCTL_BIN:-$ROOT_DIR/scripts/indexctl}"
+PWACTL_BIN="${PWACTL_BIN:-$ROOT_DIR/scripts/pwactl}"
+ROUTERCTL_BIN="${ROUTERCTL_BIN:-$ROOT_DIR/router/routerctl}"
+BRIDGECTL_BIN="${BRIDGECTL_BIN:-$ROOT_DIR/bridge/bridgectl}"
+CORE4_CHECKCTL_BIN="${CORE4_CHECKCTL_BIN:-$ROOT_DIR/core4/python-core4/core4-checkctl}"
+PIN_STORE_DIR="${PIN_STORE_DIR:-$HOME/.aos}"
+PIN_CONFIG_PATH="${PIN_CONFIG_PATH:-$PIN_STORE_DIR/pin.json}"
+PIN_SESSIONS_PATH="${PIN_SESSIONS_PATH:-$PIN_STORE_DIR/pin-sessions.json}"
+PIN_DISABLE_FLAG_PATH="${PIN_DISABLE_FLAG_PATH:-$PIN_STORE_DIR/pin.disabled}"
+USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+
+[[ -d "$INDEX_ROOT" ]] || { echo "ERROR: index-node not found: $INDEX_ROOT" >&2; exit 1; }
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+has_func() { declare -F "$1" >/dev/null 2>&1; }
+
+say() {
+  if has_func msg; then
+    msg "$*"
+  else
+    printf "%s\n" "$*"
+  fi
+}
+
+say_warn() {
+  if has_func ui_warn; then
+    ui_warn "$*"
+  else
+    printf "WARN: %s\n" "$*" >&2
+  fi
+}
+
+say_title() {
+  if has_func ui_title; then
+    ui_title "$*"
+  else
+    printf "=== %s ===\n" "$*"
+  fi
+}
+
+pause_return() {
+  if has_func ctl_pause_return; then
+    ctl_pause_return
+  elif has_func ui_pause; then
+    ui_pause "Press Enter to return"
+  fi
+}
+
+run_indexctl() {
+  if [[ -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" "$@"
+  else
+    echo "ERROR: indexctl not found: $INDEXCTL_BIN" >&2
+    return 1
+  fi
+}
+
+exec_indexctl() {
+  if [[ -x "$INDEXCTL_BIN" ]]; then
+    exec "$INDEXCTL_BIN" "$@"
+  else
+    echo "ERROR: indexctl not found: $INDEXCTL_BIN" >&2
+    exit 1
+  fi
+}
+
+delegate_pwactl() {
+  if [[ -x "$PWACTL_BIN" ]]; then
+    exec "$PWACTL_BIN" "$@"
+  elif [[ -x "$ROOT_DIR/scripts/mobileappctl" ]]; then
+    exec "$ROOT_DIR/scripts/mobileappctl" "$@"
+  else
+    echo "ERROR: pwactl/mobileappctl not found" >&2
+    exit 1
+  fi
+}
+
+run_pwactl() {
+  if [[ -x "$PWACTL_BIN" ]]; then
+    "$PWACTL_BIN" "$@"
+  elif [[ -x "$ROOT_DIR/scripts/mobileappctl" ]]; then
+    "$ROOT_DIR/scripts/mobileappctl" "$@"
+  else
+    echo "ERROR: pwactl/mobileappctl not found" >&2
+    return 1
+  fi
+}
+
+tailscale_available() {
+  has_cmd tailscale
+}
+
+tailscale_self_dns() {
+  tailscale_available || return 1
+
+  if has_cmd jq; then
+    tailscale status --json 2>/dev/null \
+      | jq -r '.Self.DNSName // empty | sub("\\.$"; "")' 2>/dev/null \
+      | head -n 1
+    return 0
+  fi
+
+  tailscale status --json 2>/dev/null \
+    | sed -n 's/^[[:space:]]*"DNSName": "\([^"]*\)\\.",$/\1/p' \
+    | head -n 1
+}
+
+ts_url() {
+  tailscale_available || return 0
+
+  local self_dns=""
+  self_dns="$(tailscale_self_dns || true)"
+  if [[ -n "$self_dns" ]]; then
+    if tailscale serve status 2>/dev/null | awk -v want="https://${self_dns}" '$1 == want { found=1 } END { exit(found ? 0 : 1) }'; then
+      printf "https://%s\n" "$self_dns"
+      return 0
+    fi
+  fi
+
+  tailscale serve status 2>/dev/null | awk '/^https:\/\//{print $1; exit}' || true
+}
+
+best_url() {
+  local ts
+  ts="$(ts_url || true)"
+  if [[ -n "$ts" ]]; then
+    echo "$ts"
+  else
+    echo "http://${NODE_HOST}:${NODE_PORT}"
+  fi
+}
+
+pwa_url() {
+  local app="${1:-core4}"
+  local base
+  base="$(best_url)"
+  printf "%s/pwa/%s/\n" "${base%/}" "$app"
+}
+
+open_url() {
+  local url="$1"
+  if has_cmd xdg-open; then
+    xdg-open "$url" >/dev/null 2>&1 &
+  else
+    echo "$url"
+  fi
+}
+
+health_check() {
+  if ! has_cmd curl; then
+    echo "? curl not installed (cannot check health)"
+    return 1
+  fi
+
+  if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
+    echo "✓ Index Node healthy (http://${NODE_HOST}:${NODE_PORT})"
+    return 0
+  fi
+
+  echo "✗ Index Node unreachable (http://${NODE_HOST}:${NODE_PORT})"
+  return 1
+}
+
+print_url_block() {
+  local base
+  base="$(best_url)"
+  echo "Local:  http://${NODE_HOST}:${NODE_PORT}"
+  echo "Best:   ${base}"
+  echo "PWA:    $(pwa_url core4)"
+  echo "        $(pwa_url fire)"
+  echo "        $(pwa_url focus)"
+}
+
+serve_pwa_only() {
+  say_warn "PWA-only via 'tailscale serve --set-path=/pwa/' is currently disabled."
+  say_warn "Reason: Tailscale Serve strips the /pwa/ prefix, causing index-node redirect loops on /pwa/*."
+  say "Use 'nodectl serve full' in a private tailnet, then verify with: nodectl pwa serve-status"
+  return 2
+}
+
+serve_full_node() {
+  local target="127.0.0.1:${NODE_PORT}"
+  tailscale serve --bg --yes "$target"
+}
+
+serve_off_host() {
+  say_warn "This disables Tailscale HTTPS serve on the active host and may also remove /bridge if it shares the same host."
+  if has_func ui_confirm; then
+    ui_confirm "Disable Tailscale serve on the active host?" || return 1
+  fi
+  tailscale serve --https=443 off || tailscale serve off
+}
+
+run_and_pause() {
+  local rc=0
+  "$@" || rc=$?
+  pause_return
+  return "$rc"
+}
+
+# ============================================================================
+# USAGE
+# ============================================================================
+
+usage() {
+  cat <<'EOF'
+nodectl — compatibility frontdoor for index-node + PWA convenience
+
+NOTE: For production use, prefer:
+  - hubctl index ... / indexctl ... (canonical index-node service control)
+  - nodectl remains a compatibility toolbox with convenience commands
+
+Quick Commands:
+  status              Show service status + health + URLs
+  doctor              Full diagnostics (delegates to indexctl)
+  start|stop|restart  Service control (user service)
+  logs                Follow service logs (user service)
+  menu                Interactive node/PWA/tailscale menu (UI)
+  menu-check          Quick /menu endpoint check
+
+Development:
+  dev                 Run npm dev server (foreground)
+  warm                Warm up index by hitting / and /menu
+
+URLs:
+  open                Open best URL (tailscale if available)
+  local               Open http://localhost:8799
+  ts                  Open tailscale serve URL
+  pwa [core4|fire|focus] Open mobile PWA page (best URL base)
+  pwa <pwactl-args...>  Delegate to pwactl/mobileappctl (compat)
+  url                 Print best URL
+  urls                Print local + tailscale + PWA URLs
+
+Tailscale:
+  serve status        Show tailscale serve status
+  serve on|full       Expose full node (/ -> :8799) in tailnet
+  serve pwa|pwa-only  PWA-only serve attempt (currently disabled; redirect-loop risk)
+  serve off           Disable HTTPS serve on active host (may affect /bridge)
+
+Service Mode:
+  mode-dev            Ensure dev/user service is active
+  mode-status         Show current mode
+
+Delegation:
+  indexctl <args>     Delegate to indexctl
+  pwactl <args>       Delegate to pwactl/mobileappctl
+  routerctl <args>    Delegate to routerctl
+  bridgectl <args>    Delegate to bridgectl
+
+Tooling:
+  edit [file]         Edit file in index-node (default: server.js)
+  pin <status|off|on|clear-sessions|paths>
+                     Manage local index-node PIN barrier flag (requires server support)
+  core4-check [args]  Run Core4 diagnostic sweep helper
+  help                Show this help
+
+Examples:
+  nodectl status
+  nodectl menu
+  nodectl restart
+  nodectl pwa core4
+  nodectl pwa serve-status
+  nodectl pwactl list
+  nodectl serve pwa
+  nodectl open
+  nodectl pin status
+  nodectl pin off
+  nodectl core4-check all
+
+Env overrides:
+  AOS_INDEX_USER_SERVICE=aos-index-dev.service
+
+EOF
+}
+
+# ============================================================================
+# COMMANDS
+# ============================================================================
+
+cmd_status() {
+  local rc=0
+  echo "=== Index Node Status ==="
+  echo ""
+  run_indexctl status || rc=$?
+  echo ""
+  health_check || true
+  echo ""
+  print_url_block
+  return "$rc"
+}
+
+cmd_doctor() {
+  exec_indexctl doctor
+}
+
+# Service control is user-scope only; system-scope index control is intentionally not supported.
+user_bus_ok() {
+  systemctl --user --version >/dev/null 2>&1 && systemctl --user is-active default.target >/dev/null 2>&1 || {
+    systemctl --user list-unit-files >/dev/null 2>&1
+  }
+}
+
+user_svc_active() {
+  user_bus_ok && systemctl --user -q is-active "$USER_SERVICE_NAME" >/dev/null 2>&1
+}
+
+cmd_service_control() {
+  local action="$1"
+  shift || true
+  exec_indexctl "$action" "$@"
+}
+
+cmd_menu() {
+  if ! has_cmd curl; then
+    echo "ERROR: curl not installed" >&2
+    exit 1
+  fi
+
+  if has_cmd jq; then
+    if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" 2>/dev/null | jq . 2>/dev/null; then
+      echo ""
+      echo "✓ /menu endpoint OK"
+      return 0
+    fi
+  else
+    if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
+      echo "✓ /menu endpoint OK"
+      return 0
+    fi
+  fi
+
+  echo "✗ /menu endpoint failed"
+  exit 1
+}
+
+cmd_warm() {
+  if ! has_cmd curl; then
+    echo "ERROR: curl not installed" >&2
+    exit 1
+  fi
+  echo "Warming up index-node..."
+  curl -fsSL "http://${NODE_HOST}:${NODE_PORT}/" >/dev/null 2>&1 && echo "  ✓ /" || echo "  ✗ /"
+  curl -fsSL "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1 && echo "  ✓ /menu" || echo "  ✗ /menu"
+}
+
+cmd_dev() {
+  echo "Starting index-node in dev mode (npm run dev)..."
+  cd "$INDEX_ROOT"
+  exec npm run dev
+}
+
+cmd_url() {
+  best_url
+}
+
+cmd_urls() {
+  print_url_block
+}
+
+cmd_open() {
+  local url
+  url="$(best_url)"
+  echo "Opening: $url"
+  open_url "$url"
+}
+
+cmd_local() {
+  echo "Opening: http://localhost:${NODE_PORT}"
+  open_url "http://localhost:${NODE_PORT}"
+}
+
+cmd_ts() {
+  local url
+  url="$(ts_url || true)"
+  if [[ -n "$url" ]]; then
+    echo "Opening: $url"
+    open_url "$url"
+  else
+    echo "ERROR: tailscale serve not active" >&2
+    exit 1
+  fi
+}
+
+cmd_pwa() {
+  local app=""
+  local sub="${1:-}"
+
+  case "$sub" in
+    "")
+      app="core4"
+      ;;
+    core4|fire|focus)
+      app="$sub"
+      ;;
+    open)
+      shift || true
+      app="${1:-core4}"
+      ;;
+    *)
+      # Compatibility: keep pwactl/mobileappctl workflows reachable via `nodectl pwa ...`.
+      delegate_pwactl "$@"
+      ;;
+  esac
+
+  case "$app" in
+    core4|fire|focus) ;;
+    *)
+      echo "Usage: nodectl pwa [core4|fire|focus]" >&2
+      echo "   or: nodectl pwactl <args...>" >&2
+      exit 1
+      ;;
+  esac
+
+  local url
+  url="$(pwa_url "$app")"
+  echo "Opening: $url"
+  open_url "$url"
+}
+
+cmd_serve() {
+  local action="${1:-status}"
+
+  if ! tailscale_available; then
+    echo "ERROR: tailscale not installed" >&2
+    exit 1
+  fi
+
+  case "$action" in
+    on|full)
+      serve_full_node
+      ;;
+    pwa|pwa-only)
+      serve_pwa_only
+      ;;
+    off)
+      serve_off_host
+      ;;
+    status)
+      tailscale serve status
+      ;;
+    url)
+      ts_url || true
+      ;;
+    *)
+      echo "Usage: nodectl serve on|full|pwa|pwa-only|off|status|url" >&2
+      exit 1
+      ;;
+  esac
+}
+
+cmd_edit() {
+  local file="${1:-server.js}"
+  local path="$INDEX_ROOT/$file"
+  if [[ ! -f "$path" ]]; then
+    echo "ERROR: file not found: $path" >&2
+    exit 1
+  fi
+  "${EDITOR:-vim}" "$path"
+}
+
+cmd_pin() {
+  local sub="${1:-status}"
+  shift || true
+
+  mkdir -p "$PIN_STORE_DIR"
+
+  case "$sub" in
+    status)
+      say_title "nodectl pin status"
+      say "store:   $PIN_STORE_DIR"
+      say "config:  $PIN_CONFIG_PATH"
+      say "sessions:$PIN_SESSIONS_PATH"
+      say "flag:    $PIN_DISABLE_FLAG_PATH"
+      say ""
+      [[ -f "$PIN_CONFIG_PATH" ]] && say "pin config: present" || say "pin config: missing"
+      [[ -f "$PIN_SESSIONS_PATH" ]] && say "pin sessions: present" || say "pin sessions: missing"
+      if [[ -f "$PIN_DISABLE_FLAG_PATH" ]]; then
+        say_warn "pin barrier: DISABLED by flag"
+      else
+        say "pin barrier: enabled (no local disable flag)"
+      fi
+      if has_cmd curl; then
+        local status_url="http://${NODE_HOST}:${NODE_PORT}/api/pin/status"
+        local out rc=0
+        out="$(curl --max-time 2 -sS "$status_url" 2>&1)" || rc=$?
+        say ""
+        if [[ "$rc" -eq 0 ]]; then
+          say "api: $status_url"
+          printf "%s\n" "$out"
+        else
+          say_warn "api probe failed: $status_url ($out)"
+        fi
+      fi
+      ;;
+    off|disable)
+      printf "disabled_at=%s\n" "$(date --iso-8601=seconds 2>/dev/null || date)" > "$PIN_DISABLE_FLAG_PATH"
+      say "Wrote disable flag: $PIN_DISABLE_FLAG_PATH"
+      say "PIN barrier will be bypassed when server.js supports the flag."
+      say "If already running, restart index-node to pick up code changes."
+      ;;
+    on|enable)
+      rm -f "$PIN_DISABLE_FLAG_PATH"
+      say "Removed disable flag: $PIN_DISABLE_FLAG_PATH"
+      say "PIN barrier re-enabled (if configured)."
+      say "If already running, restart index-node to pick up code changes."
+      ;;
+    clear-sessions|clear-session|logout-all)
+      rm -f "$PIN_SESSIONS_PATH"
+      say "Removed PIN sessions file: $PIN_SESSIONS_PATH"
+      ;;
+    paths|path)
+      printf "%s\n" "$PIN_STORE_DIR" "$PIN_CONFIG_PATH" "$PIN_SESSIONS_PATH" "$PIN_DISABLE_FLAG_PATH"
+      ;;
+    help|-h|--help)
+      cat <<EOF
+Usage: nodectl pin <status|off|on|clear-sessions|paths>
+
+status         Show local PIN files and best-effort /api/pin/status probe
+off            Create local disable flag (${PIN_DISABLE_FLAG_PATH})
+on             Remove local disable flag
+clear-sessions Delete local PIN session cache file
+paths          Print local PIN file paths
+
+Note:
+  'off' requires index-node/server.js support for the pin disable flag.
+  Restart index-node after changing the flag if the running server is older.
+EOF
+      ;;
+    *)
+      echo "Usage: nodectl pin <status|off|on|clear-sessions|paths>" >&2
+      exit 1
+      ;;
+  esac
+}
+
+cmd_core4_check() {
+  if [[ -x "$CORE4_CHECKCTL_BIN" ]]; then
+    exec "$CORE4_CHECKCTL_BIN" "$@"
+  fi
+  echo "ERROR: core4-checkctl not found: $CORE4_CHECKCTL_BIN" >&2
+  exit 1
+}
+
+dashboard_show() {
+  say_title "nodectl menu"
+  health_check || true
+  echo ""
+  print_url_block
+  echo ""
+  if tailscale_available; then
+    echo "Tailscale serve:"
+    tailscale serve status 2>/dev/null || echo "  (status unavailable)"
+  else
+    echo "Tailscale: not installed"
+  fi
+}
+
+cmd_dashboard() {
+  local can_prompt=1
+  local prev_prompt="${CTL_CHOOSE_PROMPT:-}"
+
+  if has_func ctl_can_prompt; then
+    ctl_can_prompt || can_prompt=0
+  fi
+
+  if [[ "$can_prompt" != "1" ]]; then
+    dashboard_show
+    return 0
+  fi
+
+  while true; do
+    dashboard_show
+    echo ""
+
+    local action=""
+    CTL_CHOOSE_PROMPT="nodectl menu"
+    action="$(choose \
+      "refresh" \
+      "status" \
+      "open node" \
+      "open pwa core4" \
+      "open pwa fire" \
+      "open pwa focus" \
+      "menu check (/menu)" \
+      "warm node" \
+      "pwa serve-status" \
+      "pwa health all" \
+      "pwa doctor" \
+      "tailscale serve status" \
+      "tailscale serve full node" \
+      "tailscale serve pwa-only" \
+      "tailscale serve off (host)" \
+      "indexctl status" \
+      "indexctl doctor" \
+      "quit")" || {
+        CTL_CHOOSE_PROMPT="$prev_prompt"
+        return 0
+      }
+    CTL_CHOOSE_PROMPT="$prev_prompt"
+
+    case "$action" in
+      refresh) ;;
+      status) run_and_pause cmd_status ;;
+      "open node") cmd_open; pause_return ;;
+      "open pwa core4") cmd_pwa core4; pause_return ;;
+      "open pwa fire") cmd_pwa fire; pause_return ;;
+      "open pwa focus") cmd_pwa focus; pause_return ;;
+      "menu check (/menu)") run_and_pause cmd_menu ;;
+      "warm node") run_and_pause cmd_warm ;;
+      "pwa serve-status") run_and_pause run_pwactl serve-status ;;
+      "pwa health all") run_and_pause run_pwactl health all ;;
+      "pwa doctor") run_and_pause run_pwactl doctor ;;
+      "tailscale serve status") run_and_pause cmd_serve status ;;
+      "tailscale serve full node") run_and_pause cmd_serve full ;;
+      "tailscale serve pwa-only") run_and_pause cmd_serve pwa-only ;;
+      "tailscale serve off (host)") run_and_pause cmd_serve off ;;
+      "indexctl status") run_and_pause run_indexctl status ;;
+      "indexctl doctor") run_and_pause run_indexctl doctor ;;
+      quit) return 0 ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# ============================================================================
+# MAIN DISPATCH
+# ============================================================================
+
+cmd=""
+if [[ $# -gt 0 ]]; then
+  cmd="$1"
+  shift
+else
+  # Match bridgectl-like UX: open interactive menu by default.
+  # Fall back to status in non-interactive contexts.
+  cmd="menu"
+  if has_func ctl_can_prompt; then
+    ctl_can_prompt || cmd="status"
+  fi
+fi
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+
+  # Quick commands
+  status) cmd_status ;;
+  doctor) cmd_doctor ;;
+  menu|dashboard|dash|ui) cmd_dashboard ;;
+  menu-check) cmd_menu ;;
+  warm) cmd_warm ;;
+  dev) cmd_dev ;;
+
+  # URLs
+  url) cmd_url ;;
+  urls) cmd_urls ;;
+  open) cmd_open ;;
+  local) cmd_local ;;
+  ts) cmd_ts ;;
+  pwa) cmd_pwa "$@" ;;
+
+  # Tailscale
+  serve) cmd_serve "$@" ;;
+
+  # Edit
+  edit) cmd_edit "$@" ;;
+  pin) cmd_pin "$@" ;;
+  core4-check|c4check) cmd_core4_check "$@" ;;
+
+  # Service control (user service only)
+  start|stop|restart|logs)
+    cmd_service_control "$cmd" "$@"
+    ;;
+  fix)
+    exec_indexctl "$cmd" "$@"
+    ;;
+
+  # Mode switching (delegate to indexctl)
+  mode-dev|mode-status)
+    exec_indexctl "$cmd" "$@"
+    ;;
+
+  # Pass-through delegation
+  indexctl)
+    exec_indexctl "$@"
+    ;;
+  pwactl)
+    delegate_pwactl "$@"
+    ;;
+  routerctl)
+    exec "$ROUTERCTL_BIN" "$@"
+    ;;
+  bridgectl)
+    exec "$BRIDGECTL_BIN" "$@"
+    ;;
+
+  *)
+    echo "ERROR: unknown command: $cmd" >&2
+    echo "" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

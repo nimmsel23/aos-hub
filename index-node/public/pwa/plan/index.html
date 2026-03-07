@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#18100f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Plan</title>
+  <link rel="manifest" href="/pwa/plan/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/plan/style.css" />
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <div class="flare flare-a"></div>
+    <div class="flare flare-b"></div>
+    <div class="mesh"></div>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="eyebrow">AlphaOS Door</div>
+        <h1>Plan</h1>
+        <p>Door War, quadrant control, War Stack.</p>
+      </div>
+
+      <section class="card control-card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Selected Door</div>
+            <h2>Target</h2>
+          </div>
+          <button class="ghost-button" id="refreshBtn" type="button">Refresh</button>
+        </div>
+
+        <label class="field-label" for="doorTitleInput">Door title</label>
+        <input id="doorTitleInput" class="text-input" type="text" placeholder="Pick a candidate or type manually" />
+
+        <label class="field-label" for="reasoningInput">Reasoning</label>
+        <textarea id="reasoningInput" class="reasoning-input" placeholder="Why this door, why now?"></textarea>
+
+        <div class="control-actions">
+          <button class="primary-button" id="runDoorwarBtn" type="button">Run Door War</button>
+          <button class="ghost-button" id="startWarstackBtn" type="button">Start War Stack</button>
+        </div>
+      </section>
+
+      <section class="card status-card">
+        <div class="eyebrow">Runtime</div>
+        <div class="status-line">
+          <span class="status-dot" id="onlineDot"></span>
+          <span id="onlineLabel">Checking connection...</span>
+        </div>
+        <div class="status-copy" id="statusLine">Booting plan surface...</div>
+        <div class="status-copy subtle" id="summaryLine">Loading candidates...</div>
+      </section>
+
+      <section class="card radar-card">
+        <div class="section-head compact">
+          <div>
+            <div class="eyebrow">Quadrants</div>
+            <h2>Radar</h2>
+          </div>
+        </div>
+        <div class="radar-grid" id="radarGrid"></div>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <section class="hero card">
+        <div>
+          <div class="eyebrow">Phase 2</div>
+          <h2>Turn raw doors into a committed strike path.</h2>
+          <p>
+            Triaging does not replace Door War. It sharpens it.
+            Use quadrants to set pressure, then move the winner through the War Stack inquiry.
+          </p>
+        </div>
+        <div class="hero-metrics">
+          <div class="metric-box">
+            <span>Candidates</span>
+            <strong id="candidateCount">0</strong>
+          </div>
+          <div class="metric-box">
+            <span>Door Wars</span>
+            <strong id="doorwarCount">0</strong>
+          </div>
+          <div class="metric-box">
+            <span>War Stacks</span>
+            <strong id="warstackCount">0</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <section class="card candidate-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Hot List</div>
+              <h2>Plan Candidates</h2>
+            </div>
+            <div class="section-meta" id="candidateMeta">0 active entries</div>
+          </div>
+          <div class="candidate-list" id="candidateList"></div>
+        </section>
+
+        <section class="stack-column">
+          <section class="card result-card">
+            <div class="section-head">
+              <div>
+                <div class="eyebrow">Door War</div>
+                <h2>Current Result</h2>
+              </div>
+            </div>
+            <div id="doorwarResult"></div>
+          </section>
+
+          <section class="card session-card">
+            <div class="section-head">
+              <div>
+                <div class="eyebrow">War Stack</div>
+                <h2>Inquiry</h2>
+              </div>
+            </div>
+            <div id="sessionPanel"></div>
+          </section>
+        </section>
+      </section>
+
+      <section class="history-grid">
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Recent</div>
+              <h2>Door Wars</h2>
+            </div>
+          </div>
+          <div class="history-list" id="doorwarHistory"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Active</div>
+              <h2>Sessions</h2>
+            </div>
+          </div>
+          <div class="history-list" id="sessionHistory"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Archive</div>
+              <h2>War Stacks</h2>
+            </div>
+          </div>
+          <div class="history-list" id="warstackHistory"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/pwa/plan/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/plan/sw.js", { scope: "/pwa/plan/" });
+    }
+  </script>
+</body>
+</html>

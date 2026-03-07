@@ -1,0 +1,430 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+source "$ROOT_DIR/scripts/lib/codex-subcmd.sh"
+codex_subcmd_maybe "node" "nodectl" "$@" && exit 0
+
+source "$SCRIPT_DIR/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+BASE_ROOT="${AOS_ROOT:-$HOME/aos-hub}"
+INDEX_ROOT="${AOS_INDEX_ROOT:-$BASE_ROOT/index-node}"
+PROD_SERVICE="${AOS_INDEX_SERVICE:-${ALPHAOS_INDEX_SERVICE:-aos-index.service}}"
+USER_SERVICE="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+INDEX_MENU_PATH_UNIT="${AOS_INDEX_MENU_PATH_UNIT:-${ALPHAOS_INDEX_MENU_PATH_UNIT:-aos-index-dev-menu.path}}"
+INDEX_PUBLIC_PATH_UNIT="${AOS_INDEX_PUBLIC_PATH_UNIT:-${ALPHAOS_INDEX_PUBLIC_PATH_UNIT:-aos-index-dev-public.path}}"
+NODE_HOST="${AOS_INDEX_HOST:-127.0.0.1}"
+NODE_PORT="${AOS_INDEX_PORT:-${ALPHAOS_INDEX_PORT:-8799}}"
+ROUTERCTL_BIN="${ROUTERCTL_BIN:-$BASE_ROOT/routerctl}"
+BRIDGECTL_BIN="${BRIDGECTL_BIN:-$BASE_ROOT/bridgectl}"
+INDEXCTL_BIN="${INDEXCTL_BIN:-$BASE_ROOT/scripts/indexctl}"
+
+_detect_svc_mode() {
+  if systemctl -q is-active "$PROD_SERVICE" 2>/dev/null; then
+    echo "system"
+  elif systemctl --user -q is-active "$USER_SERVICE" 2>/dev/null; then
+    echo "user"
+  elif systemctl -q is-enabled "$PROD_SERVICE" 2>/dev/null; then
+    echo "system"
+  else
+    echo "user"
+  fi
+}
+
+SERVICE_SCOPE="$(_detect_svc_mode)"
+SERVICE_NAME="${PROD_SERVICE}"
+SERVICE_FLAGS=()
+if [[ "$SERVICE_SCOPE" == "user" ]]; then
+  SERVICE_NAME="$USER_SERVICE"
+  SERVICE_FLAGS=(--user)
+fi
+
+if [[ ! -d "$INDEX_ROOT" ]]; then
+  echo "Error: index-node directory missing ($INDEX_ROOT)" >&2
+  exit 1
+fi
+
+health_menu() {
+  if curl --max-time 1 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
+    echo "menu: OK"
+  else
+    echo "menu: FAIL"
+  fi
+}
+
+section() {
+  if has_gum; then
+    gum style --bold --border normal --padding "0 1" "$1"
+  else
+    echo "=== $1 ==="
+  fi
+}
+
+ts_url() {
+  tailscale serve status 2>/dev/null | awk '/^https:\/\//{print $1; exit}'
+}
+
+open_url() {
+  local url="$1"
+  if has_cmd xdg-open; then
+    xdg-open "$url" >/dev/null 2>&1
+  else
+    echo "$url"
+  fi
+}
+
+svc_is_active() { systemctl "${SERVICE_FLAGS[@]}" -q is-active "$SERVICE_NAME" 2>/dev/null; }
+svc_is_enabled() { systemctl "${SERVICE_FLAGS[@]}" -q is-enabled "$SERVICE_NAME" 2>/dev/null; }
+
+svc_start() {
+  if [[ "$SERVICE_SCOPE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" start
+  else
+    systemctl "${SERVICE_FLAGS[@]}" start "$SERVICE_NAME"
+  fi
+}
+
+svc_stop() {
+  if [[ "$SERVICE_SCOPE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" stop || true
+  else
+    systemctl "${SERVICE_FLAGS[@]}" stop "$SERVICE_NAME" || true
+  fi
+}
+
+svc_restart() {
+  if [[ "$SERVICE_SCOPE" == "system" && -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" restart
+  else
+    systemctl "${SERVICE_FLAGS[@]}" restart "$SERVICE_NAME"
+  fi
+}
+
+svc_logs() { journalctl "${SERVICE_FLAGS[@]}" -u "$SERVICE_NAME" "$@"; }
+
+ensure_running() {
+  svc_is_active || { svc_start >/dev/null 2>&1 || true; }
+}
+
+warmup() {
+  if has_cmd curl; then
+    local base="http://${NODE_HOST}:${NODE_PORT}"
+    for _ in {1..20}; do
+      curl --max-time 1 -fsS "$base/" >/dev/null 2>&1 || true
+      if curl --max-time 1 -fsS "$base/menu" >/dev/null 2>&1; then
+        return 0
+      fi
+      sleep 0.15
+    done
+  fi
+  return 0
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: nodectl <command>
+
+Compatibility note:
+  - Production-first index control: aosctl index ...
+  - Dev/user index control:         hubctl index ... (or hubctl node ...)
+  - nodectl remains as compatibility toolbox.
+
+General:
+  all, monitor, status   show summary + doctor + urls (default: all)
+  doctor                service + port + tailscale diagnostics
+  menu                  curl /menu to confirm index health
+  warm                  warm up / and /menu on the current port
+
+Service control:
+  start / stop / restart
+  logs                  tail recent journal entries
+  fix                   stop, free the port (lsof/fuser), then restart
+
+Dev helpers:
+  dev                   run npm dev server with auto-reload disabled
+  autoreload on|off|status
+  mode-dev/mode-prod    switch between user dev and system prod services
+  mode-status           show current mode via indexctl (if available)
+
+Integrations:
+  routerctl             pass through to routerctl
+  bridgectl             pass through to bridgectl
+  indexctl              pass through to indexctl
+
+URLs:
+  open                 open best URL (tailscale preferred)
+  local                open http://localhost:8799
+  ts                   open tailscale serve URL
+  url                  print best URL
+  serve on|off|status  manage tailscale serve
+
+Tooling:
+  edit [file]          open file relative to index-node root (default server.js)
+  help, -h, --help     show this message
+
+See also: indexctl --help, bridgectl status, routerctl doctor
+USAGE
+}
+
+show_monitor() {
+  section "Service status ($SERVICE_SCOPE: $SERVICE_NAME)"
+  echo "active: $(svc_is_active && echo yes || echo no)"
+  echo "enabled: $(svc_is_enabled && echo yes || echo no)"
+  echo
+  section "Recent logs"
+  svc_logs -n 20 --no-pager --output=short 2>/dev/null || echo "logs: unavailable"
+  echo
+  section "Menu health"
+  health_menu
+  echo
+  section "Tailscale serve"
+  if has_cmd tailscale; then
+    tailscale serve status 2>/dev/null || echo "tailscale: unavailable"
+  else
+    echo "tailscale: missing"
+  fi
+}
+
+doctor() {
+  echo "Index service: $SERVICE_NAME (mode: $SERVICE_SCOPE)"
+  echo "Port: $NODE_PORT"
+  echo
+  echo "[systemd]"
+  svc_is_enabled && echo "enabled: yes" || echo "enabled: no"
+  svc_is_active  && echo "active: yes"  || echo "active: no"
+  echo
+  echo "[listen]"
+  ss -ltnp 2>/dev/null | grep ":${NODE_PORT}" || echo "no listener on :${NODE_PORT}"
+  echo
+  echo "[local curl]"
+  if has_cmd curl; then
+    health_menu
+  else
+    echo "curl: missing"
+  fi
+  echo
+  echo "[tailscale]"
+  has_cmd tailscale && tailscale serve status || echo "tailscale: missing"
+}
+
+show_all() {
+  section "Summary"
+  local ts
+  ts="$(ts_url || true)"
+  if [[ -n "$ts" ]]; then
+    echo "url: $ts"
+  else
+    echo "url: http://${NODE_HOST}:${NODE_PORT}"
+  fi
+  echo
+  section "Monitor"
+  show_monitor
+  echo
+  section "Doctor"
+  doctor
+  if [[ -x "$ROUTERCTL_BIN" ]]; then
+    echo
+    section "routerctl doctor"
+    "$ROUTERCTL_BIN" doctor || true
+  fi
+  if [[ -x "$BRIDGECTL_BIN" ]]; then
+    echo
+    section "bridgectl doctor"
+    "$BRIDGECTL_BIN" doctor || true
+  fi
+  if [[ -x "$INDEXCTL_BIN" ]]; then
+    echo
+    section "indexctl doctor"
+    "$INDEXCTL_BIN" doctor || true
+  fi
+}
+
+device_dev() {
+  systemctl --user disable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" >/dev/null 2>&1 || true
+  svc_stop
+  (cd "$INDEX_ROOT" && npm run dev)
+}
+
+autoreload_cmd() {
+  local sub="${1:-status}"
+  case "$sub" in
+    on)
+      systemctl --user enable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" ;;
+    off)
+      systemctl --user disable --now "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" ;;
+    status)
+      systemctl --user status "$INDEX_MENU_PATH_UNIT" "$INDEX_PUBLIC_PATH_UNIT" --no-pager ;;
+    *)
+      echo "Usage: nodectl autoreload on|off|status" >&2
+      exit 2
+      ;;
+  esac
+}
+
+pass_through() {
+  local bin="$1"
+  shift
+  if [[ -x "$bin" ]]; then
+    "$bin" "$@"
+  else
+    echo "$bin not found or not executable" >&2
+    exit 1
+  fi
+}
+
+action_service_mode() {
+  local mode="$1"
+  if [[ -x "$INDEXCTL_BIN" ]]; then
+    "$INDEXCTL_BIN" "$mode"
+  else
+    echo "indexctl not available to apply $mode" >&2
+    exit 1
+  fi
+}
+
+case "${1:-all}" in
+  all|monitor|status)
+    if [[ "${1:-all}" == "all" ]]; then
+      show_all
+    else
+      show_monitor
+    fi
+    ;;
+  doctor)
+    doctor
+    ;;
+  menu)
+    health_menu
+    ;;
+  warm)
+    ensure_running
+    warmup && echo "OK"
+    ;;
+  fix)
+    svc_stop
+    if has_cmd lsof; then
+      local pids
+      pids="$(lsof -iTCP:${NODE_PORT} -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $2}' | sort -u)"
+      if [[ -n "$pids" ]]; then
+        echo "killing: $pids"
+        kill $pids || true
+      fi
+    elif has_cmd fuser; then
+      fuser -k -n tcp "$NODE_PORT" >/dev/null 2>&1 || true
+    else
+      echo "No lsof/fuser available to kill port ${NODE_PORT}" >&2
+    fi
+    svc_start
+    ;;
+  dev)
+    device_dev
+    ;;
+  autoreload)
+    shift
+    autoreload_cmd "$1"
+    ;;
+  routerctl)
+    shift
+    pass_through "$ROUTERCTL_BIN" "$@"
+    ;;
+  bridgectl)
+    shift
+    pass_through "$BRIDGECTL_BIN" "$@"
+    ;;
+  indexctl)
+    shift
+    pass_through "$INDEXCTL_BIN" "$@"
+    ;;
+  mode-dev|dev-mode|switch-dev)
+    action_service_mode mode-dev
+    ;;
+  mode-prod|prod-mode|switch-prod)
+    action_service_mode mode-prod
+    ;;
+  mode-status)
+    action_service_mode mode-status
+    ;;
+  open)
+    ensure_running
+    warmup
+    if ts_url >/dev/null 2>&1; then
+      open_url "$(ts_url)"
+    else
+      open_url "http://${NODE_HOST}:${NODE_PORT}"
+    fi
+    ;;
+  local)
+    ensure_running
+    warmup
+    open_url "http://${NODE_HOST}:${NODE_PORT}"
+    ;;
+  ts)
+    local ts
+    ts="$(ts_url || true)"
+    if [[ -n "$ts" ]]; then
+      open_url "$ts"
+    else
+      echo "No tailscale serve config." >&2
+      exit 1
+    fi
+    ;;
+  url)
+    ts="$(ts_url || true)"
+    if [[ -n "$ts" ]]; then
+      echo "$ts"
+    else
+      echo "http://${NODE_HOST}:${NODE_PORT}"
+    fi
+    ;;
+  serve)
+    sub="${2:-status}"
+    case "$sub" in
+      on)
+        tailscale serve --bg "$NODE_PORT"
+        ;;
+      off)
+        tailscale serve reset
+        ;;
+      status)
+        tailscale serve status
+        ;;
+      *)
+        echo "Usage: nodectl serve on|off|status" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  start)
+    svc_start
+    ;;
+  stop)
+    svc_stop
+    ;;
+  restart)
+    svc_restart
+    ;;
+  logs)
+    svc_logs -n 40 --no-pager
+    ;;
+  edit)
+    file="${2:-server.js}"
+    target="$INDEX_ROOT/$file"
+    if [[ -f "$target" ]]; then
+      (cd "$INDEX_ROOT" && "${EDITOR:-micro}" "$file")
+    else
+      echo "File not found: $target" >&2
+      exit 1
+    fi
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

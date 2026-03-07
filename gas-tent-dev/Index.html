@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <base target="_top">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GENERAL’S TENT – Alpha Odyssey</title>
+
+  <style>
+    :root {
+      --bg: #07000f;
+      --panel: rgba(26, 0, 40, 0.92);
+      --panel2: rgba(12, 0, 18, 0.88);
+      --border: rgba(155, 89, 182, 0.75);
+      --text: #eadcf5;
+      --muted: rgba(234, 220, 245, 0.70);
+
+      --accent: #bb86fc;      /* royal flame */
+      --accent2: #8e44ad;     /* deep purple */
+      --gold: #d7b46a;        /* counsel / divine */
+      --glow: rgba(155, 89, 182, 0.55);
+      --shadow: rgba(0,0,0,0.65);
+
+      --danger: #ff5c8a;
+      --ok: #63ffdb;
+      --warn: #ffd166;
+
+      --radius: 22px;
+      --radius2: 28px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:
+        radial-gradient(1200px 600px at 10% 0%, rgba(187,134,252,0.18), transparent 60%),
+        radial-gradient(900px 500px at 90% 10%, rgba(142,68,173,0.22), transparent 55%),
+        radial-gradient(900px 700px at 50% 100%, rgba(155,89,182,0.18), transparent 60%),
+        linear-gradient(180deg, #040008 0%, #07000f 45%, #05000a 100%);
+      overflow-x: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+      background: rgba(0,0,0,0.55);
+      border-bottom: 1px solid rgba(187,134,252,0.25);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    }
+    .topbar {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 16px 18px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+    .sigil {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      border: 1px solid rgba(187,134,252,0.55);
+      background:
+        radial-gradient(circle at 30% 30%, rgba(187,134,252,0.45), rgba(142,68,173,0.25) 55%, rgba(0,0,0,0.3) 100%);
+      box-shadow: 0 0 35px var(--glow), inset 0 0 25px rgba(0,0,0,0.55);
+      position: relative;
+      overflow: hidden;
+    }
+    .sigil:after {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: conic-gradient(from 180deg, rgba(187,134,252,0.0), rgba(187,134,252,0.35), rgba(187,134,252,0.0));
+      animation: spin 6s linear infinite;
+      opacity: 0.75;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .titlewrap { min-width: 0; }
+    .title {
+      font-weight: 950;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin: 0;
+      font-size: 14px;
+      color: rgba(234, 220, 245, 0.92);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .subtitle {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .pill {
+      border: 1px solid rgba(187,134,252,0.35);
+      background: rgba(26,0,40,0.35);
+      color: rgba(234, 220, 245, 0.92);
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 24px rgba(155,89,182,0.18);
+      user-select: none;
+    }
+    .btn {
+      cursor: pointer;
+      border: 1px solid rgba(187,134,252,0.35);
+      background: linear-gradient(135deg, rgba(187,134,252,0.26), rgba(142,68,173,0.12));
+      color: rgba(234,220,245,0.95);
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      box-shadow: 0 0 35px rgba(155,89,182,0.24);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(187,134,252,0.65);
+      box-shadow: 0 0 55px rgba(155,89,182,0.38);
+    }
+
+    /* Layout */
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 26px 18px 70px;
+    }
+
+    .hero {
+      margin-top: 10px;
+      border-radius: var(--radius2);
+      padding: 26px;
+      border: 1px solid rgba(187,134,252,0.30);
+      background:
+        radial-gradient(900px 300px at 20% 10%, rgba(187,134,252,0.16), transparent 60%),
+        radial-gradient(700px 260px at 80% 20%, rgba(142,68,173,0.22), transparent 60%),
+        linear-gradient(135deg, rgba(26,0,40,0.82), rgba(10,0,16,0.88));
+      box-shadow: 0 30px 90px rgba(0,0,0,0.55), 0 0 70px rgba(155,89,182,0.18);
+      overflow: hidden;
+      position: relative;
+    }
+    .hero:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 60% 0%, rgba(215,180,106,0.12), transparent 45%);
+      pointer-events: none;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 54px);
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      font-weight: 950;
+      color: rgba(187,134,252,0.96);
+      text-shadow: 0 0 50px rgba(155,89,182,0.55);
+    }
+    .hero p {
+      margin: 12px 0 0;
+      color: rgba(234,220,245,0.82);
+      line-height: 1.8;
+      max-width: 76ch;
+      font-size: 14px;
+    }
+    .hero .quote {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-left: 4px solid rgba(215,180,106,0.85);
+      background: rgba(0,0,0,0.25);
+      border-radius: 14px;
+      color: rgba(234,220,245,0.86);
+      font-style: italic;
+    }
+    .hero .quote strong { color: rgba(215,180,106,0.95); font-style: normal; }
+
+    /* Section grid */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      border-radius: var(--radius);
+      border: 1px solid rgba(187,134,252,0.26);
+      background: linear-gradient(135deg, rgba(26,0,40,0.82), rgba(10,0,16,0.90));
+      box-shadow: 0 22px 70px rgba(0,0,0,0.55);
+      overflow: hidden;
+    }
+    .card .hd {
+      padding: 16px 18px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      border-bottom: 1px solid rgba(187,134,252,0.18);
+      background: rgba(0,0,0,0.20);
+    }
+    .card .hd h2 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-weight: 950;
+      color: rgba(234,220,245,0.92);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card .hd .mini {
+      margin: 0;
+      font-size: 12px;
+      color: rgba(234,220,245,0.65);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    .card .bd { padding: 16px 18px 18px; }
+
+    .ritual {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 720px) { .ritual { grid-template-columns: 1fr; } }
+
+    .rit {
+      border: 1px solid rgba(187,134,252,0.18);
+      border-radius: 18px;
+      background: rgba(0,0,0,0.22);
+      padding: 14px;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.55);
+    }
+    .rit h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(187,134,252,0.95);
+      font-weight: 950;
+    }
+    .rit p {
+      margin: 0;
+      color: rgba(234,220,245,0.72);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    /* Maps */
+    .maps {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 900px) { .maps { grid-template-columns: 1fr; } }
+
+    .mapbox {
+      border-radius: 18px;
+      border: 1px solid rgba(187,134,252,0.16);
+      background: linear-gradient(135deg, rgba(0,0,0,0.26), rgba(0,0,0,0.12));
+      padding: 14px;
+      box-shadow: inset 0 0 26px rgba(0,0,0,0.55);
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .maphead {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .maphead .name {
+      font-weight: 950;
+      letter-spacing: 2px;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: rgba(215,180,106,0.92);
+    }
+    .maphead .meta {
+      font-size: 12px;
+      color: rgba(234,220,245,0.55);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    .entry {
+      white-space: pre-wrap;
+      color: rgba(234,220,245,0.82);
+      font-size: 13px;
+      line-height: 1.65;
+      max-height: 220px;
+      overflow: auto;
+      padding-right: 6px;
+    }
+    .entry em { color: rgba(234,220,245,0.58); }
+
+    .linkrow {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: auto;
+    }
+    .linkrow a {
+      text-decoration: none;
+      font-weight: 900;
+      font-size: 12px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: rgba(187,134,252,0.92);
+      border: 1px solid rgba(187,134,252,0.22);
+      background: rgba(26,0,40,0.35);
+      padding: 10px 12px;
+      border-radius: 999px;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .linkrow a:hover {
+      transform: translateY(-1px);
+      border-color: rgba(187,134,252,0.55);
+      box-shadow: 0 0 40px rgba(155,89,182,0.22);
+    }
+
+    /* Scores */
+    .scores {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .scorebox {
+      border-radius: 18px;
+      border: 1px solid rgba(187,134,252,0.18);
+      background: rgba(0,0,0,0.22);
+      padding: 14px;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.55);
+    }
+    .scorebox .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .scorebox .label {
+      font-weight: 950;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: rgba(215,180,106,0.92);
+    }
+    .scorebox .hint {
+      font-size: 12px;
+      color: rgba(234,220,245,0.55);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .scoreinputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .scoreinputs label {
+      font-size: 12px;
+      color: rgba(234,220,245,0.68);
+      letter-spacing: 1px;
+    }
+    input[type="number"] {
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(187,134,252,0.20);
+      background: rgba(0,0,0,0.55);
+      color: rgba(234,220,245,0.95);
+      outline: none;
+      font-size: 14px;
+      box-shadow: inset 0 0 22px rgba(0,0,0,0.55);
+    }
+    input[type="number"]:focus {
+      border-color: rgba(187,134,252,0.55);
+      box-shadow: 0 0 30px rgba(155,89,182,0.25), inset 0 0 22px rgba(0,0,0,0.55);
+    }
+
+    .scoreline {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(187,134,252,0.18);
+    }
+    .scoreline .big {
+      font-size: 28px;
+      font-weight: 950;
+      letter-spacing: 2px;
+      color: rgba(187,134,252,0.95);
+      text-shadow: 0 0 40px rgba(155,89,182,0.35);
+    }
+    .scoreline .tag {
+      font-size: 12px;
+      color: rgba(234,220,245,0.60);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* Notes */
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(187,134,252,0.18);
+      background: rgba(0,0,0,0.55);
+      color: rgba(234,220,245,0.92);
+      outline: none;
+      font-size: 14px;
+      line-height: 1.7;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.55);
+      resize: vertical;
+    }
+    textarea:focus {
+      border-color: rgba(187,134,252,0.55);
+      box-shadow: 0 0 35px rgba(155,89,182,0.25), inset 0 0 30px rgba(0,0,0,0.55);
+    }
+
+    .notegrid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .notehead {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .notehead .k {
+      font-weight: 950;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: rgba(187,134,252,0.95);
+    }
+    .notehead .s {
+      font-size: 12px;
+      color: rgba(234,220,245,0.55);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    /* Menu */
+    .menu {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .menucards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 980px) { .menucards { grid-template-columns: 1fr; } }
+
+    .mcard {
+      border-radius: 18px;
+      border: 1px solid rgba(187,134,252,0.16);
+      background: linear-gradient(135deg, rgba(0,0,0,0.22), rgba(0,0,0,0.10));
+      padding: 14px;
+      box-shadow: inset 0 0 26px rgba(0,0,0,0.55);
+    }
+    .mcard .t {
+      margin: 0 0 8px;
+      font-weight: 950;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: rgba(215,180,106,0.92);
+    }
+    .mcard .d {
+      margin: 0 0 10px;
+      color: rgba(234,220,245,0.70);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    footer {
+      margin-top: 18px;
+      text-align: center;
+      color: rgba(234,220,245,0.45);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 22px 0 10px;
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">
+      <div class="sigil" aria-hidden="true"></div>
+      <div class="titlewrap">
+        <p class="title">GENERAL’S TENT</p>
+        <p class="subtitle">Weekly Strategic Reflection • Return & Report • Counsel with GOD</p>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="pill" id="weekPill">🗓 Week: --</div>
+      <div class="pill" id="stampPill">⏳ Updated: --</div>
+      <button class="btn" type="button" onclick="loadAll()">Reload</button>
+      <button class="btn" type="button" onclick="resetLocal()">Reset Local Notes</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>THE GENERAL’S TENT</h1>
+    <p>
+      In the heart of your battleground there is a sanctuary — a weekly ritual of strategic reflection.
+      You return. You report. You learn. You correct. You set new targets.
+      And across the table sits the only ally that matters: <span style="color:rgba(215,180,106,0.95);font-weight:900;letter-spacing:1px;">GOD</span>.
+    </p>
+    <div class="quote">
+      <strong>Chapter 41:</strong> “What happens in the Tent is not review. It’s commitment.”
+    </div>
+  </section>
+
+  <section class="grid">
+    <!-- LEFT: Return & Report + Maps -->
+    <div class="card">
+      <div class="hd">
+        <h2>🗺 Return & Report</h2>
+        <p class="mini">Latest Intel from your Maps</p>
+      </div>
+      <div class="bd">
+        <div class="ritual">
+          <div class="rit">
+            <h3>Component #1</h3>
+            <p>
+              <b>Return & Report</b> — brutal honesty. Are you on track or off track?
+              The maps do not lie.
+            </p>
+          </div>
+          <div class="rit">
+            <h3>Chain of Command</h3>
+            <p>
+              Day → Week → Month → Year. Your review sets the tone.
+              Your correction decides the outcome.
+            </p>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="maps">
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Frame Map</div>
+              <div class="meta" id="meta_frame">—</div>
+            </div>
+            <div class="entry" id="frame">(lädt...)</div>
+            <div class="linkrow">
+              <a id="link_frame" href="#" target="_blank">→ Frame Centre</a>
+            </div>
+          </div>
+
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Freedom Map</div>
+              <div class="meta" id="meta_freedom">—</div>
+            </div>
+            <div class="entry" id="freedom">(lädt...)</div>
+            <div class="linkrow">
+              <a id="link_freedom" href="#" target="_blank">→ Freedom Centre</a>
+            </div>
+          </div>
+
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Focus Map</div>
+              <div class="meta" id="meta_focus">—</div>
+            </div>
+            <div class="entry" id="focus">(lädt...)</div>
+            <div class="linkrow">
+              <a id="link_focus" href="#" target="_blank">→ Focus Centre</a>
+            </div>
+          </div>
+
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Fire Map</div>
+              <div class="meta" id="meta_fire">—</div>
+            </div>
+            <div class="entry" id="fire">(lädt...)</div>
+            <div class="linkrow">
+              <a id="link_fire" href="#" target="_blank">→ Fire Centre</a>
+            </div>
+          </div>
+
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Voice Stack</div>
+              <div class="meta" id="meta_voice">—</div>
+            </div>
+            <div class="entry" id="voice">(lädt...)</div>
+            <div class="linkrow">
+              <a id="link_voice" href="#" target="_blank">→ Voice Centre</a>
+            </div>
+          </div>
+
+          <div class="mapbox">
+            <div class="maphead">
+              <div class="name">Alpha Odyssey</div>
+              <div class="meta">Wake Up • Take A Knee • Have It All • Be Free</div>
+            </div>
+            <div class="entry">
+              <em>
+                The Code → The Fact Maps → The Voice → The Core → The Door → The Game.
+                The Tent is where the Game becomes inevitable.
+              </em>
+            </div>
+            <div class="linkrow">
+              <a href="#" onclick="scrollToId('notesCard');return false;">→ Continue Ritual</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Scores + Menu -->
+    <div style="display:grid;gap:18px;">
+      <div class="card">
+        <div class="hd">
+          <h2>📊 Alpha Score</h2>
+          <p class="mini">Report the Numbers</p>
+        </div>
+        <div class="bd">
+          <div class="scores">
+            <div class="scorebox">
+              <div class="row">
+                <div class="label">The Core</div>
+                <div class="hint">__/28 (daily)</div>
+              </div>
+              <div class="scoreinputs">
+                <label>Score
+                  <input id="coreScore" type="number" min="0" max="28" placeholder="0..28">
+                </label>
+                <label>Max
+                  <input id="coreMax" type="number" min="1" max="60" value="28">
+                </label>
+              </div>
+              <div class="scoreline">
+                <div class="big" id="coreDisplay">-- / 28</div>
+                <div class="tag">Return & Report</div>
+              </div>
+              <div class="mini" id="core4-weekly-note" style="display:none;"></div>
+            </div>
+
+            <div class="scorebox">
+              <div class="row">
+                <div class="label">The Stack</div>
+                <div class="hint">__/7 (weekly)</div>
+              </div>
+              <div class="scoreinputs">
+                <label>Score
+                  <input id="stackScore" type="number" min="0" max="7" placeholder="0..7">
+                </label>
+                <label>Max
+                  <input id="stackMax" type="number" min="1" max="30" value="7">
+                </label>
+              </div>
+              <div class="scoreline">
+                <div class="big" id="stackDisplay">-- / 7</div>
+                <div class="tag">Return & Report</div>
+              </div>
+            </div>
+
+            <div class="scorebox">
+              <div class="row">
+                <div class="label">The Door</div>
+                <div class="hint">__/21 (weekly)</div>
+              </div>
+              <div class="scoreinputs">
+                <label>Score
+                  <input id="doorScore" type="number" min="0" max="21" placeholder="0..21">
+                </label>
+                <label>Max
+                  <input id="doorMax" type="number" min="1" max="60" value="21">
+                </label>
+              </div>
+              <div class="scoreline">
+                <div class="big" id="doorDisplay">-- / 21</div>
+                <div class="tag">Return & Report</div>
+              </div>
+            </div>
+
+            <button class="btn" type="button" onclick="saveLocalScores()">Save Scores (local)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd">
+          <h2>🧭 Command Menu</h2>
+          <p class="mini">Cards → Submodules</p>
+        </div>
+        <div class="bd">
+          <div class="menucards">
+            <div class="mcard">
+              <div class="t">GameCentre</div>
+              <div class="d">Maps + Tent + Odyssey synthesis.</div>
+              <div class="linkrow">
+                <a id="link_gamecentre" href="#" target="_blank">→ GameCentre Index</a>
+              </div>
+            </div>
+            <div class="mcard">
+              <div class="t">DoorCentre</div>
+              <div class="d">Hot List • Door War • War Stack • Profit Review.</div>
+              <div class="linkrow">
+                <a id="link_doorcentre" href="#" target="_blank">→ DoorCentre Index</a>
+              </div>
+            </div>
+            <div class="mcard">
+              <div class="t">Frame/Freedom/Focus/Fire</div>
+              <div class="d">Navigate facts. Then choose targets.</div>
+              <div class="linkrow">
+                <a id="link_frame2" href="#" target="_blank">Frame</a>
+                <a id="link_freedom2" href="#" target="_blank">Freedom</a>
+                <a id="link_focus2" href="#" target="_blank">Focus</a>
+                <a id="link_fire2" href="#" target="_blank">Fire</a>
+              </div>
+            </div>
+            <div class="mcard">
+              <div class="t">Voice Centre</div>
+              <div class="d">Stop • Submit • Struggle • Strike (clarity before action).</div>
+              <div class="linkrow">
+                <a id="link_voice2" href="#" target="_blank">→ Voice</a>
+              </div>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+          <div class="rit">
+            <h3>Directive</h3>
+            <p>
+              Keep the Tent clean: it’s the weekly council.
+              The modules do the work. The Tent decides the war.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NOTES -->
+  <section class="card" id="notesCard" style="margin-top:18px;">
+    <div class="hd">
+      <h2>✍️ The Fourfold Strategy Session</h2>
+      <p class="mini">Lessons • Course Correction • New Targets</p>
+    </div>
+    <div class="bd">
+      <div class="notegrid">
+        <div>
+          <div class="notehead">
+            <div class="k">Component #2 — Lessons Learned</div>
+            <div class="s">What worked / What didn’t</div>
+          </div>
+          <textarea id="lessons" placeholder="What did the week teach you? What pattern repeats? What cross-domain principle can you apply for exponential growth?"></textarea>
+        </div>
+
+        <div>
+          <div class="notehead">
+            <div class="k">Component #3 — Course Correction</div>
+            <div class="s">Adjust strategy</div>
+          </div>
+          <textarea id="correction" placeholder="Where did you drift? What needs realignment? What gets cut? What gets reinforced?"></textarea>
+        </div>
+
+        <div>
+          <div class="notehead">
+            <div class="k">Component #4 — New Targets</div>
+            <div class="s">Targets aligned to Focus → Freedom</div>
+          </div>
+          <textarea id="targets" placeholder="List the new targets. Keep them aligned: Focus (month) → Freedom (year)."></textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn" type="button" onclick="saveLocalNotes()">Save Notes (local)</button>
+          <button class="btn" type="button" onclick="copyWeeklyReport()">Copy Weekly Report (md)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    αOS • General’s Tent • Chapter 41 • Alpha Odyssey
+  </footer>
+</main>
+
+<script>
+  window.CENTRE_LINKS = <?= JSON.stringify((typeof centreLinks !== 'undefined' && centreLinks) ? centreLinks : {}) ?>;
+  const CENTRE_LINKS = window.CENTRE_LINKS || {};
+
+  const LS = {
+    prefix: "aos_gentent_",
+    scores: "scores",
+    notes:  "notes"
+  };
+
+  // ====== Helpers ======
+  function scrollToId(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 90, behavior: "smooth" });
+  }
+
+  function isoWeekString(date = new Date()) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+  }
+
+  function fmtDate(d) {
+    try {
+      return new Date(d).toLocaleDateString('de-DE');
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function safeText(s) {
+    return String(s || "").replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+  }
+
+  function setLinks() {
+    const pairs = [
+      ["link_frame", "frame"], ["link_frame2", "frame"],
+      ["link_freedom", "freedom"], ["link_freedom2", "freedom"],
+      ["link_focus", "focus"], ["link_focus2", "focus"],
+      ["link_fire", "fire"], ["link_fire2", "fire"],
+      ["link_voice", "voice"], ["link_voice2", "voice"],
+      ["link_doorcentre", "doorcentre"],
+      ["link_gamecentre", "gamecentre"],
+    ];
+    pairs.forEach(([id, key]) => {
+      const a = document.getElementById(id);
+      if (!a) return;
+      a.href = CENTRE_LINKS[key] || "#";
+      a.onclick = (ev) => {
+        const href = a.getAttribute("href") || "";
+        if (!href || href === "#") {
+          ev.preventDefault();
+          return false;
+        }
+        tentDebugCentreClick_(key, href);
+        return true;
+      };
+    });
+  }
+
+  function tentDebugCentreClick_(centreKey, href) {
+    if (typeof google === "undefined" || !google.script || !google.script.run) return;
+    google.script.run.tent_debugCentreClick(String(centreKey || ""), String(href || ""));
+  }
+
+  function renderRow(type, row) {
+    const box = document.getElementById(type);
+    const meta = document.getElementById("meta_" + type);
+    if (!box) return;
+
+    if (!row || !Array.isArray(row) || row.length < 5) {
+      box.innerHTML = "<em>Kein Eintrag – Course Correction nötig</em>";
+      if (meta) meta.textContent = "—";
+      return;
+    }
+
+    // Standard: [SessionID, Title, Type, Timestamp, Content, Extra...]
+    const title = row[1] || type.toUpperCase();
+    const ts = row[3] ? fmtDate(row[3]) : "";
+    const content = row[4] || row[5] || "";
+
+    if (meta) meta.textContent = ts ? ts : "—";
+
+    box.innerHTML =
+      `<b>${safeText(title)}${ts ? " · " + safeText(ts) : ""}</b>\n\n` +
+      safeText(content || "(kein Inhalt)");
+  }
+
+  // ====== Load all map latest ======
+  function loadAll() {
+    setLinks();
+
+    document.getElementById("weekPill").textContent = "🗓 Week: " + isoWeekString();
+    document.getElementById("stampPill").textContent = "⏳ Updated: " + new Date().toLocaleString('de-DE');
+
+    const types = ["frame","freedom","focus","fire","voice"];
+    types.forEach(type => {
+      if (typeof google === "undefined" || !google.script || !google.script.run) {
+        document.getElementById(type).innerHTML = "<em>google.script.run nicht verfügbar (Preview außerhalb GAS)</em>";
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(row => renderRow(type, row))
+        .withFailureHandler(err => {
+          document.getElementById(type).innerHTML = "<em>Fehler: " + safeText(err.message || err) + "</em>";
+        })
+        .getLatest(type);
+    });
+
+    restoreLocal();
+    loadCore4Weekly();
+    wireScoreLive();
+    wireAutosave();
+  }
+
+  // ====== Local storage for scores/notes ======
+  function restoreLocal() {
+    try {
+      const scores = JSON.parse(localStorage.getItem(LS.prefix + LS.scores) || "{}");
+      if (scores.coreScore != null)  document.getElementById("coreScore").value = scores.coreScore;
+      if (scores.coreMax != null)    document.getElementById("coreMax").value = scores.coreMax;
+      if (scores.stackScore != null) document.getElementById("stackScore").value = scores.stackScore;
+      if (scores.stackMax != null)   document.getElementById("stackMax").value = scores.stackMax;
+      if (scores.doorScore != null)  document.getElementById("doorScore").value = scores.doorScore;
+      if (scores.doorMax != null)    document.getElementById("doorMax").value = scores.doorMax;
+
+      const notes = JSON.parse(localStorage.getItem(LS.prefix + LS.notes) || "{}");
+      if (notes.lessons != null)    document.getElementById("lessons").value = notes.lessons;
+      if (notes.correction != null) document.getElementById("correction").value = notes.correction;
+      if (notes.targets != null)    document.getElementById("targets").value = notes.targets;
+    } catch (_) {}
+    updateScoreDisplays();
+  }
+
+  function loadCore4Weekly() {
+    const note = document.getElementById("core4-weekly-note");
+    if (!note) return;
+    const today = new Date();
+    if (today.getDay() !== 0) {
+      note.style.display = "none";
+      return;
+    }
+
+    if (typeof google === "undefined" || !google.script || !google.script.run) {
+      note.textContent = "Core4: GAS nicht verfügbar";
+      note.style.display = "block";
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(summary => {
+        const totals = summary && summary.totals ? summary.totals : {};
+        const weekTotal = totals.week_total || 0;
+        const max = 28;
+        const pct = Math.round((weekTotal / max) * 100);
+        const weekLabel = summary && summary.week ? summary.week : isoWeekString();
+
+        const coreScore = document.getElementById("coreScore");
+        const coreMax = document.getElementById("coreMax");
+        if (coreScore) coreScore.value = weekTotal;
+        if (coreMax) coreMax.value = max;
+        updateScoreDisplays();
+
+        note.textContent = `Core4 ${weekLabel}: ${weekTotal}/${max} (${pct}%)`;
+        note.style.display = "block";
+      })
+      .withFailureHandler(err => {
+        note.textContent = "Core4: Fehler beim Laden";
+        note.style.display = "block";
+      })
+      .core4_getWeekSummary();
+  }
+
+  function saveLocalScores() {
+    const payload = {
+      coreScore:  numVal("coreScore"),
+      coreMax:    numVal("coreMax"),
+      stackScore: numVal("stackScore"),
+      stackMax:   numVal("stackMax"),
+      doorScore:  numVal("doorScore"),
+      doorMax:    numVal("doorMax"),
+      week: isoWeekString(),
+      ts: new Date().toISOString()
+    };
+    localStorage.setItem(LS.prefix + LS.scores, JSON.stringify(payload));
+    updateScoreDisplays();
+    flash("Scores saved (local).");
+  }
+
+  function saveLocalNotes() {
+    const payload = {
+      lessons: document.getElementById("lessons").value || "",
+      correction: document.getElementById("correction").value || "",
+      targets: document.getElementById("targets").value || "",
+      week: isoWeekString(),
+      ts: new Date().toISOString()
+    };
+    localStorage.setItem(LS.prefix + LS.notes, JSON.stringify(payload));
+    flash("Notes saved (local).");
+  }
+
+  function resetLocal() {
+    localStorage.removeItem(LS.prefix + LS.scores);
+    localStorage.removeItem(LS.prefix + LS.notes);
+    location.reload();
+  }
+
+  function numVal(id) {
+    const v = parseInt(document.getElementById(id).value, 10);
+    return isNaN(v) ? null : v;
+  }
+
+  function updateScoreDisplays() {
+    const cs = numVal("coreScore");
+    const cm = numVal("coreMax") ?? 28;
+    const ss = numVal("stackScore");
+    const sm = numVal("stackMax") ?? 7;
+    const ds = numVal("doorScore");
+    const dm = numVal("doorMax") ?? 21;
+
+    document.getElementById("coreDisplay").textContent = `${cs ?? "--"} / ${cm}`;
+    document.getElementById("stackDisplay").textContent = `${ss ?? "--"} / ${sm}`;
+    document.getElementById("doorDisplay").textContent = `${ds ?? "--"} / ${dm}`;
+  }
+
+  function wireScoreLive() {
+    ["coreScore","coreMax","stackScore","stackMax","doorScore","doorMax"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", updateScoreDisplays);
+    });
+  }
+
+  function wireAutosave() {
+    // light autosave for notes
+    ["lessons","correction","targets"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", () => {
+        // store without spamming UI
+        try {
+          const notes = {
+            lessons: document.getElementById("lessons").value || "",
+            correction: document.getElementById("correction").value || "",
+            targets: document.getElementById("targets").value || "",
+            week: isoWeekString(),
+            ts: new Date().toISOString()
+          };
+          localStorage.setItem(LS.prefix + LS.notes, JSON.stringify(notes));
+        } catch (_) {}
+      });
+    });
+  }
+
+  function copyWeeklyReport() {
+    const week = isoWeekString();
+    const scores = JSON.parse(localStorage.getItem(LS.prefix + LS.scores) || "{}");
+    const notes  = JSON.parse(localStorage.getItem(LS.prefix + LS.notes) || "{}");
+
+    const md =
+`# General's Tent — ${week}
+
+## Component #1 — Return & Report
+- Core: ${scores.coreScore ?? "__"} / ${scores.coreMax ?? 28}
+- Stack: ${scores.stackScore ?? "__"} / ${scores.stackMax ?? 7}
+- Door: ${scores.doorScore ?? "__"} / ${scores.doorMax ?? 21}
+
+## Component #2 — Lessons Learned
+${(notes.lessons || "_empty_").trim()}
+
+## Component #3 — Course Correction
+${(notes.correction || "_empty_").trim()}
+
+## Component #4 — New Targets
+${(notes.targets || "_empty_").trim()}
+
+---
+Alpha Odyssey • Chapter 41
+`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(md).then(() => flash("Weekly report copied (md)."))
+      .catch(() => alert(md));
+    } else {
+      alert(md);
+    }
+  }
+
+  function flash(msg) {
+    // minimal feedback without extra CSS: use stamp pill temporarily
+    const el = document.getElementById("stampPill");
+    const old = el.textContent;
+    el.textContent = "✨ " + msg;
+    setTimeout(() => { el.textContent = old; }, 1400);
+  }
+
+  // boot
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", loadAll);
+  } else {
+    loadAll();
+  }
+</script>
+
+</body>
+</html>

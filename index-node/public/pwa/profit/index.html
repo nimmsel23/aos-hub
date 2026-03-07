@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#10322c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Door Profit</title>
+  <link rel="manifest" href="/pwa/profit/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/profit/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="card brand-card">
+        <div class="eyebrow">Door / Phase 4</div>
+        <h1>Profit</h1>
+        <p>Close the loop. Review completed work, save the reflection, and keep the wins visible.</p>
+      </div>
+
+      <section class="card overview-card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Overview</div>
+            <h2>Completed Doors</h2>
+          </div>
+          <button class="ghost-button" id="refreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="overview-grid">
+          <div class="metric-tile">
+            <span class="metric-label">Completed</span>
+            <strong id="completedCount">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">Reflections</span>
+            <strong id="reflectionCount">0</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="card status-card">
+        <div class="eyebrow">Status</div>
+        <div class="status-line">
+          <span class="status-dot" id="onlineDot"></span>
+          <span id="onlineLabel">Checking connection...</span>
+        </div>
+        <div class="status-meta" id="statusLine">Ready.</div>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="toolbar card">
+        <div>
+          <div class="eyebrow">Review Layer</div>
+          <h2>Profit Review</h2>
+        </div>
+        <div class="toolbar-copy">
+          <strong id="toolbarMeta">0 completed doors</strong>
+          <span>Door reflections and archived wins.</span>
+        </div>
+      </header>
+
+      <section class="board">
+        <div class="stack-column">
+          <section class="card panel-card">
+            <div class="panel-head">
+              <div>
+                <div class="eyebrow">Completed</div>
+                <h3>Door Results</h3>
+              </div>
+            </div>
+            <div class="completed-list" id="completedList"></div>
+          </section>
+
+          <section class="card panel-card">
+            <div class="panel-head">
+              <div>
+                <div class="eyebrow">Archive</div>
+                <h3>Saved Reflections</h3>
+              </div>
+            </div>
+            <div class="reflection-list" id="reflectionList"></div>
+          </section>
+        </div>
+
+        <aside class="form-column">
+          <section class="card panel-card">
+            <div class="panel-head">
+              <div>
+                <div class="eyebrow">New Reflection</div>
+                <h3>Write Profit</h3>
+              </div>
+            </div>
+
+            <form id="reflectionForm" class="reflection-form">
+              <label class="field">
+                <span>Door Title</span>
+                <input id="doorTitleInput" name="door_title" type="text" placeholder="Completed door" />
+              </label>
+
+              <label class="field">
+                <span>Reflection</span>
+                <textarea id="reflectionInput" name="reflection" rows="6" placeholder="What changed? What mattered?"></textarea>
+              </label>
+
+              <label class="field">
+                <span>Wins</span>
+                <textarea id="winsInput" name="wins" rows="3" placeholder="One win per line"></textarea>
+              </label>
+
+              <label class="field">
+                <span>Lessons</span>
+                <textarea id="lessonsInput" name="lessons" rows="3" placeholder="One lesson per line"></textarea>
+              </label>
+
+              <label class="field">
+                <span>Next</span>
+                <textarea id="nextInput" name="next" rows="3" placeholder="One next step per line"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="primary-button" id="saveBtn" type="submit">Save Reflection</button>
+                <button class="ghost-button" id="resetBtn" type="button">Clear</button>
+              </div>
+            </form>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script src="/pwa/profit/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/profit/sw.js", { scope: "/pwa/profit/" });
+    }
+  </script>
+</body>
+</html>

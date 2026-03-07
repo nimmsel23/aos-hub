@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fire Map (Weekly)</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --card:rgba(255,255,255,0.06);
+      --border:rgba(255,255,255,0.14);
+      --text:rgba(255,255,255,0.92);
+      --muted:rgba(255,255,255,0.62);
+      --accent:#ff5c8a;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(255,92,138,0.16), transparent 60%),
+                  radial-gradient(1000px 500px at 80% 40%, rgba(0,229,255,0.12), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      min-height:100vh;
+    }
+    nav{
+      position:sticky;
+      top:0;
+      z-index:10;
+      padding:14px 16px;
+      background:rgba(0,0,0,0.35);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(10px);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    nav a{
+      color:var(--text);
+      text-decoration:none;
+      font-weight:900;
+      letter-spacing:2px;
+    }
+    .wrap{max-width:1100px;margin:24px auto 60px;padding:0 16px;}
+    h1{margin:18px 0 6px;font-size:34px;letter-spacing:1px;}
+    .sub{color:var(--muted);margin:0 0 18px;}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+    .pill{display:inline-block;padding:8px 10px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--muted);font-size:12px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+    textarea{
+      width:100%;
+      min-height:170px;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,0.35);
+      color:var(--text);
+      resize:vertical;
+      outline:none;
+    }
+    textarea:focus{border-color:rgba(255,92,138,0.6);box-shadow:0 0 0 3px rgba(255,92,138,0.12);}
+    button{
+      border:0;
+      border-radius:14px;
+      padding:12px 16px;
+      font-weight:900;
+      letter-spacing:1px;
+      cursor:pointer;
+      background:linear-gradient(135deg, rgba(255,92,138,0.95), rgba(255,164,84,0.95));
+      color:#12040a;
+    }
+    button.secondary{
+      background:transparent;
+      color:var(--text);
+      border:1px solid var(--border);
+    }
+    .status{margin-top:12px;color:var(--muted);font-size:13px;white-space:pre-wrap;}
+    .label{font-weight:900;letter-spacing:1px;margin:0 0 8px;}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="<?= baseUrl ?>?k=<?= userKey || '' ?>">αOS</a>
+    <span class="pill">Weekly Export</span>
+  </nav>
+
+  <div class="wrap">
+    <h1>FIRE MAP</h1>
+    <p class="sub">Weekly strikes. Lock them. Serve Focus.</p>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div class="row">
+        <div class="pill">Week: <span id="weekLabel">-</span></div>
+        <div class="pill">Focus Month: <span id="monthLabel">-</span></div>
+        <button class="secondary" onclick="setToday()">Today</button>
+        <button onclick="exportWeek()">LOCK WEEK</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">BODY</div>
+        <textarea id="body" placeholder="1. Training 4x\n2. Mobility daily\n3. Sleep discipline"></textarea>
+      </div>
+      <div class="card">
+        <div class="label">BEING</div>
+        <textarea id="being" placeholder="1. Meditation daily\n2. Voice session\n3. Reading"></textarea>
+      </div>
+      <div class="card">
+        <div class="label">BALANCE</div>
+        <textarea id="balance" placeholder="1. Date night\n2. Family call\n3. Sanctuary"></textarea>
+      </div>
+      <div class="card">
+        <div class="label">BUSINESS</div>
+        <textarea id="business" placeholder="1. Ship X\n2. Client work\n3. Outreach"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('Client'); ?>
+
+  <script>
+    function isoWeekString(date = new Date()) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+    }
+
+    function splitLines(text) {
+      return String(text || "")
+        .split("\n")
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function setToday() {
+      const now = new Date();
+      const week = isoWeekString(now);
+      const monthName = now.toLocaleString("default", { month: "long", year: "numeric" });
+      document.getElementById("weekLabel").textContent = week;
+      document.getElementById("monthLabel").textContent = monthName;
+      const st = document.getElementById("status");
+      if (st) st.textContent = "";
+    }
+
+    function exportWeek() {
+      const week = document.getElementById("weekLabel").textContent.trim();
+      const monthName = document.getElementById("monthLabel").textContent.trim();
+      const strikes = {
+        body: splitLines(document.getElementById("body").value),
+        being: splitLines(document.getElementById("being").value),
+        balance: splitLines(document.getElementById("balance").value),
+        business: splitLines(document.getElementById("business").value)
+      };
+      const total = strikes.body.length + strikes.being.length + strikes.balance.length + strikes.business.length;
+      if (!total) return alert("No strikes entered.");
+
+      const st = document.getElementById("status");
+      if (st) st.textContent = "Locking...";
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (!res || !res.ok) {
+            if (st) st.textContent = "Error: " + (res && res.error ? res.error : "save failed");
+            return;
+          }
+          if (st) st.textContent = `Locked: ${res.file && res.file.name ? res.file.name : ""}\n${res.file && res.file.url ? res.file.url : ""}`;
+        })
+        .withFailureHandler((err) => {
+          if (st) st.textContent = "Error: " + (err && err.message ? err.message : String(err));
+        })
+        .saveFireWeek(week, monthName, strikes, gameGetUserKey_());
+    }
+
+    setToday();
+  </script>
+</body>
+</html>
+

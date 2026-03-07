@@ -1,0 +1,366 @@
+:root {
+  --bg: #edf4ef;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-strong: #ffffff;
+  --surface-dark: linear-gradient(180deg, #10322c 0%, #1c5447 100%);
+  --text: #17332c;
+  --text-soft: #5f796f;
+  --text-strong: #0d201b;
+  --accent: #1f8b74;
+  --accent-strong: #0b5d4b;
+  --accent-soft: rgba(31, 139, 116, 0.12);
+  --gold: #b68a2f;
+  --line: rgba(14, 67, 55, 0.1);
+  --shadow: 0 28px 54px rgba(17, 52, 44, 0.14);
+  --radius: 24px;
+  --radius-sm: 16px;
+  --font-body: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(31, 139, 116, 0.16), transparent 32%),
+    radial-gradient(circle at top right, rgba(182, 138, 47, 0.18), transparent 26%),
+    linear-gradient(180deg, #edf4ef 0%, #eef6f1 48%, #f7faf8 100%);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+body {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+
+.sidebar {
+  background: var(--surface-dark);
+  color: #effcf7;
+  padding: 28px 20px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.card {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.sidebar .card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.main-panel {
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+  grid-template-rows: auto 1fr;
+}
+
+.toolbar,
+.panel-card {
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+}
+
+.toolbar {
+  padding: 20px 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.brand-card,
+.overview-card,
+.status-card {
+  padding: 20px;
+}
+
+.toolbar h2,
+.brand-card h1,
+.panel-head h3,
+.section-head h2 {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  letter-spacing: -0.04em;
+}
+
+.brand-card h1 {
+  font-size: 42px;
+}
+
+.toolbar h2 {
+  font-size: 34px;
+}
+
+.panel-head h3,
+.section-head h2 {
+  font-size: 24px;
+}
+
+.eyebrow,
+.metric-label,
+.field span {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.main-panel .eyebrow {
+  color: var(--accent-strong);
+}
+
+.brand-card p,
+.toolbar-copy span,
+.status-meta,
+.completed-meta,
+.reflection-meta,
+.field input,
+.field textarea,
+.empty-state {
+  color: var(--text-soft);
+}
+
+.section-head,
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.ghost-button,
+.primary-button,
+.card-button {
+  border-radius: 14px;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+
+.ghost-button:hover,
+.primary-button:hover,
+.card-button:hover {
+  transform: translateY(-1px);
+}
+
+.ghost-button {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.primary-button {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #2db58f 0%, #11735b 100%);
+  color: #ecfffa;
+  font-weight: 700;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-tile {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metric-tile strong {
+  display: block;
+  margin-top: 12px;
+  font-size: 30px;
+  color: #f6fffb;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 0 5px rgba(182, 138, 47, 0.14);
+}
+
+.status-dot.is-online {
+  background: #3fd7a6;
+  box-shadow: 0 0 0 5px rgba(63, 215, 166, 0.12);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+}
+
+.stack-column,
+.form-column {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.panel-card {
+  padding: 18px;
+}
+
+.completed-list,
+.reflection-list {
+  display: grid;
+  gap: 12px;
+}
+
+.completed-card,
+.reflection-card {
+  width: 100%;
+  text-align: left;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.74));
+}
+
+.completed-card:hover,
+.reflection-card:hover {
+  border-color: rgba(31, 139, 116, 0.28);
+}
+
+.completed-card h4,
+.reflection-card h4 {
+  margin: 0;
+  font-size: 21px;
+  font-family: var(--font-display);
+  color: var(--text-strong);
+}
+
+.completed-meta,
+.reflection-meta {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.completed-note {
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
+.reflection-form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(13, 93, 75, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(241, 249, 245, 0.9));
+  padding: 13px 14px;
+  outline: none;
+  resize: vertical;
+  color: var(--text);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: rgba(95, 121, 111, 0.72);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.empty-state {
+  padding: 24px 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(14, 67, 55, 0.18);
+  text-align: center;
+  line-height: 1.6;
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .board {
+    grid-template-columns: 1fr;
+  }
+
+  .main-panel {
+    padding: 20px 16px 120px;
+  }
+
+  .sidebar {
+    padding: 20px 16px;
+  }
+
+  .toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .overview-grid,
+  .form-actions {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .brand-card h1,
+  .toolbar h2 {
+    font-size: 32px;
+  }
+}

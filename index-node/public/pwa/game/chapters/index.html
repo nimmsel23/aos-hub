@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>αOS · Game Chapters</title>
+  <link rel="stylesheet" href="/pwa/game/chapters/style.css" />
+</head>
+<body>
+  <header class="bar">
+    <div>
+      <div class="kicker">αOS · THE GAME</div>
+      <div class="title">Chapters 32–42</div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/pwa/game/">Game Hub</a>
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <aside class="toc">
+      <div class="toc-title">Table of Contents</div>
+      <div id="tocList" class="toc-list"></div>
+    </aside>
+
+    <section class="reader">
+      <div class="reader-head">
+        <div class="reader-title" id="readerTitle">Select a chapter</div>
+        <div class="reader-sub" id="readerSub">—</div>
+      </div>
+      <article id="readerBody" class="reader-body">Pick a chapter on the left.</article>
+    </section>
+  </main>
+
+  <script src="/pwa/game/chapters/app.js"></script>
+</body>
+</html>

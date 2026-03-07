@@ -1,0 +1,651 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+FIRECTL_VERSION="0.3.0"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+
+# Load global env (optional).
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" || true
+
+# Shared UI/helpers.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+
+CTL_UI_OK_PREFIX="✔"
+CTL_UI_ERR_PREFIX="✘"
+CTL_CHOOSE_PROMPT="firectl"
+CTL_FZF_HEIGHT="18"
+CTL_FZF_REVERSE="1"
+CTL_FZF_PROMPT_SUFFIX="> "
+
+systemd_ok() {
+  has_cmd systemctl || return 1
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+abs_path() {
+  local p="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$p"
+    return 0
+  fi
+  [[ "$p" = /* ]] && echo "$p" || echo "$PWD/$p"
+}
+
+run() {
+  # shellcheck disable=SC2068
+  "$@"
+}
+
+load_fire_env() {
+  local f="${AOS_FIRE_ENV_FILE:-}"
+  [[ -z "$f" ]] && return 0
+  [[ -f "$f" ]] || return 0
+  # shellcheck disable=SC1090
+  set -a; source "$f"; set +a
+}
+
+# Optional override (default config should live in `aos.env`).
+load_fire_env || true
+
+TASK_BIN="${AOS_TASK_BIN:-task}"
+PYTHON_BIN="${AOS_PYTHON_BIN:-python}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
+FIRE_ROOT="${AOS_FIRE_DIR:-$VAULT_DIR/Game/Fire}"
+FIREBOT_SCRIPT="${AOS_FIREBOT_SCRIPT:-$ROOT_DIR/game/fire/firemap_bot.py}"
+FIRE_GCAL_DUE_SCRIPT="$SCRIPT_DIR/gcal-due.sh"
+FIRE_GCAL_DOCTOR_SCRIPT="$SCRIPT_DIR/gcal-doctor.sh"
+FIRE_GCAL_SETUP_SCRIPT="$SCRIPT_DIR/gcal-setup.sh"
+FIRE_GCAL_LIST_SCRIPT="$SCRIPT_DIR/gcal-list.sh"
+FIRE_GCAL_AUTH_SCRIPT="$SCRIPT_DIR/gcal-auth.sh"
+FIRE_GCAL_BOOTSTRAP_SCRIPT="$SCRIPT_DIR/gcal-bootstrap.sh"
+FIRE_GCAL_AUTO_SCRIPT="$SCRIPT_DIR/gcal-auto.sh"
+FIRE_TELE_DAILY_SCRIPT="$SCRIPT_DIR/tele-fire-daily.sh"
+FIRE_TELE_WEEKLY_SCRIPT="$SCRIPT_DIR/tele-fire-weekly.sh"
+SYSTEMD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+SERVICE_DAILY="aos-fire-daily.service"
+TIMER_DAILY="aos-fire-daily.timer"
+SERVICE_WEEKLY="aos-fire-weekly.service"
+TIMER_WEEKLY="aos-fire-weekly.timer"
+FIRE_GIT_DIR="${AOS_FIRE_GIT_DIR:-$FIRE_ROOT}"
+
+need_task() { has_cmd "$TASK_BIN" || die "missing: $TASK_BIN"; }
+need_firebot() { has_cmd "$PYTHON_BIN" || die "missing: $PYTHON_BIN"; [[ -f "$FIREBOT_SCRIPT" ]] || die "missing: $FIREBOT_SCRIPT"; }
+
+pwa_status() {
+  local ctl="$ROOT_DIR/scripts/mobileappctl"
+  if [[ ! -x "$ctl" ]]; then
+    ui_warn "missing: $ctl (tailscale PWA status unavailable)"
+    return 1
+  fi
+  run "$ctl" serve-status
+}
+
+http_status() {
+  local url="$1"
+  curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || true
+}
+
+pwa_local_compact() {
+  local base="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+  base="${base%/health}"
+  local probe="${base%/}/pwa/fire/"
+  local code
+  code="$(http_status "$probe")"
+  if [[ "$code" =~ ^2|3 ]]; then
+    ui_ok "PWA local: ok ($code) $probe"
+    return 0
+  fi
+  ui_warn "PWA local: down ($code) $probe"
+  return 1
+}
+
+tailscale_serve_url_compact() {
+  has_cmd tailscale || return 1
+  local status url=""
+  status="$(tailscale serve status 2>/dev/null || true)"
+  [[ -n "$status" ]] || return 1
+  url="$(printf "%s\n" "$status" | awk '
+    /^https:\/\// {current=$1; if (first=="") first=$1; next}
+    /^\|--/ {
+      if (current != "" && $0 ~ /\/pwa[[:space:]]+proxy[[:space:]]+http:\/\/127\.0\.0\.1:8780\/pwa/) {
+        print current; found=1; exit
+      }
+    }
+    END { if (!found && first != "") print first }
+  ')"
+  [[ -n "$url" ]] || return 1
+  printf "%s\n" "${url%/}"
+}
+
+pwa_tailnet_compact() {
+  local url
+  url="$(tailscale_serve_url_compact || true)"
+  if [[ -z "$url" ]]; then
+    ui_warn "PWA tailnet: no tailscale serve URL"
+    return 1
+  fi
+  local probe="${url%/}/pwa/fire/"
+  local code
+  code="$(http_status "$probe")"
+  if [[ "$code" =~ ^2|3 ]]; then
+    ui_ok "PWA tailnet: ok ($code) $probe"
+    return 0
+  fi
+  ui_warn "PWA tailnet: down ($code) $probe"
+  return 1
+}
+
+fire_daily_compact() {
+  local last_trigger result status today
+  today="$(date +%F)"
+  last_trigger="$(systemctl --user show -p LastTriggerUSec --value "$TIMER_DAILY" 2>/dev/null || true)"
+  result="$(systemctl --user show -p Result --value "$SERVICE_DAILY" 2>/dev/null || true)"
+  status="$(systemctl --user show -p ExecMainStatus --value "$SERVICE_DAILY" 2>/dev/null || true)"
+
+  if [[ -n "$last_trigger" ]]; then
+    local last_date
+    last_date="$(date -d "$last_trigger" +%F 2>/dev/null || true)"
+    if [[ "$last_date" == "$today" && "$result" == "success" && "$status" == "0" ]]; then
+      ui_ok "Fire daily: ok (last run $last_trigger)"
+      return 0
+    fi
+    if [[ "$last_date" == "$today" ]]; then
+      ui_warn "Fire daily: ran today but failed (result=${result:-?} status=${status:-?})"
+      return 1
+    fi
+    ui_warn "Fire daily: not run today (last $last_trigger)"
+    return 1
+  fi
+
+  ui_warn "Fire daily: no last trigger info"
+  return 1
+}
+
+week_label() {
+  local w y
+  w="$(date +%V)"
+  y="$(date +%Y)"
+  printf "KW%s_%s" "$w" "$y"
+}
+
+today_iso() { date +%F; }
+
+fire_dir_daily()  { printf "%s/Daily/%s"  "$FIRE_ROOT" "$(week_label)"; }
+fire_dir_weekly() { printf "%s/Weekly/%s" "$FIRE_ROOT" "$(week_label)"; }
+
+out_file_daily()  { printf "%s/fire-%s.md" "$(fire_dir_daily)" "$(today_iso)"; }
+out_file_weekly() { printf "%s/fire-week-%s.md" "$(fire_dir_weekly)" "$(week_label)"; }
+
+print_message() {
+  local scope="$1"
+  case "$scope" in
+    daily|weekly) ;;
+    *) die "unknown scope: $scope" ;;
+  esac
+  need_firebot
+  run "$PYTHON_BIN" "$FIREBOT_SCRIPT" print --scope "$scope"
+}
+
+build_markdown() {
+  local scope="$1" file_dir out
+  case "$scope" in
+    daily)
+      file_dir="$(fire_dir_daily)"
+      out="$(out_file_daily)"
+      ;;
+    weekly)
+      file_dir="$(fire_dir_weekly)"
+      out="$(out_file_weekly)"
+      ;;
+    *) die "unknown scope: $scope" ;;
+  esac
+
+  mkdir -p "$file_dir"
+  print_message "$scope" >"$out"
+  ui_ok "Wrote: $out"
+}
+
+send_message() {
+  local scope="$1"
+  case "$scope" in
+    daily)
+      if [[ -x "$FIRE_TELE_DAILY_SCRIPT" ]]; then
+        run "$FIRE_TELE_DAILY_SCRIPT"
+      else
+        need_firebot
+        run "$PYTHON_BIN" "$FIREBOT_SCRIPT" daily
+      fi
+      ;;
+    weekly)
+      if [[ -x "$FIRE_TELE_WEEKLY_SCRIPT" ]]; then
+        run "$FIRE_TELE_WEEKLY_SCRIPT"
+      else
+        need_firebot
+        run "$PYTHON_BIN" "$FIREBOT_SCRIPT" weekly
+      fi
+      ;;
+    *) die "unknown scope: $scope" ;;
+  esac
+  ui_ok "Sent: $scope"
+}
+
+test_message() {
+  need_firebot
+  run "$PYTHON_BIN" "$FIREBOT_SCRIPT" test "$@"
+  ui_ok "Sent test message."
+}
+
+write_systemd_units() {
+  mkdir -p "$SYSTEMD_DIR"
+
+  cat >"$SYSTEMD_DIR/$SERVICE_DAILY" <<EOF
+[Unit]
+Description=αOS Fire Daily Send
+
+[Service]
+Type=oneshot
+ExecStart=-$FIRE_TELE_DAILY_SCRIPT
+ExecStart=$SCRIPT_DIR/firectl gcal due
+EOF
+
+  cat >"$SYSTEMD_DIR/$TIMER_DAILY" <<'EOF'
+[Unit]
+Description=αOS Fire Daily Send (08:00)
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  cat >"$SYSTEMD_DIR/$SERVICE_WEEKLY" <<EOF
+[Unit]
+Description=αOS Fire Weekly Send
+
+[Service]
+Type=oneshot
+ExecStart=$FIRE_TELE_WEEKLY_SCRIPT
+EOF
+
+  cat >"$SYSTEMD_DIR/$TIMER_WEEKLY" <<'EOF'
+[Unit]
+Description=αOS Fire Weekly Send (Sun 22:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 22:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload
+  ui_ok "Wrote: $SYSTEMD_DIR/$TIMER_DAILY"
+  ui_ok "Wrote: $SYSTEMD_DIR/$TIMER_WEEKLY"
+}
+
+setup_systemd() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+  write_systemd_units
+  # Disable legacy/duplicate timers to keep a single canonical aos-* fire pipeline.
+  systemctl --user disable --now \
+    "aos-fire-gcal-due.timer" \
+    "alphaos-fire-gcal-due.timer" \
+    "aos-firemap-weekly.timer" \
+    "alphaos-firemap-weekly.timer" \
+    "alphaos-fire-daily.timer" \
+    "alphaos-fire-weekly.timer" \
+    >/dev/null 2>&1 || true
+  systemctl --user enable --now "$TIMER_DAILY" >/dev/null 2>&1 || true
+  systemctl --user enable --now "$TIMER_WEEKLY" >/dev/null 2>&1 || true
+  ui_ok "Enabled timers."
+}
+
+status() {
+  has_cmd systemctl || die "missing: systemctl"
+  systemd_ok || die "systemctl --user not available (run on the host user session)"
+
+  ui_title "firectl"
+  fire_daily_compact || true
+  pwa_local_compact || true
+  pwa_tailnet_compact || true
+}
+
+logs() {
+  has_cmd journalctl || die "missing: journalctl"
+  local follow="0" lines="200"
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+      -f|--follow) follow="1"; shift ;;
+      -n|--lines) lines="${2:-200}"; shift 2 || true ;;
+      *) shift ;;
+    esac
+  done
+
+  local args=(--user -n "$lines" --no-pager -u "$SERVICE_DAILY" -u "$SERVICE_WEEKLY")
+  if [[ "$follow" == "1" ]]; then
+    args=(--user -f -u "$SERVICE_DAILY" -u "$SERVICE_WEEKLY")
+  fi
+  journalctl "${args[@]}" || true
+}
+
+doctor() {
+  need_task
+  need_firebot
+  ui_info "task: $("$TASK_BIN" --version 2>/dev/null || echo ok)"
+  ui_info "vault: $(abs_path "$VAULT_DIR")"
+  ui_info "fire root: $(abs_path "$FIRE_ROOT")"
+  ui_info "taskrc: $(abs_path "${AOS_TASKRC:-$HOME/.taskrc}")"
+  ui_info "fire bot: $FIREBOT_SCRIPT"
+  ui_info "fire bot .env: $(abs_path "$(dirname -- "$FIREBOT_SCRIPT")/.env")"
+}
+
+gcal_need_script() {
+  local f="$1"
+  [[ -x "$f" ]] || die "missing gcal helper: $f"
+}
+
+gcal_cmd() {
+  local sub="${1:-doctor}"
+  shift || true
+  case "$sub" in
+    bootstrap) gcal_need_script "$FIRE_GCAL_BOOTSTRAP_SCRIPT"; run "$FIRE_GCAL_BOOTSTRAP_SCRIPT" "$@" ;;
+    due) gcal_need_script "$FIRE_GCAL_DUE_SCRIPT"; run "$FIRE_GCAL_DUE_SCRIPT" "$@" ;;
+    doctor) gcal_need_script "$FIRE_GCAL_DOCTOR_SCRIPT"; run "$FIRE_GCAL_DOCTOR_SCRIPT" "$@" ;;
+    setup) gcal_need_script "$FIRE_GCAL_SETUP_SCRIPT"; run "$FIRE_GCAL_SETUP_SCRIPT" "$@" ;;
+    auto) gcal_need_script "$FIRE_GCAL_AUTO_SCRIPT"; run "$FIRE_GCAL_AUTO_SCRIPT" "$@" ;;
+    list) gcal_need_script "$FIRE_GCAL_LIST_SCRIPT"; run "$FIRE_GCAL_LIST_SCRIPT" "$@" ;;
+    auth|init) gcal_need_script "$FIRE_GCAL_AUTH_SCRIPT"; run "$FIRE_GCAL_AUTH_SCRIPT" "$@" ;;
+    *)
+      cat <<EOF
+  firectl gcal — Fire Taskwarrior -> Google Calendar helpers
+
+Usage:
+  firectl gcal bootstrap [options] # guided setup (gcalcli + OAuth + calendar save)
+  firectl gcal auth              # gcalcli init
+  firectl gcal list              # list calendars
+  firectl gcal setup             # calendar + task source/report config in game/fire/fire.env
+  firectl gcal auto <enable|disable|status|run-now> [args...]
+  firectl gcal doctor            # env + task counts diagnostics
+  firectl gcal due [options]     # push due:today + overdue (all-day)
+
+Examples:
+  firectl gcal bootstrap
+  firectl gcal setup
+  firectl gcal setup --use-fired --no-list
+  firectl gcal setup --tw-source report --tw-report fired --no-list
+  firectl gcal auto enable 07:30
+  firectl gcal auto status
+  firectl gcal due --dry-run
+  firectl gcal due --backend print
+EOF
+      [[ "$sub" == "help" || "$sub" == "-h" || "$sub" == "--help" || -z "$sub" ]] && return 0
+      die "unknown gcal subcommand: $sub"
+      ;;
+  esac
+}
+
+need_git() { has_cmd git || die "missing: git"; }
+
+fire_git_root() {
+  need_git
+  [[ -d "$FIRE_GIT_DIR" ]] || die "missing dir: $FIRE_GIT_DIR"
+  git -C "$FIRE_GIT_DIR" rev-parse --show-toplevel 2>/dev/null || return 1
+}
+
+fire_git_status() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  ui_title "firectl"
+  ui_info "repo: $root"
+  git -C "$root" status -sb
+  echo ""
+  git -C "$root" remote -v || true
+}
+
+fire_git_log() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" log --oneline --graph --decorate -15
+}
+
+fire_git_diff() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" diff
+}
+
+fire_git_commit() {
+  local root msg="${1:-}"
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  [[ -n "$msg" ]] || msg="fire: update $(date +%F)"
+  git -C "$root" add -A
+  if git -C "$root" diff --cached --quiet; then
+    ui_ok "No changes to commit."
+    return 0
+  fi
+  git -C "$root" commit -m "$msg"
+}
+
+fire_git_pull() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" pull --rebase --autostash
+}
+
+fire_git_push() {
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  git -C "$root" push
+}
+
+fire_git_sync() {
+  local msg="" do_commit=1 do_pull=1 do_push=1 dry_run=0
+
+  while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+      -m|--message) msg="${2:-}"; shift 2 ;;
+      --no-commit) do_commit=0; shift ;;
+      --no-pull) do_pull=0; shift ;;
+      --no-push) do_push=0; shift ;;
+      -n|--dry-run|--print) dry_run=1; shift ;;
+      -h|--help)
+        cat <<EOF
+firectl git sync
+
+Usage:
+  firectl git sync [options]
+
+Options:
+  -m, --message MSG   Commit message (default: fire: update YYYY-MM-DD)
+  --no-commit         Skip git add/commit step
+  --no-pull           Skip pull --rebase
+  --no-push           Skip push
+  --dry-run           Print actions only
+
+Env:
+  AOS_FIRE_GIT_DIR    Directory inside the Fire git worktree (default: AOS_FIRE_DIR)
+EOF
+        return 0
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+  done
+
+  local root
+  root="$(fire_git_root)" || die "not a git repo: $FIRE_GIT_DIR"
+  ui_info "repo: $root"
+
+  if [[ "$dry_run" == "1" ]]; then
+    ui_info "dry-run:"
+    [[ "$do_commit" == "1" ]] && ui_info "  git add -A && git commit -m <msg> (if changes)"
+    [[ "$do_pull" == "1" ]] && ui_info "  git pull --rebase --autostash"
+    [[ "$do_push" == "1" ]] && ui_info "  git push"
+    return 0
+  fi
+
+  if [[ "$do_commit" == "1" ]]; then
+    fire_git_commit "${msg:-}"
+  fi
+  if [[ "$do_pull" == "1" ]]; then
+    fire_git_pull
+  fi
+  if [[ "$do_push" == "1" ]]; then
+    fire_git_push
+  fi
+  ui_ok "Git sync done."
+}
+
+git_menu() {
+  ui_title "firectl"
+  local action
+  action="$(choose \
+    "git status" \
+    "git sync" \
+    "git log" \
+    "git diff" \
+    "quit")"
+  case "$action" in
+    "git status") fire_git_status ;;
+    "git sync") fire_git_sync ;;
+    "git log") fire_git_log ;;
+    "git diff") fire_git_diff ;;
+    "quit") exit 0 ;;
+  esac
+}
+
+menu() {
+  ui_title "firectl"
+  local action
+  action="$(choose \
+    "send daily" "send weekly" \
+    "build daily md" "build weekly md" \
+    "print daily" "print weekly" \
+    "test --debug --scope daily" \
+    "git menu" \
+    "gcal bootstrap" "gcal setup" "gcal auto status" "gcal due --doctor" "gcal due" "gcal due --backend print" \
+    "pwa tailscale status" \
+    "status" "logs --follow" \
+    "setup systemd timers" \
+    "doctor" \
+    "quit")"
+
+  case "$action" in
+    "send daily") send_message daily ;;
+    "send weekly") send_message weekly ;;
+    "build daily md") build_markdown daily ;;
+    "build weekly md") build_markdown weekly ;;
+    "print daily") print_message daily ;;
+    "print weekly") print_message weekly ;;
+    "test --debug --scope daily") test_message --debug --scope daily ;;
+    "git menu") git_menu ;;
+    "gcal bootstrap") gcal_cmd bootstrap ;;
+    "gcal setup") gcal_cmd setup ;;
+    "gcal auto status") gcal_cmd auto status ;;
+    "gcal due --doctor") gcal_cmd doctor ;;
+    "gcal due") gcal_cmd due ;;
+    "gcal due --backend print") gcal_cmd due --backend print ;;
+    "pwa tailscale status") pwa_status ;;
+    "status") status ;;
+    "logs --follow") logs --follow ;;
+    "setup systemd timers") setup_systemd ;;
+    "doctor") doctor ;;
+    "quit") exit 0 ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+firectl — Fire tooling ($FIRECTL_VERSION)
+
+Usage:
+  firectl menu
+  firectl doctor
+  firectl status
+  firectl logs [--follow] [--lines N]
+  firectl print daily|weekly
+  firectl build daily|weekly
+  firectl send  daily|weekly
+  firectl test [--debug] [--scope daily|weekly] [--text "..."]
+  firectl gcal <auth|list|setup|auto|doctor|due> [args...]
+  firectl pwa status
+  firectl ctx [open|start|stop|restart|status|logs|menu]
+  firectl setup-systemd
+  firectl git <status|sync|log|diff|commit|pull|push|menu>
+
+Env:
+  AOS_TASK_BIN=task
+  AOS_PYTHON_BIN=python
+  AOS_FIREBOT_SCRIPT=<repo>/game/fire/firemap_bot.py
+  AOS_VAULT_DIR=~/vault
+  AOS_FIRE_DIR=<vault>/Game/Fire
+  AOS_TASKRC=~/.taskrc
+  AOS_FIRE_GIT_DIR=<vault>/Game/Fire
+EOF
+}
+
+cmd_ctx() {
+  local action="${1:-menu}"
+  if command -v firectx >/dev/null 2>&1; then
+    firectx "$action"
+    return $?
+  fi
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx fire "$action"
+    return $?
+  fi
+  echo "firectx/pwactx not found" >&2
+  return 1
+}
+
+cmd="${1:-menu}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  menu) menu ;;
+  doctor) doctor ;;
+  status) status ;;
+  logs) logs "$@" ;;
+  print) print_message "${1:-}" ;;
+  build) build_markdown "${1:-}" ;;
+  send) send_message "${1:-}" ;;
+  test) test_message "$@" ;;
+  setup-systemd) setup_systemd ;;
+  gcal) gcal_cmd "$@" ;;
+  ctx) cmd_ctx "${1:-}" ;;
+  pwa)
+    sub="${1:-status}"; shift || true
+    case "$sub" in
+      status) pwa_status "$@" ;;
+      *) die "unknown pwa subcommand: $sub" ;;
+    esac
+    ;;
+  git)
+    sub="${1:-menu}"; shift || true
+    case "$sub" in
+      menu) git_menu ;;
+      status) fire_git_status ;;
+      sync) fire_git_sync "$@" ;;
+      log) fire_git_log ;;
+      diff) fire_git_diff ;;
+      commit) fire_git_commit "${*:-}" ;;
+      pull) fire_git_pull ;;
+      push) fire_git_push ;;
+      *) die "unknown git subcommand: $sub" ;;
+    esac
+    ;;
+  *) ui_err "unknown command: $cmd"; usage; exit 1 ;;
+esac

@@ -1,0 +1,25 @@
+{
+  "id": "/pwa/plan/",
+  "name": "AlphaOS Plan",
+  "short_name": "Plan",
+  "description": "Door Plan with Door War, quadrants, and War Stack",
+  "start_url": "/pwa/plan/",
+  "scope": "/pwa/plan/",
+  "display": "standalone",
+  "theme_color": "#18100f",
+  "background_color": "#18100f",
+  "icons": [
+    {
+      "src": "/pwa/door/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/door/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

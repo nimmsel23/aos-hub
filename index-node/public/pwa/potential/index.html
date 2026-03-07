@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f3f6fb" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Potential</title>
+  <link rel="manifest" href="/pwa/potential/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/door/potential/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-kicker">AlphaOS Potential</div>
+        <h1>Potential</h1>
+        <p>Hot List as one focused app.</p>
+      </div>
+
+      <section class="capture card">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Capture</div>
+            <h2>Quick Add</h2>
+          </div>
+          <button class="ghost-button compact" id="clearCaptureBtn" type="button">Clear</button>
+        </div>
+        <textarea id="captureInput" placeholder="One idea per line"></textarea>
+        <div class="capture-actions">
+          <button class="primary-button" id="captureBtn" type="button">Add To List</button>
+          <button class="ghost-button" id="flushQueueBtn" type="button">Flush Queue</button>
+        </div>
+      </section>
+
+      <nav class="lists card" aria-label="Hot List views">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Lists</div>
+            <h2>Smart Views</h2>
+          </div>
+        </div>
+        <div class="list-nav" id="listNav"></div>
+      </nav>
+
+      <section class="status-card card">
+        <div class="section-kicker">Status</div>
+        <div class="status-line">
+          <span class="status-dot" id="onlineDot"></span>
+          <span id="onlineLabel">Checking connection...</span>
+        </div>
+        <div class="status-meta" id="queueMeta">Queue: 0</div>
+        <div class="status-message" id="statusLine">Ready.</div>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="toolbar">
+        <div>
+          <div class="toolbar-kicker">Potential / Hot List</div>
+          <h2 id="viewTitle">Active</h2>
+        </div>
+        <div class="toolbar-actions">
+          <label class="search-field" for="searchInput">
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="Filter current list" />
+          </label>
+          <button class="ghost-button" id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <section class="board">
+        <div class="items-column">
+          <div class="column-head">
+            <span id="listMeta">0 items</span>
+          </div>
+          <div class="items" id="itemList"></div>
+        </div>
+
+        <aside class="detail-column">
+          <div class="detail-card card" id="detailPanel"></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script src="/pwa/door/potential/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/potential/sw.js", { scope: "/pwa/potential/" });
+    }
+  </script>
+</body>
+</html>

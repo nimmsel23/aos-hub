@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+BOT_DIR="$SCRIPT_DIR/bot"
+BOT_MAIN="$BOT_DIR/tent_bot.py"
+BOT_ENV="$BOT_DIR/.env"
+BOT_ENV_EXAMPLE="$BOT_DIR/.env.example"
+BOT_REQUIREMENTS="$BOT_DIR/requirements.txt"
+WEEKLY_FISH="$SCRIPT_DIR/generals_tent.fish"
+
+SERVICE_NAME="aos-tent-bot"
+SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
+PYTHON_BIN="${AOS_PYTHON_BIN:-python3}"
+INDEX_API_BASE="${INDEX_API_BASE:-http://127.0.0.1:8799}"
+
+source "$ROOT_DIR/scripts/ctl-lib.sh" 2>/dev/null || true
+source "$ROOT_DIR/scripts/lib/aos-env.sh" 2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+
+have() { command -v "$1" >/dev/null 2>&1; }
+ensure_bot_files() {
+  [[ -f "$BOT_MAIN" ]] || { echo "missing bot script: $BOT_MAIN" >&2; return 1; }
+}
+ensure_systemd_user() {
+  have systemctl || { echo "systemctl not found" >&2; return 1; }
+  systemctl --user show-environment >/dev/null 2>&1 || {
+    echo "systemctl --user unavailable in this session" >&2
+    return 1
+  }
+}
+
+cmd_install() {
+  ensure_bot_files
+  ensure_systemd_user
+
+  echo "Installing Tent Bot service: $SERVICE_NAME"
+  mkdir -p "$HOME/.config/systemd/user"
+
+  cat >"$SERVICE_FILE" <<EOF
+[Unit]
+Description=AlphaOS Tent Bot - Strategic Intelligence Reports
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$BOT_DIR
+ExecStart=$(command -v "$PYTHON_BIN" || command -v python3) $BOT_MAIN
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+
+  systemctl --user daemon-reload
+  echo "Installed: $SERVICE_FILE"
+}
+
+cmd_start() {
+  ensure_systemd_user
+  systemctl --user start "$SERVICE_NAME"
+  echo "Started: $SERVICE_NAME"
+}
+
+cmd_stop() {
+  ensure_systemd_user
+  systemctl --user stop "$SERVICE_NAME"
+  echo "Stopped: $SERVICE_NAME"
+}
+
+cmd_restart() {
+  ensure_systemd_user
+  systemctl --user restart "$SERVICE_NAME"
+  echo "Restarted: $SERVICE_NAME"
+}
+
+cmd_status() {
+  ensure_systemd_user
+  systemctl --user status "$SERVICE_NAME"
+}
+
+cmd_logs() {
+  ensure_systemd_user
+  journalctl --user -u "$SERVICE_NAME" -f
+}
+
+cmd_enable() {
+  ensure_systemd_user
+  systemctl --user enable "$SERVICE_NAME"
+  echo "Enabled: $SERVICE_NAME"
+}
+
+cmd_disable() {
+  ensure_systemd_user
+  systemctl --user disable "$SERVICE_NAME"
+  echo "Disabled: $SERVICE_NAME"
+}
+
+cmd_uninstall() {
+  ensure_systemd_user
+  systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
+  systemctl --user disable "$SERVICE_NAME" 2>/dev/null || true
+  rm -f "$SERVICE_FILE"
+  systemctl --user daemon-reload
+  echo "Uninstalled: $SERVICE_NAME"
+}
+
+cmd_run() {
+  ensure_bot_files
+  exec "$PYTHON_BIN" "$BOT_MAIN"
+}
+
+cmd_weekly() {
+  [[ -f "$WEEKLY_FISH" ]] || { echo "missing weekly tent script: $WEEKLY_FISH" >&2; return 1; }
+  have fish || { echo "fish not found (required for weekly tent session)" >&2; return 1; }
+  exec fish "$WEEKLY_FISH" "$@"
+}
+
+cmd_health() {
+  echo "Tent Bot health"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  if ensure_systemd_user && systemctl --user is-active --quiet "$SERVICE_NAME"; then
+    echo "service: running"
+  else
+    echo "service: stopped"
+  fi
+
+  if [[ -f "$BOT_ENV" ]]; then
+    echo "config: $BOT_ENV"
+  else
+    echo "config: missing ($BOT_ENV). copy from $BOT_ENV_EXAMPLE"
+  fi
+
+  if [[ -f "$BOT_MAIN" ]]; then
+    echo "bot: $BOT_MAIN"
+  else
+    echo "bot: missing ($BOT_MAIN)"
+  fi
+
+  if curl -sf "$INDEX_API_BASE/health" >/dev/null 2>&1; then
+    echo "index-api: reachable ($INDEX_API_BASE)"
+  else
+    echo "index-api: unreachable ($INDEX_API_BASE)"
+  fi
+
+  if "$PYTHON_BIN" -c "import aiogram,aiohttp,dotenv" >/dev/null 2>&1; then
+    echo "python deps: ok"
+  else
+    echo "python deps: missing (pip install -r $BOT_REQUIREMENTS)"
+  fi
+}
+
+cmd_test() {
+  ensure_bot_files
+  if [[ ! -f "$BOT_ENV" ]]; then
+    echo "missing $BOT_ENV (copy from $BOT_ENV_EXAMPLE)" >&2
+    return 1
+  fi
+  curl -sf "$INDEX_API_BASE/api/tent/component/return-report" >/dev/null
+  echo "API ok: $INDEX_API_BASE/api/tent/component/return-report"
+  echo "Run bot with: tentctl run"
+}
+
+cmd_ctx() {
+  local action="${1:-open}"
+
+  if command -v tentctx >/dev/null 2>&1; then
+    tentctx "$action"
+    return 0
+  fi
+
+  if command -v pwactx >/dev/null 2>&1; then
+    pwactx tent "$action"
+    return 0
+  fi
+
+  echo "tentctx/pwactx not found" >&2
+  return 1
+}
+
+usage() {
+  cat <<EOF
+tentctl — Tent control (weekly session + bot ops)
+
+Usage:
+  tentctl <command>
+  tentctl ctx  [open|start|stop|restart|status|logs|menu]  Tent PWA ctx (via tentctx)
+
+Commands:
+  weekly      Run interactive General's Tent weekly session (fish)
+  install     Install systemd user service
+  start       Start service
+  stop        Stop service
+  restart     Restart service
+  status      Show service status
+  logs        Follow service logs
+  enable      Enable auto-start
+  disable     Disable auto-start
+  uninstall   Remove service
+  run         Run bot in foreground
+  health      Check service/config/deps/API
+  test        Validate API + env presence
+  ctx         Open PWA ctx or manage PWA service
+  help        Show this help
+
+Paths:
+  bot:        $BOT_DIR
+  main:       $BOT_MAIN
+  service:    $SERVICE_FILE
+EOF
+}
+
+case "${1:-}" in
+  weekly)    shift || true; cmd_weekly "$@" ;;
+  install)   cmd_install ;;
+  start)     cmd_start ;;
+  stop)      cmd_stop ;;
+  restart)   cmd_restart ;;
+  status)    cmd_status ;;
+  logs)      cmd_logs ;;
+  enable)    cmd_enable ;;
+  disable)   cmd_disable ;;
+  uninstall) cmd_uninstall ;;
+  run)       cmd_run ;;
+  health)    cmd_health ;;
+  test)      cmd_test ;;
+  ctx)       shift || true; cmd_ctx "${1:-}" ;;
+  help|--help|-h|"") usage ;;
+  *)
+    echo "unknown command: $1" >&2
+    usage
+    exit 1
+    ;;
+esac

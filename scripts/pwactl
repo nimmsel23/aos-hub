@@ -1,0 +1,1030 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# codex-ironforge note:
+# Expanded pwactl to act as a full strict ctl for resilient local PWA ops.
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+if [[ "$ROOT_DIR" != "$HOME/aos-hub" && -d "$HOME/aos-hub/scripts" ]]; then
+  ROOT_DIR="$HOME/aos-hub"
+fi
+
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/ctl-lib.sh"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/lib/aos-env.sh"
+aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+CTL_APP_PREFIX="pwactl"
+
+INDEX_DIR="$ROOT_DIR/index-node"
+PWA_DIR="$INDEX_DIR/public/pwa"
+PWA_HEALTH_URL="${AOS_PWA_HEALTH_URL:-http://127.0.0.1:8780/health}"
+MAIN_HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+PWA_BASE_URL="${AOS_PWA_BASE_URL:-${PWA_HEALTH_URL%/health}}"
+MAIN_BASE_URL="${AOS_INDEX_BASE_URL:-${MAIN_HEALTH_URL%/health}}"
+PWA_USER_SERVICE="${AOS_PWA_USER_SERVICE:-aos-pwa-dev.service}"
+PWA_USER_UNIT_SOURCE="${AOS_PWA_USER_UNIT_SOURCE:-$ROOT_DIR/systemd/user/aos-pwa-dev.service}"
+PWA_USER_UNIT_DEST="${AOS_PWA_USER_UNIT_DEST:-$HOME/.config/systemd/user/$PWA_USER_SERVICE}"
+PWA_MODE_ENV_FILE="${AOS_PWA_MODE_ENV_FILE:-$HOME/.env/pwa.env}"
+TAILNET_BASE_URL="${AOS_TAILNET_BASE_URL:-}"
+FITNESS_TS_PATH="${AOS_FITNESS_TAILSCALE_PATH:-/fitnessctx}"
+FITNESS_TS_TARGET="${AOS_FITNESS_TAILSCALE_TARGET:-http://127.0.0.1:8788/}"
+
+# Daily baseline + weekly lane emphasis:
+# - core4/fire are daily baseline apps
+# - door is weekly/sometime usage
+PWA_DEFAULT_ORDER=(core4 fire focus frame freedom door game memoirs fitness)
+PWA_NAV_STATE_FILE="${AOS_PWA_NAV_STATE_FILE:-$HOME/.cache/aos/pwactl-nav-app}"
+
+app_required_files() {
+  local app="${1:?app}"
+  case "$app" in
+    # fitness uses shared stylesheet folder and has no local style.css.
+    fitness) printf '%s\n' index.html manifest.json sw.js app.js ;;
+    *) printf '%s\n' index.html manifest.json sw.js app.js style.css ;;
+  esac
+}
+
+ensure_user_runtime_dir() {
+  if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    return 0
+  fi
+  local uid runtime_dir
+  uid="$(id -u)"
+  runtime_dir="/run/user/${uid}"
+  if [[ -d "$runtime_dir" ]]; then
+    export XDG_RUNTIME_DIR="$runtime_dir"
+  fi
+}
+
+user_bus_ok() {
+  systemctl --user --version >/dev/null 2>&1 && systemctl --user is-active default.target >/dev/null 2>&1 || {
+    systemctl --user list-unit-files >/dev/null 2>&1
+  }
+}
+
+require_user_bus() {
+  user_bus_ok || die "systemctl --user not available (no user bus). enable linger for persistent service mode."
+}
+
+service_state() {
+  if ! user_bus_ok; then
+    printf "unknown\n"
+    return 0
+  fi
+  local state
+  state="$(systemctl --user is-active "$PWA_USER_SERVICE" 2>/dev/null || true)"
+  [[ -n "$state" ]] || state="unknown"
+  printf "%s\n" "$state"
+}
+
+linger_status() {
+  if ! has_cmd loginctl; then
+    printf "unknown\n"
+    return 0
+  fi
+  local v
+  v="$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)"
+  if [[ "$v" == "yes" ]]; then
+    printf "enabled\n"
+  elif [[ "$v" == "no" ]]; then
+    printf "disabled\n"
+  else
+    printf "unknown\n"
+  fi
+}
+
+ensure_linger_on() {
+  local cur
+  cur="$(linger_status)"
+  if [[ "$cur" == "enabled" ]]; then
+    msg "linger already enabled for user: $USER"
+    return 0
+  fi
+  if ! has_cmd loginctl; then
+    die "loginctl not found"
+  fi
+  if loginctl enable-linger "$USER" >/dev/null 2>&1; then
+    msg "linger enabled for user: $USER"
+    return 0
+  fi
+  if has_cmd sudo; then
+    sudo -n loginctl enable-linger "$USER" >/dev/null 2>&1 \
+      && { msg "linger enabled for user: $USER"; return 0; }
+  fi
+  die "failed to enable linger (try manually): sudo loginctl enable-linger $USER"
+}
+
+ensure_linger_off() {
+  if ! has_cmd loginctl; then
+    die "loginctl not found"
+  fi
+  if loginctl disable-linger "$USER" >/dev/null 2>&1; then
+    msg "linger disabled for user: $USER"
+    return 0
+  fi
+  if has_cmd sudo; then
+    sudo -n loginctl disable-linger "$USER" >/dev/null 2>&1 \
+      && { msg "linger disabled for user: $USER"; return 0; }
+  fi
+  die "failed to disable linger (try manually): sudo loginctl disable-linger $USER"
+}
+
+normalize_mode() {
+  local mode_raw="${1:-dev}"
+  local mode
+  mode="$(printf "%s" "$mode_raw" | tr '[:upper:]' '[:lower:]')"
+  case "$mode" in
+    dev|development) printf "dev\n" ;;
+    normal|prod|production) printf "normal\n" ;;
+    *) die "invalid mode: $mode_raw (use dev|normal)" ;;
+  esac
+}
+
+current_mode() {
+  local from_env="${AOS_PWA_RUN_MODE:-}"
+  if [[ -f "$PWA_MODE_ENV_FILE" ]]; then
+    while IFS= read -r line; do
+      line="${line#"${line%%[![:space:]]*}"}"
+      [[ -n "$line" ]] || continue
+      [[ "$line" == \#* ]] && continue
+      if [[ "$line" =~ ^AOS_PWA_RUN_MODE[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+        from_env="${BASH_REMATCH[1]}"
+      fi
+    done < "$PWA_MODE_ENV_FILE"
+  fi
+  normalize_mode "${from_env:-dev}"
+}
+
+set_mode() {
+  local mode
+  mode="$(normalize_mode "${1:-dev}")"
+  mkdir -p "$(dirname "$PWA_MODE_ENV_FILE")"
+  if [[ ! -f "$PWA_MODE_ENV_FILE" ]]; then
+    cat >"$PWA_MODE_ENV_FILE" <<EOF
+# αOS PWA runtime mode
+# dev    -> npm run pwa:dev
+# normal -> npm run pwa
+AOS_PWA_RUN_MODE=$mode
+
+# Standalone PWA runtime bind
+PWA_HOST=0.0.0.0
+PWA_PORT=8780
+EOF
+    msg "created: $PWA_MODE_ENV_FILE"
+    msg "mode: $mode"
+    return 0
+  fi
+
+  if grep -Eq '^AOS_PWA_RUN_MODE[[:space:]]*=' "$PWA_MODE_ENV_FILE" 2>/dev/null; then
+    sed -i "s/^AOS_PWA_RUN_MODE[[:space:]]*=.*/AOS_PWA_RUN_MODE=$mode/" "$PWA_MODE_ENV_FILE"
+  else
+    printf "\nAOS_PWA_RUN_MODE=%s\n" "$mode" >>"$PWA_MODE_ENV_FILE"
+  fi
+  msg "updated: $PWA_MODE_ENV_FILE"
+  msg "mode: $mode"
+}
+
+ensure_user_runtime_dir
+
+usage() {
+  cat <<EOF
+pwactl - PWA runtime and app-shell control (main + standalone)
+
+Usage:
+  pwactl menu
+  pwactl status
+  pwactl logs
+  pwactl mode [show|dev|normal]
+  pwactl apps
+  pwactl service <subcommand>
+  pwactl list
+  pwactl routes [main|pwa|all]
+  pwactl health [main|pwa|all]
+  pwactl check
+  pwactl doctor
+  pwactl prev [main|pwa]
+  pwactl next [main|pwa]
+  pwactl nav <prev|next|left|right> [main|pwa]
+  pwactl fitness <serve|funnel|switch|status>
+  pwactl game
+  pwactl open <app> [main|pwa]
+  pwactl run [main|pwa] [--force]
+  pwactl changelog
+  pwactl help
+
+Commands:
+  menu         interactive quick actions (TTY)
+  status       compact summary (filesystem + runtime reachability)
+  logs         stream PWA runtime logs (alias for: pwactl service logs)
+  mode         read/write runtime mode in pwa.env (dev|normal)
+  apps         print discovered app ids only
+  service      systemd --user control for standalone PWA runtime
+  list         show installed app shells and critical files (index/manifest/sw/app/style)
+  routes       print install URLs for each app on selected runtime base URL
+  health       check /health and /pwa/<app>/ reachability for selected runtime
+  check        local filesystem check for app shell completeness
+  doctor       check + health(all) summary
+  prev         open previous PWA in configured order
+  next         open next PWA in configured order
+  nav          compatibility alias (prev/next/left/right)
+  fitness      toggle/check Tailscale route for Fitness PWA (/fitnessctx)
+  game         quick architecture hints for THE GAME PWA JS/runtime flow
+  open         open one app URL via xdg-open (runtime defaults to pwa)
+  run          start runtime in foreground:
+               main -> npm run dev
+               pwa  -> npm run pwa
+               if runtime is already reachable, it exits without restart
+  changelog    show PWA changelog markdown
+
+Runtime bases:
+  main: $MAIN_BASE_URL
+  pwa : $PWA_BASE_URL
+
+Env overrides:
+  AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
+  AOS_PWA_HEALTH_URL=http://127.0.0.1:8780/health
+  AOS_INDEX_BASE_URL=http://127.0.0.1:8799
+  AOS_PWA_BASE_URL=http://127.0.0.1:8780
+  AOS_PWA_USER_SERVICE=aos-pwa-dev.service
+  AOS_PWA_USER_UNIT_SOURCE=$ROOT_DIR/systemd/user/aos-pwa-dev.service
+  AOS_PWA_USER_UNIT_DEST=$HOME/.config/systemd/user/aos-pwa-dev.service
+  AOS_PWA_MODE_ENV_FILE=$HOME/.env/pwa.env
+  AOS_PWA_NAV_STATE_FILE=$HOME/.cache/aos/pwactl-nav-app
+  AOS_FITNESS_TAILSCALE_PATH=/fitnessctx
+  AOS_FITNESS_TAILSCALE_TARGET=http://127.0.0.1:8788/
+
+Systemd runtime mode file:
+  $HOME/.env/pwa.env
+  AOS_PWA_RUN_MODE=dev      # dev -> npm run pwa:dev
+  AOS_PWA_RUN_MODE=normal   # normal/prod -> npm run pwa
+
+Service subcommands:
+  setup       install unit + daemon-reload + enable --now + linger-on
+  install     install unit file to ~/.config/systemd/user/
+  start|stop|restart|status|logs
+  enable|disable
+  linger-on|linger-off|linger-status
+EOF
+}
+
+has_app_dir() {
+  local app="${1:?app}"
+  [[ -d "$PWA_DIR/$app" ]]
+}
+
+require_pwa_dir() {
+  [[ -d "$PWA_DIR" ]] || die "missing PWA dir: $PWA_DIR"
+}
+
+discover_apps() {
+  require_pwa_dir
+  local apps=()
+  local app
+  for app in "${PWA_DEFAULT_ORDER[@]}"; do
+    has_app_dir "$app" && apps+=("$app")
+  done
+  if [[ ${#apps[@]} -eq 0 ]]; then
+    while IFS= read -r app; do
+      [[ -n "$app" ]] || continue
+      apps+=("$app")
+    done < <(find "$PWA_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  fi
+  printf '%s\n' "${apps[@]}"
+}
+
+app_route() {
+  local app="${1:?app}"
+  printf "/pwa/%s/" "$app"
+}
+
+apps_count() {
+  local count=0
+  local app
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    count=$((count + 1))
+  done < <(discover_apps)
+  printf "%s\n" "$count"
+}
+
+nav_state_get() {
+  local current=""
+  if [[ -f "$PWA_NAV_STATE_FILE" ]]; then
+    current="$(tr -d '[:space:]' < "$PWA_NAV_STATE_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -n "$current" ]] && has_app_dir "$current"; then
+    printf "%s\n" "$current"
+    return 0
+  fi
+  discover_apps | head -n 1
+}
+
+nav_state_set() {
+  local app="${1:?app}"
+  mkdir -p "$(dirname "$PWA_NAV_STATE_FILE")"
+  printf "%s\n" "$app" > "$PWA_NAV_STATE_FILE"
+}
+
+runtime_base() {
+  local rt="${1:-pwa}"
+  case "$rt" in
+    pwa|standalone) printf "%s\n" "${PWA_BASE_URL%/}" ;;
+    main|index) printf "%s\n" "${MAIN_BASE_URL%/}" ;;
+    *)
+      die "invalid runtime: $rt (use main|pwa)"
+      ;;
+  esac
+}
+
+runtime_health_url() {
+  local rt="${1:-pwa}"
+  case "$rt" in
+    pwa|standalone) printf "%s\n" "$PWA_HEALTH_URL" ;;
+    main|index) printf "%s\n" "$MAIN_HEALTH_URL" ;;
+    *)
+      die "invalid runtime: $rt (use main|pwa)"
+      ;;
+  esac
+}
+
+list_cmd() {
+  require_pwa_dir
+  printf "%-10s %-7s %-10s %-10s %-10s %-10s %-10s\n" \
+    "app" "dir" "index.html" "manifest" "sw.js" "app.js" "style.css"
+  local app dir
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    dir="$PWA_DIR/$app"
+    local style_state="yes"
+    if [[ "$app" == "fitness" ]]; then
+      style_state="n/a"
+    elif [[ ! -f "$dir/style.css" ]]; then
+      style_state="no"
+    fi
+    printf "%-10s %-7s %-10s %-10s %-10s %-10s %-10s\n" \
+      "$app" \
+      "$([[ -d "$dir" ]] && echo yes || echo no)" \
+      "$([[ -f "$dir/index.html" ]] && echo yes || echo no)" \
+      "$([[ -f "$dir/manifest.json" ]] && echo yes || echo no)" \
+      "$([[ -f "$dir/sw.js" ]] && echo yes || echo no)" \
+      "$([[ -f "$dir/app.js" ]] && echo yes || echo no)" \
+      "$style_state"
+  done < <(discover_apps)
+}
+
+apps_cmd() {
+  discover_apps
+}
+
+routes_for_runtime() {
+  local rt="${1:-pwa}"
+  local base
+  base="$(runtime_base "$rt")"
+  local app
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    printf "%-10s %s%s\n" "$app" "$base" "$(app_route "$app")"
+  done < <(discover_apps)
+}
+
+routes_cmd() {
+  local target="${1:-all}"
+  case "$target" in
+    pwa|standalone) routes_for_runtime pwa ;;
+    main|index) routes_for_runtime main ;;
+    all)
+      msg "[routes] pwa runtime"
+      routes_for_runtime pwa
+      echo ""
+      msg "[routes] main runtime"
+      routes_for_runtime main
+      ;;
+    *)
+      die "usage: pwactl routes [main|pwa|all]"
+      ;;
+  esac
+}
+
+http_status() {
+  local url="${1:?url}"
+  local out rc
+  # Keep this resilient and diagnostic-friendly:
+  # - short timeout for CLI checks
+  # - surface curl transport errors instead of silent "000"
+  out="$(curl -sS --max-time 2 --connect-timeout 1 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -ne 0 ]]; then
+    printf "ERR(%s)\n" "$rc"
+    return 0
+  fi
+  printf "%s\n" "${out:-000}"
+}
+
+tailscale_status_text() {
+  has_cmd tailscale || return 1
+  tailscale serve status 2>/dev/null || true
+}
+
+run_tailscale_with_fallback() {
+  local cmd="${1:?cmd}"
+  shift || true
+
+  if tailscale "$cmd" "$@"; then
+    return 0
+  fi
+  local rc=$?
+  if has_cmd sudo; then
+    warn "tailscale $cmd failed (likely permission). try with sudo..."
+    if sudo -n tailscale "$cmd" "$@" >/dev/null 2>&1; then
+      msg "applied via sudo -n: tailscale $cmd"
+      return 0
+    fi
+    warn "sudo password required. run manually:"
+    warn "  sudo tailscale $cmd $*"
+  fi
+  return "$rc"
+}
+
+print_tailscale_route_for_path() {
+  local path="${1:?path}"
+  local mode="${2:?mode}"
+  local text=""
+  text="$(tailscale "$mode" status 2>/dev/null || true)"
+  if [[ -z "$text" ]]; then
+    warn "$mode: unavailable"
+    return 0
+  fi
+  local line=""
+  line="$(printf "%s\n" "$text" | awk -v p="$path" '$0 ~ "^\\|-- " p "[[:space:]]+" { print; exit }')"
+  if [[ -n "$line" ]]; then
+    msg "$mode: $line"
+  else
+    warn "$mode: no route for $path"
+  fi
+}
+
+tailscale_has_route_for_path() {
+  local path="${1:?path}"
+  local mode="${2:?mode}"
+  local text=""
+  text="$(tailscale "$mode" status 2>/dev/null || true)"
+  [[ -n "$text" ]] || return 1
+  printf "%s\n" "$text" | awk -v p="$path" '
+    $0 ~ "^\\|-- " p "([[:space:]]|$)" { found=1; exit }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+fitness_tailscale_apply() {
+  local mode="${1:?mode}"
+  has_cmd tailscale || die "tailscale not installed"
+  case "$mode" in
+    serve|funnel) ;;
+    *) die "invalid mode: $mode (use serve|funnel)" ;;
+  esac
+
+  msg "fitness route:"
+  msg "  path   : $FITNESS_TS_PATH"
+  msg "  target : $FITNESS_TS_TARGET"
+  run_tailscale_with_fallback "$mode" --bg --set-path "$FITNESS_TS_PATH" "$FITNESS_TS_TARGET"
+  print_tailscale_route_for_path "$FITNESS_TS_PATH" serve
+  print_tailscale_route_for_path "$FITNESS_TS_PATH" funnel
+}
+
+fitness_tailscale_status() {
+  has_cmd tailscale || die "tailscale not installed"
+  msg "fitness route:"
+  msg "  path   : $FITNESS_TS_PATH"
+  msg "  target : $FITNESS_TS_TARGET"
+  print_tailscale_route_for_path "$FITNESS_TS_PATH" serve
+  print_tailscale_route_for_path "$FITNESS_TS_PATH" funnel
+}
+
+fitness_tailscale_switch() {
+  has_cmd tailscale || die "tailscale not installed"
+  local target_mode="funnel"
+  if tailscale_has_route_for_path "$FITNESS_TS_PATH" funnel; then
+    target_mode="serve"
+  fi
+  msg "switching fitness route to: $target_mode"
+  fitness_tailscale_apply "$target_mode"
+}
+
+fitness_cmd() {
+  local sub="${1:-status}"
+  case "$sub" in
+    serve) fitness_tailscale_apply serve ;;
+    funnel) fitness_tailscale_apply funnel ;;
+    switch) fitness_tailscale_switch ;;
+    status) fitness_tailscale_status ;;
+    *)
+      die "usage: pwactl fitness <serve|funnel|switch|status>"
+      ;;
+  esac
+}
+
+tailscale_first_url() {
+  local text="${1:-}"
+  printf "%s\n" "$text" | awk '/^https:\/\//{print $1; exit}'
+}
+
+tailscale_pwa_proxy_target() {
+  local text="${1:-}"
+  printf "%s\n" "$text" | awk '
+    prev ~ /^\|--[[:space:]]+\/pwa[[:space:]]*$/ && /proxy[[:space:]]+http/ { print $NF; exit }
+    { prev = $0 }
+  '
+}
+
+tailnet_status_line() {
+  local base text pwa_target base_clean
+  if [[ -n "$TAILNET_BASE_URL" ]]; then
+    base="$TAILNET_BASE_URL"
+  else
+    text="$(tailscale_status_text || true)"
+    base="$(tailscale_first_url "$text")"
+  fi
+
+  if [[ -z "$base" ]]; then
+    warn "tailnet: unavailable (no tailscale serve URL found)"
+    return 0
+  fi
+
+  base_clean="${base%/}"
+  if [[ -z "$TAILNET_BASE_URL" ]]; then
+    pwa_target="$(tailscale_pwa_proxy_target "${text:-}")"
+  fi
+
+  msg "tailnet: base=$base"
+  if [[ -n "$pwa_target" ]]; then
+    msg "tailnet: /pwa proxy -> $pwa_target"
+  fi
+
+  local pwa_url strip_url pwa_code strip_code
+  pwa_url="${base_clean}/pwa/core4/"
+  strip_url="${base_clean}/core4/"
+  pwa_code="$(http_status "$pwa_url")"
+  strip_code="$(http_status "$strip_url")"
+  msg "tailnet: /pwa/core4/=$pwa_code  /core4/=$strip_code"
+}
+
+runtime_is_reachable() {
+  local rt="${1:?runtime}"
+  local health_url
+  health_url="$(runtime_health_url "$rt")"
+  local hs
+  hs="$(http_status "$health_url")"
+  [[ "$hs" =~ ^2[0-9][0-9]$ ]]
+}
+
+health_runtime() {
+  local rt="${1:?runtime}"
+  local base health_url
+  base="$(runtime_base "$rt")"
+  health_url="$(runtime_health_url "$rt")"
+
+  local rc=0
+  local hs
+  hs="$(http_status "$health_url")"
+  if [[ "$hs" =~ ^2[0-9][0-9]$ ]]; then
+    msg "[$rt] health ok ($hs) $health_url"
+  else
+    warn "[$rt] health fail (${hs:-?}) $health_url"
+    rc=1
+  fi
+
+  local app route url status
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    route="$(app_route "$app")"
+    url="$base$route"
+    status="$(http_status "$url")"
+    if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+      msg "[$rt] $app ok ($status) $url"
+    else
+      warn "[$rt] $app fail (${status:-?}) $url"
+      rc=1
+    fi
+  done < <(discover_apps)
+
+  return "$rc"
+}
+
+health_cmd() {
+  local target="${1:-all}"
+  local rc=0
+  case "$target" in
+    pwa|standalone) health_runtime pwa ;;
+    main|index) health_runtime main ;;
+    all)
+      set +e
+      health_runtime pwa
+      local rc_pwa=$?
+      health_runtime main
+      local rc_main=$?
+      set -e
+      (( rc_pwa == 0 && rc_main == 0 )) || rc=1
+      return "$rc"
+      ;;
+    *)
+      die "usage: pwactl health [main|pwa|all]"
+      ;;
+  esac
+}
+
+runtime_status_line() {
+  local rt="${1:?runtime}"
+  local base health_url hs
+  base="$(runtime_base "$rt")"
+  health_url="$(runtime_health_url "$rt")"
+  hs="$(http_status "$health_url")"
+
+  local reachable="down"
+  if [[ "$hs" =~ ^2[0-9][0-9]$ ]]; then
+    reachable="up"
+  fi
+
+  local ok=0 total=0 app url code
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    total=$((total + 1))
+    url="$base$(app_route "$app")"
+    code="$(http_status "$url")"
+    if [[ "$code" =~ ^2[0-9][0-9]$ ]]; then
+      ok=$((ok + 1))
+    fi
+  done < <(discover_apps)
+
+  printf "%-5s health=%-4s apps=%s/%s base=%s\n" "$rt" "$reachable" "$ok" "$total" "$base"
+}
+
+status_cmd() {
+  require_pwa_dir
+  local total
+  total="$(apps_count)"
+  msg "apps: $total discovered at $PWA_DIR"
+  runtime_status_line pwa
+  runtime_status_line main
+  tailnet_status_line
+}
+
+check_cmd() {
+  require_pwa_dir
+  local rc=0
+  local app dir
+  local seen=0
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    seen=1
+    dir="$PWA_DIR/$app"
+    local req
+    while IFS= read -r req; do
+      [[ -n "$req" ]] || continue
+      if [[ ! -f "$dir/$req" ]]; then
+        warn "missing: $dir/$req"
+        rc=1
+      fi
+    done < <(app_required_files "$app")
+  done < <(discover_apps)
+  if [[ "$seen" -eq 0 ]]; then
+    warn "no pwa apps discovered under: $PWA_DIR"
+    rc=1
+  fi
+  return "$rc"
+}
+
+open_cmd() {
+  local app="${1:-}"
+  local rt="${2:-pwa}"
+  [[ -n "$app" ]] || die "usage: pwactl open <app> [main|pwa]"
+  has_cmd xdg-open || die "xdg-open not found"
+  has_app_dir "$app" || die "unknown app: $app"
+  nav_state_set "$app"
+  local base
+  base="$(runtime_base "$rt")"
+  local url="$base$(app_route "$app")"
+  msg "opening: $url"
+  xdg-open "$url" >/dev/null 2>&1 || die "failed to open: $url"
+}
+
+nav_cmd() {
+  local dir="${1:-}"
+  local rt="${2:-pwa}"
+  [[ -n "$dir" ]] || die "usage: pwactl nav <prev|next|left|right> [main|pwa]"
+  case "$dir" in
+    prev|left) dir="prev" ;;
+    next|right) dir="next" ;;
+    *) die "usage: pwactl nav <prev|next|left|right> [main|pwa]" ;;
+  esac
+
+  local -a apps=()
+  local app
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    apps+=("$app")
+  done < <(discover_apps)
+  (( ${#apps[@]} > 0 )) || die "no PWA apps discovered under: $PWA_DIR"
+
+  local current idx=-1 i
+  current="$(nav_state_get || true)"
+  for i in "${!apps[@]}"; do
+    if [[ "${apps[$i]}" == "$current" ]]; then
+      idx="$i"
+      break
+    fi
+  done
+  if (( idx < 0 )); then
+    idx=0
+  fi
+
+  if [[ "$dir" == "prev" ]]; then
+    idx=$(( (idx - 1 + ${#apps[@]}) % ${#apps[@]} ))
+  else
+    idx=$(( (idx + 1) % ${#apps[@]} ))
+  fi
+
+  app="${apps[$idx]}"
+  nav_state_set "$app"
+  open_cmd "$app" "$rt"
+}
+
+run_cmd() {
+  local rt="${1:-pwa}"
+  local force="${2:-}"
+  [[ -d "$INDEX_DIR" ]] || die "missing index-node dir: $INDEX_DIR"
+  if [[ -n "$force" && "$force" != "--force" ]]; then
+    die "usage: pwactl run [main|pwa] [--force]"
+  fi
+
+  if [[ "$force" != "--force" ]] && runtime_is_reachable "$rt"; then
+    msg "runtime already reachable ($(runtime_base "$rt")); skip start"
+    msg "use: pwactl run $rt --force"
+    return 0
+  fi
+
+  case "$rt" in
+    pwa|standalone)
+      msg "running standalone PWA runtime: npm run pwa"
+      cd "$INDEX_DIR"
+      exec npm run pwa
+      ;;
+    main|index)
+      msg "running main index runtime: npm run dev"
+      cd "$INDEX_DIR"
+      exec npm run dev
+      ;;
+    *)
+      die "usage: pwactl run [main|pwa]"
+      ;;
+  esac
+}
+
+changelog_cmd() {
+  local file="$PWA_DIR/CHANGELOG.md"
+  [[ -f "$file" ]] || die "missing changelog: $file"
+  if [[ -t 1 ]] && has_cmd less; then
+    less "$file"
+  else
+    cat "$file"
+  fi
+}
+
+service_install_cmd() {
+  [[ -f "$PWA_USER_UNIT_SOURCE" ]] || die "missing unit source: $PWA_USER_UNIT_SOURCE"
+  mkdir -p "$(dirname "$PWA_USER_UNIT_DEST")"
+  cp "$PWA_USER_UNIT_SOURCE" "$PWA_USER_UNIT_DEST"
+  if user_bus_ok; then
+    systemctl --user daemon-reload
+  else
+    warn "user bus unavailable; run later: systemctl --user daemon-reload"
+  fi
+  msg "installed: $PWA_USER_UNIT_DEST"
+}
+
+service_status_cmd() {
+  local linger mode state
+  linger="$(linger_status)"
+  mode="$(current_mode)"
+  state="$(service_state)"
+  msg "service: $PWA_USER_SERVICE"
+  msg "state  : $state"
+  msg "mode   : $mode ($PWA_MODE_ENV_FILE)"
+  msg "linger : $linger"
+  local health_status
+  health_status="$(http_status "$PWA_HEALTH_URL")"
+  msg "health : ${health_status:-000} $PWA_HEALTH_URL"
+}
+
+service_cmd() {
+  local sub="${1:-status}"
+  shift || true
+  case "$sub" in
+    setup)
+      service_install_cmd
+      if [[ ! -f "$PWA_MODE_ENV_FILE" ]]; then
+        set_mode dev
+      fi
+      ensure_linger_on
+      require_user_bus
+      systemctl --user enable --now "$PWA_USER_SERVICE"
+      service_status_cmd
+      ;;
+    install) service_install_cmd ;;
+    start) require_user_bus; systemctl --user start "$PWA_USER_SERVICE" ;;
+    stop) require_user_bus; systemctl --user stop "$PWA_USER_SERVICE" ;;
+    restart) require_user_bus; systemctl --user restart "$PWA_USER_SERVICE" ;;
+    enable) require_user_bus; systemctl --user enable "$PWA_USER_SERVICE" ;;
+    disable) require_user_bus; systemctl --user disable "$PWA_USER_SERVICE" ;;
+    status) require_user_bus; systemctl --user status "$PWA_USER_SERVICE" --no-pager ;;
+    logs) require_user_bus; journalctl --user -u "$PWA_USER_SERVICE" -f ;;
+    doctor) service_status_cmd ;;
+    linger-on) ensure_linger_on ;;
+    linger-off) ensure_linger_off ;;
+    linger-status) msg "linger: $(linger_status)" ;;
+    *)
+      die "usage: pwactl service <setup|install|start|stop|restart|enable|disable|status|logs|doctor|linger-on|linger-off|linger-status>"
+      ;;
+  esac
+}
+
+mode_cmd() {
+  local action="${1:-show}"
+  local opt="${2:-}"
+  case "$action" in
+    show|status|"")
+      msg "mode: $(current_mode) ($PWA_MODE_ENV_FILE)"
+      ;;
+    dev|normal|prod|production|development)
+      local mode
+      mode="$(normalize_mode "$action")"
+      set_mode "$mode"
+      if [[ "$opt" == "--restart" ]]; then
+        if [[ "$(service_state)" == "active" ]]; then
+          require_user_bus
+          systemctl --user restart "$PWA_USER_SERVICE"
+          msg "service restarted: $PWA_USER_SERVICE"
+        else
+          warn "service not active: $PWA_USER_SERVICE"
+        fi
+      fi
+      ;;
+    *)
+      die "usage: pwactl mode [show|dev|normal] [--restart]"
+      ;;
+  esac
+}
+
+game_cmd() {
+  msg "[game] quick JS/runtime map"
+  printf "%s\n" "  hub page      : $PWA_DIR/game/index.html"
+  printf "%s\n" "  hub app js    : $PWA_DIR/game/app.js"
+  printf "%s\n" "  hub sw        : $PWA_DIR/game/sw.js"
+  printf "%s\n" "  shared fallback: $PWA_DIR/gas-fallback.js"
+  printf "%s\n" "  chapters ui   : $PWA_DIR/game/chapters/index.html"
+  printf "%s\n" "  chapters js   : $PWA_DIR/game/chapters/app.js"
+  printf "%s\n" "  api mount     : $INDEX_DIR/server.js (/api/game, /api/pwa/gas-fallback)"
+  printf "%s\n" "  game routes   : $INDEX_DIR/routes/game.js (/chapters, /chapters/:id)"
+  echo ""
+  msg "[game] behavior hints"
+  printf "%s\n" "  - app.js is intentionally thin: calls aosGasFallback.init('game')"
+  printf "%s\n" "  - sw.js caches static shell and skips /api/* requests"
+  printf "%s\n" "  - chapter reader fetches /api/game/chapters + /api/game/chapters/:id"
+  printf "%s\n" "  - canonical URL is /pwa/game/ (trailing slash redirect in server.js)"
+  echo ""
+  msg "[game] quick checks"
+  printf "%s\n" "  - pwactl routes all | rg 'game'"
+  printf "%s\n" "  - pwactl health all"
+  printf "%s\n" "  - curl -sS ${MAIN_BASE_URL%/}/api/game/chapters | jq '.ok, (.chapters|length)'"
+  printf "%s\n" "  - curl -sS ${MAIN_BASE_URL%/}/api/pwa/gas-fallback?app=game | jq '.ok,.url'"
+}
+
+menu_cmd() {
+  ctl_can_prompt || die "menu requires interactive TTY"
+
+  pwactl_menu_choose() {
+    local prompt="${1:?prompt}"
+    shift || true
+    local -a options=("$@")
+    [[ "${#options[@]}" -gt 0 ]] || return 1
+    if ui_menu_gum "$prompt" "${options[@]}"; then
+      return 0
+    fi
+    ui_menu_fzf "$prompt" "${options[@]}"
+  }
+
+  local action
+  action="$(pwactl_menu_choose "pwactl menu" \
+    "status" \
+    "open (pwa)" \
+    "open (main)" \
+    "prev app" \
+    "next app" \
+    "mode..." \
+    "routes..." \
+    "health..." \
+    "run..." \
+    "fitness..." \
+    "service..." \
+    "check" \
+    "doctor" \
+    "changelog")" || return 1
+
+  case "$action" in
+    status) status_cmd ;;
+    "open (pwa)")
+      local app
+      app="$(pwactl_menu_choose "select app (pwa)" $(discover_apps))" || return 1
+      open_cmd "$app" pwa
+      ;;
+    "open (main)")
+      local app
+      app="$(pwactl_menu_choose "select app (main)" $(discover_apps))" || return 1
+      open_cmd "$app" main
+      ;;
+    "prev app") nav_cmd prev pwa ;;
+    "next app") nav_cmd next pwa ;;
+    "mode...")
+      local m
+      m="$(pwactl_menu_choose "mode" "show" "dev" "normal")" || return 1
+      mode_cmd "$m"
+      ;;
+    "routes...")
+      local r
+      r="$(pwactl_menu_choose "routes" "pwa" "main" "all")" || return 1
+      routes_cmd "$r"
+      ;;
+    "health...")
+      local h
+      h="$(pwactl_menu_choose "health" "pwa" "main" "all")" || return 1
+      health_cmd "$h"
+      ;;
+    "run...")
+      local run_target
+      run_target="$(pwactl_menu_choose "run" "pwa" "main")" || return 1
+      run_cmd "$run_target"
+      ;;
+    "fitness...")
+      local f
+      f="$(pwactl_menu_choose "fitness route" "status" "switch" "serve" "funnel")" || return 1
+      fitness_cmd "$f"
+      ;;
+    "service...")
+      local s
+      s="$(pwactl_menu_choose "service" "status" "start" "stop" "restart" "logs" "doctor")" || return 1
+      service_cmd "$s"
+      ;;
+    check) check_cmd ;;
+    doctor) doctor_cmd ;;
+    changelog) changelog_cmd ;;
+    *)
+      die "unknown menu action: $action"
+      ;;
+  esac
+}
+
+doctor_cmd() {
+  local rc=0
+  set +e
+  check_cmd
+  local rc_check=$?
+  health_cmd all
+  local rc_health=$?
+  set -e
+  if [[ $rc_check -eq 0 && $rc_health -eq 0 ]]; then
+    msg "doctor: all checks passed"
+    return 0
+  fi
+  warn "doctor: check=$rc_check health=$rc_health"
+  rc=1
+  return "$rc"
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  menu) menu_cmd ;;
+  status) status_cmd ;;
+  logs) service_cmd logs ;;
+  mode) mode_cmd "$@" ;;
+  apps) apps_cmd ;;
+  service) service_cmd "$@" ;;
+  list) list_cmd ;;
+  routes) routes_cmd "$@" ;;
+  health) health_cmd "$@" ;;
+  check) check_cmd ;;
+  doctor) doctor_cmd ;;
+  prev) nav_cmd prev "$@" ;;
+  next) nav_cmd next "$@" ;;
+  nav) nav_cmd "$@" ;;
+  fitness) fitness_cmd "$@" ;;
+  game) game_cmd ;;
+  open) open_cmd "$@" ;;
+  run|serve) run_cmd "$@" ;;
+  changelog) changelog_cmd ;;
+  help|-h|--help|"") usage ;;
+  *)
+    die "unknown command: $cmd"
+    ;;
+esac

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily ctx</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1115;
+        --panel: #151924;
+        --text: #e6e9ef;
+        --muted: #8c93a8;
+        --accent: #7dd3fc;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #141826, #111420);
+        border-bottom: 1px solid #1f2433;
+      }
+      header .title {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      header .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      header .actions {
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid #262c3e;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .grid {
+        flex: 1;
+        display: grid;
+        grid-template-rows: 1fr 1fr;
+        gap: 10px;
+        padding: 10px;
+      }
+      body.side .grid {
+        grid-template-rows: 1fr;
+        grid-template-columns: 1fr 1fr;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid #1f2433;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .panel .label {
+        padding: 8px 12px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        border-bottom: 1px solid #1f2433;
+      }
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+        flex: 1;
+        background: #0b0d14;
+      }
+      .footer {
+        padding: 6px 14px 12px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div class="title">DAILY ctx</div>
+        <div class="meta">Core4 + Fire Map daily view</div>
+      </div>
+      <div class="actions">
+        <button id="layoutBtn" type="button">Layout: Stack</button>
+        <button id="swapBtn" type="button">Swap</button>
+        <button id="refreshBtn" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <section class="grid" id="grid">
+      <div class="panel" id="panelCore4">
+        <div class="label">Core4 Daily</div>
+        <iframe id="core4Frame" title="Core4 Daily"></iframe>
+      </div>
+      <div class="panel" id="panelFire">
+        <div class="label">Fire Map Daily</div>
+        <iframe id="fireFrame" title="Fire Map Daily"></iframe>
+      </div>
+    </section>
+
+    <div class="footer">
+      Hub: <span id="hubLabel">http://127.0.0.1:8799</span> ·
+      <a id="core4Link" href="#" target="_blank" rel="noopener">Core4</a> ·
+      <a id="fireLink" href="#" target="_blank" rel="noopener">Fire</a>
+    </div>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const storedHub = localStorage.getItem("daily_hub");
+        const hub = params.get("hub") || storedHub || "http://127.0.0.1:8799";
+        if (params.get("hub")) localStorage.setItem("daily_hub", hub);
+
+        const core4Url = hub.replace(/\/$/, "") + "/pwa/core4/";
+        const fireUrl = hub.replace(/\/$/, "") + "/pwa/fire/";
+
+        const core4Frame = document.getElementById("core4Frame");
+        const fireFrame = document.getElementById("fireFrame");
+        const core4Link = document.getElementById("core4Link");
+        const fireLink = document.getElementById("fireLink");
+        const hubLabel = document.getElementById("hubLabel");
+
+        core4Frame.src = core4Url;
+        fireFrame.src = fireUrl;
+        core4Link.href = core4Url;
+        fireLink.href = fireUrl;
+        hubLabel.textContent = hub;
+
+        let side = false;
+        const layoutBtn = document.getElementById("layoutBtn");
+        const swapBtn = document.getElementById("swapBtn");
+        const refreshBtn = document.getElementById("refreshBtn");
+
+        function updateLayout() {
+          document.body.classList.toggle("side", side);
+          layoutBtn.textContent = side ? "Layout: Side" : "Layout: Stack";
+        }
+        layoutBtn.addEventListener("click", () => {
+          side = !side;
+          updateLayout();
+        });
+
+        swapBtn.addEventListener("click", () => {
+          const grid = document.getElementById("grid");
+          const a = document.getElementById("panelCore4");
+          const b = document.getElementById("panelFire");
+          if (grid && a && b) {
+            grid.insertBefore(b, a);
+          }
+        });
+
+        refreshBtn.addEventListener("click", () => {
+          core4Frame.src = core4Url;
+          fireFrame.src = fireUrl;
+        });
+
+        updateLayout();
+      })();
+    </script>
+  </body>
+</html>

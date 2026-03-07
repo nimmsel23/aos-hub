@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="αOS Fire">
+  <rect width="192" height="192" rx="36" fill="#0b0c0f"/>
+  <defs>
+    <linearGradient id="flame" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffd08a"/>
+      <stop offset="55%" stop-color="#ff7a1a"/>
+      <stop offset="100%" stop-color="#ff2d2d"/>
+    </linearGradient>
+  </defs>
+  <circle cx="96" cy="96" r="58" fill="none" stroke="#1f2937" stroke-width="6"/>
+  <path d="M96 30c-8 20-26 34-34 58-7 20-2 38 7 50 7 9 14 14 26 18-8-12-8-25-4-36 7-18 26-22 38-38 11-16 10-36-33-52z" fill="url(#flame)"/>
+  <path d="M96 98c-9 9-18 18-18 34 0 16 14 30 33 30s33-14 33-30c0-16-13-28-18-34-5 12-13 22-25 22s-20-10-25-22z" fill="#ffe1b3"/>
+</svg>

@@ -1,0 +1,256 @@
+/*******************************
+ * αOS TENT - Weekly Review Automation
+ * Automatic weekly summary generation
+ *******************************/
+
+/**
+ * Trigger: Run every Sunday at 20:00 (week end)
+ * Creates weekly summary file in Tent folder
+ * Sends Telegram notification
+ */
+function tent_weeklyReviewTrigger() {
+  try {
+    const lastWeek = tent_getLastWeekKey_();
+    const summary = tent_generateWeeklySummary_(lastWeek);
+
+    // Save to Drive
+    const file = tent_saveWeeklySummary_(lastWeek, summary);
+
+    // Send Telegram notification
+    tent_sendWeeklySummaryNotification_(lastWeek, summary, file);
+
+    Logger.log('Weekly review completed: ' + lastWeek);
+    return { ok: true, week: lastWeek, file: file };
+  } catch (e) {
+    Logger.log('Weekly review failed: ' + e);
+    return { ok: false, error: e.toString() };
+  }
+}
+
+/**
+ * Get last completed week key (YYYY_WW format)
+ */
+function tent_getLastWeekKey_() {
+  const now = new Date();
+  // Go back to Sunday of last week
+  const daysToSubtract = now.getDay() === 0 ? 7 : now.getDay();
+  const lastSunday = new Date(now.getTime() - (daysToSubtract * 24 * 60 * 60 * 1000));
+
+  const year = lastSunday.getFullYear();
+  const weekNum = tent_getWeekNumber_(lastSunday);
+  return year + '_' + String(weekNum).padStart(2, '0');
+}
+
+/**
+ * Get ISO week number
+ */
+function tent_getWeekNumber_(date) {
+  const d = new Date(date.getTime());
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+/**
+ * Generate comprehensive weekly summary from multiple sources
+ */
+function tent_generateWeeklySummary_(weekKey) {
+  const summary = {
+    week: weekKey,
+    generated_at: new Date().toISOString(),
+    sources: {}
+  };
+
+  // 1. Core4 Summary
+  if (typeof core4_getWeekSummary === 'function') {
+    try {
+      const core4 = core4_getWeekSummary(weekKey);
+      summary.sources.core4 = {
+        ok: true,
+        week_total: core4.totals.week_total || 0,
+        by_domain: core4.totals.by_domain || {},
+        entries_count: (core4.entries || []).length,
+        target: 28,
+        percentage: Math.round(((core4.totals.week_total || 0) / 28) * 100)
+      };
+    } catch (e) {
+      summary.sources.core4 = { ok: false, error: e.toString() };
+    }
+  }
+
+  // 2. War Stacks completed (from Door Centre)
+  if (typeof door_getWeekWarStacks === 'function') {
+    try {
+      const warStacks = door_getWeekWarStacks(weekKey);
+      summary.sources.warStacks = {
+        ok: true,
+        count: warStacks.count || 0,
+        completed: warStacks.completed || 0
+      };
+    } catch (e) {
+      summary.sources.warStacks = { ok: false, error: e.toString() };
+    }
+  }
+
+  // 3. Voice Sessions (from Voice Centre)
+  if (typeof voice_getWeekSessions === 'function') {
+    try {
+      const voice = voice_getWeekSessions(weekKey);
+      summary.sources.voice = {
+        ok: true,
+        count: voice.count || 0
+      };
+    } catch (e) {
+      summary.sources.voice = { ok: false, error: e.toString() };
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Save weekly summary to Tent folder
+ */
+function tent_saveWeeklySummary_(weekKey, summary) {
+  const folder = tent_getFolder_();
+  const summaryFolder = tent_getOrCreateSubfolder_(folder, 'Weekly_Reviews');
+
+  const filename = 'tent_week_summary_' + weekKey + '.json';
+  const content = JSON.stringify(summary, null, 2);
+
+  const files = summaryFolder.getFilesByName(filename);
+  if (files.hasNext()) {
+    const file = files.next();
+    file.setContent(content);
+    return { id: file.getId(), name: file.getName(), url: file.getUrl() };
+  }
+
+  const file = summaryFolder.createFile(filename, content, MimeType.PLAIN_TEXT);
+  return { id: file.getId(), name: file.getName(), url: file.getUrl() };
+}
+
+/**
+ * Send Telegram notification with weekly summary
+ */
+function tent_sendWeeklySummaryNotification_(weekKey, summary, file) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('GAME_BOT_TOKEN') || props.getProperty('BOT_TOKEN');
+  const chatId = props.getProperty('CHAT_ID');
+
+  if (!token || !chatId) {
+    Logger.log('Tent weekly notification: BOT_TOKEN or CHAT_ID missing');
+    return { ok: false };
+  }
+
+  // Build message
+  let msg = '⛺ *GENERAL\'S TENT - Week ' + weekKey + '*\n\n';
+
+  // Core4
+  if (summary.sources.core4 && summary.sources.core4.ok) {
+    const c4 = summary.sources.core4;
+    msg += `*Core4:* ${c4.week_total}/${c4.target} points (${c4.percentage}%)\n`;
+    msg += `- Body: ${c4.by_domain.body || 0}\n`;
+    msg += `- Being: ${c4.by_domain.being || 0}\n`;
+    msg += `- Balance: ${c4.by_domain.balance || 0}\n`;
+    msg += `- Business: ${c4.by_domain.business || 0}\n\n`;
+  }
+
+  // War Stacks
+  if (summary.sources.warStacks && summary.sources.warStacks.ok) {
+    const ws = summary.sources.warStacks;
+    msg += `*War Stacks:* ${ws.completed}/${ws.count} completed\n\n`;
+  }
+
+  // Voice Sessions
+  if (summary.sources.voice && summary.sources.voice.ok) {
+    msg += `*Voice Sessions:* ${summary.sources.voice.count}\n\n`;
+  }
+
+  msg += `_Full report: ${file.url}_`;
+
+  const payload = {
+    chat_id: chatId,
+    text: msg,
+    parse_mode: 'Markdown'
+  };
+
+  try {
+    UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    return { ok: true };
+  } catch (e) {
+    Logger.log('Tent notification failed: ' + e);
+    return { ok: false, error: e.toString() };
+  }
+}
+
+/**
+ * Setup weekly trigger (run once)
+ * Executes every Sunday at 20:00
+ */
+function tent_setupWeeklyReviewTrigger() {
+  // Remove existing triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === 'tent_weeklyReviewTrigger') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  // Create new trigger: Every Sunday at 20:00
+  ScriptApp.newTrigger('tent_weeklyReviewTrigger')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(20)
+    .create();
+
+  return { ok: true, message: 'Weekly review trigger created (Sunday 20:00)' };
+}
+
+/**
+ * Manual trigger for testing
+ */
+function tent_testWeeklyReview() {
+  return tent_weeklyReviewTrigger();
+}
+
+/**
+ * Get or create Alpha_Tent folder
+ */
+function tent_getFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty('TENT_DRIVE_FOLDER_ID');
+
+  if (folderId) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      folder.getName(); // Test access
+      return folder;
+    } catch (e) {
+      Logger.log('Tent folder invalid: ' + e);
+    }
+  }
+
+  // Search or create
+  const folderName = 'Alpha_Tent';
+  const folders = DriveApp.getFoldersByName(folderName);
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  props.setProperty('TENT_DRIVE_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+/**
+ * Get or create subfolder
+ */
+function tent_getOrCreateSubfolder_(parent, name) {
+  const folders = parent.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return parent.createFolder(name);
+}

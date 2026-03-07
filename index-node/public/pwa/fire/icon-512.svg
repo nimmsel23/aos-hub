@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AlphaOS Fire">
+  <rect width="512" height="512" rx="96" fill="#0b0c0f"/>
+  <defs>
+    <linearGradient id="flame" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffb347"/>
+      <stop offset="55%" stop-color="#ff6a00"/>
+      <stop offset="100%" stop-color="#ff2d2d"/>
+    </linearGradient>
+  </defs>
+  <path d="M256 76c-16 48-64 80-83 140-16 48-2 92 18 122 16 22 32 34 64 40-20-28-20-56-10-80 16-40 60-50 84-90 22-32 20-74-73-132z" fill="url(#flame)"/>
+  <path d="M256 246c-22 20-44 40-44 78 0 34 30 68 72 68s72-34 72-68c0-34-28-60-44-78-10 26-28 46-56 46s-46-20-56-46z" fill="#ffd08a"/>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="αOS Core4">
+  <defs>
+    <clipPath id="mask192">
+      <rect width="192" height="192" rx="36"/>
+    </clipPath>
+  </defs>
+  <rect width="192" height="192" rx="36" fill="#0b0c0f"/>
+
+  <!-- 4 Domain quadrant glows -->
+  <circle cx="72" cy="72" r="28" fill="#5db85d" opacity=".12"/>
+  <circle cx="120" cy="72" r="28" fill="#5b9dd8" opacity=".12"/>
+  <circle cx="72" cy="120" r="28" fill="#b85db8" opacity=".12"/>
+  <circle cx="120" cy="120" r="28" fill="#d89d5b" opacity=".12"/>
+
+  <!-- Central ring (progress metaphor) -->
+  <circle cx="96" cy="96" r="42" fill="none" stroke="#1e2128" stroke-width="5"/>
+  <circle cx="96" cy="96" r="42" fill="none" stroke="url(#grad192)" stroke-width="5" stroke-linecap="round" stroke-dasharray="198 66"/>
+
+  <!-- 4 Domain dots on the ring -->
+  <circle cx="96" cy="54" r="6" fill="#5db85d"/>
+  <circle cx="138" cy="96" r="6" fill="#5b9dd8"/>
+  <circle cx="96" cy="138" r="6" fill="#b85db8"/>
+  <circle cx="54" cy="96" r="6" fill="#d89d5b"/>
+
+  <!-- Center "4" -->
+  <text x="96" y="103" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="32" font-weight="900" fill="#e8ecf0" letter-spacing="-1">4</text>
+
+  <defs>
+    <linearGradient id="grad192" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5db85d"/>
+      <stop offset="33%" stop-color="#5b9dd8"/>
+      <stop offset="66%" stop-color="#b85db8"/>
+      <stop offset="100%" stop-color="#d89d5b"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# shellcheck disable=SC1090
+source "$APP_DIR/core4-lib.sh"
+
+core4_load_env || true
+core4_recompute_config
+
+normalize_base_url() {
+  local raw="${1:-}"
+  local out="${raw%/}"
+  out="${out%%/api/*}"
+  out="${out%%/bridge/*}"
+  printf "%s\n" "$out"
+}
+
+INDEX_URL="$(normalize_base_url "${AOS_INDEX_URL:-http://127.0.0.1:8799}")"
+BRIDGE_URL="$(normalize_base_url "${AOS_BRIDGE_URL:-http://127.0.0.1:8080}")"
+INDEX_ROOT="${AOS_INDEX_ROOT:-$ROOT_DIR/index-node}"
+TODAY="${TODAY:-$(date +%F)}"
+
+FAILS=0
+WARNS=0
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+ok() { printf "PASS  %s\n" "$*"; }
+warnc() { printf "WARN  %s\n" "$*"; WARNS=$((WARNS + 1)); }
+failc() { printf "FAIL  %s\n" "$*"; FAILS=$((FAILS + 1)); }
+headln() { printf "\n[%s]\n" "$*"; }
+
+run_capture() {
+  local out rc
+  out="$("$@" 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  printf "%s" "$out"
+  return "$rc"
+}
+
+check_cmd_exists() {
+  local name="$1"
+  if have "$name"; then
+    ok "$name on PATH -> $(command -v "$name")"
+  else
+    failc "$name missing on PATH"
+  fi
+}
+
+check_help_cmd() {
+  local name="$1"
+  local out rc=0
+  out="$(run_capture timeout 4s "$name" --help)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"Usage:"* ]]; then
+    ok "$name --help"
+    return 0
+  fi
+  failc "$name --help failed (rc=$rc)"
+}
+
+check_binary_frontdoors() {
+  headln "frontdoors"
+  check_cmd_exists core4
+  check_cmd_exists c4
+  check_cmd_exists c4d
+  check_cmd_exists wcore4
+  check_cmd_exists core4ctl
+}
+
+check_help_frontdoors() {
+  headln "help"
+  check_help_cmd core4
+  check_help_cmd c4
+  check_help_cmd c4d
+  check_help_cmd wcore4
+
+  local out rc=0
+  out="$(run_capture timeout 4s core4ctl menu --help)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"Usage: core4ctl"* ]]; then
+    ok "core4ctl menu --help (shim help path)"
+  else
+    failc "core4ctl menu --help did not return core4ctl help (rc=$rc)"
+  fi
+}
+
+check_cli_runtime() {
+  headln "cli-runtime"
+  local out rc=0
+
+  rc=0
+  out="$(run_capture timeout 6s core4 -d)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"Core4 "* ]]; then
+    ok "core4 -d"
+  else
+    failc "core4 -d failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture timeout 6s core4 -w)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"Core4 "* ]]; then
+    ok "core4 -w"
+  else
+    failc "core4 -w failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture timeout 4s c4)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]]; then
+    ok "c4"
+  elif [[ "$out" == *"No Core4 data for"* ]]; then
+    warnc "c4 reports no local day snapshot yet"
+  else
+    failc "c4 failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture timeout 6s core4ctl status)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"core4ctl status"* ]]; then
+    ok "core4ctl status"
+  else
+    failc "core4ctl status failed (rc=$rc)"
+  fi
+}
+
+check_taskwarrior() {
+  headln "taskwarrior"
+  if ! have task; then
+    warnc "task binary not found (skipping Taskwarrior checks)"
+    return 0
+  fi
+
+  local out rc=0
+  rc=0
+  out="$(run_capture task --version)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]]; then
+    ok "task --version ($(printf '%s' "$out" | head -1))"
+  else
+    failc "task --version failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture timeout 8s core4ctl week)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]]; then
+    ok "core4ctl week"
+  elif [[ "$out" == *"thisweek"* && "$out" == *"valid date"* ]]; then
+    warnc "core4ctl week uses Taskwarrior syntax not supported by this setup (due:thisweek)"
+  else
+    warnc "core4ctl week failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture timeout 10s core4ctl seed-week --dry-run)" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *"Core4 seed-week "* ]]; then
+    ok "core4ctl seed-week --dry-run"
+  else
+    failc "core4ctl seed-week --dry-run failed (rc=$rc)"
+  fi
+}
+
+check_pwa_static() {
+  headln "pwa-static"
+  local pwa_dir="$INDEX_ROOT/public/pwa/core4"
+  local server_js="$INDEX_ROOT/server.js"
+
+  [[ -f "$pwa_dir/index.html" ]] && ok "PWA file: index.html" || failc "missing $pwa_dir/index.html"
+  [[ -f "$pwa_dir/app.js" ]] && ok "PWA file: app.js" || failc "missing $pwa_dir/app.js"
+  [[ -f "$pwa_dir/style.css" ]] && ok "PWA file: style.css" || failc "missing $pwa_dir/style.css"
+  [[ -f "$pwa_dir/sw.js" ]] && ok "PWA file: sw.js" || failc "missing $pwa_dir/sw.js"
+  [[ -f "$pwa_dir/manifest.json" ]] && ok "PWA file: manifest.json" || failc "missing $pwa_dir/manifest.json"
+
+  if have node; then
+    if node --check "$pwa_dir/app.js" >/dev/null 2>&1; then
+      ok "node --check pwa/core4/app.js"
+    else
+      failc "node --check pwa/core4/app.js failed"
+    fi
+    if node --check "$pwa_dir/sw.js" >/dev/null 2>&1; then
+      ok "node --check pwa/core4/sw.js"
+    else
+      failc "node --check pwa/core4/sw.js failed"
+    fi
+  else
+    warnc "node not found (skipping JS syntax checks)"
+  fi
+
+  if rg -q '/api/core4/day-state' "$server_js" && rg -q '/api/core4/week-summary' "$server_js" && rg -q '/api/core4/log' "$server_js"; then
+    ok "server.js includes Core4 API routes"
+  else
+    failc "server.js missing one or more Core4 API routes"
+  fi
+
+  if rg -q '/pwa/core4/' "$server_js"; then
+    ok "server.js includes PWA core4 route redirect(s)"
+  else
+    failc "server.js missing PWA core4 route redirect(s)"
+  fi
+}
+
+http_probe_ok() {
+  local url="$1"
+  curl --max-time 2 -fsS "$url" >/dev/null 2>&1
+}
+
+check_live_http() {
+  headln "live-http"
+  if ! have curl; then
+    warnc "curl not found (skipping live HTTP checks)"
+    return 0
+  fi
+
+  if http_probe_ok "${INDEX_URL%/}/health"; then
+    ok "index health ${INDEX_URL%/}/health"
+  else
+    warnc "index health unreachable (${INDEX_URL%/}/health)"
+    return 0
+  fi
+
+  if http_probe_ok "${INDEX_URL%/}/pwa/core4/"; then
+    ok "PWA route /pwa/core4/"
+  else
+    warnc "PWA route /pwa/core4/ unreachable"
+  fi
+
+  local out rc=0
+  rc=0
+  out="$(run_capture curl --max-time 3 -fsS "${INDEX_URL%/}/api/core4/day-state?date=${TODAY}")" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *'"ok"'* ]]; then
+    ok "API /api/core4/day-state"
+  else
+    warnc "API /api/core4/day-state failed (rc=$rc)"
+  fi
+
+  rc=0
+  out="$(run_capture curl --max-time 3 -fsS "${INDEX_URL%/}/api/core4/week-summary?date=${TODAY}")" || rc=$?
+  rc="${rc:-0}"
+  if [[ "$rc" -eq 0 ]] && [[ "$out" == *'"ok"'* ]]; then
+    ok "API /api/core4/week-summary"
+  else
+    warnc "API /api/core4/week-summary failed (rc=$rc)"
+  fi
+
+  if http_probe_ok "${BRIDGE_URL%/}/health"; then
+    ok "bridge health ${BRIDGE_URL%/}/health"
+    rc=0
+    out="$(run_capture curl --max-time 3 -fsS "${BRIDGE_URL%/}/bridge/core4/today")" || rc=$?
+    rc="${rc:-0}"
+    if [[ "$rc" -eq 0 ]] && [[ "$out" == *'"week"'* ]]; then
+      ok "bridge /bridge/core4/today"
+    else
+      warnc "bridge /bridge/core4/today failed (rc=$rc)"
+    fi
+  else
+    warnc "bridge health unreachable (${BRIDGE_URL%/}/health)"
+  fi
+}
+
+summary() {
+  printf "\n[summary]\n"
+  printf "FAIL=%s WARN=%s\n" "$FAILS" "$WARNS"
+  if [[ "$FAILS" -eq 0 ]]; then
+    printf "Result: OK%s\n" "$( [[ "$WARNS" -gt 0 ]] && printf ' (with warnings)' )"
+    return 0
+  fi
+  printf "Result: FAIL\n"
+  return 1
+}
+
+usage() {
+  cat <<EOF
+Usage: core4-checkctl [quick|all|live] [--live] [--no-live]
+
+Core4 diagnostic checks (frontdoors, shim/help, PWA files/routes, Taskwarrior, optional live HTTP probes).
+
+Modes:
+  quick    Run local/static checks only (default)
+  all      Same as quick + live HTTP probes
+  live     Run only live HTTP probes
+
+Env:
+  AOS_INDEX_URL=${INDEX_URL}
+  AOS_BRIDGE_URL=${BRIDGE_URL}
+  AOS_INDEX_ROOT=${INDEX_ROOT}
+EOF
+}
+
+MODE="quick"
+DO_LIVE=0
+
+if [[ $# -gt 0 ]]; then
+  case "${1:-}" in
+    quick|all|live) MODE="$1"; shift || true ;;
+    -h|--help|help) usage; exit 0 ;;
+  esac
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --live) DO_LIVE=1 ;;
+    --no-live) DO_LIVE=0 ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) die "unknown arg: $1" ;;
+  esac
+  shift || true
+done
+
+case "$MODE" in
+  quick)
+    ;;
+  all)
+    DO_LIVE=1
+    ;;
+  live)
+    DO_LIVE=1
+    ;;
+esac
+
+ui_title "core4-checkctl ($MODE)"
+msg "Habit-tracker-first diagnostic sweep"
+msg "index: ${INDEX_URL%/}"
+msg "bridge: ${BRIDGE_URL%/}"
+
+if [[ "$MODE" != "live" ]]; then
+  check_binary_frontdoors
+  check_help_frontdoors
+  check_cli_runtime
+  check_taskwarrior
+  check_pwa_static
+fi
+
+if [[ "$DO_LIVE" -eq 1 ]]; then
+  check_live_http
+fi
+
+summary

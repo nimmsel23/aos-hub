@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>αOS · Links</title>
+  <link rel="stylesheet" href="/links.css" />
+</head>
+<body>
+  <header class="bar">
+    <div>
+      <div class="kicker">αOS · INDEX NODE</div>
+      <div class="title">Serve / Funnel Links</div>
+    </div>
+    <button id="refresh" class="btn">Refresh</button>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="card-title">Routes (This Host)</div>
+      <div class="grid" id="routeGrid"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Active Ports</div>
+      <div class="grid" id="portGrid"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Menu Links</div>
+      <div class="grid" id="menuGrid"></div>
+    </section>
+  </main>
+
+  <script src="/links.js"></script>
+</body>
+</html>

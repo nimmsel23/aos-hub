@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#1d1030" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Door Production</title>
+  <link rel="manifest" href="/pwa/production/manifest.json" />
+  <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
+  <link rel="stylesheet" href="/pwa/production/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand card brand-card">
+        <div class="eyebrow">Door / Phase 3</div>
+        <h1>Production</h1>
+        <p>Work the active hits. Close the week with visible movement, not drift.</p>
+      </div>
+
+      <section class="card summary-card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Week Snapshot</div>
+            <h2 id="weekLabel">This Week</h2>
+          </div>
+          <button class="ghost-button" id="refreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="summary-grid">
+          <div class="metric-tile">
+            <span class="metric-label">Open</span>
+            <strong id="openCount">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">Done</span>
+            <strong id="doneCount">0</strong>
+          </div>
+          <div class="metric-tile metric-wide">
+            <span class="metric-label">Completion</span>
+            <strong id="rateValue">0%</strong>
+            <div class="meter"><span id="rateBar"></span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card control-card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Filter</div>
+            <h2>Hit Views</h2>
+          </div>
+        </div>
+        <div class="segmented" id="filterNav" aria-label="Production filters"></div>
+        <label class="search-field" for="searchInput">
+          <span>Search</span>
+          <input id="searchInput" type="search" placeholder="Filter hits, doors, strikes" />
+        </label>
+      </section>
+
+      <section class="card status-card">
+        <div class="eyebrow">Status</div>
+        <div class="status-line">
+          <span class="status-dot" id="onlineDot"></span>
+          <span id="onlineLabel">Checking connection...</span>
+        </div>
+        <div class="status-meta" id="statusMeta">Ready.</div>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="toolbar card">
+        <div>
+          <div class="eyebrow">Execution Board</div>
+          <h2 id="viewTitle">Open Hits</h2>
+        </div>
+        <div class="toolbar-copy">
+          <strong id="listMeta">0 hits</strong>
+          <span>Weekly execution from Door / Production</span>
+        </div>
+      </header>
+
+      <section class="board">
+        <div class="list-column">
+          <div class="card panel-card">
+            <div class="panel-head">
+              <div>
+                <div class="eyebrow">Action Queue</div>
+                <h3>Hits</h3>
+              </div>
+            </div>
+            <div class="hit-list" id="hitList"></div>
+          </div>
+        </div>
+
+        <aside class="detail-column">
+          <div class="card panel-card detail-card" id="detailPanel"></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script src="/pwa/production/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pwa/production/sw.js", { scope: "/pwa/production/" });
+    }
+  </script>
+</body>
+</html>

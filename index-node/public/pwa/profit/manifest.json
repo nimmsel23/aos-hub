@@ -1,0 +1,25 @@
+{
+  "id": "/pwa/profit/",
+  "name": "Door Profit",
+  "short_name": "Profit",
+  "description": "Standalone Door Profit PWA",
+  "start_url": "/pwa/profit/",
+  "scope": "/pwa/profit/",
+  "display": "standalone",
+  "theme_color": "#10322c",
+  "background_color": "#edf4ef",
+  "icons": [
+    {
+      "src": "/pwa/door/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/door/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

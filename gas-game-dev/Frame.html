@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>FRAME MAP – Alpha OS</title>
+  <?!= include('Game_Frame_Style'); ?>
+  <style>
+    .tab-nav {
+      display: flex;
+      gap: 20px;
+      margin: 40px 0 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: #000;
+      color: #aaa;
+      border: 2px solid #333;
+      padding: 16px 40px;
+      font-size: 20px;
+      font-weight: 900;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.4s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .tab-btn.active, .tab-btn:hover {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 0 30px var(--glow);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.6s; }
+    @keyframes fadeIn { from {opacity:0; transform:translateY(20px)} to {opacity:1; transform:none} }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="<?= baseUrl ?>?k=<?= userKey || '' ?>" class="active">FRAME MAP</a>
+</nav>
+
+<div class="container">
+  <h1>FRAME MAP</h1>
+  <div class="subtitle">Einmal im Jahr · 4 Domains · 20 Wahrheiten</div>
+
+  <!-- TABS -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="openTab('body')">BODY</button>
+    <button class="tab-btn" onclick="openTab('being')">BEING</button>
+    <button class="tab-btn" onclick="openTab('balance')">BALANCE</button>
+    <button class="tab-btn" onclick="openTab('business')">BUSINESS</button>
+  </div>
+
+  <div class="card">
+
+    <!-- BODY TAB -->
+    <div id="body" class="tab-content active">
+      <div class="domain">
+        <h2>BODY</h2>
+        <label>1. Where am I now?</label>
+        <textarea id="body_where"></textarea>
+        <label>2. How did I get here?</label>
+        <textarea id="body_how"></textarea>
+        <label>3. How do I feel about where I am?</label>
+        <textarea id="body_feel"></textarea>
+        <label>4. What is working?</label>
+        <textarea id="body_working"></textarea>
+        <label>5. What is not working?</label>
+        <textarea id="body_not"></textarea>
+        <button onclick="save('Body')">BODY speichern</button>
+      </div>
+    </div>
+
+    <!-- BEING TAB -->
+    <div id="being" class="tab-content">
+      <div class="domain">
+        <h2>BEING</h2>
+        <label>1. Where am I now?</label><textarea id="being_where"></textarea>
+        <label>2. How did I get here?</label><textarea id="being_how"></textarea>
+        <label>3. How do I feel?</label><textarea id="being_feel"></textarea>
+        <label>4. What is working?</label><textarea id="being_working"></textarea>
+        <label>5. What is not working?</label><textarea id="being_not"></textarea>
+        <button onclick="save('Being')">BEING speichern</button>
+      </div>
+    </div>
+
+    <!-- BALANCE TAB -->
+    <div id="balance" class="tab-content">
+      <div class="domain">
+        <h2>BALANCE</h2>
+        <label>1. Where am I now?</label><textarea id="balance_where"></textarea>
+        <label>2. How did I get here?</label><textarea id="balance_how"></textarea>
+        <label>3. How do I feel?</label><textarea id="balance_feel"></textarea>
+        <label>4. What is working?</label><textarea id="balance_working"></textarea>
+        <label>5. What is not working?</label><textarea id="balance_not"></textarea>
+        <button onclick="save('Balance')">BALANCE speichern</button>
+      </div>
+    </div>
+
+    <!-- BUSINESS TAB -->
+    <div id="business" class="tab-content">
+      <div class="domain">
+        <h2>BUSINESS</h2>
+        <label>1. Where am I now?</label><textarea id="business_where"></textarea>
+        <label>2. How did I get here?</label><textarea id="business_how"></textarea>
+        <label>3. How do I feel?</label><textarea id="business_feel"></textarea>
+        <label>4. What is working?</label><textarea id="business_working"></textarea>
+        <label>5. What is not working?</label><textarea id="business_not"></textarea>
+        <button onclick="save('Business')">BUSINESS speichern</button>
+      </div>
+    </div>
+
+    <div class="saved" id="saved">gespeichert</div>
+  </div>
+</div>
+
+<footer>FRAME MAP – Alpha OS | 2026 beginnt hier.</footer>
+<script>
+function openTab(domain) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(domain.toLowerCase()).classList.add('active');
+}
+
+function save(domain) {
+  const p = domain.toLowerCase();
+  const answers = {
+    whereNow:       document.getElementById(p+'_where').value.trim(),
+    howGotHere:     document.getElementById(p+'_how').value.trim(),
+    howFeel:        document.getElementById(p+'_feel').value.trim(),
+    whatWorking:    document.getElementById(p+'_working').value.trim(),
+    whatNotWorking: document.getElementById(p+'_not').value.trim()
+  };
+
+  if (!answers.whereNow) return alert('Where am I now? nicht leer lassen');
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.ok) {
+        alert(`${domain} gespeichert\n${res.file.url}`);
+        // Felder leeren – korrekte IDs
+        document.getElementById(p+'_where').value = '';
+        document.getElementById(p+'_how').value = '';
+        document.getElementById(p+'_feel').value = '';
+        document.getElementById(p+'_working').value = '';
+        document.getElementById(p+'_not').value = '';
+        // Saved-Animation triggern
+        const saved = document.getElementById('saved');
+        saved.style.opacity = '1';
+        setTimeout(() => saved.style.opacity = '0', 2000);
+      } else {
+        alert(res.error || 'Fehler beim Speichern');
+      }
+    })
+    .withFailureHandler(err => alert('Server-Fehler: ' + err.message))
+    .saveFrameEntry(domain, answers, gameGetUserKey_());
+}
+</script>
+
+<?!= include('Client'); ?>
+</body>
+</html>
