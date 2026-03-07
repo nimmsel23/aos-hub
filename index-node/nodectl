@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# nodectl — compatibility frontdoor for index-node + PWA convenience.
-# Canonical index-node service control lives in scripts/indexctl.
-# Compatibility wrappers may forward here from scripts/nodectl.
+# nodectl — frontdoor for index-node + PWA convenience.
+# Canonical service control lives in scripts/indexctl.
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 INDEX_ROOT_DEFAULT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
@@ -74,6 +73,10 @@ say_title() {
   else
     printf "=== %s ===\n" "$*"
   fi
+}
+
+step() {
+  printf "[step] %s\n" "$*"
 }
 
 pause_return() {
@@ -242,14 +245,11 @@ run_and_pause() {
 
 usage() {
   cat <<'EOF'
-nodectl — compatibility frontdoor for index-node + PWA convenience
-
-NOTE: For production use, prefer:
-  - hubctl index ... / indexctl ... (canonical index-node service control)
-  - nodectl remains a compatibility toolbox with convenience commands
+nodectl — frontdoor for index-node + PWA convenience
 
 Quick Commands:
   status              Show service status + health + URLs
+  flow                Explain what nodectl executes internally
   doctor              Full diagnostics (delegates to indexctl)
   start|stop|restart  Service control (user service)
   logs                Follow service logs (user service)
@@ -265,7 +265,6 @@ URLs:
   local               Open http://localhost:8799
   ts                  Open tailscale serve URL
   pwa [core4|fire|focus] Open mobile PWA page (best URL base)
-  pwa <pwactl-args...>  Delegate to pwactl/mobileappctl (compat)
   url                 Print best URL
   urls                Print local + tailscale + PWA URLs
 
@@ -281,7 +280,7 @@ Service Mode:
 
 Delegation:
   indexctl <args>     Delegate to indexctl
-  pwactl <args>       Delegate to pwactl/mobileappctl
+  pwactl <args>       Delegate to pwactl
   routerctl <args>    Delegate to routerctl
   bridgectl <args>    Delegate to bridgectl
 
@@ -294,12 +293,12 @@ Tooling:
 
 Examples:
   nodectl status
+  nodectl flow
   nodectl menu
   nodectl restart
   nodectl pwa core4
-  nodectl pwa serve-status
-  nodectl pwactl list
-  nodectl serve pwa
+  nodectl pwactl serve-status
+  nodectl serve full
   nodectl open
   nodectl pin status
   nodectl pin off
@@ -318,16 +317,48 @@ EOF
 cmd_status() {
   local rc=0
   echo "=== Index Node Status ==="
+  echo "Flow: 1) indexctl status 2) /menu health 3) URL summary"
   echo ""
+  step "Running: indexctl status"
   run_indexctl status || rc=$?
   echo ""
+  step "Checking: GET http://${NODE_HOST}:${NODE_PORT}/menu"
   health_check || true
   echo ""
+  step "Showing resolved URLs"
   print_url_block
   return "$rc"
 }
 
+cmd_flow() {
+  cat <<EOF
+nodectl command flow
+
+Entry:
+  scripts/nodectl -> index-node/nodectl
+
+Status flow:
+  1) indexctl status
+  2) curl /menu health probe
+  3) URL resolution (local + tailscale + PWA)
+
+Service flow:
+  start|stop|restart|logs -> indexctl <same action> (user service)
+
+Doctor flow:
+  doctor -> indexctl doctor
+
+PWA flow:
+  pwa core4|fire|focus -> open <best-url>/pwa/<app>/
+
+Current roots:
+  root:  $ROOT_DIR
+  index: $INDEX_ROOT
+EOF
+}
+
 cmd_doctor() {
+  step "Delegating: indexctl doctor"
   exec_indexctl doctor
 }
 
@@ -345,6 +376,7 @@ user_svc_active() {
 cmd_service_control() {
   local action="$1"
   shift || true
+  step "Delegating: indexctl $action $*"
   exec_indexctl "$action" "$@"
 }
 
@@ -355,12 +387,14 @@ cmd_menu() {
   fi
 
   if has_cmd jq; then
+    step "Checking JSON endpoint: /menu"
     if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" 2>/dev/null | jq . 2>/dev/null; then
       echo ""
       echo "✓ /menu endpoint OK"
       return 0
     fi
   else
+    step "Checking endpoint: /menu"
     if curl --max-time 2 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
       echo "✓ /menu endpoint OK"
       return 0
@@ -377,7 +411,9 @@ cmd_warm() {
     exit 1
   fi
   echo "Warming up index-node..."
+  step "GET /"
   curl -fsSL "http://${NODE_HOST}:${NODE_PORT}/" >/dev/null 2>&1 && echo "  ✓ /" || echo "  ✗ /"
+  step "GET /menu"
   curl -fsSL "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1 && echo "  ✓ /menu" || echo "  ✗ /menu"
 }
 
@@ -435,8 +471,9 @@ cmd_pwa() {
       app="${1:-core4}"
       ;;
     *)
-      # Compatibility: keep pwactl/mobileappctl workflows reachable via `nodectl pwa ...`.
-      delegate_pwactl "$@"
+      echo "Usage: nodectl pwa [core4|fire|focus]" >&2
+      echo "For PWA tooling use: nodectl pwactl <args...>" >&2
+      exit 1
       ;;
   esac
 
@@ -444,7 +481,6 @@ cmd_pwa() {
     core4|fire|focus) ;;
     *)
       echo "Usage: nodectl pwa [core4|fire|focus]" >&2
-      echo "   or: nodectl pwactl <args...>" >&2
       exit 1
       ;;
   esac
@@ -579,21 +615,34 @@ cmd_core4_check() {
   exit 1
 }
 
-dashboard_show() {
-  say_title "nodectl menu"
-  health_check || true
-  echo ""
-  print_url_block
-  echo ""
-  if tailscale_available; then
-    echo "Tailscale serve:"
-    tailscale serve status 2>/dev/null || echo "  (status unavailable)"
+menu_header_line() {
+  local svc="unknown"
+  local menu_probe="down"
+  local url="http://${NODE_HOST}:${NODE_PORT}"
+
+  if user_bus_ok; then
+    svc="$(systemctl --user is-active "$USER_SERVICE_NAME" 2>/dev/null || true)"
+    [[ -n "$svc" ]] || svc="unknown"
   else
-    echo "Tailscale: not installed"
+    svc="no-user-bus"
   fi
+
+  if has_cmd curl && curl --max-time 1 -fsS "http://${NODE_HOST}:${NODE_PORT}/menu" >/dev/null 2>&1; then
+    menu_probe="ok"
+  fi
+
+  if tailscale_available; then
+    local ts
+    ts="$(ts_url || true)"
+    if [[ -n "$ts" ]]; then
+      url="$ts"
+    fi
+  fi
+
+  printf "status: svc=%s | /menu=%s | url=%s\n" "$svc" "$menu_probe" "$url"
 }
 
-cmd_dashboard() {
+cmd_menu_ui() {
   local can_prompt=1
   local prev_prompt="${CTL_CHOOSE_PROMPT:-}"
 
@@ -602,62 +651,46 @@ cmd_dashboard() {
   fi
 
   if [[ "$can_prompt" != "1" ]]; then
-    dashboard_show
-    return 0
+    cmd_status
+    return $?
   fi
 
-  while true; do
-    dashboard_show
-    echo ""
+  menu_header_line
+  echo ""
 
-    local action=""
-    CTL_CHOOSE_PROMPT="nodectl menu"
-    action="$(choose \
-      "refresh" \
-      "status" \
-      "open node" \
-      "open pwa core4" \
-      "open pwa fire" \
-      "open pwa focus" \
-      "menu check (/menu)" \
-      "warm node" \
-      "pwa serve-status" \
-      "pwa health all" \
-      "pwa doctor" \
-      "tailscale serve status" \
-      "tailscale serve full node" \
-      "tailscale serve pwa-only" \
-      "tailscale serve off (host)" \
-      "indexctl status" \
-      "indexctl doctor" \
-      "quit")" || {
-        CTL_CHOOSE_PROMPT="$prev_prompt"
-        return 0
-      }
-    CTL_CHOOSE_PROMPT="$prev_prompt"
+  local action=""
+  CTL_CHOOSE_PROMPT="nodectl menu"
+  action="$(choose \
+    "status" \
+    "start service" \
+    "restart service" \
+    "stop service" \
+    "logs" \
+    "check /menu" \
+    "open node" \
+    "open pwa core4" \
+    "show urls" \
+    "flow (what happens)" \
+    "quit")" || {
+      CTL_CHOOSE_PROMPT="$prev_prompt"
+      return 0
+    }
+  CTL_CHOOSE_PROMPT="$prev_prompt"
 
-    case "$action" in
-      refresh) ;;
-      status) run_and_pause cmd_status ;;
-      "open node") cmd_open; pause_return ;;
-      "open pwa core4") cmd_pwa core4; pause_return ;;
-      "open pwa fire") cmd_pwa fire; pause_return ;;
-      "open pwa focus") cmd_pwa focus; pause_return ;;
-      "menu check (/menu)") run_and_pause cmd_menu ;;
-      "warm node") run_and_pause cmd_warm ;;
-      "pwa serve-status") run_and_pause run_pwactl serve-status ;;
-      "pwa health all") run_and_pause run_pwactl health all ;;
-      "pwa doctor") run_and_pause run_pwactl doctor ;;
-      "tailscale serve status") run_and_pause cmd_serve status ;;
-      "tailscale serve full node") run_and_pause cmd_serve full ;;
-      "tailscale serve pwa-only") run_and_pause cmd_serve pwa-only ;;
-      "tailscale serve off (host)") run_and_pause cmd_serve off ;;
-      "indexctl status") run_and_pause run_indexctl status ;;
-      "indexctl doctor") run_and_pause run_indexctl doctor ;;
-      quit) return 0 ;;
-      *) return 0 ;;
-    esac
-  done
+  case "$action" in
+    status) run_and_pause cmd_status ;;
+    "start service") run_and_pause cmd_service_control start ;;
+    "restart service") run_and_pause cmd_service_control restart ;;
+    "stop service") run_and_pause cmd_service_control stop ;;
+    logs) run_and_pause cmd_service_control logs ;;
+    "check /menu") run_and_pause cmd_menu ;;
+    "show urls") run_and_pause cmd_urls ;;
+    "flow (what happens)") run_and_pause cmd_flow ;;
+    "open node") cmd_open; pause_return ;;
+    "open pwa core4") cmd_pwa core4; pause_return ;;
+    quit) return 0 ;;
+    *) return 0 ;;
+  esac
 }
 
 # ============================================================================
@@ -669,8 +702,7 @@ if [[ $# -gt 0 ]]; then
   cmd="$1"
   shift
 else
-  # Match bridgectl-like UX: open interactive menu by default.
-  # Fall back to status in non-interactive contexts.
+  # Interactive by default when no command is given.
   cmd="menu"
   if has_func ctl_can_prompt; then
     ctl_can_prompt || cmd="status"
@@ -682,8 +714,9 @@ case "$cmd" in
 
   # Quick commands
   status) cmd_status ;;
+  flow) cmd_flow ;;
   doctor) cmd_doctor ;;
-  menu|dashboard|dash|ui) cmd_dashboard ;;
+  menu) cmd_menu_ui ;;
   menu-check) cmd_menu ;;
   warm) cmd_warm ;;
   dev) cmd_dev ;;

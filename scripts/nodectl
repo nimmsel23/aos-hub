@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compatibility wrapper: canonical nodectl now lives at index-node/nodectl.
+# Strict-CTL compatible wrapper:
+# canonical nodectl implementation lives at index-node/nodectl.
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
-TARGET="$ROOT_DIR/index-node/nodectl"
 
-if [[ ! -e "$TARGET" ]]; then
-  echo "ERROR: canonical nodectl not found: $TARGET" >&2
+# shellcheck disable=SC1090
+source "$ROOT_DIR/scripts/ctl-lib.sh" 2>/dev/null || true
+# shellcheck disable=SC1090
+source "$ROOT_DIR/scripts/lib/aos-env.sh" 2>/dev/null || true
+aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
+
+TARGET="$ROOT_DIR/index-node/nodectl"
+if [[ -n "${AOS_INDEX_ROOT:-}" && -x "${AOS_INDEX_ROOT}/nodectl" ]]; then
+  TARGET="${AOS_INDEX_ROOT}/nodectl"
+fi
+
+if [[ ! -x "$TARGET" ]]; then
+  echo "ERROR: canonical nodectl not executable: $TARGET" >&2
   exit 1
 fi
 
