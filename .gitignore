@@ -32,3 +32,7 @@ logs/
 *~
 .DS_Store
 Thumbs.db
+
+# OAuth/client secrets
+client_secret_*.json
+game/fire/client_secret_*.json
