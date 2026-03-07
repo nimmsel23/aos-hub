@@ -37,6 +37,7 @@ VITAL_FALLBACK="${SCRIPT_DIR}/utils/rclone-vitaltrainer-copy.sh"
 FADARO_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-fadaro-push.sh"
 HUB_LIVE_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-aos-hub-live-push.sh"
 HUB_LIVE_FALLBACK="${SCRIPT_DIR}/utils/rclone-aos-hub-live-push.sh"
+VITAL_HUB_PRIMARY="${SCRIPT_DIR}/sync-utils/rclone-vital-hub-push.sh"
 
 have_tty() { [[ -t 0 && -t 1 ]]; }
 gum_tty_available() { has_gum && [[ -t 1 ]]; }
@@ -294,8 +295,11 @@ Vitaltrainer copy:
 FADARO push:
   syncctl fadaro [--dry-run]
 
-aos-hub live backup:
+aos-hub backup:
   syncctl hub <status|push> [--dry-run]
+
+vital-hub backup:
+  syncctl vital-hub <status|push> [--dry-run]
 
 Personal folders:
   syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]
@@ -439,9 +443,10 @@ show_overview() {
     remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
     print_flow_row "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
     print_flow_row "FADARO"       "->"  "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}"             "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
-    print_flow_row "aos-hub live" "->"  "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"                                "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
-    print_flow_row "business"     "->"  "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}"                               "${AOS_BUSINESS_REMOTE:-eldanioo:business}"
-    print_flow_row "fitness repo" "->"  "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}"              "${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
+    print_flow_row "aos-hub" "->"  "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"                                "${AOS_AOS_HUB_REMOTE:-eldanioo:alpha/aos-hub}"
+    print_flow_row "vital-hub"    "->"  "${AOS_VITAL_HUB_LOCAL_PATH:-$HOME/vital-hub}"                             "${AOS_VITAL_HUB_REMOTE:-eldanioo:alpha/vital-hub} (links:copy)"
+    print_flow_row "business"     "->"  "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}"                               "${AOS_BUSINESS_REMOTE:-eldanioo:alpha/business}"
+    print_flow_row "fitness repo" "->"  "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}"              "${AOS_FITNESS_REPO_REMOTE:-eldanioo:alpha/core4-fitness-centre}"
 
     section_title "Timers"
     if has_cmd systemctl; then
@@ -496,9 +501,10 @@ show_overview() {
   print_flow_row_compact "Dokumente" "->" "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}" "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
   print_flow_row_compact "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
   print_flow_row_compact "FADARO" "->" "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}" "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
-  print_flow_row_compact "aos-hub live" "->" "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}" "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
-  print_flow_row_compact "business" "->" "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}" "${AOS_BUSINESS_REMOTE:-eldanioo:business}"
-  print_flow_row_compact "fitness repo" "->" "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}" "${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
+  print_flow_row_compact "aos-hub" "->" "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}" "${AOS_AOS_HUB_REMOTE:-eldanioo:alpha/aos-hub}"
+  print_flow_row_compact "vital-hub" "->" "${AOS_VITAL_HUB_LOCAL_PATH:-$HOME/vital-hub}" "${AOS_VITAL_HUB_REMOTE:-eldanioo:alpha/vital-hub} (links:copy)"
+  print_flow_row_compact "business" "->" "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}" "${AOS_BUSINESS_REMOTE:-eldanioo:alpha/business}"
+  print_flow_row_compact "fitness repo" "->" "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}" "${AOS_FITNESS_REPO_REMOTE:-eldanioo:alpha/core4-fitness-centre}"
 
   section_title "Timers"
   if has_cmd systemctl; then
@@ -787,6 +793,16 @@ run_hub_live() {
   fi
 }
 
+run_vital_hub() {
+  local bin
+  bin="$(pick_bin "$VITAL_HUB_PRIMARY" "" "")" || die "rclone-vital-hub-push.sh not found"
+  if [[ "${SYNCCTL_IN_MENU:-0}" == "1" ]]; then
+    "$bin" "$@"
+  else
+    exec "$bin" "$@"
+  fi
+}
+
 run_personal() {
   local target="${1:-}"
   shift || true
@@ -807,11 +823,11 @@ run_personal() {
   case "$target" in
     business)
       src="${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}"
-      dst="${AOS_BUSINESS_REMOTE:-eldanioo:business}"
+      dst="${AOS_BUSINESS_REMOTE:-eldanioo:alpha/business}"
       ;;
     fitness)
       src="${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}"
-      dst="${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
+      dst="${AOS_FITNESS_REPO_REMOTE:-eldanioo:alpha/core4-fitness-centre}"
       ;;
     *)
       die "Usage: syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]"
@@ -1042,7 +1058,7 @@ menu_hub_live() {
     echo ""
     echo "Current mode: $(badge)"
     local a
-    a="$(sync_choose "aos-hub live backup uses rclone copy (push-only, no deletes)." \
+    a="$(sync_choose "aos-hub backup uses rclone copy (push-only, no deletes)." \
       "Status" \
       "Push now (copy)" \
       "Push now (dry-run)" \
@@ -1052,6 +1068,27 @@ menu_hub_live() {
       "Status") run_hub_live status ;;
       "Push now (copy)") run_hub_live push ;;
       "Push now (dry-run)") run_hub_live push --dry-run ;;
+      "Back") return 0 ;;
+    esac
+    pause
+  done
+}
+
+menu_vital_hub() {
+  while true; do
+    echo ""
+    echo "Current mode: $(badge)"
+    local a
+    a="$(sync_choose "vital-hub backup uses rclone copy (push-only, no deletes) and follows symlinks." \
+      "Status" \
+      "Push now (copy)" \
+      "Push now (dry-run)" \
+      "Back")" || return 0
+
+    case "$a" in
+      "Status") run_vital_hub status ;;
+      "Push now (copy)") run_vital_hub push ;;
+      "Push now (dry-run)") run_vital_hub push --dry-run ;;
       "Back") return 0 ;;
     esac
     pause
@@ -1106,7 +1143,8 @@ run_menu() {
       "Domains copy" \
       "Vitaltrainer copy" \
       "FADARO push" \
-      "aos-hub live backup" \
+      "aos-hub backup" \
+      "vital-hub backup" \
       "Settings" \
       "Safety notes" \
       "Quit")" || return 0
@@ -1117,7 +1155,8 @@ run_menu() {
       "Domains copy") menu_domains ;;
       "Vitaltrainer copy") menu_vitaltrainer ;;
       "FADARO push") menu_fadaro ;;
-      "aos-hub live backup") menu_hub_live ;;
+      "aos-hub backup") menu_hub_live ;;
+      "vital-hub backup") menu_vital_hub ;;
       "Settings") menu_settings ;;
       "Safety notes") print_safety_notes; pause ;;
       "Quit") return 0 ;;
@@ -1165,6 +1204,7 @@ main() {
     vitaltrainer|vital) run_vitaltrainer "$@" ;;
     fadaro) run_fadaro "$@" ;;
     hub|aos-hub) run_hub_live "$@" ;;
+    vital-hub|vitalhub) run_vital_hub "$@" ;;
     personal) run_personal "$@" ;;
     *)
       usage

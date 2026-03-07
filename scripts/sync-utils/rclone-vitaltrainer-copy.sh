@@ -134,11 +134,21 @@ run_copy() {
 
   if rclone copy "$src" "$dst" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" "${dry_opts[@]}" 2>&1 | tee -a "$log_file"; then
     success "Vitaltrainer ${direction} completed"
+    if [ "$DRY_RUN" = "1" ]; then
+      sync_alert_success "vitaltrainer" "${direction} dry-run ${src} -> ${dst}"
+    else
+      sync_alert_success "vitaltrainer" "${direction} ${src} -> ${dst}"
+    fi
     return 0
   fi
 
   local exit_code=$?
   error "Vitaltrainer ${direction} failed (exit code: $exit_code)"
+  if [ "$DRY_RUN" = "1" ]; then
+    sync_alert_error "vitaltrainer" "${direction} dry-run ${src} -> ${dst}"
+  else
+    sync_alert_error "vitaltrainer" "${direction} ${src} -> ${dst}"
+  fi
   return $exit_code
 }
 

@@ -47,6 +47,7 @@ Usage:
   gitctl vault-sync
   gitctl vitaltrainer-sync
   gitctl fadaro-sync
+  gitctl vital-hub-sync [--dry-run]
   gitctl menu
   gitctl doctor
   gitctl version
@@ -68,6 +69,12 @@ cmd_sync() {
 
 cmd_vault() {
   vault_git_dispatch "$@"
+}
+
+cmd_vital_hub_sync() {
+  local syncctl_bin="${SCRIPT_DIR}/syncctl"
+  [[ -x "$syncctl_bin" ]] || die "syncctl not found: $syncctl_bin"
+  "$syncctl_bin" vital-hub push "$@"
 }
 
 split_components_all() {
@@ -344,6 +351,7 @@ cmd_menu() {
       "Vault: setup repo (gh)" \
       "Vitaltrainer: sync" \
       "FADARO: sync" \
+      "vital-hub: push (rclone)" \
       "Split: status" \
       "Split: setup GitHub remotes (nimmsel23/aos-*)" \
       "Split: migrate alphaos-* remote names" \
@@ -364,6 +372,7 @@ cmd_menu() {
       "Vault: setup repo (gh)") run_allow_fail vault_git_setup ;;
       "Vitaltrainer: sync") run_allow_fail vitaltrainer_git_sync ;;
       "FADARO: sync") run_allow_fail fadaro_git_sync ;;
+      "vital-hub: push (rclone)") run_allow_fail cmd_vital_hub_sync ;;
       "Split: status") run_allow_fail cmd_split status all ;;
       "Split: setup GitHub remotes (nimmsel23/aos-*)") run_allow_fail cmd_split setup-github nimmsel23 aos ;;
       "Split: migrate alphaos-* remote names") run_allow_fail cmd_split migrate-remote-names ;;
@@ -389,6 +398,7 @@ main() {
     vault-sync) vault_git_sync ;;
     vitaltrainer-sync) vitaltrainer_git_sync ;;
     fadaro-sync) fadaro_git_sync ;;
+    vital-hub-sync) shift; cmd_vital_hub_sync "$@" ;;
     vault) shift; cmd_vault "$@" ;;
     menu) cmd_menu ;;
     doctor) cmd_doctor ;;

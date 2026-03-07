@@ -89,10 +89,24 @@ run_push() {
 
   if [ "$DRY_RUN" = "1" ]; then
     log "Dry-run: pushing FADARO to ${REMOTE_NAME}:${REMOTE_PATH}"
-    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run 2>&1 | tee -a "$LOG_FILE"
+    if rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" --dry-run 2>&1 | tee -a "$LOG_FILE"; then
+      success "FADARO push completed (dry-run)"
+      sync_alert_success "fadaro" "dry-run $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
+      return 0
+    fi
+    error "FADARO push failed (dry-run)"
+    sync_alert_error "fadaro" "dry-run $LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
+    return 1
   else
     log "Pushing FADARO to ${REMOTE_NAME}:${REMOTE_PATH}"
-    rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"
+    if rclone copy "$LOCAL_PATH" "${REMOTE_NAME}:${REMOTE_PATH}" --config "$RCLONE_CONFIG" "${RCLONE_OPTIONS[@]}" "${backup_opts[@]}" "${filter_from[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+      success "FADARO push completed"
+      sync_alert_success "fadaro" "$LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
+      return 0
+    fi
+    error "FADARO push failed"
+    sync_alert_error "fadaro" "$LOCAL_PATH -> ${REMOTE_NAME}:${REMOTE_PATH}"
+    return 1
   fi
 }
 

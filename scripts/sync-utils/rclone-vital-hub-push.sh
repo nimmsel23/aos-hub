@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Push backup for ~/aos-hub (rclone copy, no deletes).
+# Push backup for ~/vital-hub (rclone copy, no deletes).
 #
 # Env:
-#   AOS_AOS_HUB_LOCAL_PATH=$HOME/aos-hub
-#   AOS_AOS_HUB_REMOTE=eldanioo:alpha/aos-hub
-#   AOS_AOS_HUB_COPY_LINKS=0|1
-#   AOS_AOS_HUB_LOG_FILE=...
-#   AOS_AOS_HUB_LOCK_FILE=/tmp/rclone-aos-hub-live-push.lock
+#   AOS_VITAL_HUB_LOCAL_PATH=$HOME/vital-hub
+#   AOS_VITAL_HUB_REMOTE=eldanioo:alpha/vital-hub
+#   AOS_VITAL_HUB_COPY_LINKS=1|0
+#   AOS_VITAL_HUB_LOG_FILE=...
+#   AOS_VITAL_HUB_LOCK_FILE=/tmp/rclone-vital-hub-push.lock
 #   AOS_RCLONE_CONFIG=$HOME/.config/rclone/rclone.conf
 #   AOS_LOG_DIR=$HOME/.local/share/alphaos/logs
 #
 # Usage:
-#   rclone-aos-hub-live-push.sh status
-#   rclone-aos-hub-live-push.sh push [--dry-run]
+#   rclone-vital-hub-push.sh status
+#   rclone-vital-hub-push.sh push [--dry-run]
 
 set -euo pipefail
 
@@ -20,13 +20,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
 
-LOCAL_PATH="${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"
-REMOTE="${AOS_AOS_HUB_REMOTE:-eldanioo:alpha/aos-hub}"
+LOCAL_PATH="${AOS_VITAL_HUB_LOCAL_PATH:-$HOME/vital-hub}"
+REMOTE="${AOS_VITAL_HUB_REMOTE:-eldanioo:alpha/vital-hub}"
 RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 LOG_DIR="${AOS_LOG_DIR:-$HOME/.local/share/alphaos/logs}"
-LOG_FILE="${AOS_AOS_HUB_LOG_FILE:-$LOG_DIR/aos-hub-live-push.log}"
-LOCK_FILE="${AOS_AOS_HUB_LOCK_FILE:-/tmp/rclone-aos-hub-live-push.lock}"
-COPY_LINKS_MODE="${AOS_AOS_HUB_COPY_LINKS:-${AOS_COPY_LINKS:-0}}"
+LOG_FILE="${AOS_VITAL_HUB_LOG_FILE:-$LOG_DIR/vital-hub-push.log}"
+LOCK_FILE="${AOS_VITAL_HUB_LOCK_FILE:-/tmp/rclone-vital-hub-push.lock}"
+COPY_LINKS_MODE="${AOS_VITAL_HUB_COPY_LINKS:-1}"
 DRY_RUN=0
 BACKUP_OVERWRITES="${AOS_SYNC_BACKUP_OVERWRITES:-1}"
 BACKUP_BASE_REMOTE="${AOS_SYNC_BACKUP_BASE_REMOTE:-_aos-overwrite-backups}"
@@ -44,14 +44,14 @@ acquire_lock() {
   if command -v flock >/dev/null 2>&1; then
     exec 9>"$LOCK_FILE"
     if ! flock -n 9; then
-      warning "Another aos-hub push is already running (lock: $LOCK_FILE)"
+      warning "Another vital-hub push is already running (lock: $LOCK_FILE)"
       exit 0
     fi
     return 0
   fi
 
   if [ -f "$LOCK_FILE" ]; then
-    warning "Another aos-hub push may be running (lock file exists: $LOCK_FILE)"
+    warning "Another vital-hub push may be running (lock file exists: $LOCK_FILE)"
     exit 0
   fi
   touch "$LOCK_FILE"
@@ -59,11 +59,12 @@ acquire_lock() {
 }
 
 status() {
-  echo "aos-hub push"
+  echo "vital-hub push"
   echo "  local:  $LOCAL_PATH"
   echo "  remote: $REMOTE"
   echo "  config: $RCLONE_CONFIG"
   echo "  log:    $LOG_FILE"
+  echo "  links:  $([[ "$COPY_LINKS_MODE" == "1" ]] && echo copy || echo skip)"
   if [ -d "$LOCAL_PATH" ]; then
     success "local path exists"
   else
@@ -86,11 +87,13 @@ push() {
 
   if [ ! -d "$LOCAL_PATH" ]; then
     error "Local path not found: $LOCAL_PATH"
+    sync_alert_error "vital-hub" "local path missing: $LOCAL_PATH"
     exit 1
   fi
 
   if is_remote_root; then
-    error "Refusing remote root destination: '$REMOTE' (set AOS_AOS_HUB_REMOTE to a folder like 'eldanioo:alpha/aos-hub')"
+    error "Refusing remote root destination: '$REMOTE' (set AOS_VITAL_HUB_REMOTE to a folder like 'eldanioo:alpha/vital-hub')"
+    sync_alert_error "vital-hub" "remote root refused: $REMOTE"
     exit 1
   fi
 
@@ -119,33 +122,34 @@ push() {
   else
     rclone_opts+=(--skip-links)
   fi
+
   if [ "$BACKUP_OVERWRITES" = "1" ]; then
-    local backup_dir="${REMOTE%%:*}:${BACKUP_BASE_REMOTE%/}/aos-hub/push/$(date +%Y%m%d-%H%M%S)"
+    local backup_dir="${REMOTE%%:*}:${BACKUP_BASE_REMOTE%/}/vital-hub/push/$(date +%Y%m%d-%H%M%S)"
     backup_opts+=(--backup-dir "$backup_dir")
     log "Overwrite backups enabled: $backup_dir"
   fi
 
   if [ "$DRY_RUN" = "1" ]; then
-    log "Dry-run: pushing aos-hub to $REMOTE (copy)"
+    log "Dry-run: pushing vital-hub to $REMOTE (copy)"
     if rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}" "${backup_opts[@]}" --dry-run; then
-      success "aos-hub push completed (dry-run)"
-      sync_alert_success "aos-hub" "dry-run $LOCAL_PATH -> $REMOTE"
+      success "vital-hub push completed (dry-run)"
+      sync_alert_success "vital-hub" "dry-run $LOCAL_PATH -> $REMOTE"
       return 0
     fi
-    error "aos-hub push failed (dry-run)"
-    sync_alert_error "aos-hub" "dry-run $LOCAL_PATH -> $REMOTE"
+    error "vital-hub push failed (dry-run)"
+    sync_alert_error "vital-hub" "dry-run $LOCAL_PATH -> $REMOTE"
     return 1
   fi
 
-  log "Pushing aos-hub to $REMOTE (copy)"
+  log "Pushing vital-hub to $REMOTE (copy)"
   if rclone copy "$LOCAL_PATH" "$REMOTE" "${rclone_opts[@]}" "${backup_opts[@]}"; then
-    success "aos-hub push completed"
-    sync_alert_success "aos-hub" "$LOCAL_PATH -> $REMOTE"
+    success "vital-hub push completed"
+    sync_alert_success "vital-hub" "$LOCAL_PATH -> $REMOTE"
     return 0
   fi
 
-  error "aos-hub push failed"
-  sync_alert_error "aos-hub" "$LOCAL_PATH -> $REMOTE"
+  error "vital-hub push failed"
+  sync_alert_error "vital-hub" "$LOCAL_PATH -> $REMOTE"
   return 1
 }
 

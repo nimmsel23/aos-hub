@@ -124,6 +124,9 @@ rclone_action() {
     hub)
       run_ctl "scripts/syncctl" hub "${@:-status}"
       ;;
+    vital-hub|vitalhub)
+      run_ctl "scripts/syncctl" vital-hub "${@:-status}"
+      ;;
     vault)
       run_ctl "scripts/syncctl" vault "${@:-status}"
       ;;
@@ -151,6 +154,7 @@ Usage:
   hubctl rclone status
   hubctl rclone push [--dry-run]
   hubctl rclone hub [status|push] [--dry-run]
+  hubctl rclone vital-hub [status|push] [--dry-run]
   hubctl rclone vault [status|sync|pull|logs|timers|watch]
   hubctl rclone domains [status-all|<DOMAIN> <push|pull|sync|status|log>]
   hubctl rclone doctor [target]
