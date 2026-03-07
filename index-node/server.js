@@ -18,7 +18,11 @@ import freedomRouter from "./routes/freedom.js";
 import frameRouter   from "./routes/frame.js";
 import doorRouter    from "./routes/door.js";
 import fitnessCentreRouter from "./routes/fitness-centre.js";
-import { addHotlistEntry } from "./routes/door/hotlist-backend.js";
+import {
+  addHotlistEntries,
+  addHotlistEntry,
+  readHotlistEntries,
+} from "./routes/door/hotlist-backend.js";
 
 const app = express();
 
@@ -540,7 +544,7 @@ const SYNC_MAP_PATH =
   path.join(os.homedir(), ".local", "share", "alphaos", "task_sync_map.json");
 const RCLONE_RC_URL = process.env.RCLONE_RC_URL || "http://127.0.0.1:5572";
 const RCLONE_TARGET =
-  process.env.RCLONE_TARGET || "fabian:AlphaOS-Vault";
+  process.env.RCLONE_TARGET || "fabian:vault";
 const RCLONE_FLAGS = String(
   process.env.RCLONE_FLAGS || "--update --skip-links --create-empty-src-dirs"
 )
@@ -563,7 +567,7 @@ const FRUITS_QUESTIONS_PATH =
   process.env.FRUITS_QUESTIONS || path.resolve("data", "fruits_questions.json");
 const FRUITS_DIR =
   process.env.FRUITS_DIR ||
-  path.join(os.homedir(), "AlphaOS-Vault", "Game", "Fruits");
+  path.join(os.homedir(), "vault", "Game", "Fruits");
 const FRUITS_STORE_PATH =
   process.env.FRUITS_STORE || path.join(FRUITS_DIR, "fruits_store.json");
 const FRUITS_EXPORT_DIR =
@@ -886,7 +890,7 @@ function findCentreBySlug(slugOrCmd) {
 }
 
 function getGeneralsDir() {
-  return path.join(os.homedir(), "AlphaOS-Vault", "Game", "Tent");
+  return path.join(os.homedir(), "vault", "Game", "Tent");
 }
 
 function ensureDir(dirPath) {
@@ -1337,7 +1341,7 @@ function getDomainStatesDir() {
 // Purpose: Enable cross-domain synthesis, temporal cascade analysis,
 // and pipeline flow diagnosis for General's Tent strategic intelligence.
 //
-// Storage: ~/AlphaOS-Vault/.states/{domain}.json
+// Storage: ~/vault/.states/{domain}.json
 // Schema: domain-state-schema.json
 // ============================================================================
 
@@ -4950,6 +4954,8 @@ app.get("/pwa/freedom", (_req, res) => res.redirect(301, "/pwa/freedom/"));
 app.get("/pwa/frame",   (_req, res) => res.redirect(301, "/pwa/frame/"));
 app.get(/^\/pwa\/potential$/, (_req, res) => res.redirect(301, "/pwa/potential/"));
 app.get(/^\/pwa\/plan$/, (_req, res) => res.redirect(301, "/pwa/plan/"));
+app.get(/^\/pwa\/production$/, (_req, res) => res.redirect(301, "/pwa/production/"));
+app.get(/^\/pwa\/profit$/, (_req, res) => res.redirect(301, "/pwa/profit/"));
 // Legacy short paths → permanent redirect to new canonical paths
 app.get("/core4",  (_req, res) => res.redirect(301, "/pwa/core4/"));
 app.get("/core4/", (_req, res) => res.redirect(301, "/pwa/core4/"));
@@ -4961,14 +4967,18 @@ app.get("/potential", (_req, res) => res.redirect(301, "/pwa/potential/"));
 app.get("/potential/", (_req, res) => res.redirect(301, "/pwa/potential/"));
 app.get("/plan", (_req, res) => res.redirect(301, "/pwa/plan/"));
 app.get("/plan/", (_req, res) => res.redirect(301, "/pwa/plan/"));
+app.get("/production", (_req, res) => res.redirect(301, "/pwa/production/"));
+app.get("/production/", (_req, res) => res.redirect(301, "/pwa/production/"));
+app.get("/profit", (_req, res) => res.redirect(301, "/pwa/profit/"));
+app.get("/profit/", (_req, res) => res.redirect(301, "/pwa/profit/"));
 app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
 app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
 app.get("/game/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
-app.get("/game/frame", (_req, res) => res.redirect(302, "/game/frame.html"));
-app.get("/game/freedom", (_req, res) => res.redirect(302, "/game/freedom.html"));
-app.get("/game/focus", (_req, res) => res.redirect(302, "/game/focus.html"));
-app.get("/game/fire", (_req, res) => res.redirect(302, "/game/fire.html"));
+app.get("/game/frame", (_req, res) => res.redirect(302, "/pwa/frame/"));
+app.get("/game/freedom", (_req, res) => res.redirect(302, "/pwa/freedom/"));
+app.get("/game/focus", (_req, res) => res.redirect(302, "/pwa/focus/"));
+app.get("/game/fire", (_req, res) => res.redirect(302, "/pwa/fire/"));
 app.get("/tele", (_req, res) => res.redirect(302, "/tele.html"));
 
 // GPT redirects
@@ -5302,7 +5312,7 @@ app.post("/api/door/export", async (req, res) => {
     }
 
     // Determine filepath
-    const dir = path.join(os.homedir(), "AlphaOS-Vault", "Door", "War-Stacks");
+    const dir = path.join(os.homedir(), "vault", "Door", "War-Stacks");
     ensureDir(dir);
     const stamp = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     const base = safeFilename(parsed.title) || `warstack_${stamp}`;
@@ -5415,18 +5425,18 @@ app.get("/api/door/flow", (_req, res) => {
 
 app.get("/api/door/hotlist", (_req, res) => {
   try {
-    const flow = loadDoorFlow();
-    return res.json({ ok: true, items: flow.hotlist || [] });
+    const mode = String(_req.query?.mode || "active").trim() || "active";
+    const items = readHotlistEntries(mode);
+    return res.json({ ok: true, items, mode });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
-app.post("/api/door/hotlist", async (req, res) => {
+app.post("/api/door/hotlist", (req, res) => {
   try {
     const raw = req.body?.items ?? req.body?.text ?? "";
     const source = String(req.body?.source || "manual");
-    const domain = String(req.body?.domain || "Business").trim();
     const list = Array.isArray(raw)
       ? raw.map((item) => {
           // Handle object with title property or plain string
@@ -5444,40 +5454,13 @@ app.post("/api/door/hotlist", async (req, res) => {
       return res.status(400).json({ ok: false, error: "missing items" });
     }
 
-    // Create Taskwarrior tasks via Bridge
-    const tasks = list.map((title) => ({
-      description: title,
-      tags: ["potential", domain.toLowerCase()],
-      project: "HotList",
-      meta: {
+    const entries = addHotlistEntries(
+      list.map((title) => ({
+        title,
         source,
-        domain,
-        created_via: "index-node"
-      }
-    }));
-
-    const result = await createTaskwarriorTask(tasks);
-
-    if (!result.ok) {
-      return res.status(502).json({
-        ok: false,
-        error: `taskwarrior creation failed: ${result.error}`
-      });
-    }
-
-    // Save UUIDs to .door-flow.json (UUID-only format)
-    const flow = loadDoorFlow();
-    const entries = result.results.map((r, idx) => ({
-      task_uuid: r.task_uuid,
-      task_id: r.task_id,
-      title: list[idx],
-      source,
-      domain,
-      created_at: new Date().toISOString()
-    }));
-
-    flow.hotlist.push(...entries);
-    saveDoorFlow(flow);
+        description: "",
+      }))
+    );
 
     return res.json({ ok: true, items: entries });
   } catch (err) {
@@ -5491,9 +5474,8 @@ app.post("/api/door/doorwar", async (req, res) => {
     const reasoning = String(req.body?.reasoning || "").trim();
     const domain = String(req.body?.domain || "Business").trim();
 
-    // Load Hot List from flow
     const flow = loadDoorFlow();
-    const hotlist = flow.hotlist || [];
+    const hotlist = readHotlistEntries("active");
 
     if (!hotlist.length) {
       return res.status(400).json({

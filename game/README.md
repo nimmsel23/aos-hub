@@ -343,7 +343,7 @@ gamectl cascade business
 
 **File location:**
 ```
-~/AlphaOS-Vault/GAME/Tent/Tent-YYYY-Wxx.md
+~/vault/GAME/Tent/Tent-YYYY-Wxx.md
 ```
 
 **Auto-created with template** when you run:
@@ -354,7 +354,7 @@ gamectl tent edit
 ## File Structure
 
 ```
-~/AlphaOS-Vault/GAME/
+~/vault/GAME/
 ├── Frame/
 │   ├── BODY-Frame.md
 │   ├── BEING-Frame.md
@@ -521,7 +521,7 @@ gamectl cascade
 ls $AOS_VAULT_DIR/GAME
 
 # Create missing directories
-mkdir -p ~/AlphaOS-Vault/GAME/{Frame,IPW,Freedom,Focus,Fire,Daily,Tent}
+mkdir -p ~/vault/GAME/{Frame,IPW,Freedom,Focus,Fire,Daily,Tent}
 ```
 
 **Cascade not detecting changes:**
@@ -537,7 +537,7 @@ mkdir -p ~/AlphaOS-Vault/GAME/{Frame,IPW,Freedom,Focus,Fire,Daily,Tent}
 ## Environment
 
 ```bash
-export AOS_VAULT_DIR=~/AlphaOS-Vault    # Vault location
+export AOS_VAULT_DIR=~/vault    # Vault location
 export EDITOR=micro                      # Preferred editor
 ```
 

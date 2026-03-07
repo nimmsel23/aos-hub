@@ -78,7 +78,7 @@ task project:HotList list
 # 43  FADARO Content Calendar erstellen    potential,business HotList
 
 # Check .door-flow.json
-cat ~/AlphaOS-Vault/Door/.door-flow.json | jq '.hotlist'
+cat ~/vault/Door/.door-flow.json | jq '.hotlist'
 
 # Expected: Array with task_uuid entries
 ```
@@ -130,7 +130,7 @@ curl -X POST http://127.0.0.1:8799/api/door/doorwar \
   },
   "evaluated": [...],
   "selected": {...},
-  "path": "/home/alpha/AlphaOS-Vault/Door/2-Plan/Door_War_2026-01-02.md"
+  "path": "/home/alpha/vault/Door/2-Plan/Door_War_2026-01-02.md"
 }
 ```
 
@@ -224,7 +224,7 @@ EOF
 ```json
 {
   "ok": true,
-  "path": "/home/alpha/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md",
+  "path": "/home/alpha/vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md",
   "parsed": {
     "title": "Vitaltrainer Module 6",
     "domain": "Business",
@@ -277,7 +277,7 @@ task 50 _get wait
 # Expected: +5d
 
 # Check markdown file
-cat ~/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md
+cat ~/vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md
 ```
 
 **Expected in Markdown:**

@@ -125,9 +125,10 @@ Canonical host for mobile/public PWA access:
 - `https://ideapad.tail7a15d6.ts.net`
 
 Current expected handlers:
-- `/` -> `http://127.0.0.1:8799` (index-node + all `/pwa/*` + `/api/*`)
+- `/` -> `http://127.0.0.1:8799` (index-node + `/api/*`)
+- `/pwa` -> `http://127.0.0.1:8780/pwa`
 - `/bridge` -> `http://127.0.0.1:8080`
-- `/fitnessctx` -> `http://127.0.0.1:8780`
+- `/fitnessctx` -> `http://127.0.0.1:8788`
 
 Important:
 - Do **not** add separate handlers for `/api/core4`, `/api/fire`, `/api/focus`.

@@ -29,7 +29,7 @@ resolve_vault_root() {
     [ -n "${AOS_VAULT_ROOT:-}" ] && candidates+=("$AOS_VAULT_ROOT")
     [ -n "${AOS_RCLONE_LOCAL:-}" ] && candidates+=("$AOS_RCLONE_LOCAL")
     [ -n "${AOS_VAULT_DIR:-}" ] && candidates+=("$AOS_VAULT_DIR")
-    candidates+=("$HOME/vault" "$HOME/AlphaOS-Vault" "$HOME/Dokumente/AlphaOs-Vault" "$HOME/AlphaOs-Vault")
+    candidates+=("$HOME/vault" "$HOME/vault" "$HOME/Dokumente/vault" "$HOME/vault")
 
     local c
     for c in "${candidates[@]}"; do
@@ -91,16 +91,16 @@ vault_git_dir() {
         echo "$HOME/vault"
         return 0
     fi
-    if [ -d "$HOME/AlphaOS-Vault" ]; then
-        echo "$HOME/AlphaOS-Vault"
+    if [ -d "$HOME/vault" ]; then
+        echo "$HOME/vault"
         return 0
     fi
-    if [ -d "$HOME/Dokumente/AlphaOs-Vault" ]; then
-        echo "$HOME/Dokumente/AlphaOs-Vault"
+    if [ -d "$HOME/Dokumente/vault" ]; then
+        echo "$HOME/Dokumente/vault"
         return 0
     fi
-    if [ -d "$HOME/AlphaOs-Vault" ]; then
-        echo "$HOME/AlphaOs-Vault"
+    if [ -d "$HOME/vault" ]; then
+        echo "$HOME/vault"
         return 0
     fi
     return 1

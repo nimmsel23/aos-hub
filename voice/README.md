@@ -125,7 +125,7 @@ Creates markdown template with 4-step structure, then opens in editor.
 
 ### Location
 ```
-~/AlphaOs-Vault/VOICE/VOICE-YYYY-MM-DD_HHMM.md
+~/vault/VOICE/VOICE-YYYY-MM-DD_HHMM.md
 ```
 
 Or:
@@ -298,7 +298,7 @@ voicectl list 30
 ## Environment
 
 ```bash
-export AOS_VAULT_DIR=~/AlphaOs-Vault    # Vault location
+export AOS_VAULT_DIR=~/vault    # Vault location
 export EDITOR=micro                      # Preferred editor
 ```
 

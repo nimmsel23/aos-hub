@@ -5,7 +5,7 @@
 UUID="$1"
 DESC="$2"
 
-VAULT_ROOT="$HOME/AlphaOS-Vault/Door"
+VAULT_ROOT="$HOME/vault/Door"
 POTENTIAL_DIR="$VAULT_ROOT/1-Potential"
 
 mkdir -p "$POTENTIAL_DIR"

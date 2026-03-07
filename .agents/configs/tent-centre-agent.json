@@ -21,8 +21,8 @@
       "/bridge/tent/summary (save weekly summary)"
     ],
     "data": [
-      "~/AlphaOS-Vault/Alpha_Tent/ (weekly summaries)",
-      "~/AlphaOS-Vault/Alpha_Core4/ (Core4 data for review)"
+      "~/vault/Alpha_Tent/ (weekly summaries)",
+      "~/vault/Alpha_Core4/ (Core4 data for review)"
     ]
   },
   "triggers": [
@@ -56,7 +56,7 @@
     "Currently in development (needs enhancement before standalone)",
     "Integrates: Core4 (28-or-Die), Game Maps (Frame/Fire), Door (War Stacks)",
     "Future: tent-standalone/ with clasp deployment",
-    "Weekly summaries stored in ~/AlphaOS-Vault/Alpha_Tent/",
+    "Weekly summaries stored in ~/vault/Alpha_Tent/",
     "tent_weekly_review.gs handles review flow logic"
   ]
 }

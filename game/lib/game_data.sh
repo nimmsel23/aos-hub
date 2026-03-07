@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
 GAME_DIR="$VAULT_DIR/GAME"
 
 # Map hierarchy levels

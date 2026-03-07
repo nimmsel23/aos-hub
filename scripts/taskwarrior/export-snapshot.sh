@@ -19,7 +19,7 @@ TASK_BIN="${AOS_TASK_BIN:-${TASK_BIN:-task}}"
 TASKRC_PATH="${AOS_TASKRC:-${TASKRC:-}}"
 EXPORT_FILTER="${AOS_TASK_EXPORT_FILTER:-${TASK_EXPORT_FILTER:-(status:pending or status:waiting)}}"
 OUT_PATH="${AOS_TASK_EXPORT_PATH:-${TASK_EXPORT:-$HOME/.local/share/alphaos/task_export.json}}"
-VAULT_PATH="${AOS_TASK_EXPORT_VAULT_PATH:-$HOME/AlphaOS-Vault/.alphaos/task_export.json}"
+VAULT_PATH="${AOS_TASK_EXPORT_VAULT_PATH:-$HOME/vault/.alphaos/task_export.json}"
 COPY_TO_VAULT="${AOS_TASK_EXPORT_COPY_TO_VAULT:-1}"
 
 need_cmd "$TASK_BIN" || die "taskwarrior not found: $TASK_BIN"

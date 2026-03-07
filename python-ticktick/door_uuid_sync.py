@@ -52,7 +52,7 @@ def update_project_description(project_id: str, door_uuid: str) -> bool:
             return True
 
         # Construct markdown file link (assuming it's in War-Stacks folder)
-        md_file_link = f"obsidian://open?vault=AlphaOS-Vault&file=Door/War-Stacks/{project_name.replace(' ', '%20')}.md"
+        md_file_link = f"obsidian://open?vault=vault&file=Door/War-Stacks/{project_name.replace(' ', '%20')}.md"
 
         new_desc = f"{current_desc}\n\nTaskwarrior Door UUID: {door_uuid}\nObsidian File: {md_file_link}".strip()
 

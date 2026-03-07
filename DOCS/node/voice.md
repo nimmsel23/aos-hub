@@ -7,7 +7,7 @@ Local Voice Centre for session capture and file history.
 - UI: `http://127.0.0.1:8799/voice`
 
 ## Storage
-- Vault: `~/Voice` (preferred) or `~/AlphaOS-Vault/VOICE`
+- Vault: `~/Voice` (preferred) or `~/vault/VOICE`
 
 ## API (Node)
 - `POST /api/voice/export` (save session markdown)

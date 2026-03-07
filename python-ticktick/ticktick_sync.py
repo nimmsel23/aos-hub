@@ -35,7 +35,7 @@ def today_core4_tag() -> str:
 
 
 def vault_map_path() -> Path:
-    return Path.home() / "AlphaOS-Vault" / ".alphaos" / "core4_ticktick_map.json"
+    return Path.home() / "vault" / ".alphaos" / "core4_ticktick_map.json"
 
 
 def legacy_map_path() -> Path:

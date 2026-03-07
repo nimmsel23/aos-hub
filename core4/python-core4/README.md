@@ -24,11 +24,11 @@ The stable identity is `YYYY-MM-DD:domain:habit` (the `key`). Multiple events ca
 ## Storage model (event ledger → day → week)
 
 - **Event ledger (append-only, never edited):**
-  - Local: `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
-  - Mount: `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
+  - Local: `~/vault/Core4/.core4/events/YYYY-MM-DD/*.json`
+  - Mount: `~/vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
 - **Derived artifacts (rebuilt anytime):**
-  - Day: `~/AlphaOS-Vault/Core4/core4_day_YYYY-MM-DD.json`
-  - Week: `~/AlphaOS-Vault/Core4/core4_week_YYYY-WWW.json`
+  - Day: `~/vault/Core4/core4_day_YYYY-MM-DD.json`
+  - Week: `~/vault/Core4/core4_week_YYYY-WWW.json`
 
 Rclone push/pull only copies the ledger (`.core4/**`) to avoid Google Drive duplicate-name issues on derived JSON.
 
@@ -52,7 +52,7 @@ Override read roots with:
 ## Integration notes
 
 - Taskwarrior tasks are created+completed with `+core4` and `core4_YYYYMMDD` tags; the Taskwarrior hook logs to Bridge, and falls back to writing a local event if Bridge is down.
-- TickTick completion is best-effort via `~/aos-hub/python-ticktick/ticktick_sync.py --push` (mapping stored in `~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json`).
+- TickTick completion is best-effort via `~/aos-hub/python-ticktick/ticktick_sync.py --push` (mapping stored in `~/vault/.alphaos/core4_ticktick_map.json`).
 
 ## One binary (recommended)
 

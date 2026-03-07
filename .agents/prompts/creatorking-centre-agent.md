@@ -28,7 +28,7 @@ Specialist for CreatorKing Centre - SEPARATE DIMENSION (outside AlphaOS). Daily 
 - Own Telegram bot with polling (not webhook)
 - Script Properties: TELEGRAM_BOT_TOKEN, TG_DEFAULT_CHAT_ID, GEMINI_API_KEY
 - pollForUpdates runs every 5 minutes
-- Storage: Drive creatorking_store.json (NOT AlphaOS-Vault)
+- Storage: Drive creatorking_store.json (NOT vault)
 - .clasp.json present (deployed via clasp)
 
 ## Version: 1.0.0 (2026-01-15)

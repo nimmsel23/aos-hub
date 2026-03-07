@@ -69,7 +69,7 @@
     "Script Properties: TELEGRAM_BOT_TOKEN, TG_DEFAULT_CHAT_ID, GEMINI_API_KEY",
     "Daily flow: 08:00 question → user replies → 20:00 Gemini insights",
     "Reply-aware: bot tracks last_question to know which question user answered",
-    "Storage: Drive creatorking_store.json (not AlphaOS-Vault)",
+    "Storage: Drive creatorking_store.json (not vault)",
     ".clasp.json present (deployed via clasp)",
     "Debug helpers: ck_debugInfo(), ck_pollOnceDebug(), ck_debugClearLast(), etc.",
     "pollForUpdates runs every 5 minutes to check Telegram"

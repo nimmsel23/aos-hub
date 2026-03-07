@@ -65,7 +65,7 @@
 - **UI:** `http://127.0.0.1:8799/voice`
 
 #### Storage
-- **Vault:** `~/Voice` (preferred) OR `~/AlphaOS-Vault/VOICE`
+- **Vault:** `~/Voice` (preferred) OR `~/vault/VOICE`
 - **Format:** Markdown files with metadata
 
 #### API (Node.js Endpoints)
@@ -84,7 +84,7 @@ GET /api/voice/file?path=relative/path.md  # Load specific session
 
 #### Environment Variables
 ```bash
-VOICE_VAULT_DIR    # Default: auto-detect (~/Voice or ~/AlphaOS-Vault/VOICE)
+VOICE_VAULT_DIR    # Default: auto-detect (~/Voice or ~/vault/VOICE)
 ```
 
 #### Features

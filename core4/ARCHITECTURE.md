@@ -19,9 +19,9 @@ Core4 is a **daily habit scoring pipeline** across 4 domains (BODY/BEING/BALANCE
 - **Derived artifacts (rebuildable):** day/week JSON summaries (and optional CSV).
 
 Typical locations (vault):
-- `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
-- `~/AlphaOS-Vault/Core4/core4_day_YYYY-MM-DD.json`
-- `~/AlphaOS-Vault/Core4/core4_week_YYYY-Www.json`
+- `~/vault/Core4/.core4/events/YYYY-MM-DD/*.json`
+- `~/vault/Core4/core4_day_YYYY-MM-DD.json`
+- `~/vault/Core4/core4_week_YYYY-Www.json`
 
 Exact paths can vary by machine; prefer “find by convention” in code, not hardcoding.
 

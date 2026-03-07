@@ -30,8 +30,8 @@
       "router/extensions/fruits_daily.py (daily facts)"
     ],
     "data": [
-      "~/AlphaOS-Vault/Game/Fruits/fruits_store.json (answers DB)",
-      "~/AlphaOS-Vault/Game/Fruits/*.md (exported markdown)"
+      "~/vault/Game/Fruits/fruits_store.json (answers DB)",
+      "~/vault/Game/Fruits/*.md (exported markdown)"
     ]
   },
   "triggers": [
@@ -63,7 +63,7 @@
     "Fruits has 2 GAS implementations: single project (fruits.gs) + standalone (fruits-standalone/)",
     "fruits-standalone deployed via codex (appsscript.json present, no .clasp.json yet)",
     "Question bank: index-node/data/fruits_questions.json",
-    "Answers stored: ~/AlphaOS-Vault/Game/Fruits/fruits_store.json",
+    "Answers stored: ~/vault/Game/Fruits/fruits_store.json",
     "Daily rotation picks next unanswered question",
     "router fruits_daily extension provides Telegram access"
   ]

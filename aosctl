@@ -429,11 +429,11 @@ aosctl - AOS Unified Control Interface
 
 USAGE:
   aosctl <component> <action> [args...]
-  aosctl                     # Live dashboard (default entrypoint)
+  aosctl                     # Dashboard (status view, default entrypoint)
   aosctl menu                # Interactive menu (gum/fzf)
   aosctl gum                 # Force gum menu
   aosctl fzf                 # Force fzf menu
-  aosctl dashboard [sec]     # Live dashboard (default refresh: 10s)
+  aosctl dashboard [sec]     # Status dashboard (watch mode optional; default refresh: 180s)
   aosctl status              # Unified system status + wrapped *ctl script-layer probes
   aosctl ping                # Heartbeat ping (routerctl)
   aosctl doctor              # Unified health check
@@ -650,53 +650,240 @@ dashboard_http_row() {
   fi
 }
 
-dashboard_unit_row() {
-  local label="$1"
-  local unit="$2"
-  local scope="${3:-user}"
+dashboard_rg_chip() {
+  local state="${1:-err}" # ok|err
+  if [[ "$state" == "ok" ]]; then
+    aosctl_color "1;32" "●"
+  else
+    aosctl_color "1;31" "●"
+  fi
+}
+
+unit_active_state() {
+  local unit="$1"
+  local scope="${2:-system}"
   if ! have systemctl; then
-    msg "  ${label}: systemctl missing"
+    printf "unknown\n"
     return 0
   fi
-  local enabled active
-  if [[ "$scope" == "system" ]]; then
-    enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
-    active="$(systemctl is-active "$unit" 2>/dev/null || true)"
-  else
-    enabled="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
+  if [[ "$scope" == "user" ]]; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      printf "unknown\n"
+      return 0
+    fi
+    local active
     active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    [[ -n "$active" ]] || active="unknown"
+    printf "%s\n" "$active"
+    return 0
   fi
-  [[ -z "$enabled" ]] && enabled="-"
-  [[ -z "$active" ]] && active="-"
-  local state="warn"
-  if [[ "$unit" == *.timer ]]; then
-    if [[ "$enabled" == "not-found" ]]; then
-      state="err"
-    elif [[ "$active" == "active" ]]; then
-      state="ok"
-    elif [[ "$enabled" == "enabled" && "$active" == "inactive" ]]; then
-      state="warn"
-    fi
-  else
-    if [[ "$active" == "active" ]]; then
-      state="ok"
-    elif [[ "$enabled" == "not-found" || "$active" == "failed" ]]; then
-      state="err"
-    fi
+  local active
+  active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  [[ -n "$active" ]] || active="unknown"
+  printf "%s\n" "$active"
+}
+
+unit_runtime_state() {
+  # Returns one of: running | active-nonrunning | inactive | failed | not-found | unknown
+  local unit="$1"
+  local scope="${2:-system}"
+  if ! have systemctl; then
+    printf "unknown\n"
+    return 0
   fi
-  if [[ "$state" == "err" ]]; then
-    if [[ "$label" == "Index" && "${DASH_HEALTH_INDEX:-err}" == "ok" ]]; then
-      state="warn"
-      msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled}, HTTP reachable)"
+
+  local cmd=(systemctl)
+  if [[ "$scope" == "user" ]]; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      printf "unknown\n"
       return 0
     fi
-    if [[ "$label" == "Bridge" && "${DASH_HEALTH_BRIDGE:-err}" == "ok" ]]; then
-      state="warn"
-      msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled}, HTTP reachable)"
+    cmd=(systemctl --user)
+  fi
+
+  local load active sub
+  load="$("${cmd[@]}" show "$unit" -p LoadState --value 2>/dev/null || true)"
+  active="$("${cmd[@]}" show "$unit" -p ActiveState --value 2>/dev/null || true)"
+  sub="$("${cmd[@]}" show "$unit" -p SubState --value 2>/dev/null || true)"
+
+  [[ -n "$load" ]] || load="unknown"
+  [[ -n "$active" ]] || active="unknown"
+  [[ -n "$sub" ]] || sub="unknown"
+
+  if [[ "$load" == "not-found" ]]; then
+    printf "not-found\n"
+    return 0
+  fi
+  if [[ "$active" == "active" && ( "$sub" == "running" || "$sub" == "listening" ) ]]; then
+    printf "running\n"
+    return 0
+  fi
+  if [[ "$active" == "active" ]]; then
+    printf "active-nonrunning\n"
+    return 0
+  fi
+  if [[ "$active" == "inactive" || "$active" == "failed" ]]; then
+    printf "%s\n" "$active"
+    return 0
+  fi
+  printf "unknown\n"
+}
+
+unit_show_triplet() {
+  # unit_show_triplet <scope:system|user> <unit>
+  local scope="$1"
+  local unit="$2"
+  if ! have systemctl; then
+    printf "load=unknown active=unknown sub=unknown\n"
+    return 0
+  fi
+
+  local cmd=(systemctl)
+  if [[ "$scope" == "user" ]]; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      printf "load=unknown active=unknown sub=unknown\n"
       return 0
     fi
+    cmd=(systemctl --user)
   fi
-  msg "  ${label}: $(aosctl_chip "$state") (${scope}:${active}/${enabled})"
+
+  local show_out show_rc
+  set +e
+  show_out="$("${cmd[@]}" show "$unit" -p LoadState -p ActiveState -p SubState 2>&1)"
+  show_rc=$?
+  set -e
+  if [[ "$show_rc" -ne 0 ]]; then
+    local err_short
+    err_short="$(printf "%s" "$show_out" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | cut -c1-120)"
+    printf "load=unknown active=unknown sub=unknown err=%s\n" "${err_short:-show-failed}"
+    return 0
+  fi
+
+  local load active sub
+  load="$(printf "%s\n" "$show_out" | sed -n 's/^LoadState=//p' | head -n1)"
+  active="$(printf "%s\n" "$show_out" | sed -n 's/^ActiveState=//p' | head -n1)"
+  sub="$(printf "%s\n" "$show_out" | sed -n 's/^SubState=//p' | head -n1)"
+  [[ -n "$load" ]] || load="unknown"
+  [[ -n "$active" ]] || active="unknown"
+  [[ -n "$sub" ]] || sub="unknown"
+  printf "load=%s active=%s sub=%s\n" "$load" "$active" "$sub"
+}
+
+dashboard_service_facts_row() {
+  # dashboard_service_facts_row <label> <system-unit> <user-unit>
+  local label="$1"
+  local system_unit="$2"
+  local user_unit="$3"
+  local system_triplet user_triplet system_state user_state mode chip_state
+  system_triplet="$(unit_show_triplet system "$system_unit")"
+  user_triplet="$(unit_show_triplet user "$user_unit")"
+  system_state="$(unit_runtime_state "$system_unit" system)"
+  user_state="$(unit_runtime_state "$user_unit" user)"
+
+  mode="inactive"
+  chip_state="err"
+  if [[ "$system_state" == "running" && "$user_state" == "running" ]]; then
+    mode="conflict(system+user)"
+    chip_state="err"
+  elif [[ "$system_state" == "running" ]]; then
+    mode="system-only"
+    chip_state="ok"
+  elif [[ "$user_state" == "running" ]]; then
+    mode="user-only"
+    chip_state="ok"
+  fi
+
+  msg "  ${label}:"
+  msg "    runtime $(dashboard_rg_chip "$chip_state") mode=${mode}"
+  msg "    system(${system_unit}) ${system_triplet}"
+  msg "    user(${user_unit})   ${user_triplet}"
+}
+
+dashboard_unit_fact() {
+  # dashboard_unit_fact <label> <scope:system|user> <unit>
+  local label="$1"
+  local scope="$2"
+  local unit="$3"
+  local triplet state
+  triplet="$(unit_show_triplet "$scope" "$unit")"
+  state="err"
+  [[ "$triplet" == *"active=active"* ]] && state="ok"
+  msg "  ${label}: $(dashboard_rg_chip "$state")  ${scope}:${unit} ${triplet}"
+}
+
+dashboard_service_result_fact() {
+  # dashboard_service_result_fact <label> <scope:system|user> <unit>
+  local label="$1"
+  local scope="$2"
+  local unit="$3"
+  if ! have systemctl; then
+    msg "  ${label}: $(dashboard_rg_chip err)  systemctl missing"
+    return 0
+  fi
+  local cmd=(systemctl)
+  if [[ "$scope" == "user" ]]; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      msg "  ${label}: $(dashboard_rg_chip err)  user bus unavailable"
+      return 0
+    fi
+    cmd=(systemctl --user)
+  fi
+  local out rc
+  set +e
+  out="$("${cmd[@]}" show "$unit" -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus 2>/dev/null)"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 || -z "$out" ]]; then
+    msg "  ${label}: $(dashboard_rg_chip err)  ${scope}:${unit} unavailable"
+    return 0
+  fi
+  local load active sub result status
+  load="$(printf "%s\n" "$out" | sed -n 's/^LoadState=//p' | head -n1)"
+  active="$(printf "%s\n" "$out" | sed -n 's/^ActiveState=//p' | head -n1)"
+  sub="$(printf "%s\n" "$out" | sed -n 's/^SubState=//p' | head -n1)"
+  result="$(printf "%s\n" "$out" | sed -n 's/^Result=//p' | head -n1)"
+  status="$(printf "%s\n" "$out" | sed -n 's/^ExecMainStatus=//p' | head -n1)"
+  [[ -n "$load" ]] || load="unknown"
+  [[ -n "$active" ]] || active="unknown"
+  [[ -n "$sub" ]] || sub="unknown"
+  [[ -n "$result" ]] || result="unknown"
+  [[ -n "$status" ]] || status="unknown"
+  local chip="err"
+  if [[ "$active" == "active" || "$result" == "success" ]]; then
+    chip="ok"
+  fi
+  msg "  ${label}: $(dashboard_rg_chip "$chip")  ${scope}:${unit} load=${load} active=${active} sub=${sub} result=${result} status=${status}"
+}
+
+http_probe_fact() {
+  # http_probe_fact <label> <url>
+  local label="$1"
+  local url="$2"
+  if ! have curl; then
+    msg "  ${label}: $(dashboard_rg_chip err)  curl missing  url=${url}"
+    return 0
+  fi
+  local code rc
+  set +e
+  code="$(curl --max-time 4 -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)"
+  rc=$?
+  set -e
+  local state="err"
+  if [[ "$rc" -eq 0 && "$code" != "000" ]]; then
+    state="ok"
+  fi
+  msg "  ${label}: $(dashboard_rg_chip "$state")  code=${code:-000} rc=${rc}  url=${url}"
+}
+
+tailscale_self_dns_name() {
+  if ! have tailscale; then
+    return 1
+  fi
+  if have jq; then
+    tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty | sub("\\.$"; "")' | head -n 1
+    return 0
+  fi
+  tailscale status --json 2>/dev/null | sed -n 's/^[[:space:]]*"DNSName": "\([^"]*\)\.$/\1/p' | head -n 1
 }
 
 legacy_user_unit_notice() {
@@ -767,18 +954,13 @@ scope_guard_check() {
     msg "    $(aosctl_chip warn) legacy unit active: $legacy"
   fi
 
-  prod="aos-bridge.service"; dev="aos-bridge-dev.service"; legacy="aos-bridge.service"
+  prod="aos-bridge.service"; dev="aos-bridge.service"; legacy=""
   prod_active="$(systemctl is-active "$prod" 2>/dev/null || true)"
   dev_active="$(user_unit_active_state "$dev")"
-  legacy_active="$(user_unit_active_state "$legacy")"
-  msg "  bridge prod=${prod_active:-unknown} dev=${dev_active:-unknown} legacy-user=${legacy_active:-unknown}"
+  msg "  bridge system=${prod_active:-unknown} user=${dev_active:-unknown}"
   if [[ "$prod_active" == "active" && "$dev_active" == "active" ]]; then
     issues=$((issues + 1))
-    msg "    $(aosctl_chip err) parallel run (production + dev)"
-  fi
-  if [[ "$legacy_active" == "active" ]]; then
-    issues=$((issues + 1))
-    msg "    $(aosctl_chip warn) legacy user bridge active: $legacy"
+    msg "    $(aosctl_chip err) parallel run (system + user)"
   fi
 
   if [[ "$mode" == "strict" && "$issues" -gt 0 ]]; then
@@ -835,15 +1017,6 @@ render_production_units_compact() {
   msg "  Weekly Timer: $(aosctl_chip "$state") (aos-hub-backup-weekly.timer, $active/$enabled)"
 }
 
-dashboard_dir_chip() {
-  local path="$1"
-  if [[ -d "$path" ]]; then
-    printf "%s" "$(aosctl_chip ok)"
-  else
-    printf "%s" "$(aosctl_chip warn)"
-  fi
-}
-
 render_dashboard_once() {
   if [[ "${AOS_NO_CLEAR:-0}" != "1" && -t 1 ]]; then
     clear
@@ -852,108 +1025,92 @@ render_dashboard_once() {
   msg "Updated: $(date '+%Y-%m-%d %H:%M:%S')"
   msg ""
 
-  msg "=== Health ==="
-  DASH_HEALTH_INDEX=err
-  DASH_HEALTH_BRIDGE=err
-  dashboard_http_row "Index" "${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
-  dashboard_http_row "Bridge" "${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
-  if have systemctl && systemctl -q is-active aos-router.service 2>/dev/null; then
-    msg "  Router: $(aosctl_chip ok)"
+  msg "=== Service Facts ==="
+  dashboard_service_facts_row "Index" "aos-index.service" "aos-index-dev.service"
+  dashboard_service_facts_row "Bridge" "aos-bridge.service" "aos-bridge.service"
+  dashboard_service_facts_row "Router" "aos-router.service" "aos-router-dev.service"
+  msg ""
+
+  msg "=== Probe Facts ==="
+  local index_local="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+  local bridge_local="${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
+  http_probe_fact "index.local" "$index_local"
+  http_probe_fact "bridge.local" "$bridge_local"
+  local ts_dns=""
+  ts_dns="$(tailscale_self_dns_name || true)"
+  if [[ -n "$ts_dns" ]]; then
+    http_probe_fact "index.tailnet" "https://${ts_dns}/health"
+    http_probe_fact "bridge.tailnet" "https://${ts_dns}/bridge/health"
   else
-    msg "  Router: $(aosctl_chip err)"
+    msg "  tailnet: $(dashboard_rg_chip err)  tailscale dns unavailable"
   fi
   msg ""
 
-  msg "=== Production Units (system) ==="
-  dashboard_unit_row "Index" "aos-index.service" "system"
-  dashboard_unit_row "Bridge" "aos-bridge.service" "system"
-  dashboard_unit_row "Router" "aos-router.service" "system"
-  dashboard_unit_row "Daily Timer" "aos-hub-backup-daily.timer" "system"
-  dashboard_unit_row "Weekly Timer" "aos-hub-backup-weekly.timer" "system"
-  msg ""
-
-  msg "=== Legacy/User Migration Hints ==="
-  legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
-  legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
-  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
-  legacy_user_unit_notice "alphaos-vault-sync.timer" "Legacy Vault Timer"
-  msg ""
-
-  msg "=== Sync Summary ==="
+  msg "=== Sync Facts ==="
+  msg "  policy: hub_root daily push is REQUIRED (canonical)"
+  msg "  policy: dokumente regular push is REQUIRED"
+  msg "  policy: vault daily push is REQUIRED"
   local rclone_cfg="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+  local rclone_bin="<missing>"
+  local rclone_ver="<unknown>"
   if have rclone; then
-    msg "  rclone: $(aosctl_chip ok) ($(command -v rclone))"
-  else
-    msg "  rclone: $(aosctl_chip err) (missing)"
+    rclone_bin="$(command -v rclone)"
+    rclone_ver="$(rclone --version 2>/dev/null | head -n1 || echo "<unknown>")"
   fi
-  if [[ -f "$rclone_cfg" ]]; then
-    msg "  config: $(aosctl_chip ok) ($rclone_cfg)"
+  msg "  rclone_bin: $rclone_bin"
+  msg "  rclone_version: $rclone_ver"
+  msg "  rclone_config: $rclone_cfg ($( [[ -f "$rclone_cfg" ]] && echo present || echo missing ))"
+  msg "  required_timers:"
+  dashboard_unit_fact "hub.daily.timer" "system" "aos-hub-backup-daily.timer"
+  dashboard_service_result_fact "hub.daily.service" "system" "aos-hub-backup-daily.service"
+  dashboard_unit_fact "hub.live.timer" "user" "aos-sync@aos-hub.timer"
+  dashboard_unit_fact "vault.push.timer" "user" "vaultctl-push.timer"
+  dashboard_service_result_fact "vault.push.service" "user" "vaultctl-push.service"
+  dashboard_unit_fact "vault.monitor.timer" "user" "vaultctl-push-monitor.timer"
+
+  local vaultctl_bin="${SCRIPT_DIR}/scripts/sync-utils/vaultctl"
+  if [[ -x "$vaultctl_bin" ]]; then
+    local vault_status rc
+    set +e
+    vault_status="$("$vaultctl_bin" status 2>&1)"
+    rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+      msg "  vaultctl.status (required): $(dashboard_rg_chip ok)"
+      printf "%s\n" "$vault_status" \
+        | sed -n -E '/^(local:|remote:|push:|monitor:|last-success:|last-result:|progress:)/p' \
+        | sed 's/^/    /'
+    else
+      msg "  vaultctl.status (required): $(dashboard_rg_chip err)  rc=${rc}"
+      msg "    $vault_status"
+    fi
   else
-    msg "  config: $(aosctl_chip err) ($rclone_cfg)"
-  fi
-  if [[ "${AOS_SYNC_BACKUP_OVERWRITES:-1}" == "1" ]]; then
-    msg "  overwrite-backups: $(aosctl_chip ok) (enabled)"
-  else
-    msg "  overwrite-backups: $(aosctl_chip warn) (disabled)"
+    msg "  vaultctl.status (required): $(dashboard_rg_chip err)  missing ($vaultctl_bin)"
   fi
 
-  local vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}}"
-  local domain_root="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
-  local biz_root="$HOME/Dokumente/BUSINESS"
+  local -a legacy_sync_timers=()
+  if have systemctl && systemctl --user show-environment >/dev/null 2>&1; then
+    mapfile -t legacy_sync_timers < <(systemctl --user list-unit-files "aos-sync@*.timer" --no-legend --no-pager 2>/dev/null | awk '{print $1}' | grep -E 'aos-sync@(BODY|BUSINESS)\.timer' | sort)
+  fi
+  if (( ${#legacy_sync_timers[@]} > 0 )); then
+    msg "  legacy_sync_timers_detected:"
+    local t
+    for t in "${legacy_sync_timers[@]}"; do
+      dashboard_unit_fact "legacy" "user" "$t"
+    done
+  fi
+
+  local vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
+  local dokumente_root="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
   local hub_root="${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"
-  msg "  roots: vault=$(dashboard_dir_chip "$vault_root"), domains=$(dashboard_dir_chip "$domain_root"), business=$(dashboard_dir_chip "$biz_root"), hub=$(dashboard_dir_chip "$hub_root")"
+  msg "  vault_root: $vault_root ($( [[ -d "$vault_root" ]] && echo present || echo missing ))"
+  msg "  dokumente_root: $dokumente_root ($( [[ -d "$dokumente_root" ]] && echo present || echo missing ))"
+  msg "  hub_root: $hub_root ($( [[ -d "$hub_root" ]] && echo present || echo missing ))"
 }
 
 run_dashboard() {
   local mode="${1:-once}"
-  local interval="${2:-10}"
-
-  show_menu_with_picker() {
-    local picker="$1"
-    case "$picker" in
-      gum|fzf) ;;
-      *) die "Unknown picker: $picker (expected gum|fzf)" ;;
-    esac
-    (
-      CTL_CHOOSE_PREFER="$picker"
-      show_menu
-    )
-  }
-
-  dashboard_hotkey_dispatch() {
-    local key="$1"
-    case "$key" in
-      q|Q)
-        return 99
-        ;;
-      m|M)
-        show_menu || true
-        ;;
-      g|G)
-        show_menu_with_picker gum || true
-        ;;
-      f|F)
-        show_menu_with_picker fzf || true
-        ;;
-      s|S)
-        run_status || true
-        ;;
-      d|D)
-        run_doctor || true
-        ;;
-      p|P)
-        run_ping || true
-        ;;
-      h|H|\?)
-        show_help
-        ;;
-      *)
-        return 0
-        ;;
-    esac
-    ctl_pause_return
-    return 0
-  }
+  local interval="${2:-180}"
 
   case "$mode" in
     once|"")
@@ -961,27 +1118,18 @@ run_dashboard() {
       ;;
     watch|--watch|-w)
       [[ "$interval" =~ ^[0-9]+$ ]] || die "Usage: aosctl dashboard [watch [seconds]]"
-      (( interval > 0 )) || interval=10
+      (( interval > 0 )) || interval=180
       while true; do
-        render_dashboard_once
+        if [[ "${AOS_NO_CLEAR:-0}" != "1" && -t 1 ]]; then
+          clear
+        fi
+        render_dashboard_once || true
         if [[ ! -t 0 || ! -t 1 ]]; then
           break
         fi
         msg ""
-        msg "Refresh ${interval}s | hotkeys: [m]enu [g]um [f]zf [s]tatus [d]octor [p]ing [h]elp [q]uit"
-        local key=""
-        if ctl_read_key_timed "$interval" key; then
-          echo ""
-          if ! dashboard_hotkey_dispatch "$key"; then
-            rc=$?
-            if [[ "$rc" -eq 99 ]]; then
-              break
-            fi
-          fi
-          if [[ "${key:-}" == "q" || "${key:-}" == "Q" ]]; then
-            break
-          fi
-        fi
+        msg "Refresh ${interval}s | Ctrl-C to quit"
+        sleep "$interval"
       done
       ;;
     *)
@@ -1035,6 +1183,68 @@ _status_timer_line() {
   local chip
   [[ "$active" == "active" ]] && chip="$(aosctl_chip ok)" || chip="$(aosctl_chip warn)"
   printf "  %-46s [%s]\n" "$unit" "$chip"
+}
+
+_status_port_probe() {
+  local port="$1"
+  local path="${2:-/health}"
+  local code
+  code="$(curl -sS -o /dev/null -m 2 -w "%{http_code}" "http://127.0.0.1:${port}${path}" 2>/dev/null || true)"
+  [[ -n "$code" && "$code" != "000" ]] && printf "%s" "$code" || printf "-"
+}
+
+_status_dual_unit_line() {
+  # _status_dual_unit_line <label> <unit> <port> [path]
+  local label="$1" unit="$2" port="$3" path="${4:-/health}"
+  local sys_active user_active code
+  sys_active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  user_active="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+  [[ -n "$sys_active" ]] || sys_active="-"
+  [[ -n "$user_active" ]] || user_active="-"
+  if [[ "$port" == "0" || "$port" == "-" ]]; then
+    code="-"
+  else
+    code="$(_status_port_probe "$port" "$path")"
+  fi
+
+  local chip_state="warn"
+  if [[ "$sys_active" == "active" && "$user_active" == "active" ]]; then
+    chip_state="err"
+  elif [[ "$sys_active" == "active" || "$user_active" == "active" ]]; then
+    chip_state="ok"
+  elif [[ "$code" != "-" ]]; then
+    chip_state="warn"
+  fi
+
+  printf "  %-22s [%s] unit=%s sys=%-8s user=%-8s port=%-5s http=%s\n" \
+    "$label" "$(aosctl_chip "$chip_state")" "$unit" "$sys_active" "$user_active" "$port" "$code"
+}
+
+_status_split_unit_line() {
+  # _status_split_unit_line <label> <system-unit> <user-unit> <port> [path]
+  local label="$1" sys_unit="$2" user_unit="$3" port="$4" path="${5:-/health}"
+  local sys_active user_active code
+  sys_active="$(systemctl is-active "$sys_unit" 2>/dev/null || true)"
+  user_active="$(systemctl --user is-active "$user_unit" 2>/dev/null || true)"
+  [[ -n "$sys_active" ]] || sys_active="-"
+  [[ -n "$user_active" ]] || user_active="-"
+  if [[ "$port" == "0" || "$port" == "-" ]]; then
+    code="-"
+  else
+    code="$(_status_port_probe "$port" "$path")"
+  fi
+
+  local chip_state="warn"
+  if [[ "$sys_active" == "active" && "$user_active" == "active" ]]; then
+    chip_state="err"
+  elif [[ "$sys_active" == "active" || "$user_active" == "active" ]]; then
+    chip_state="ok"
+  elif [[ "$code" != "-" ]]; then
+    chip_state="warn"
+  fi
+
+  printf "  %-22s [%s] sys=%-24s(%-8s) user=%-24s(%-8s) port=%-5s http=%s\n" \
+    "$label" "$(aosctl_chip "$chip_state")" "$sys_unit" "$sys_active" "$user_unit" "$user_active" "$port" "$code"
 }
 
 _index_deploy_drift() {
@@ -1140,32 +1350,25 @@ run_status() {
   msg "αOS Status — $(date '+%Y-%m-%d %H:%M')"
   msg ""
 
-  # ── Core Services (system scope, aos-*) ───────────────────────
-  msg "── Core Services (system: aos-*) ─────────────────────────────"
-  _status_unit_line "Index      (aos-index)"  "aos-index.service"  "system"
-  _status_unit_line "Bridge     (aos-bridge)" "aos-bridge.service" "system"
-  _status_unit_line "Router     (aos-router)" "aos-router.service" "system"
+  # ── Core Services (system + user + localhost) ────────────────
+  msg "── Core Services (system + user + localhost) ──────────────────"
+  _status_split_unit_line "index" "aos-index.service" "aos-index-dev.service" "8799" "/health"
+  _status_split_unit_line "bridge" "aos-bridge.service" "aos-bridge.service" "8080" "/health"
+  _status_split_unit_line "router" "aos-router.service" "aos-router-dev.service" "0" "/"
   msg ""
 
-  # ── Dev Units (user scope, aos-*) ─────────────────────────────
-  local dev_index_active dev_bridge_active dev_router_active
-  dev_index_active="$(systemctl --user is-active "aos-index-dev.service"  2>/dev/null || true)"
-  dev_bridge_active="$(systemctl --user is-active "aos-bridge-dev.service" 2>/dev/null || true)"
-  dev_router_active="$(systemctl --user is-active "aos-router-dev.service" 2>/dev/null || true)"
-
-  if [[ "$dev_index_active" == "active" || "$dev_bridge_active" == "active" || "$dev_router_active" == "active" ]]; then
-    msg "── Dev Units (user: aos-*-dev) ────────────────────────────────"
-    [[ "$dev_index_active"  != "inactive" && -n "$dev_index_active"  ]] && _status_unit_line "Index-dev  (user)" "aos-index-dev.service"  "user"
-    [[ "$dev_bridge_active" != "inactive" && -n "$dev_bridge_active" ]] && _status_unit_line "Bridge-dev (user)" "aos-bridge-dev.service" "user"
-    [[ "$dev_router_active" != "inactive" && -n "$dev_router_active" ]] && _status_unit_line "Router-dev (user)" "aos-router-dev.service" "user"
-
-    local prod_idx_active
-    prod_idx_active="$(systemctl is-active "aos-index.service" 2>/dev/null || true)"
-    if [[ "$prod_idx_active" == "active" && "$dev_index_active" == "active" ]]; then
-      msg "  $(aosctl_chip err) PORT CONFLICT: prod + dev both on port — run: aosctl hub deploy"
-    fi
-    msg ""
-  fi
+  # ── Centre Runtimes (ctx + ports) ────────────────────────────
+  msg "── Centre Runtimes (ctx + ports) ─────────────────────────────"
+  _status_dual_unit_line "core4 ctx"   "aos-pwa-core4-ctx.service"   "8781"
+  _status_dual_unit_line "fire ctx"    "aos-pwa-fire-ctx.service"    "8782"
+  _status_dual_unit_line "focus ctx"   "aos-pwa-focus-ctx.service"   "8783"
+  _status_dual_unit_line "frame ctx"   "aos-pwa-frame-ctx.service"   "8784"
+  _status_dual_unit_line "freedom ctx" "aos-pwa-freedom-ctx.service" "8785"
+  _status_dual_unit_line "door ctx"    "aos-doorctx.service"         "8786"
+  _status_dual_unit_line "game ctx"    "aos-pwa-game-ctx.service"    "8787"
+  _status_dual_unit_line "fitness ctx" "aos-fitnessctx.service"      "8788"
+  _status_dual_unit_line "memoirs ctx" "aos-pwa-memoirs-ctx.service" "8790"
+  msg ""
 
   # ── Index: Prod vs Repo (deploy drift) ────────────────────────
   if [[ -f "/opt/aos/index/server.js" ]]; then
@@ -1196,6 +1399,14 @@ run_status() {
     | grep -E "^(aos-sync@|aos-hub-live|alphaos-vault-sync|alphaos-safe-rclone|alphaos-dokumente)" \
     | grep "\.timer$" | sort)
   [[ "$_sync_shown" -eq 0 ]] && msg "  (none active)"
+  msg ""
+
+  # ── Vault Push Stack ──────────────────────────────────────────
+  msg "── Vault Push Stack (user) ────────────────────────────────────"
+  _status_unit_line "vaultctl push timer"   "vaultctl-push.timer" "user"
+  _status_unit_line "vaultctl push service" "vaultctl-push.service" "user"
+  _status_unit_line "vault monitor timer"   "vaultctl-push-monitor.timer" "user"
+  _status_unit_line "vault monitor svc"     "vaultctl-push-monitor.service" "user"
   msg ""
 
   # ── Other Legacy Timers (user: alphaos-*, non-sync) ───────────
@@ -1284,7 +1495,6 @@ run_doctor() {
   msg "Legacy/user migration hints:"
   legacy_user_unit_notice "alphaos-index.service" "Legacy Index"
   legacy_user_unit_notice "alphaos-router.service" "Legacy Router"
-  legacy_user_unit_notice "aos-bridge.service" "Legacy Bridge User Unit"
   msg ""
   if ! scope_guard_check strict; then
     msg ""
@@ -1872,7 +2082,7 @@ PY
 
 main() {
   if [[ $# -eq 0 ]]; then
-    run_dashboard "${AOSCTL_DASHBOARD_INTERVAL:-10}"
+    run_dashboard "${AOSCTL_DASHBOARD_INTERVAL:-180}"
     exit 0
   fi
 

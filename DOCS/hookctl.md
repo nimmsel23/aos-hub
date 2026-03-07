@@ -23,11 +23,15 @@ Taskwarrior hook manager for αOS.
 ```
 hookctl install
 hookctl status
+hookctl doctor
+hookctl bench [task args...]
 hookctl disable-legacy
 hookctl env
 hookctl set-target tele|bridge
 hookctl set-format human|json
 hookctl set-silent on|off
+hookctl set-export on|off
+hookctl set-export-interval <seconds>
 hookctl preview [add|modify|core4]
 hookctl menu
 hookctl help
@@ -40,7 +44,7 @@ hookctl help
   - Bridge (`/bridge/task/operation`) when `AOS_HOOK_TARGET=bridge`
 - `on-exit` writes a Taskwarrior export snapshot (fail-soft):
   - Default: `~/.local/share/alphaos/task_export.json`
-  - Optional vault copy: `~/AlphaOS-Vault/.alphaos/task_export.json`
+  - Optional vault copy: `~/vault/.alphaos/task_export.json`
 
 ## Key env vars (hooks.env)
 
@@ -53,12 +57,17 @@ hookctl help
 - `AOS_INDEX_BASE_URL=http://127.0.0.1:8799` (used when CORE4_LOG_URL unset)
 - `AOS_INDEX_URL=http://127.0.0.1:8799/api/centres` (fallback; /api/centres trimmed)
 - `AOS_BRIDGE_URL=http://127.0.0.1:8080`
+- `AOS_TASK_EXPORT_ENABLE=1|0` (enable/disable on-exit snapshot export)
 - `AOS_TASK_EXPORT_*` (export snapshot settings for on-exit)
 
 ## Quick check
 
 ```
 hookctl status
+hookctl doctor
+hookctl bench +PENDING count
+hookctl set-export off
+hookctl set-export-interval 60
 hookctl preview modify
 hookctl disable-legacy
 ```

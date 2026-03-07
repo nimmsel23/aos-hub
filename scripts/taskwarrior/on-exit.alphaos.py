@@ -67,6 +67,15 @@ def main() -> int:
     hook_env_path = Path(os.environ.get("AOS_HOOK_ENV_FILE") or str(ENV_PATH)).expanduser()
     load_env(hook_env_path)
 
+    export_enabled = str(os.environ.get("AOS_TASK_EXPORT_ENABLE", "1")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if not export_enabled:
+        return 0
+
     task_bin = os.environ.get("AOS_TASK_BIN") or os.environ.get("TASK_BIN") or "task"
     taskrc = os.environ.get("AOS_TASKRC") or os.environ.get("TASKRC") or ""
 
@@ -77,7 +86,7 @@ def main() -> int:
         or (Path.home() / ".local" / "share" / "alphaos" / "task_export.json")
     ).expanduser()
     vault_path = Path(
-        os.environ.get("AOS_TASK_EXPORT_VAULT_PATH") or (Path.home() / "AlphaOS-Vault" / ".alphaos" / "task_export.json")
+        os.environ.get("AOS_TASK_EXPORT_VAULT_PATH") or (Path.home() / "vault" / ".alphaos" / "task_export.json")
     ).expanduser()
     copy_to_vault = (os.environ.get("AOS_TASK_EXPORT_COPY_TO_VAULT", "1").strip() == "1")
 

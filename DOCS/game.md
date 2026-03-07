@@ -431,7 +431,7 @@ GET /api/generals/latest?type=frame|freedom|focus|fire|voice  # Get latest Map
 
 # 4. Fire (Weekly)
 # GAS: saveFireEntry({week: "2026-01-10", domain: "Body", strikes: [...]})
-# OR CLI: vim ~/AlphaOS-Vault/Game/Fire/FIRE_MAP_Body_KW02_2026.md
+# OR CLI: vim ~/vault/Game/Fire/FIRE_MAP_Body_KW02_2026.md
 #         firemap sync
 
 # 5. Daily Game
@@ -487,7 +487,7 @@ chmod +x ~/aos-hub/game/fire/fire-to-tasks.sh
 - [core4.md](core4.md) - Daily Habits
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [index-node/README.md](../index-node/README.md) - Node.js server docs
-- [AlphaOS-THE-GAME.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Blueprint (Chapters 32-42)
+- [AlphaOS-THE-GAME.md](~/Dokumente/vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Blueprint (Chapters 32-42)
 
 ---
 

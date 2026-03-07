@@ -182,8 +182,9 @@ All `*ctl` entrypoints currently under `aos-hub/`:
 - `cd bridge && python app.py --host 0.0.0.0 --port 8080` runs the bridge.
 - `./scripts/aos-doctor` or `./hubctl doctor` produces a multi-service health report.
 - Runtime split policy:
-  - `aosctl` = Production frontdoor (systemd system scope, `aos-*` units)
-  - `hubctl dev` = Dev frontdoor (systemd user scope, `aos-*-dev` units)
+  - `hubctl dev` = canonical frontdoor for index/bridge (systemd user scope).
+  - Index runs as `aos-index-dev.service`; Bridge runs as `aos-bridge.service` (no bridge dev unit).
+  - System-scope `aos-index.service`/`aos-bridge.service` are legacy/drift and should stay inactive.
 - `./nodectl monitor` checks the Node index service (systemd + health).
 - Service CLIs:
   - `./hubctl router ...` (→ `router/routerctl`)
@@ -263,6 +264,8 @@ All `*ctl` entrypoints currently under `aos-hub/`:
 ## Testing Guidelines
 - No automated test suite is configured; rely on smoke checks.
 - Example checks: `curl http://127.0.0.1:8799/health` and `curl http://127.0.0.1:8080/bridge/core4/today`.
+- Localhost checks are baseline-only: successful `127.0.0.1`/`localhost` probes do **not** prove real remote reachability.
+- For real ops validation, prioritize tailnet/funnel path checks (`https://<host>.ts.net/...`) because that is the critical network edge.
 - PWA launcher + ctx checks (index-node):
   - `/menu` must include both `links` and `mobile_links` (MOBILE hover menu is driven by `mobile_links`, no hardcoded links in `public/index.html`).
   - `GET /api/pwa/mobile-links` returns launcher-only links for lightweight consumers (UI/Telegram/router integrations).

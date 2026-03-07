@@ -21,8 +21,8 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 - `public/pwa/core4/` is the **mobile-first Core4 PWA** — served at `/pwa/core4/`.
 - `/core4` is legacy and redirects to `/pwa/core4/`.
 - The mobile hover launcher button ("MOBILE") lives in `public/index.html` under `.pwa-launcher`, but links are loaded dynamically from `/menu` (`mobile_links`), not hardcoded in HTML.
-- Local data is read from the vault at `~/AlphaOS-Vault` (Door chapters, map entries).
-- Door exports write markdown to `~/AlphaOS-Vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
+- Local data is read from the vault at `~/vault` (Door chapters, map entries).
+- Door exports write markdown to `~/vault/Door` with subfolders `1-Potential`, `2-Plan`, `3-Production`, `4-Profit`, `War-Stacks`.
 
 ## Build, Test, and Development Commands
 - `npm install` installs server and frontend dependencies.
@@ -42,7 +42,7 @@ Das zugehörige `indexctl`-Skript wird aktiv von Codex bzw. Claude-Code verwende
 
 ## Quick Smoke Checks
 - Click every card in `/game` to confirm routes open.
-- In `/door`, generate Hot List, Door War, War Stack, Hit List, Profit, then export each to `/Door/` and confirm the files are written under `~/AlphaOS-Vault/Door`.
+- In `/door`, generate Hot List, Door War, War Stack, Hit List, Profit, then export each to `/Door/` and confirm the files are written under `~/vault/Door`.
 - Verify chapters load in `/door` (they should come from `/api/door/chapters`).
 - Open `/pwa/core4/` (or `/core4` legacy redirect) — mobile PWA, 4 domain cards, `.5/.5` toggles.
   - Uses canonical: `GET /api/core4/day-state`, `GET /api/core4/week-summary`, `POST /api/core4/log`
@@ -77,7 +77,7 @@ See `api-map.md` for full reference. Short version:
   - `GET /api/pwa/ctx` (status for all dedicated ctx runtimes)
   - `POST /api/pwa/ctx/:app` with `{"action":"status|start|stop|restart|enable|disable"}`
   - Remote access requires `AOS_PWA_CTX_ALLOW_REMOTE=1`.
-- Vault content is read from `~/AlphaOS-Vault`; keep file paths stable.
+- Vault content is read from `~/vault`; keep file paths stable.
 - API PIN barrier can block Core4 PWA API calls (`/api/core4/*`) on write methods and may surface as frontend parse/auth errors.
 - Use `index-node/nodectl` for PIN operations:
   - `nodectl pin status`
@@ -127,7 +127,7 @@ Tailnet/Funnel note:
 - Funnel base: `https://ideapad.tail7a15d6.ts.net` → `http://127.0.0.1:8799`
 - Funnel PWA base: `https://ideapad.tail7a15d6.ts.net/pwa` → `http://127.0.0.1:8780/pwa`
 - Funnel bridge: `https://ideapad.tail7a15d6.ts.net/bridge` → `http://127.0.0.1:8080`
-- Funnel fitness ctx: `https://ideapad.tail7a15d6.ts.net/fitnessctx` → `http://127.0.0.1:8780/pwa/fitness/`
+- Funnel fitness ctx: `https://ideapad.tail7a15d6.ts.net/fitnessctx` → `http://127.0.0.1:8788`
 
 Menu/API note:
 - `/menu` now returns both:

@@ -19,7 +19,7 @@
       "voicecentre.html"
     ],
     "data": [
-      "~/AlphaOS-Vault/VOICE/ (session files)"
+      "~/vault/VOICE/ (session files)"
     ]
   },
   "triggers": [
@@ -50,7 +50,7 @@
   "notes": [
     "VOICE = Mental Mastery through pattern interruption",
     "4-step process: STOP (interrupt) → SUBMIT (face truth) → STRUGGLE (rewrite) → STRIKE (act)",
-    "Sessions stored as markdown in ~/AlphaOS-Vault/VOICE/",
+    "Sessions stored as markdown in ~/vault/VOICE/",
     "Autosave prevents data loss during long sessions"
   ]
 }

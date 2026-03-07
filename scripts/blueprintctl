@@ -21,7 +21,7 @@ source "$SCRIPT_DIR/lib/aos-env.sh"
 source "$SCRIPT_DIR/ctl-lib.sh"
 CTL_APP_PREFIX="$APP"
 
-AOS_VAULT_DIR_DEFAULT="/home/alpha/AlphaOS-Vault"
+AOS_VAULT_DIR_DEFAULT="/home/alpha/vault"
 VAULT_DIR="${AOS_VAULT_DIR:-$AOS_VAULT_DIR_DEFAULT}"
 BLUEPRINT_DIR="${AOS_BLUEPRINT_DIR:-$VAULT_DIR/AlphaOS-blueprints}"
 

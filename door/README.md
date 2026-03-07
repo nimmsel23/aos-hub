@@ -246,7 +246,7 @@ Calls `door/lib/door_data.sh` functions via `spawn()`.
 export TASK_BIN=task
 
 # Vault directory
-export AOS_VAULT_DIR=~/AlphaOS-Vault
+export AOS_VAULT_DIR=~/vault
 
 # Health thresholds
 export AOS_DOOR_STALLED_DAYS=7

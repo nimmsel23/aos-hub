@@ -10,7 +10,7 @@ These scripts implemented the old Door Centre automation pattern using file watc
 
 **Old Pattern (these scripts):**
 ```
-inotify watches ~/AlphaOS-Vault/Door/2-Plan/
+inotify watches ~/vault/Door/2-Plan/
     ↓
 New War Stack file detected
     ↓
@@ -53,14 +53,14 @@ systemd services handle sync/backup
 **Purpose:** inotify daemon watching `/Door/2-Plan/` for new War Stack files
 
 **What it did:**
-1. Monitor `~/AlphaOS-Vault/Door/2-Plan/` for file creation
+1. Monitor `~/vault/Door/2-Plan/` for file creation
 2. Detect new War Stack markdown files
 3. Trigger `war_stack_create.sh` automatically
 4. Log to `~/.dotfiles/logs/door-automation.log`
 
 **Configuration:**
 ```bash
-export VAULT_PATH="$HOME/Dokumente/AlphaOs-Vault"
+export VAULT_PATH="$HOME/Dokumente/vault"
 export WAR_STACK_CREATE="$HOME/.dotfiles/bin/war_stack_create.sh"
 ```
 
@@ -146,7 +146,7 @@ open http://127.0.0.1:8799/door
 **4. Check current state:**
 ```bash
 # Old: Check file location
-ls ~/AlphaOS-Vault/Door/2-Plan/
+ls ~/vault/Door/2-Plan/
 
 # New: Check Taskwarrior
 task project:HotList list

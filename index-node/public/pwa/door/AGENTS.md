@@ -13,20 +13,16 @@
 - **PROFIT** — Review & Reflection
 
 **Current Frontend Direction**
-- `Potential` remains Phase 1 of The Door, but now has its own standalone install route:
-  - frontend: `public/pwa/potential/`
-  - canonical route: `/pwa/potential/`
-- `Plan` remains Phase 2 of The Door, but now has its own standalone install route:
-  - frontend: `public/pwa/plan/`
-  - canonical route: `/pwa/plan/`
-- `Door Hub` remains the umbrella entry:
+- `Door Hub` remains the shared umbrella entry:
   - frontend: `public/pwa/door/index.html`
   - canonical route: `/pwa/door/`
-- current Door phase shells still exist under:
-  - `public/pwa/door/production/`
-  - `public/pwa/door/profit/`
-- old `public/pwa/door/potential/` and `public/pwa/door/plan/` paths are compatibility-only and must not become the primary install surface again
-- PWA surfaces must remain offline-capable for cached static assets and cached `GET /api/door/*` reads
+- All phases are now standalone install surfaces with their own scope:
+  - `Potential`: `public/pwa/potential/` -> `/pwa/potential/`
+  - `Plan`: `public/pwa/plan/` -> `/pwa/plan/`
+  - `Production`: `public/pwa/production/` -> `/pwa/production/`
+  - `Profit`: `public/pwa/profit/` -> `/pwa/profit/`
+- `public/pwa/door/potential/`, `public/pwa/door/plan/`, `public/pwa/door/production/`, `public/pwa/door/profit/` are compatibility redirects only.
+- PWA surfaces must remain offline-capable for cached static assets and cached `GET /api/door/*` reads.
 
 **Build Order (important)**
 1. Stabilize `Potential`
@@ -44,9 +40,10 @@
 - Longer roadmap: `../../../../DOCS/node/door-pwa-roadmap.md`
 
 **Backend:** YOUR JOB
-- Location: `routes/door.js` (to be created)
+- Location: `index-node/routes/door.js` + `index-node/routes/door/*`
 - APIs: Hot List, Door War, War Stack, Hits, Reflections
-- Storage: `~/.aos/door-flow.json` + `~/AlphaOS-Vault/Door/`
+- Primary state: `~/.aos/door-centre-state.json` (legacy read fallback: `~/.aos/door-flow.json`)
+- Vault exports: `~/vault/Door/`
 
 ## Your Responsibilities
 
@@ -61,6 +58,7 @@ Create Express router with these endpoints:
 
 **PLAN API (Door War + War Stack):**
 - `POST /api/door/plan/doorwar` → run Eisenhower Matrix, select Domino Door
+- `POST /api/door/plan/quadrant/:id` → assign quadrant directly and sync Taskwarrior priority
 - `GET /api/door/plan/doorwars` → list recent Door Wars
 - `GET /api/door/plan/warstacks` → list War Stacks
 - `POST /api/door/plan/warstack/start` → start new War Stack (returns session_id + first question)
@@ -80,7 +78,7 @@ Create Express router with these endpoints:
 
 ### 2. Storage Pattern
 
-**Flow State:** `~/.aos/door-flow.json`
+**Flow State:** `~/.aos/door-centre-state.json` (legacy read fallback: `~/.aos/door-flow.json`)
 ```json
 {
   "hotlist": [
@@ -98,9 +96,9 @@ Create Express router with these endpoints:
 }
 ```
 
-**Vault Markdown:** `~/AlphaOS-Vault/Door/`
+**Vault Markdown:** `~/vault/Door/`
 ```
-~/AlphaOS-Vault/Door/
+~/vault/Door/
 ├── War-Stacks/
 │   ├── 2026-W08/
 │   │   └── Vitaltrainer_Ausbildung.md
@@ -136,7 +134,7 @@ War Stack creation is **conversational** (4 inquiry steps + auto-generate 4 hits
     "inquiry": { "trigger": "...", "narrative": "...", "validation": "...", "impact": "..." },
     "hits": [ { "fact": "...", "obstacle": "...", "strike": "...", "responsibility": "..." }, ... ],
     "created_at": "2026-02-24T10:00:00Z",
-    "markdown_path": "~/AlphaOS-Vault/Door/War-Stacks/2026-W08/Vitaltrainer_Ausbildung.md"
+    "markdown_path": "~/vault/Door/War-Stacks/2026-W08/Vitaltrainer_Ausbildung.md"
   }
 }
 ```
@@ -190,7 +188,7 @@ War Stack creation is **conversational** (4 inquiry steps + auto-generate 4 hits
 ✅ Build `routes/door.js` with all Hot List/War Stack/Hits/Reflection APIs
 ✅ Mount router in `server.js`: `app.use("/api/door", doorRouter);`
 ✅ Persist flow state to `~/.aos/door-flow.json`
-✅ Export War Stacks to markdown in `~/AlphaOS-Vault/Door/War-Stacks/`
+✅ Export War Stacks to markdown in `~/vault/Door/War-Stacks/`
 ✅ Return JSON: `{ ok: true/false, data/error }`
 ✅ Set git identity: `git config user.name "codex-door-forge"` before commits
 

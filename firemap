@@ -37,14 +37,14 @@ detect_fire_dir() {
         candidates+=("$AOS_VAULT_DIR/Game/Fire" "$AOS_VAULT_DIR/GAME/Fire")
     fi
     candidates+=(
-        "$HOME/AlphaOS-Vault/Game/Fire"
-        "$HOME/AlphaOS-Vault/GAME/Fire"
-        "$HOME/AlphaOs-Vault/Game/Fire"
-        "$HOME/AlphaOs-Vault/GAME/Fire"
-        "$HOME/Dokumente/AlphaOS-Vault/Game/Fire"
-        "$HOME/Dokumente/AlphaOS-Vault/GAME/Fire"
-        "$HOME/Dokumente/AlphaOs-Vault/Game/Fire"
-        "$HOME/Dokumente/AlphaOs-Vault/GAME/Fire"
+        "$HOME/vault/Game/Fire"
+        "$HOME/vault/GAME/Fire"
+        "$HOME/vault/Game/Fire"
+        "$HOME/vault/GAME/Fire"
+        "$HOME/Dokumente/vault/Game/Fire"
+        "$HOME/Dokumente/vault/GAME/Fire"
+        "$HOME/Dokumente/vault/Game/Fire"
+        "$HOME/Dokumente/vault/GAME/Fire"
     )
     for d in "${candidates[@]}"; do
         if [[ -n "$d" && -d "$d" ]]; then
@@ -52,7 +52,7 @@ detect_fire_dir() {
             return 0
         fi
     done
-    echo "${candidates[0]:-$HOME/AlphaOS-Vault/Game/Fire}"
+    echo "${candidates[0]:-$HOME/vault/Game/Fire}"
 }
 
 FIRE_DIR="$(detect_fire_dir)"
@@ -101,7 +101,7 @@ EXAMPLES:
 
 ENV:
     AOS_FIRE_DIR=/path/to/Fire              # override Fire maps dir
-    AOS_VAULT_DIR=/path/to/AlphaOS-Vault    # used to derive Fire dir
+    AOS_VAULT_DIR=/path/to/vault    # used to derive Fire dir
     AOS_FIRE_TO_TASKS=/path/to/fire-to-tasks.sh
     AOS_FIREBOT_SCRIPT=/path/to/firemap_bot.py
     AOS_PYTHON_BIN=python

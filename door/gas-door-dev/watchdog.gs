@@ -1432,22 +1432,22 @@ function getTaskwarriorSyncableTasks() {
 }
 
 function aos_findTaskExportFileId_once_() {
-  // One-time lookup of AlphaOS-Vault/.alphaos/task_export.json.
+  // One-time lookup of vault/.alphaos/task_export.json.
   const alphaos = aos_getAlphaosVaultFolder_();
   const fileIt = alphaos.getFilesByName('task_export.json');
-  if (!fileIt.hasNext()) throw new Error('task_export.json not found in AlphaOS-Vault/.alphaos');
+  if (!fileIt.hasNext()) throw new Error('task_export.json not found in vault/.alphaos');
   const id = fileIt.next().getId();
   PropertiesService.getScriptProperties().setProperty('AOS_TASK_EXPORT_FILE_ID', id);
   return id;
 }
 
 function aos_getAlphaosVaultFolder_() {
-  // Resolve Drive folder AlphaOS-Vault/.alphaos.
-  const rootIt = DriveApp.getFoldersByName('AlphaOS-Vault');
-  if (!rootIt.hasNext()) throw new Error('AlphaOS-Vault folder not found');
+  // Resolve Drive folder vault/.alphaos.
+  const rootIt = DriveApp.getFoldersByName('vault');
+  if (!rootIt.hasNext()) throw new Error('vault folder not found');
   const root = rootIt.next();
   const alphaosIt = root.getFoldersByName('.alphaos');
-  if (!alphaosIt.hasNext()) throw new Error('AlphaOS-Vault/.alphaos folder not found');
+  if (!alphaosIt.hasNext()) throw new Error('vault/.alphaos folder not found');
   return alphaosIt.next();
 }
 

@@ -49,6 +49,7 @@ Dev Mode (user services):
 Ops Commands:
   fire <args>         Fire Map scheduler + sync ops
   sync <args>         Vault sync
+  rclone <args>       Rclone sync frontdoor (hub/domains/vault)
   git <args>          Git operations (gitctl)
   backup <args>       Backup management (backupctl)
   mount <args>        Mount control (mountctl)
@@ -69,6 +70,8 @@ Examples:
   hubctl router status
   hubctl node status
   hubctl sync summary
+  hubctl rclone status
+  hubctl rclone push
   hubctl menu
   hubctl dev restart bridge
   hubctl fire status
@@ -104,13 +107,70 @@ delegate_tool() {
   esac
 }
 
+rclone_action() {
+  local sub="${1:-status}"
+  shift || true
+
+  case "$sub" in
+    status)
+      run_ctl "scripts/syncctl" hub status || true
+      echo ""
+      ui_info "vault status is available via: hubctl rclone vault status"
+      ui_info "domains status-all is available via: hubctl rclone domains status-all"
+      ;;
+    push)
+      run_ctl "scripts/syncctl" hub push "$@"
+      ;;
+    hub)
+      run_ctl "scripts/syncctl" hub "${@:-status}"
+      ;;
+    vault)
+      run_ctl "scripts/syncctl" vault "${@:-status}"
+      ;;
+    domains)
+      if [[ $# -eq 0 ]]; then
+        run_ctl "scripts/syncctl" domains status-all
+      else
+        run_ctl "scripts/syncctl" domains "$@"
+      fi
+      ;;
+    doctor)
+      run_ctl "scripts/syncctl" doctor "$@"
+      ;;
+    list)
+      run_ctl "scripts/syncctl" list "$@"
+      ;;
+    menu)
+      run_ctl "scripts/syncctl" menu
+      ;;
+    -h|--help|help)
+      cat <<'EOF'
+hubctl rclone — rclone sync frontdoor (via syncctl)
+
+Usage:
+  hubctl rclone status
+  hubctl rclone push [--dry-run]
+  hubctl rclone hub [status|push] [--dry-run]
+  hubctl rclone vault [status|sync|pull|logs|timers|watch]
+  hubctl rclone domains [status-all|<DOMAIN> <push|pull|sync|status|log>]
+  hubctl rclone doctor [target]
+  hubctl rclone list
+  hubctl rclone menu
+EOF
+      ;;
+    *)
+      hub_die "unknown rclone command: $sub (try: hubctl rclone help)"
+      ;;
+  esac
+}
+
 # ============================================================================
 # DEV MODE (user services)
 # ============================================================================
 
 DEV_INDEX_UNIT="${AOS_INDEX_DEV_UNIT:-aos-index-dev.service}"
 DEV_ROUTER_UNIT="${AOS_ROUTER_DEV_UNIT:-aos-router-dev.service}"
-DEV_BRIDGE_UNIT="${AOS_BRIDGE_DEV_UNIT:-aos-bridge-dev.service}"
+DEV_BRIDGE_UNIT="${AOS_BRIDGE_USER_SERVICE:-${AOS_BRIDGE_DEV_UNIT:-aos-bridge.service}}"
 PROD_INDEX_UNIT="${AOS_INDEX_SERVICE:-aos-index.service}"
 PROD_ROUTER_UNIT="${AOS_ROUTER_SERVICE:-aos-router.service}"
 PROD_BRIDGE_UNIT="${AOS_BRIDGE_SERVICE:-aos-bridge.service}"
@@ -119,20 +179,26 @@ have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 svc_state() {
   local scope="$1" unit="$2"
+  local out=""
   if [[ "$scope" == "user" ]]; then
-    systemctl --user is-active "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
   else
-    systemctl is-active "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl is-active "$unit" 2>/dev/null || true)"
   fi
+  [[ -n "$out" ]] || out="n/a"
+  printf "%s\n" "$out"
 }
 
 svc_enabled() {
   local scope="$1" unit="$2"
+  local out=""
   if [[ "$scope" == "user" ]]; then
-    systemctl --user is-enabled "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl --user is-enabled "$unit" 2>/dev/null || true)"
   else
-    systemctl is-enabled "$unit" 2>/dev/null || echo "n/a"
+    out="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
   fi
+  [[ -n "$out" ]] || out="n/a"
+  printf "%s\n" "$out"
 }
 
 http_probe_compact() {
@@ -458,7 +524,7 @@ Dev Mode:
   dev status|start|stop|restart|logs [target]
 
 Ops:
-  fire, sync, git, backup, mount, hook
+  fire, sync, rclone, git, backup, mount, hook
 
 Compat aliases:
   bridgectl, routerctl, nodectl, syncctl
@@ -507,6 +573,8 @@ menu_action() {
       "router"
       "node"
       "sync"
+      "rclone status"
+      "rclone push"
       "dev status"
       "dev restart bridge"
       "dev logs (all)"
@@ -530,6 +598,8 @@ menu_action() {
       "router") run_ctl "router/routerctl" ;;
       "node") run_ctl "scripts/nodectl" ;;
       "sync") run_ctl "scripts/syncctl" ;;
+      "rclone status") rclone_action status ;;
+      "rclone push") rclone_action push ;;
       "dev status") dev_status ;;
       "dev restart bridge") dev_action restart bridge ;;
       "dev logs (all)") dev_action logs all ;;
@@ -588,6 +658,10 @@ case "$cmd" in
   # Tools (delegate)
   sync|syncctl|git|backup|mount|hook)
     delegate_tool "$cmd" "$@"
+    ;;
+
+  rclone)
+    rclone_action "$@"
     ;;
 
   *)

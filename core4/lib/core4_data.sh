@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
 CORE4_DIR="$VAULT_DIR/Alpha_Core4"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/alphaos"
 

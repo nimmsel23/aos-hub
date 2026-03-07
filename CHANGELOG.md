@@ -22,7 +22,7 @@ Each entry should include:
 **core4:**
 - feat: core4ctl sources shows latest event (date, habit, timestamp) per source directory
 - feat: Support both ISO timestamp formats (dashes and compact)
-- refactor: AlphaOS-Vault → vault path migration (core4_types.py, core4_paths.py)
+- refactor: vault → vault path migration (core4_types.py, core4_paths.py)
 - docs: Update CHANGELOG.md
 
 **scripts:**

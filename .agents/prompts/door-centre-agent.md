@@ -32,7 +32,7 @@ USER (Telegram/Browser)
 ┌─────────────────────────────────────────┐
 │  DATA LAYER                             │
 ├─────────────────────────────────────────┤
-│ ~/AlphaOS-Vault/Door/                  │
+│ ~/vault/Door/                  │
 │  ├─ 1-Potential/ (Hot List)            │
 │  ├─ 2-Plan/ (Door War)                 │
 │  ├─ War-Stacks/ (War Stacks)           │
@@ -123,11 +123,11 @@ USER (Telegram/Browser)
 - Purpose: Bridge python-warstack resume capability with GAS
 
 **Data Layer:**
-- `~/AlphaOS-Vault/Door/1-Potential/` - Hot List markdown files
-- `~/AlphaOS-Vault/Door/2-Plan/` - Door War markdown files
-- `~/AlphaOS-Vault/Door/War-Stacks/` - War Stack markdown files
-- `~/AlphaOS-Vault/Door/3-Production/` - Hit List markdown files
-- `~/AlphaOS-Vault/Door/4-Profit/` - Profit reflection markdown files
+- `~/vault/Door/1-Potential/` - Hot List markdown files
+- `~/vault/Door/2-Plan/` - Door War markdown files
+- `~/vault/Door/War-Stacks/` - War Stack markdown files
+- `~/vault/Door/3-Production/` - Hit List markdown files
+- `~/vault/Door/4-Profit/` - Profit reflection markdown files
 
 ## Core Responsibilities
 
@@ -147,7 +147,7 @@ Build and maintain the Door Centre interface across both index-node and gas.
 app.post('/api/door/hotlist', async (req, res) => {
   const { title, description, domain, priority } = req.body;
   // NEW: Add 'priority' field
-  // Save to ~/AlphaOS-Vault/Door/1-Potential/hot-list-YYYY-Wxx.md
+  // Save to ~/vault/Door/1-Potential/hot-list-YYYY-Wxx.md
 });
 ```
 
@@ -306,7 +306,7 @@ Access these files for information:
    - gas: addHotListItem()
    - Telegram: (future, via router extension)
 2. Generate markdown entry
-3. Save to `~/AlphaOS-Vault/Door/1-Potential/hot-list-YYYY-Wxx.md`
+3. Save to `~/vault/Door/1-Potential/hot-list-YYYY-Wxx.md`
 4. Return success confirmation
 
 **Example:**
@@ -380,7 +380,7 @@ app.post('/api/door/export', async (req, res) => {
               phase === 'production' ? '3-Production' :
               '4-Profit';
   const filename = `${dir}/${phase}-${week}.md`;
-  await fs.writeFile(`~/AlphaOS-Vault/Door/${filename}`, markdown);
+  await fs.writeFile(`~/vault/Door/${filename}`, markdown);
   res.json({ success: true, path: filename });
 });
 ```
@@ -448,7 +448,7 @@ journalctl --user -u aos-bridge -f | grep warstack/draft
 1. Check environment variable `WARSTACK_GAS_ONLY`
    - If `=1`, bot skips local vault write
    - Unset or set to `0` for local write
-2. Verify vault path exists: `~/AlphaOS-Vault/Door/War-Stacks/`
+2. Verify vault path exists: `~/vault/Door/War-Stacks/`
 3. Check file permissions
 
 ### Edge Case 3: Door War Selection Not in menu.yaml
@@ -515,7 +515,7 @@ curl -X POST http://127.0.0.1:8799/api/door/hotlist \
   -d '{"title":"Test Door","description":"Test","domain":"BUSINESS"}'
 
 # Check if file created
-ls -lh ~/AlphaOS-Vault/Door/1-Potential/
+ls -lh ~/vault/Door/1-Potential/
 ```
 
 ## Development Status Awareness

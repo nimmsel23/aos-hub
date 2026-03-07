@@ -10,7 +10,7 @@ syncvaultctl is the unified CLI + menu to control git and rclone sync jobs acros
 - Vitaltrainer copy push/pull controls.
 - AOS target management (via `aos-sync`).
 - Vault git tools (sync/status/log/diff/remote/check/setup).
-- Git auto-sync for AlphaOS-Vault/Vitaltrainer/FADARO (auto-commit + pull/push).
+- Git auto-sync for vault/Vitaltrainer/FADARO (auto-commit + pull/push).
 - FADARO git auto-sync (on demand).
 - FADARO auto-push timer: `fadaro-auto-push.timer` (22:30 daily).
 - FADARO rclone backup timer: `fadaro-rclone-push.timer` (weekly).

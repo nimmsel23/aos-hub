@@ -69,9 +69,9 @@ aos_env_resolve_file() {
 aos_env_default_vault_dir() {
   local -a candidates=(
     "${HOME}/vault"
-    "${HOME}/AlphaOS-Vault"
-    "${HOME}/Dokumente/AlphaOs-Vault"
-    "${HOME}/AlphaOs-Vault"
+    "${HOME}/vault"
+    "${HOME}/Dokumente/vault"
+    "${HOME}/vault"
   )
   local c
   for c in "${candidates[@]}"; do

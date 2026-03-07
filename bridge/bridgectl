@@ -112,9 +112,8 @@ doctor() {
   fi
   msg ""
 
-  local dev_unit="${AOS_BRIDGE_USER_SERVICE:-aos-bridge-dev.service}"
+  local dev_unit="${AOS_BRIDGE_USER_SERVICE:-aos-bridge.service}"
   local user_active="unknown"
-  local legacy_user_active="unknown"
   local sys_active="unknown"
   if has_cmd systemctl; then
     sys_active="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
@@ -122,7 +121,6 @@ doctor() {
   fi
   if systemctl --user show-environment >/dev/null 2>&1; then
     user_active="$(systemctl --user is-active "$dev_unit" 2>/dev/null || true)"
-    legacy_user_active="$(systemctl --user is-active "aos-bridge.service" 2>/dev/null || true)"
   fi
 
   msg "Systemd checks:"
@@ -140,10 +138,6 @@ doctor() {
     ui_info "user service inactive"
   else
     ui_warn "user service status unknown (no user bus)"
-  fi
-
-  if [[ "$legacy_user_active" == "active" && "$dev_unit" != "aos-bridge.service" ]]; then
-    ui_warn "legacy user service active: aos-bridge.service (migrate to $dev_unit)"
   fi
 
   if [[ "$sys_active" == "active" && "$user_active" == "active" ]]; then

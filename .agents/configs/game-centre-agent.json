@@ -34,12 +34,12 @@
       "router/extensions/firemap_commands.py (Telegram trigger)"
     ],
     "data": [
-      "~/AlphaOS-Vault/Game/Frame/ (Where am I now?)",
-      "~/AlphaOS-Vault/Game/IPW/ (10-year Ideal Parallel World)",
-      "~/AlphaOS-Vault/Game/Freedom/ (Annual vision)",
-      "~/AlphaOS-Vault/Game/Focus/ (Monthly mission)",
-      "~/AlphaOS-Vault/Game/Fire/ (Weekly war - 4×4 Hits)",
-      "~/AlphaOS-Vault/Alpha_Tent/ (Weekly summaries)"
+      "~/vault/Game/Frame/ (Where am I now?)",
+      "~/vault/Game/IPW/ (10-year Ideal Parallel World)",
+      "~/vault/Game/Freedom/ (Annual vision)",
+      "~/vault/Game/Focus/ (Monthly mission)",
+      "~/vault/Game/Fire/ (Weekly war - 4×4 Hits)",
+      "~/vault/Alpha_Tent/ (Weekly summaries)"
     ]
   },
   "triggers": [

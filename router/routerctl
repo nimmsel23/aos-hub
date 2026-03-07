@@ -30,7 +30,7 @@ source "$ROOT_DIR/scripts/ctl-lib.sh"
 # =========================
 # Router (aiogram bot)
 # =========================
-ROUTER_NAME="${ROUTER_NAME:-aos-router-dev}"
+ROUTER_NAME="${ROUTER_NAME:-aos-router}"
 ROUTER_DIR="${ROUTER_DIR:-$SCRIPT_DIR}"
 PY_ENTRY="${PY_ENTRY:-router_bot.py}"
 

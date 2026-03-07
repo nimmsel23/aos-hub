@@ -25,7 +25,7 @@
       "/bridge/example/*"
     ],
     "data": [
-      "~/AlphaOS-Vault/Example/"
+      "~/vault/Example/"
     ]
   },
   "triggers": [

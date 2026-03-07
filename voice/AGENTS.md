@@ -59,7 +59,7 @@ voice/
 [
   {
     "id": "VOICE-2026-02-09_1430",
-    "path": "/home/alpha/AlphaOs-Vault/VOICE/VOICE-2026-02-09_1430.md",
+    "path": "/home/alpha/vault/VOICE/VOICE-2026-02-09_1430.md",
     "mtime": "2026-02-09 14:30",
     "size": 12345,
     "title": "Pattern: Spiritual Bypassing"
@@ -211,7 +211,7 @@ Examples:
 
 **Primary:**
 ```
-~/AlphaOs-Vault/VOICE/
+~/vault/VOICE/
 ```
 
 **Fallback:**
@@ -351,7 +351,7 @@ voicectl list  # CLI shows all sessions (including agent-created)
 ### ❌ Don't hardcode paths
 ```bash
 # BAD
-cat ~/AlphaOs-Vault/VOICE/session.md
+cat ~/vault/VOICE/session.md
 
 # GOOD
 local vdir=$(get_voice_dir)

@@ -14,7 +14,7 @@ status() {
   msg "core4ctl status"
   msg ""
   msg "- core4: $CORE4_TRACKER"
-  msg "- vault: ${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+  msg "- vault: ${AOS_VAULT_DIR:-$HOME/vault}"
   msg "- local core4: $CORE4_LOCAL_DIR"
   msg ""
   "$CORE4_TRACKER" -d --quiet || true

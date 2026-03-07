@@ -8,7 +8,7 @@
 
 **Usage:**
 ```bash
-war_stack_create.sh ~/AlphaOS-Vault/Door/2-Plan/WS_Vitaltrainer_KW01.md
+war_stack_create.sh ~/vault/Door/2-Plan/WS_Vitaltrainer_KW01.md
 ```
 
 **What it does:**
@@ -43,7 +43,7 @@ war_stack_create.sh ~/AlphaOS-Vault/Door/2-Plan/WS_Vitaltrainer_KW01.md
 
 **Configuration:**
 ```bash
-export VAULT_PATH="$HOME/Dokumente/AlphaOs-Vault"
+export VAULT_PATH="$HOME/Dokumente/vault"
 export TICKTICK_API="$HOME/.dotfiles/scripts/utils/integrations/ticktick_api.sh"
 export SKIP_DOMINO_VALIDATION=1  # Skip Domino Door check
 ```
@@ -101,7 +101,7 @@ Creating Taskwarrior tasks...
 === War Stack Automation Complete ===
 
 Next steps:
-1. TickTick will sync to: ~/AlphaOS-Vault/Door/3-Production/
+1. TickTick will sync to: ~/vault/Door/3-Production/
 2. taskopen <uuid> to open files
 3. Complete Hits Mon-Thu (4 days)
 4. Sunday: General's Tent review

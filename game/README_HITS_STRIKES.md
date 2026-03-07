@@ -8,8 +8,8 @@
 
 Empfohlen (passt zu deiner Vault-Struktur):
 
-* `~/Dokumente/AlphaOs-Vault/GAME/README_HITS_STRIKES.md`
-* Optional Kurzlink: `~/Dokumente/AlphaOs-Vault/GAME/README_SCORE.md` → verlinkt auf die Datei oben
+* `~/Dokumente/vault/GAME/README_HITS_STRIKES.md`
+* Optional Kurzlink: `~/Dokumente/vault/GAME/README_SCORE.md` → verlinkt auf die Datei oben
 
 ---
 

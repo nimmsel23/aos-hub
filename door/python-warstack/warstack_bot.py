@@ -51,7 +51,7 @@ AOS_BRIDGE_TIMEOUT = int(os.getenv("AOS_BRIDGE_TIMEOUT", "5"))
 IDLE_TIMEOUT_SECONDS = int(os.getenv("WARSTACK_IDLE_TIMEOUT", "900"))
 
 # Paths
-OBSIDIAN_VAULT = Path(os.getenv("OBSIDIAN_VAULT", "~/AlphaOS-Vault")).expanduser()
+OBSIDIAN_VAULT = Path(os.getenv("OBSIDIAN_VAULT", "~/vault")).expanduser()
 WARSTACK_OUTPUT_DIR = Path(
     os.getenv("WARSTACK_OUTPUT_DIR", OBSIDIAN_VAULT / "Door" / "War-Stacks")
 )

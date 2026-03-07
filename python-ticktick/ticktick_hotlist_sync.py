@@ -18,7 +18,7 @@ Environment:
     TICKTICK_TOKEN               # TickTick API token
     HOT_TICKTICK_PROJECT_ID      # TickTick project ID (default: inbox)
     HOT_TICKTICK_TAG             # TickTick tag to filter (default: hot)
-    ALPHAOS_VAULT                # AlphaOS Vault path (default: ~/AlphaOS-Vault)
+    ALPHAOS_VAULT                # AlphaOS Vault path (default: ~/vault)
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def vault_path() -> Path:
     vault_str = os.getenv("ALPHAOS_VAULT", "").strip()
     if vault_str:
         return Path(vault_str).expanduser()
-    return Path.home() / "AlphaOS-Vault"
+    return Path.home() / "vault"
 
 
 def hot_dir() -> Path:

@@ -34,9 +34,7 @@ ReadOnlyPaths=%h/aos-hub/index-node
 ReadWritePaths=%h/.task
 ReadWritePaths=%h/.local/share/alphaos
 ReadWritePaths=%h/.alpha_os
-ReadWritePaths=%h/AlphaOS-Vault
-ReadWritePaths=%h/Dokumente/AlphaOs-Vault
-ReadWritePaths=%h/Dokumente/AlphaOS-Vault
+ReadWritePaths=%h/vault
 
 ProtectControlGroups=true
 ProtectKernelTunables=true

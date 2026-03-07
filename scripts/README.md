@@ -233,7 +233,7 @@ ln -s ~/aos-hub/python-ticktick/door_uuid_sync.py ~/.local/bin/door_uuid_sync
 ### Create War Stack via CLI
 ```bash
 cd ~/aos-hub/scripts/war-stack
-./war_stack_create.sh ~/AlphaOS-Vault/Door/2-Plan/WS_MyDoor_KW01.md
+./war_stack_create.sh ~/vault/Door/2-Plan/WS_MyDoor_KW01.md
 ```
 
 ### Sync Core4 to TickTick

@@ -44,8 +44,8 @@ DAILY GAME (Core + Voice + Door execution)
 - `router/extensions/firemap_commands.py` - Telegram `/fire` trigger
 
 **Data:**
-- `~/AlphaOS-Vault/Game/Frame/`, `/IPW/`, `/Freedom/`, `/Focus/`, `/Fire/`
-- `~/AlphaOS-Vault/Alpha_Tent/` - Weekly summaries
+- `~/vault/Game/Frame/`, `/IPW/`, `/Freedom/`, `/Focus/`, `/Fire/`
+- `~/vault/Alpha_Tent/` - Weekly summaries
 
 ## Core Responsibilities
 
@@ -70,7 +70,7 @@ Weekly review tool consolidating all 4 domains
 1. Fetch 4 active War Stacks from Door Centre
 2. Extract 4 Hits from each (16 total)
 3. Organize by domain (BODY/BEING/BALANCE/BUSINESS)
-4. Export to `~/AlphaOS-Vault/Game/Fire/fire-YYYY-Wxx.md`
+4. Export to `~/vault/Game/Fire/fire-YYYY-Wxx.md`
 
 **Handle Frame Change:**
 1. Detect Frame Map update (git log or user notification)

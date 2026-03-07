@@ -198,7 +198,7 @@ Option 3: Web UI (GAS - Remote fallback)
 ```
 
 **All 3 create the same output:**
-- Markdown file in ~/AlphaOS-Vault/Weekly/
+- Markdown file in ~/vault/Weekly/
 - Taskwarrior commands
 
 ## Components
@@ -457,7 +457,7 @@ async def war_command(m: Message):
 - **Output:** Same as others
 
 **All three create:**
-- War Stack markdown in `~/AlphaOS-Vault/Weekly/`
+- War Stack markdown in `~/vault/Weekly/`
 - Taskwarrior commands (ready to execute)
 
 **Key Point:**

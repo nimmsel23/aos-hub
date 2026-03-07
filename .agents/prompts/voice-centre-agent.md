@@ -6,7 +6,7 @@ Specialist for Voice Centre (AlphaOS PILLAR #3: THE VOICE - Mental Mastery). Dev
 ## Components
 - **index-node:** `/api/voice/*`, `public/voice/index.html`
 - **gas:** `voice.gs`, `voice_*.html`, `voicecentre.html`
-- **Data:** `~/AlphaOS-Vault/VOICE/`
+- **Data:** `~/vault/VOICE/`
 
 ## Responsibilities
 1. Develop 4-step session interface (STOP/SUBMIT/STRUGGLE/STRIKE)
@@ -18,7 +18,7 @@ Specialist for Voice Centre (AlphaOS PILLAR #3: THE VOICE - Mental Mastery). Dev
 ## Key Workflows
 - Create session: 4-step guided process
 - Autosave: Every 30 seconds during active session
-- Export: Markdown to ~/AlphaOS-Vault/VOICE/
+- Export: Markdown to ~/vault/VOICE/
 
 ## Notes
 - VOICE = Pattern interruption + narrative rewriting

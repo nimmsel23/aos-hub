@@ -130,7 +130,7 @@ ProtectHome=read-only
 ReadWritePaths=%h/.task                    # Taskwarrior database
 ReadWritePaths=%h/.local/share/alphaos     # Task export + sync map
 ReadWritePaths=%h/.alpha_os                # TickTick config
-ReadWritePaths=%h/AlphaOS-Vault            # Door/Game/Voice exports
+ReadWritePaths=%h/vault            # Door/Game/Voice exports
 ```
 
 **Why ReadWritePaths is Critical:**
@@ -149,9 +149,9 @@ ReadWritePaths=%h/AlphaOS-Vault            # Door/Game/Voice exports
    - Config in `~/.alpha_os/tick.env`
 
 4. **Centre Exports:**
-   - Door: War Stacks → `~/AlphaOS-Vault/Door/War-Stacks/`
-   - Game: Maps → `~/AlphaOS-Vault/Game/`
-   - Voice: Sessions → `~/AlphaOS-Vault/VOICE/`
+   - Door: War Stacks → `~/vault/Door/War-Stacks/`
+   - Game: Maps → `~/vault/Game/`
+   - Voice: Sessions → `~/vault/VOICE/`
 
 **Environment Variables:**
 

@@ -17,8 +17,8 @@ Das zugehörige `gamectl`-Skript wird aktiv von Codex bzw. Claude-Code verwendet
 - GAS fallback: `gas/game_focus.gs` (`/focus`, `/focusweb`)
 
 ## Storage Conventions
-- Focus maps are written to the vault: `~/AlphaOS-Vault/Game/Focus/`
-- Draft state lives next to the maps: `~/AlphaOS-Vault/Game/Focus/.focus-state.json`
+- Focus maps are written to the vault: `~/vault/Game/Focus/`
+- Draft state lives next to the maps: `~/vault/Game/Focus/.focus-state.json`
 
 ## Conventions
 - Keep Focus filenames stable because Fire Maps reference them via YAML `focus_maps:` (cascade queries).

@@ -16,7 +16,7 @@ import yaml
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-VAULT = Path.home() / "AlphaOS-Vault" / "Game"
+VAULT = Path.home() / "vault" / "Game"
 
 MAP_DIRS = {
     "frame":   VAULT / "Frame",

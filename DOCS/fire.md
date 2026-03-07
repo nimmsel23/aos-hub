@@ -192,7 +192,7 @@ When you create your first Fire Map, you might be **surprised by how simple it i
                        v
 ┌────────────────────────────────────────────────────────────┐
 │ Fire Map Files (canonical format)                          │
-│ ~/AlphaOS-Vault/Game/Fire/FIRE_MAP_<DOMAIN>_KW<WW>.md      │
+│ ~/vault/Game/Fire/FIRE_MAP_<DOMAIN>_KW<WW>.md      │
 └───────────────────────────┬────────────────────────────────┘
                             │
                             │ firemap sync / fire-to-tasks.sh
@@ -314,7 +314,7 @@ When you create your first Fire Map, you might be **surprised by how simple it i
 #### Storage (Node.js)
 
 **Vault:**
-- `~/AlphaOS-Vault/Game/Fire/` (local markdown files)
+- `~/vault/Game/Fire/` (local markdown files)
 - Format: `FIRE_MAP_<DOMAIN>_KW<WW>_<YYYY>.md`
 
 #### API Endpoints (Node.js)
@@ -546,7 +546,7 @@ task +fire scheduled:today list
 
 ```bash
 # 1. Create Fire Map markdown
-vim ~/AlphaOS-Vault/Game/Fire/FIRE_MAP_Business_KW02_2026.md
+vim ~/vault/Game/Fire/FIRE_MAP_Business_KW02_2026.md
 
 # 2. Sync to Taskwarrior
 firemap sync
@@ -630,7 +630,7 @@ ls ~/.task/hooks/on-exit.alphaos.py
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [index-node/README.md](../index-node/README.md) - Node.js server docs
 - [game/python-firemap/README.md](../game/python-firemap/README.md) - Fire Map Bot
-- [AlphaOS-THE-GAME.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Game philosophy
+- [AlphaOS-THE-GAME.md](~/Dokumente/vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Game philosophy
 
 ---
 

@@ -7,7 +7,7 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-VAULT_PATH="${VAULT_PATH:-$HOME/Dokumente/AlphaOs-Vault}"
+VAULT_PATH="${VAULT_PATH:-$HOME/Dokumente/vault}"
 PLAN_DIR="$VAULT_PATH/Door/2-Plan"
 PRODUCTION_DIR="$VAULT_PATH/Door/3-Production"
 LOG_FILE="${LOG_FILE:-$HOME/.dotfiles/logs/door-automation.log}"
@@ -245,7 +245,7 @@ create_door_ticktick_mapping() {
         return 0
     fi
 
-    local map_file="$HOME/AlphaOS-Vault/.alphaos/door_ticktick_map.json"
+    local map_file="$HOME/vault/.alphaos/door_ticktick_map.json"
     mkdir -p "$(dirname "$map_file")"
 
     # Load existing map or create new

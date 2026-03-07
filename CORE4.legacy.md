@@ -31,8 +31,8 @@ See also: `DOCS/CORE4_SYSTEM.md` (end-to-end mental model, all components + data
 
 **Source of Truth:** append-only event ledger (one file per habit per day)
 **Location (local):**
-- `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json` (primary write target)
-- `~/AlphaOS-Vault/Alpha_Core4/.core4/events/...` (pulled/mounted from GDrive)
+- `~/vault/Core4/.core4/events/YYYY-MM-DD/*.json` (primary write target)
+- `~/vault/Alpha_Core4/.core4/events/...` (pulled/mounted from GDrive)
 
 **Derived artifacts (rebuildable):**
 - `core4_day_YYYY-MM-DD.json`
@@ -333,7 +333,7 @@ Writes a Core4 event to the local `.core4/events` ledger (idempotent merge-by-ke
 **Flow:**
 1. Canonicalize task (`partner→person1`, `posterity→person2`)
 2. Infer domain if missing
-3. Write JSON event to `~/AlphaOS-Vault/Core4/.core4/events/...` (derived day/week JSON is rebuildable)
+3. Write JSON event to `~/vault/Core4/.core4/events/...` (derived day/week JSON is rebuildable)
 4. Fire-and-forget: find pending TW task + mark done
    - Live query: `task +{habit} due:{date} status:pending uuids`
    - Execute: `task {uuid} done`
@@ -361,7 +361,7 @@ Returns today's habit completion status.
 
 #### Other endpoints:
 - `GET /bridge/core4/week?week=2026-W06` — Full week data
-- `POST /bridge/core4/pull` — Pull `.core4/**` from GDrive into `~/AlphaOS-Vault/Alpha_Core4`, then rebuild locally
+- `POST /bridge/core4/pull` — Pull `.core4/**` from GDrive into `~/vault/Alpha_Core4`, then rebuild locally
 
 **Key Internals:**
 - `_core4_canon_task(task)` — Normalizes habit names
@@ -514,7 +514,7 @@ core4_actions:
        ▼
 ┌────────────────────────────────────┐
 │ Event ledger append (SoT)          │
-│ ~/AlphaOS-Vault/*Core4/.core4/     │
+│ ~/vault/*Core4/.core4/     │
 │   events/YYYY-MM-DD/*.json         │
 └────────────────────────────────────┘
 ```
@@ -567,7 +567,7 @@ Bridge: write event + create_task(complete_tw_task)
 - `gas/core4.gs` — GAS Core4 centre (single GAS project)
 - `router/extensions/core4_actions.py` — Optional router shortcuts
 
-### Data (~/AlphaOS-Vault/)
+### Data (~/vault/)
 - `Core4/.core4/events/YYYY-MM-DD/*.json` — Event ledger (SoT, append-only)
 - `Alpha_Core4/.core4/events/...` — Event ledger (GDrive mount, pulled)
 - `Core4/core4_week_YYYY-Wxx.json` — Derived week snapshot (rebuildable)

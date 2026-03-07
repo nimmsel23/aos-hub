@@ -597,7 +597,7 @@ energy_roi: 8
    - Keep history of all selections
 
 3. **War Stack YAML location:** ✅ **DECIDED: `3-Production/`**
-   - Path: `~/AlphaOS-Vault/Door/3-Production/war-stacks/`
+   - Path: `~/vault/Door/3-Production/war-stacks/`
    - Phase-specific storage (not separate root folder)
    - Follows 1→2→3→4 folder structure
 

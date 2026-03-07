@@ -33,7 +33,7 @@ Build **General's Tent Strategic Intelligence System** that provides:
   - Scans VOICE sessions
   - Scans Core4 metrics
 - ✅ Helper functions: `scanForMap()`, `scanForFireMap()`, `scanForVoiceSessions()`, etc.
-- ✅ Storage: `~/AlphaOS-Vault/.states/{DOMAIN}.json`
+- ✅ Storage: `~/vault/.states/{DOMAIN}.json`
 
 **Synthesis Engines:**
 - ✅ **Cross-Domain Synthesis** (`synthesizeCrossDomain()`)
@@ -392,7 +392,7 @@ cd ~/aos-hub/bridge
 ### 2. **Domain-State Initialization** (AFTER tent.html)
 ```bash
 curl -X POST http://127.0.0.1:8799/api/tent/init
-ls ~/AlphaOS-Vault/.states/
+ls ~/vault/.states/
 ```
 - **ETA:** 5 minutes
 

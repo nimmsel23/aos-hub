@@ -134,7 +134,7 @@ core4ctl status             # Today + Week + Streaks
 
 ### Location
 ```
-~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json
+~/vault/Alpha_Core4/core4_week_YYYY-Wxx.json
 ```
 
 ### Schema
@@ -301,7 +301,7 @@ done
 **Streaks not calculating:**
 - Streaks go backwards from today
 - Missing week files = broken streak
-- Check data with: `cat ~/AlphaOS-Vault/Alpha_Core4/core4_week_*.json | jq`
+- Check data with: `cat ~/vault/Alpha_Core4/core4_week_*.json | jq`
 
 **Wrong habit names:**
 - Use exact names: fitness, fuel, meditation, memoirs, person1, person2, discover, declare
@@ -310,7 +310,7 @@ done
 ## Environment
 
 ```bash
-export AOS_VAULT_DIR=~/AlphaOS-Vault    # Vault location
+export AOS_VAULT_DIR=~/vault    # Vault location
 ```
 
 ## Dependencies

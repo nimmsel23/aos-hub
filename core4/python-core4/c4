@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # c4 — Fast Core4 status reader (event ledger → terminal)
-# Reads directly from ~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json
+# Reads directly from ~/vault/Core4/.core4/events/YYYY-MM-DD/*.json
 # No bridge dependency, no timeout issues.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"

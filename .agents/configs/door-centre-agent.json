@@ -33,11 +33,11 @@
       "/bridge/warstack/draft (draft persistence for /resume)"
     ],
     "data": [
-      "~/AlphaOS-Vault/Door/1-Potential/ (Hot List)",
-      "~/AlphaOS-Vault/Door/2-Plan/ (Door War)",
-      "~/AlphaOS-Vault/Door/War-Stacks/ (War Stacks)",
-      "~/AlphaOS-Vault/Door/3-Production/ (Hit List)",
-      "~/AlphaOS-Vault/Door/4-Profit/ (Profit reflections)"
+      "~/vault/Door/1-Potential/ (Hot List)",
+      "~/vault/Door/2-Plan/ (Door War)",
+      "~/vault/Door/War-Stacks/ (War Stacks)",
+      "~/vault/Door/3-Production/ (Hit List)",
+      "~/vault/Door/4-Profit/ (Profit reflections)"
     ]
   },
   "triggers": [

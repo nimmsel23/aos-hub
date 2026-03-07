@@ -7,7 +7,7 @@ Specialist for Fruits Centre (daily knowledge capture). Manages both gas single 
 - **index-node:** `/api/fruits/*`, `public/facts.html`, `data/fruits_questions.json`
 - **gas:** `fruits.gs` (single) + `fruits-standalone/` (codex deployed with Code.js, client.html, utils.js)
 - **bridge:** `/bridge/fruits/answer`
-- **Data:** `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`, `*.md`
+- **Data:** `~/vault/Game/Fruits/fruits_store.json`, `*.md`
 
 ## Responsibilities
 1. Develop Fruits UI (index-node + gas single + standalone)

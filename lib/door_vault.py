@@ -3,10 +3,10 @@ Door Vault helpers — paths + Taskwarrior backend.
 Adapted from alpha_door_module.py (legacy).
 
 Vault structure:
-  ~/AlphaOS-Vault/Door/1-Potential/   Hot List (monthly md log)
-  ~/AlphaOS-Vault/Door/War-Stacks/    War Stacks (KW-based YAML)
-  ~/AlphaOS-Vault/Door/3-Production/  Hit List exports
-  ~/AlphaOS-Vault/Door/4-Profit/      Achieved exports
+  ~/vault/Door/1-Potential/   Hot List (monthly md log)
+  ~/vault/Door/War-Stacks/    War Stacks (KW-based YAML)
+  ~/vault/Door/3-Production/  Hit List exports
+  ~/vault/Door/4-Profit/      Achieved exports
 """
 
 import json
@@ -15,7 +15,7 @@ import yaml
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-VAULT = Path.home() / "AlphaOS-Vault" / "Door"
+VAULT = Path.home() / "vault" / "Door"
 
 DIRS = {
     "potential":   VAULT / "1-Potential",

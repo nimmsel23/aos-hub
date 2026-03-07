@@ -7,22 +7,16 @@ ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 # shellcheck disable=SC1090
 source "$APP_DIR/bridge-lib.sh"
 
-SERVICE_NAME="${AOS_BRIDGE_USER_SERVICE:-aos-bridge-dev.service}"
+SERVICE_NAME="${AOS_BRIDGE_USER_SERVICE:-aos-bridge.service}"
 SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
-SERVICE_PATH_SYSTEM="$ROOT_DIR/systemd/$SERVICE_NAME"
-if [[ -f "$SERVICE_PATH_USER" ]]; then
-  SERVICE_PATH="$SERVICE_PATH_USER"
-elif [[ -f "$ROOT_DIR/systemd/user/aos-bridge.service" ]]; then
-  # Backward compatibility while migrating from legacy user unit names.
-  SERVICE_NAME="aos-bridge.service"
-  SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
-  SERVICE_PATH="$SERVICE_PATH_USER"
-else
-  SERVICE_PATH="$SERVICE_PATH_SYSTEM"
-fi
+SERVICE_PATH="$SERVICE_PATH_USER"
 USER_SERVICE_DIR="$HOME/.config/systemd/user"
 
 AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
+
+if [[ ! -f "$SERVICE_PATH" ]]; then
+  die "missing user unit file: $SERVICE_PATH"
+fi
 
 systemctl_user() { systemctl --user "$@"; }
 

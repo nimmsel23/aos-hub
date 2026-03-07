@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Environment
 VOICE_DIR="${AOS_VAULT_DIR:-$HOME/vault}/Voice"
-VOICE_FALLBACK_DIR="$HOME/AlphaOs-Vault/VOICE"
+VOICE_FALLBACK_DIR="$HOME/vault/VOICE"
 
 # Determine voice directory
 get_voice_dir() {

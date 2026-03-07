@@ -45,7 +45,7 @@ git_autosync_all() {
     local repo
     repo="$(vault_git_repo)" || true
     if [ -n "${repo:-}" ]; then
-        git_auto_sync_repo "$repo" "AlphaOs-Vault"
+        git_auto_sync_repo "$repo" "vault"
     fi
     repo="$(vitaltrainer_git_repo)" || true
     if [ -n "${repo:-}" ]; then
@@ -57,13 +57,13 @@ git_autosync_all() {
 vault_git_sync() {
     local repo
     repo="$(vault_git_repo)" || { print_msg "$RED" "Vault repo not found"; return 1; }
-    git_autosync_repo "AlphaOs-Vault" "$repo"
+    git_autosync_repo "vault" "$repo"
 }
 
 vault_git_status() {
     local repo
     repo="$(vault_git_repo)" || { print_msg "$RED" "Vault repo not found"; return 1; }
-    print_msg "$GREEN" "AlphaOS-Vault Status:"
+    print_msg "$GREEN" "vault Status:"
     echo ""
     git -C "$repo" status
 }
@@ -120,8 +120,8 @@ vault_git_setup() {
     echo ""
     echo "This will create a private repository on GitHub."
     echo ""
-    read -r -p "Repository name (default: AlphaOS-Vault): " repo_name
-    repo_name=${repo_name:-AlphaOS-Vault}
+    read -r -p "Repository name (default: vault): " repo_name
+    repo_name=${repo_name:-vault}
     gh repo create "$repo_name" --private --source="$repo" --remote=origin --push
 }
 
@@ -194,7 +194,7 @@ menu_fadaro_push() {
 }
 
 menu_vault_push() {
-    if ! confirm_action "Run AlphaOS-Vault git auto-sync now?"; then
+    if ! confirm_action "Run vault git auto-sync now?"; then
         return 0
     fi
     vault_git_sync
@@ -253,7 +253,7 @@ fallback_git_status() {
     vital_repo="$(vitaltrainer_git_repo || true)"
     fadaro_repo="${AOS_FADARO_DIR:-$HOME/Dokumente/BUSINESS/FADARO}"
     fallback_repo_status_line "AOS-HUB" "$ROOT_DIR"
-    fallback_repo_status_line "AlphaOS-Vault" "$vault_repo"
+    fallback_repo_status_line "vault" "$vault_repo"
     fallback_repo_status_line "Vitaltrainer" "$vital_repo"
     fallback_repo_status_line "FADARO" "$fadaro_repo"
 }

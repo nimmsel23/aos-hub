@@ -3,65 +3,159 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0c0f" />
+  <meta name="theme-color" content="#091523" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>αOS · DOOR CTX</title>
+  <title>The Door Hub</title>
   <link rel="manifest" href="/pwa/door/manifest.json" />
   <link rel="apple-touch-icon" href="/pwa/door/icon-192.svg" />
-  <link rel="stylesheet" href="/pwa/door/style.css" />
+  <link rel="stylesheet" href="/pwa/door/hub.css" />
 </head>
 <body>
+  <div class="backdrop" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="orb orb-c"></div>
+    <div class="grid-glow"></div>
+  </div>
 
-  <!-- App header -->
-  <header class="appbar">
-    <span class="app-title">DOOR CTX</span>
-    <span class="app-phase" id="appPhase">POTENTIAL · 1-Potential</span>
-  </header>
+  <main class="hub-shell">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="eyebrow">AlphaOS Shared App</span>
+        <h1>The Door</h1>
+        <p class="subtitle">Hub first. Four installable phase apps behind it.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="action ghost" id="refreshBtn" type="button">Refresh</button>
+        <button class="action primary" id="installBtn" type="button" hidden>Install</button>
+      </div>
+    </header>
 
-  <main class="wrap">
-    <!-- Phase content (dynamically rendered) -->
-    <section id="content" class="content"></section>
+    <section class="hero card">
+      <div class="hero-copy">
+        <span class="eyebrow">4P Flow</span>
+        <h2>One command room. Four execution surfaces.</h2>
+        <p>
+          Potential captures, Plan triages, Production executes, Profit closes the loop.
+          The hub stays shared. The work happens inside the dedicated phase apps.
+        </p>
+      </div>
+      <div class="hero-status">
+        <div class="signal-row">
+          <span class="signal-dot" id="onlineDot"></span>
+          <span id="onlineLabel">Checking connection…</span>
+        </div>
+        <div class="meta-line" id="updatedLabel">Snapshot pending</div>
+        <div class="meta-line" id="summaryLine">Loading Door telemetry…</div>
+      </div>
+    </section>
+
+    <section class="phase-grid" aria-label="Door phases">
+      <article class="phase-card phase-potential card" data-route="/pwa/potential/">
+        <div class="phase-head">
+          <span class="phase-index">P1</span>
+          <span class="phase-state" id="potentialState">ACTIVE</span>
+        </div>
+        <h3>Potential</h3>
+        <p>Hot List intake and capture.</p>
+        <div class="big-metric" id="potentialCount">0</div>
+        <div class="phase-meta" id="potentialMeta">Active ideas</div>
+        <button class="launch" type="button">Open Potential</button>
+      </article>
+
+      <article class="phase-card phase-plan card" data-route="/pwa/plan/">
+        <div class="phase-head">
+          <span class="phase-index">P2</span>
+          <span class="phase-state" id="planState">TRIAGE</span>
+        </div>
+        <h3>Plan</h3>
+        <p>Door War, quadrant control, and War Stack.</p>
+        <div class="big-metric" id="planCount">0</div>
+        <div class="phase-meta" id="planMeta">Triaged entries</div>
+        <button class="launch" type="button">Open Plan</button>
+      </article>
+
+      <article class="phase-card phase-production card" data-route="/pwa/production/">
+        <div class="phase-head">
+          <span class="phase-index">P3</span>
+          <span class="phase-state" id="productionState">EXECUTE</span>
+        </div>
+        <h3>Production</h3>
+        <p>Actionable work currently in motion.</p>
+        <div class="big-metric" id="productionCount">0</div>
+        <div class="phase-meta" id="productionMeta">Open hits</div>
+        <button class="launch" type="button">Open Production</button>
+      </article>
+
+      <article class="phase-card phase-profit card" data-route="/pwa/profit/">
+        <div class="phase-head">
+          <span class="phase-index">P4</span>
+          <span class="phase-state" id="profitState">REVIEW</span>
+        </div>
+        <h3>Profit</h3>
+        <p>Completed doors and reflections.</p>
+        <div class="big-metric" id="profitCount">0</div>
+        <div class="phase-meta" id="profitMeta">Completed doors</div>
+        <button class="launch" type="button">Open Profit</button>
+      </article>
+    </section>
+
+    <section class="telemetry-grid">
+      <article class="telemetry card">
+        <div class="panel-head">
+          <span class="eyebrow">Plan Signal</span>
+          <h3>Quadrant Radar</h3>
+        </div>
+        <div class="quadrant-grid" id="quadrantGrid">
+          <div class="quadrant"><span>Q1</span><strong>0</strong><small>Critical</small></div>
+          <div class="quadrant"><span>Q2</span><strong>0</strong><small>Strategic</small></div>
+          <div class="quadrant"><span>Q3</span><strong>0</strong><small>Reactive</small></div>
+          <div class="quadrant"><span>Q4</span><strong>0</strong><small>Noise</small></div>
+        </div>
+        <p class="telemetry-note" id="planSignalNote">No plan signal yet.</p>
+      </article>
+
+      <article class="telemetry card">
+        <div class="panel-head">
+          <span class="eyebrow">Execution Pulse</span>
+          <h3>Current Pressure</h3>
+        </div>
+        <div class="pulse-stack">
+          <div class="pulse-row">
+            <span>Untriaged</span>
+            <strong id="untriagedCount">0</strong>
+          </div>
+          <div class="pulse-row">
+            <span>Open hits</span>
+            <strong id="openHitsCount">0</strong>
+          </div>
+          <div class="pulse-row">
+            <span>Completed doors</span>
+            <strong id="completedDoorsCount">0</strong>
+          </div>
+        </div>
+        <p class="telemetry-note" id="pulseNote">Waiting for live data.</p>
+      </article>
+
+      <article class="telemetry card">
+        <div class="panel-head">
+          <span class="eyebrow">Launch Board</span>
+          <h3>Install Routes</h3>
+        </div>
+        <ul class="route-list">
+          <li><code>/pwa/potential/</code></li>
+          <li><code>/pwa/plan/</code></li>
+          <li><code>/pwa/production/</code></li>
+          <li><code>/pwa/profit/</code></li>
+        </ul>
+        <p class="telemetry-note">The Door Hub stays shared. Each phase installs on its own scope.</p>
+      </article>
+    </section>
   </main>
 
-  <!-- Bottom Nav: 4P Flow -->
-  <nav class="bottomnav">
-    <button class="bn-btn active" data-phase="potential">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>POTENTIAL</span>
-    </button>
-    <button class="bn-btn" data-phase="plan">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="12" y1="18" x2="12" y2="12"/>
-        <line x1="9" y1="15" x2="15" y2="15"/>
-      </svg>
-      <span>PLAN</span>
-    </button>
-    <button class="bn-btn" data-phase="production">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="9 11 12 14 22 4"/>
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-      </svg>
-      <span>PRODUCTION</span>
-    </button>
-    <button class="bn-btn" data-phase="profit">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-        <polyline points="22 4 12 14.01 9 11.01"/>
-      </svg>
-      <span>PROFIT</span>
-    </button>
-  </nav>
-
-  <script src="/pwa/gas-fallback.js"></script>
-  <script src="/pwa/door/app.js"></script>
+  <script src="/pwa/door/hub.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/pwa/door/sw.js", { scope: "/pwa/door/" });

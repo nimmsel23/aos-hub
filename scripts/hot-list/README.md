@@ -12,7 +12,7 @@ hot_to_md.sh <UUID> "<DESCRIPTION>"
 ```
 
 **What it does:**
-1. Creates markdown file in `~/AlphaOS-Vault/Door/1-Potential/`
+1. Creates markdown file in `~/vault/Door/1-Potential/`
 2. Filename: `YYYY-MM-DD-<slug>.md`
 3. Annotates Taskwarrior task with `file://` link
 4. Opens file in `$EDITOR`

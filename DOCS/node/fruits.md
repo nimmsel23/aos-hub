@@ -14,8 +14,8 @@ Important rule: do not share a Telegram bot token between Router and any GAS bot
 
 ## Storage
 - Questions JSON: `data/fruits_questions.json`
-- Store JSON: `FRUITS_STORE` (default `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`)
-- Export dir: `FRUITS_EXPORT_DIR` (default `~/AlphaOS-Vault/Game/Fruits`)
+- Store JSON: `FRUITS_STORE` (default `~/vault/Game/Fruits/fruits_store.json`)
+- Export dir: `FRUITS_EXPORT_DIR` (default `~/vault/Game/Fruits`)
 
 ## API (Node)
 - `GET /api/fruits`

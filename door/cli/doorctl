@@ -35,7 +35,7 @@ source "$DOOR_DIR/lib/door_health.sh"
 source "$DOOR_DIR/lib/door_format.sh"
 
 # Config
-VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
 STALLED_DAYS="${AOS_DOOR_STALLED_DAYS:-7}"
 ATTENTION_DAYS="${AOS_DOOR_ATTENTION_DAYS:-3}"
 TASK_BIN="${TASK_BIN:-task}"
@@ -2402,7 +2402,7 @@ Examples:
   doorctl ctx open
 
 Config (env vars):
-  AOS_VAULT_DIR           Vault location (default: ~/AlphaOS-Vault)
+  AOS_VAULT_DIR           Vault location (default: ~/vault)
   AOS_DOOR_STALLED_DAYS   Days before door is stalled (default: 7)
   AOS_DOOR_ATTENTION_DAYS Days before door needs attention (default: 3)
   AOS_DOOR_CURRENT_FILE   Active Door file (default: ~/.aos/door.current)

@@ -25,7 +25,7 @@ STORE_JSON = Path(
         os.environ.get(
             "CREATORKING_STORE",
             os.path.expanduser(
-                "~/AlphaOS-Vault/AlphaOS/Centres/Alpha_CreatorKing/creatorking_store.json"
+                "~/vault/AlphaOS/Centres/Alpha_CreatorKing/creatorking_store.json"
             ),
         ),
     )

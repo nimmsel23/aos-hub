@@ -20,7 +20,7 @@ declare -A SYS_SERVICES=(
 declare -A USER_SERVICES=(
   [index]="aos-index-dev.service"
   [router]="aos-router-dev.service"
-  [bridge]="aos-bridge-dev.service"
+  [bridge]="aos-bridge.service"
 )
 
 _svc_active_sys()  { systemctl is-active --quiet "$1" 2>/dev/null; }

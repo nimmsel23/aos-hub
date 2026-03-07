@@ -7,7 +7,7 @@
   "created": "2026-01-15",
   "updated": "2026-01-15",
   "purpose": "Wurmloch management (rclone + systemd sync between local and cloud)",
-  "description": "Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/AlphaOS-Vault (local) and GDrive (cloud). Handles pull/push/bisync modes, systemd timers, mount operations.",
+  "description": "Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/vault (local) and GDrive (cloud). Handles pull/push/bisync modes, systemd timers, mount operations.",
   "components": {
     "scripts": [
       "index-node/scripts/vault-sync.sh (pull, push, bisync modes)"
@@ -19,7 +19,7 @@
       "alphaos-vault-sync-push.service"
     ],
     "rclone": [
-      "rclone mount (GDrive → ~/AlphaOS-Vault)",
+      "rclone mount (GDrive → ~/vault)",
       "rclone config (remote: gdrive)"
     ]
   },

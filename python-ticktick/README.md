@@ -27,7 +27,7 @@ Unified sync helper for Core4 between Taskwarrior and TickTick.
 Mapping file lives in:
 
 ```
-~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json
+~/vault/.alphaos/core4_ticktick_map.json
 ```
 
 A symlink is created to:

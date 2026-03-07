@@ -110,9 +110,10 @@ ensure_env_file() {
 # AOS_INDEX_URL=http://127.0.0.1:8799/api/centres
 #
 # Task export snapshot (on-exit)
+# AOS_TASK_EXPORT_ENABLE=1
 # AOS_TASK_EXPORT_FILTER=status:pending
 # AOS_TASK_EXPORT_PATH=$HOME/.local/share/alphaos/task_export.json
-# AOS_TASK_EXPORT_VAULT_PATH=$HOME/AlphaOS-Vault/.alphaos/task_export.json
+# AOS_TASK_EXPORT_VAULT_PATH=$HOME/vault/.alphaos/task_export.json
 # AOS_TASK_EXPORT_COPY_TO_VAULT=1
 # AOS_TASK_EXPORT_MIN_INTERVAL_SEC=15
 EOF
@@ -234,6 +235,7 @@ cmd_status() {
   ui_info "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
   ui_info "AOS_HOOK_TELE_INCLUDE_UUID=$(read_env_value AOS_HOOK_TELE_INCLUDE_UUID)"
   ui_info "AOS_HOOK_SKIP_MODIFY=$(read_env_value AOS_HOOK_SKIP_MODIFY)"
+  ui_info "AOS_TASK_EXPORT_ENABLE=$(read_env_value AOS_TASK_EXPORT_ENABLE)"
   ui_info "AOS_TASK_EXPORT_MIN_INTERVAL_SEC=$(read_env_value AOS_TASK_EXPORT_MIN_INTERVAL_SEC)"
 }
 
@@ -281,6 +283,38 @@ cmd_set_silent() {
   ui_ok "AOS_HOOK_TELE_SILENT=$(read_env_value AOS_HOOK_TELE_SILENT)"
 }
 
+cmd_set_export_interval() {
+  local seconds="${1:-}"
+  if [[ -z "$seconds" ]]; then
+    if has_gum; then
+      seconds="$(gum input --placeholder "60" --prompt "Export interval sec > ")"
+      seconds="${seconds:-60}"
+    else
+      ui_err "Usage: hookctl set-export-interval <seconds>"
+      exit 1
+    fi
+  fi
+  if [[ ! "$seconds" =~ ^[0-9]+$ ]]; then
+    ui_err "Invalid interval: $seconds (must be an integer >= 0)"
+    exit 1
+  fi
+  set_env_kv "AOS_TASK_EXPORT_MIN_INTERVAL_SEC" "$seconds"
+  ui_ok "AOS_TASK_EXPORT_MIN_INTERVAL_SEC=$seconds"
+}
+
+cmd_set_export_enabled() {
+  local val="${1:-}"
+  if [[ -z "$val" ]]; then
+    val="$(ui_choose "Export snapshot" "on" "off")"
+  fi
+  case "$val" in
+    on|1|true|yes) set_env_kv "AOS_TASK_EXPORT_ENABLE" "1" ;;
+    off|0|false|no) set_env_kv "AOS_TASK_EXPORT_ENABLE" "0" ;;
+    *) ui_err "Invalid value: $val (use on|off)"; exit 1 ;;
+  esac
+  ui_ok "AOS_TASK_EXPORT_ENABLE=$(read_env_value AOS_TASK_EXPORT_ENABLE)"
+}
+
 cmd_disable_legacy() {
   ui_title "Disable Legacy Hooks"
   local disabled_dir="$HOOK_DIR/disabled"
@@ -299,6 +333,72 @@ cmd_disable_legacy() {
   if [[ "$found" == "0" ]]; then
     ui_ok "no extra hooks to disable"
   fi
+}
+
+cmd_bench() {
+  need_cmd task
+  local args=("$@")
+  if [[ "${#args[@]}" -eq 0 ]]; then
+    args=("+PENDING" "count")
+  fi
+
+  ui_title "Hook Benchmark"
+  ui_info "task ${args[*]}"
+
+  python3 - "${args[@]}" <<'PY'
+import statistics
+import subprocess
+import sys
+import time
+
+args = sys.argv[1:] or ["+PENDING", "count"]
+runs = 3
+
+def measure(extra):
+    vals = []
+    for _ in range(runs):
+        t0 = time.perf_counter()
+        p = subprocess.run(["task", *extra, *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        dt = time.perf_counter() - t0
+        vals.append((dt, p.returncode))
+    return vals
+
+on_vals = measure([])
+off_vals = measure(["rc.hooks=0"])
+
+if any(code != 0 for _, code in on_vals + off_vals):
+    print("ERR benchmark command failed (non-zero exit code)")
+    sys.exit(1)
+
+on_times = [t for t, _ in on_vals]
+off_times = [t for t, _ in off_vals]
+on_avg = statistics.mean(on_times)
+off_avg = statistics.mean(off_times)
+delta = on_avg - off_avg
+ratio = (on_avg / off_avg) if off_avg > 0 else 0.0
+
+print(f"hooks=on  avg={on_avg:.3f}s runs={', '.join(f'{x:.3f}' for x in on_times)}")
+print(f"hooks=off avg={off_avg:.3f}s runs={', '.join(f'{x:.3f}' for x in off_times)}")
+print(f"overhead  +{delta:.3f}s ({ratio:.2f}x)")
+PY
+}
+
+cmd_doctor() {
+  ui_title "Hook Doctor"
+  cmd_status
+  echo
+  ui_info "Taskwarrior diagnostics"
+  if command -v task >/dev/null 2>&1; then
+    task diagnostics | awk '
+      /^Hooks$/ { in_hooks=1; print; next }
+      in_hooks && NF==0 { print; in_hooks=0; next }
+      in_hooks { print }
+    '
+  else
+    ui_warn "task binary not found; skipping diagnostics"
+  fi
+  echo
+  cmd_bench "+PENDING" "count"
 }
 
 cmd_preview() {
@@ -395,11 +495,15 @@ Usage:
 Commands:
   install           Install hooks into ~/.task/hooks
   status            Show hook status + env flags
+  doctor            Full diagnostics (status + task diagnostics + benchmark)
+  bench [task ...]  Compare task runtime with/without hooks
   disable-legacy    Disable extra executable hooks (avoid duplicates)
   env               Edit hooks.env
   set-target [t]    Set AOS_HOOK_TARGET (tele|bridge)
   set-format [f]    Set AOS_HOOK_TELE_FORMAT (human|json)
   set-silent [v]    Set AOS_HOOK_TELE_SILENT (on|off)
+  set-export [v]    Set AOS_TASK_EXPORT_ENABLE (on|off)
+  set-export-interval <sec>  Set AOS_TASK_EXPORT_MIN_INTERVAL_SEC
   preview [kind]    Show formatted message (add|modify|core4)
   version           Show version
   menu              Interactive menu
@@ -408,7 +512,11 @@ Commands:
 Examples:
   hookctl install
   hookctl disable-legacy
+  hookctl doctor
+  hookctl bench +PENDING count
   hookctl set-format human
+  hookctl set-export off
+  hookctl set-export-interval 60
   hookctl set-silent on
   hookctl preview modify
 EOF
@@ -420,21 +528,29 @@ menu() {
   action="$(ui_choose "Select" \
     "install hooks" \
     "status" \
+    "doctor" \
+    "benchmark" \
     "disable legacy" \
     "edit env" \
     "set target" \
     "set format" \
     "set silent" \
+    "set export on/off" \
+    "set export interval" \
     "preview" \
     "quit")"
   case "$action" in
     "install hooks") cmd_install ;;
     "status") cmd_status ;;
+    "doctor") cmd_doctor ;;
+    "benchmark") cmd_bench ;;
     "disable legacy") cmd_disable_legacy ;;
     "edit env") cmd_env ;;
     "set target") cmd_set_target ;;
     "set format") cmd_set_format ;;
     "set silent") cmd_set_silent ;;
+    "set export on/off") cmd_set_export_enabled ;;
+    "set export interval") cmd_set_export_interval ;;
     "preview") cmd_preview ;;
     "quit") exit 0 ;;
     *) exit 0 ;;
@@ -445,11 +561,15 @@ cmd="${1:-menu}"
 case "$cmd" in
   install) cmd_install ;;
   status) cmd_status ;;
+  doctor) cmd_doctor ;;
+  bench) shift; cmd_bench "$@" ;;
   disable-legacy) cmd_disable_legacy ;;
   env) cmd_env ;;
   set-target) cmd_set_target "${2:-}" ;;
   set-format) cmd_set_format "${2:-}" ;;
   set-silent) cmd_set_silent "${2:-}" ;;
+  set-export) cmd_set_export_enabled "${2:-}" ;;
+  set-export-interval) cmd_set_export_interval "${2:-}" ;;
   preview) cmd_preview "${2:-modify}" ;;
   version) echo "$HOOKCTL_VERSION" ;;
   menu) menu ;;

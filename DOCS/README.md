@@ -380,8 +380,8 @@ VOICE_VAULT_DIR=~/Voice         # Auto-detect Vault location
 **Fruits:**
 ```bash
 FRUITS_QUESTIONS=...
-FRUITS_STORE=~/AlphaOS-Vault/Game/Fruits/fruits_store.json
-FRUITS_EXPORT_DIR=~/AlphaOS-Vault/Game/Fruits
+FRUITS_STORE=~/vault/Game/Fruits/fruits_store.json
+FRUITS_EXPORT_DIR=~/vault/Game/Fruits
 ```
 
 ---
@@ -539,7 +539,7 @@ http://localhost:8799/core4
 ├── aos-war.fish                    # War Stack interface
 └── aos-game.fish                   # Game Maps interface
 
-~/AlphaOS-Vault/
+~/vault/
 ├── Door/                           # THE DOOR data
 │   ├── 1-Potential/                # Hot List (MD + JSON)
 │   ├── 2-Plan/                     # War Stacks
@@ -626,12 +626,12 @@ npm run dev
 - Voice history: `/api/voice/history`, `/api/voice/file`, `/api/voice/autosave`
 
 **Storage (Node defaults):**
-- Door flow state: `~/AlphaOS-Vault/Door/.door-flow.json`
-- Door exports: `~/AlphaOS-Vault/Door/{1-Potential,2-Plan,War-Stacks,3-Production,4-Profit}`
-- Fruits store: `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`
+- Door flow state: `~/vault/Door/.door-flow.json`
+- Door exports: `~/vault/Door/{1-Potential,2-Plan,War-Stacks,3-Production,4-Profit}`
+- Fruits store: `~/vault/Game/Fruits/fruits_store.json`
 - Fruits questions: `index-node/data/fruits_questions.json`
 - Core4 fallback: `~/.local/share/alphaos/drop/core4_today.json`
-- Voice vault: `~/Voice` (fallback: `~/AlphaOS-Vault/VOICE`)
+- Voice vault: `~/Voice` (fallback: `~/vault/VOICE`)
 
 **Bridge integration:**
 - If `AOS_BRIDGE_URL` is set, Core4 logs go to the bridge (`/bridge/core4/log`) and totals are read from `/bridge/core4/today`.
@@ -719,7 +719,7 @@ Pushes Vault and Dokumente into Drive.
 
 **Location:** `systemd/`
 **Timers/Services:**
-- `aos-vault-push-eldanioo.timer` → `eldanioo:MeineAblage/AlphaOS-Vault`
+- `aos-vault-push-eldanioo.timer` → `eldanioo:MeineAblage/vault`
 - `dokumente-push-fabian.timer` → `fabian:MeineAblage/Dokumente`
 
 ---

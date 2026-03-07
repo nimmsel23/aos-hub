@@ -136,6 +136,23 @@
       line-height: 1.5;
     }
 
+    .card .meta-line {
+      margin-top: 10px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+      opacity: 0.9;
+    }
+
+    .telemetry-line {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
     footer {
       text-align: center;
       padding: 40px 20px 60px;
@@ -184,24 +201,28 @@
         <div class="icon">💡</div>
         <h2>Potential</h2>
         <p>Hot List. Capture raw ideas.</p>
+        <p class="meta-line" id="potentialMeta">Loading...</p>
       </div>
 
       <div class="card" onclick="openPhase('plan')">
         <div class="icon">🗺️</div>
         <h2>Plan</h2>
         <p>Door War. War Stack creation.</p>
+        <p class="meta-line" id="planMeta">Loading...</p>
       </div>
 
       <div class="card" onclick="openPhase('production')">
         <div class="icon">⚔️</div>
         <h2>Production</h2>
         <p>Hit List. Execute your strikes.</p>
+        <p class="meta-line" id="productionMeta">Loading...</p>
       </div>
 
       <div class="card" onclick="openPhase('profit')">
         <div class="icon">🏆</div>
         <h2>Profit</h2>
         <p>Achieved & Done. Reflection.</p>
+        <p class="meta-line" id="profitMeta">Loading...</p>
       </div>
     </div>
   </section>
@@ -222,6 +243,7 @@
       <strong style="color: var(--accent);">Production</strong> → Tactical execution<br>
       <strong style="color: var(--accent);">Profit</strong> → Integration
     </p>
+    <div class="telemetry-line" id="telemetryLine">Backend sync: pending</div>
   </aside>
 </main>
 
@@ -264,7 +286,70 @@
       window.location.href = '/pwa/plan/';
       return;
     }
+    if (phase === 'production') {
+      window.location.href = '/pwa/production/';
+      return;
+    }
+    if (phase === 'profit') {
+      window.location.href = '/pwa/profit/';
+      return;
+    }
     window.location.href = `/door/${phase}`;
+  }
+
+  function trimText(value) {
+    return String(value == null ? '' : value).trim();
+  }
+
+  async function apiJson(url) {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || response.statusText || 'request_failed');
+    }
+    return payload.data || payload;
+  }
+
+  function setTelemetryLine(text, tone = 'muted') {
+    const el = document.getElementById('telemetryLine');
+    if (!el) return;
+    el.textContent = trimText(text) || 'Backend sync: pending';
+    el.style.color = tone === 'ok' ? 'var(--accent)' : 'var(--muted)';
+  }
+
+  async function refreshDoorTelemetry() {
+    try {
+      const [potentialData, planData, productionData, profitData] = await Promise.all([
+        apiJson('/api/door/potential/hotlist?mode=active'),
+        apiJson('/api/door/plan/doorwars'),
+        apiJson('/api/door/production/hits/week'),
+        apiJson('/api/door/profit/completed')
+      ]);
+
+      const potentialItems = Array.isArray(potentialData.items) ? potentialData.items : [];
+      const doorwars = Array.isArray(planData.doorwars) ? planData.doorwars : [];
+      const openHits = Number(productionData?.summary?.open_hits || 0);
+      const completed = Array.isArray(profitData.completed) ? profitData.completed.length : 0;
+
+      const q2 = potentialItems.filter((item) => Number(item?.quadrant) === 2).length;
+      document.getElementById('potentialMeta').textContent = `${potentialItems.length} active · ${q2} Q2`;
+      document.getElementById('planMeta').textContent = `${doorwars.length} doorwars tracked`;
+      document.getElementById('productionMeta').textContent = `${openHits} open hits`;
+      document.getElementById('profitMeta').textContent = `${completed} completed doors`;
+
+      const now = new Date();
+      const stamp = now.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+      setTelemetryLine(`Backend sync: live (${stamp})`, 'ok');
+    } catch (_err) {
+      document.getElementById('potentialMeta').textContent = 'No live data';
+      document.getElementById('planMeta').textContent = 'No live data';
+      document.getElementById('productionMeta').textContent = 'No live data';
+      document.getElementById('profitMeta').textContent = 'No live data';
+      setTelemetryLine('Backend sync: offline snapshot');
+    }
   }
 
   // Theme Switcher
@@ -281,6 +366,9 @@
     applyTheme(stored);
   })();
   themeSelect?.addEventListener('change', () => applyTheme(themeSelect.value));
+
+  refreshDoorTelemetry();
+  window.setInterval(refreshDoorTelemetry, 30000);
 </script>
 </body>
 </html>

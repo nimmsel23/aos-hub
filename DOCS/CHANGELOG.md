@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   ReadWritePaths=%h/.task                    # Taskwarrior database
   ReadWritePaths=%h/.local/share/alphaos     # Task export file
   ReadWritePaths=%h/.alpha_os                # TickTick config
-  ReadWritePaths=%h/AlphaOS-Vault            # Door/Game/Voice exports
+  ReadWritePaths=%h/vault            # Door/Game/Voice exports
   ```
 
 **Impact:**

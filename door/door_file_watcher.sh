@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Configuration
-VAULT_PATH="${VAULT_PATH:-$HOME/Dokumente/AlphaOs-Vault}"
+VAULT_PATH="${VAULT_PATH:-$HOME/Dokumente/vault}"
 PLAN_DIR="$VAULT_PATH/Door/2-Plan"
 PRODUCTION_DIR="$VAULT_PATH/Door/3-Production"
 LOG_FILE="${LOG_FILE:-$HOME/.dotfiles/logs/door-automation.log}"

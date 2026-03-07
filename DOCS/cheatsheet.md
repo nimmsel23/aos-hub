@@ -42,7 +42,7 @@ Taskwarrior bridge:
 - Taskwarrior hooks: `scripts/setup-alpha-hooks.sh` + set `AOS_HOOK_TARGET=bridge` in `~/.config/alpha-os/hooks.env`
  - αOS Taskwarrior notes: `DOCS/taskwarrior.md`
  - Taskwarrior on-exit snapshot hook: `scripts/setup-alpha-on-exit-hook.sh`
- - GAS: set Script Property `AOS_TASK_EXPORT_FILE_ID` to the Drive file id for `AlphaOS-Vault/.alphaos/task_export.json`
+ - GAS: set Script Property `AOS_TASK_EXPORT_FILE_ID` to the Drive file id for `vault/.alphaos/task_export.json`
 
 Exports:
 - `POST /api/door/export`
@@ -111,7 +111,7 @@ bridgectl:
 - `bridge/bridgectl enable`
 
 Bridge env (systemd):
-- `AOS_RCLONE_REMOTE=eldanioo:/AlphaOS-Vault`
+- `AOS_RCLONE_REMOTE=eldanioo:/vault`
 - `AOS_RCLONE_SUBDIRS=Core4,Voice,Door,Game`
 - `AOS_BRIDGE_QUEUE_DIR=~/.cache/alphaos/bridge-queue`
 - `AOS_BRIDGE_FALLBACK_TELE=1`
@@ -131,7 +131,7 @@ Bridge env (systemd):
 | `scripts/taskwarrior/export-snapshot.sh` | Write `task export` JSON snapshot |
 
 Rclone timers (templates, not installed by default):
-- `aos-vault-push-eldanioo.timer` (daily 03:30) -> `eldanioo:MeineAblage/AlphaOS-Vault`
+- `aos-vault-push-eldanioo.timer` (daily 03:30) -> `eldanioo:MeineAblage/vault`
 - `dokumente-push-fabian.timer` (weekly Sun 04:00) -> `fabian:MeineAblage/Dokumente`
 
 ## HQ Terminal Commands (GAS WebApp)

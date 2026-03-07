@@ -8,7 +8,7 @@ GAMECTL_VERSION="0.3.0"
 source "$ROOT_DIR/scripts/ctl-lib.sh"       2>/dev/null || true
 source "$ROOT_DIR/scripts/lib/aos-env.sh"   2>/dev/null && aos_env_load "" "$ROOT_DIR" 2>/dev/null || true
 
-VAULT_DIR="${AOS_VAULT_DIR:-${ALPHAOS_VAULT_DIR:-$HOME/AlphaOS-Vault}}"
+VAULT_DIR="${AOS_VAULT_DIR:-${ALPHAOS_VAULT_DIR:-$HOME/vault}}"
 GAME_VAULT_DIR="$VAULT_DIR/Game"
 FRAME_FILE="$GAME_VAULT_DIR/Frame/annual_frame.yaml"
 FREEDOM_FILE="$GAME_VAULT_DIR/Freedom/quarterly_freedom.yaml"

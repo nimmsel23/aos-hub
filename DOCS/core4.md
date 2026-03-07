@@ -631,7 +631,7 @@ If you only remember one thing:
 1. GAS writes event to Drive ledger (`Alpha_Core4/.core4/events/...`)
 2. GAS sends silent Telegram proof message
 3. GAS pings Bridge `POST /bridge/core4/pull` (throttled)
-4. Bridge pulls `.core4/**` into `~/AlphaOS-Vault/Alpha_Core4`
+4. Bridge pulls `.core4/**` into `~/vault/Alpha_Core4`
 5. Local tools recompute scores from merged ledger
 
 ---
@@ -641,10 +641,10 @@ If you only remember one thing:
 ### Source of Truth (append-only)
 
 **Local (primary write target):**
-- `~/AlphaOS-Vault/Core4/.core4/events/YYYY-MM-DD/*.json`
+- `~/vault/Core4/.core4/events/YYYY-MM-DD/*.json`
 
 **GDrive mount (written by GAS or pulled from Drive):**
-- `~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
+- `~/vault/Alpha_Core4/.core4/events/YYYY-MM-DD/*.json`
 
 **Rules:**
 - Multiple writers may create events for the same `key`. That is allowed.
@@ -653,11 +653,11 @@ If you only remember one thing:
 
 ### Derived Artifacts (rebuildable)
 
-- Day: `~/AlphaOS-Vault/Core4/core4_day_YYYY-MM-DD.json`
-- Week: `~/AlphaOS-Vault/Core4/core4_week_YYYY-Www.json`
-- Rolling daily CSV (~8 weeks): `~/AlphaOS-Vault/Core4/core4_daily.csv`
-- Month close archive: `~/AlphaOS-Vault/Core4/core4_YYYY-MM.csv`
-- Legacy weekly seal (optional): `~/AlphaOS-Vault/Core4/core4_scores.csv`
+- Day: `~/vault/Core4/core4_day_YYYY-MM-DD.json`
+- Week: `~/vault/Core4/core4_week_YYYY-Www.json`
+- Rolling daily CSV (~8 weeks): `~/vault/Core4/core4_daily.csv`
+- Month close archive: `~/vault/Core4/core4_YYYY-MM.csv`
+- Legacy weekly seal (optional): `~/vault/Core4/core4_scores.csv`
 
 ### Sync Rule (Critical)
 
@@ -754,13 +754,13 @@ core4 -w
 
 ### Check Drive consistency (rclone)
 ```bash
-rclone check ~/AlphaOS-Vault/Core4/.core4 eldanioo:Alpha_Core4/.core4 --one-way
-rclone check ~/AlphaOS-Vault/Alpha_Core4/.core4 eldanioo:Alpha_Core4/.core4 --one-way
+rclone check ~/vault/Core4/.core4 eldanioo:Alpha_Core4/.core4 --one-way
+rclone check ~/vault/Alpha_Core4/.core4 eldanioo:Alpha_Core4/.core4 --one-way
 ```
 
 ### Common Issues
 
-- **Score in CLI fehlt, obwohl GAS geloggt wurde:** Check mount exists (`ls ~/AlphaOS-Vault/Alpha_Core4/.core4/events/YYYY-MM-DD/`), then `core4 -d` / `core4 -w` to recompute.
+- **Score in CLI fehlt, obwohl GAS geloggt wurde:** Check mount exists (`ls ~/vault/Alpha_Core4/.core4/events/YYYY-MM-DD/`), then `core4 -d` / `core4 -w` to recompute.
 - **Doppelte Taskwarrior Tasks:** Score zählt trotzdem nicht doppelt (dedupe via `key`); find with `task 28` and delete manually.
 - **Bridge down:** Hooks/CLI fall back to local event writeback; entries sync on next push.
 
@@ -770,7 +770,7 @@ rclone check ~/AlphaOS-Vault/Alpha_Core4/.core4 eldanioo:Alpha_Core4/.core4 --on
 
 | Scope | Variable | Purpose |
 |-------|----------|---------|
-| Common | `AOS_VAULT_DIR` | Defaults to `~/AlphaOS-Vault` |
+| Common | `AOS_VAULT_DIR` | Defaults to `~/vault` |
 | Common | `AOS_BRIDGE_URL` | Bridge connection URL |
 | Common | `AOS_CORE4_DIRS` | Tracker read roots (colon-separated; default: `Core4:Alpha_Core4`) |
 | Bridge | `AOS_CORE4_LOCAL_DIR` | Local ledger dir |
@@ -795,7 +795,7 @@ rclone check ~/AlphaOS-Vault/Alpha_Core4/.core4 eldanioo:Alpha_Core4/.core4 --on
 - [voice.md](voice.md) - Mental Mastery
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [node/README.md](../node/README.md) - Node.js server docs
-- [AlphaOS-THE-CORE-FOUR.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-CORE-FOUR.md) - Elliott Hulse Blueprint (Chapters 13-18)
+- [AlphaOS-THE-CORE-FOUR.md](~/Dokumente/vault/ALPHA_OS/AlphaOS-THE-CORE-FOUR.md) - Elliott Hulse Blueprint (Chapters 13-18)
 
 ---
 

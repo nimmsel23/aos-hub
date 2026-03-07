@@ -13,7 +13,7 @@ The AOS Hot List provides a **multi-format capture system** for ideas:
 
 ```
 Terminal (fish) → hot "idea"
-  ├─ 1. Markdown file     (~/AlphaOS-Vault/Door/1-Potential/*.md)
+  ├─ 1. Markdown file     (~/vault/Door/1-Potential/*.md)
   ├─ 2. JSON index        (hotlist_index.json with UUIDs)
   ├─ 3. Taskwarrior task  (project:HotList +hot +potential prio:L)
   └─ 4. TickTick sync     (via Taskwarrior on-add hook)
@@ -23,8 +23,8 @@ Terminal (fish) → hot "idea"
 
 | Format | Purpose | Location |
 |--------|---------|----------|
-| **Markdown** | Human-readable (Obsidian) | `~/AlphaOS-Vault/Door/1-Potential/*.md` |
-| **JSON** | GAS/Bot processing | `~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json` |
+| **Markdown** | Human-readable (Obsidian) | `~/vault/Door/1-Potential/*.md` |
+| **JSON** | GAS/Bot processing | `~/vault/Door/1-Potential/hotlist_index.json` |
 | **Taskwarrior** | Source of Truth | `~/.task/` database |
 | **TickTick** | Mobile access | Cloud (synced via hook) |
 
@@ -43,7 +43,7 @@ hot "Build Door-Bot for Telegram interface"
 
 **Output:**
 ```
-🔥 Hot captured → /home/alpha/AlphaOS-Vault/Door/1-Potential/20260104-103045--build-door-bot.md
+🔥 Hot captured → /home/alpha/vault/Door/1-Potential/20260104-103045--build-door-bot.md
 📋 Taskwarrior UUID: a3f2b91c-8c4e-4d21-9a1f-3d8e7f2c1b4a
 ```
 
@@ -196,7 +196,7 @@ source: fish
     {
       "idea": "Build Door-Bot for Telegram",
       "created": "2026-01-04T09:30:45Z",
-      "file": "/home/alpha/AlphaOS-Vault/Door/1-Potential/20260104-103045--build-door-bot.md",
+      "file": "/home/alpha/vault/Door/1-Potential/20260104-103045--build-door-bot.md",
       "tw_uuid": "a3f2b91c-8c4e-4d21-9a1f-3d8e7f2c1b4a",
       "status": "active",
       "quadrant": 2,
@@ -246,7 +246,7 @@ task add project:HotList prio:L +hot +potential "Idea text"
 ~/.dotfiles/config/fish/functions/aos-hot.fish   # Fish functions
 ~/.taskrc                                         # Taskwarrior config (hotlist report)
 ~/.task/hooks/on-add.hotlist-ticktick             # TickTick sync hook
-~/AlphaOS-Vault/Door/1-Potential/                 # Markdown files
+~/vault/Door/1-Potential/                 # Markdown files
   ├─ *.md                                         # Individual ideas
   └─ hotlist_index.json                           # JSON index
 ~/.alphaos/hotlist_ticktick_map.json              # Taskwarrior ↔ TickTick mapping
@@ -276,10 +276,10 @@ tail -f ~/.local/share/alphaos/logs/hotlist-ticktick.log
 ### hotlist_index.json not updating
 ```bash
 # Check file permissions
-ls -la ~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json
+ls -la ~/vault/Door/1-Potential/hotlist_index.json
 
 # Manually verify JSON is valid
-jq '.' ~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json
+jq '.' ~/vault/Door/1-Potential/hotlist_index.json
 ```
 
 ---

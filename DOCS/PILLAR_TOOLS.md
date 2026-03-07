@@ -117,7 +117,7 @@ door.domino         # yes|no
 
 **Vault storage:**
 ```
-~/AlphaOS-Vault/Door/
+~/vault/Door/
 ├── 1-Potential/      # Hot List
 ├── 2-Plan/           # Door War
 ├── War-Stacks/       # War Stack markdown
@@ -188,7 +188,7 @@ Fire needs update (depends on Focus)
 ### Vault Storage
 
 ```
-~/AlphaOS-Vault/GAME/
+~/vault/GAME/
 ├── Frame/
 │   ├── BODY-Frame.md
 │   ├── BEING-Frame.md
@@ -232,7 +232,7 @@ voicectl strike <id>            # Extract STRIKE
 - **Session management** - List, search, view with glow/bat
 - **Pattern interruption** - Systematic mental mastery
 - **Integration ready** - STRIKE feeds Door War Stacks
-- **Markdown storage** - Sessions in `~/AlphaOs-Vault/VOICE/` or `~/Voice/`
+- **Markdown storage** - Sessions in `~/vault/VOICE/` or `~/Voice/`
 
 ### 4-Step Process
 
@@ -288,7 +288,7 @@ gamectl edit frame being
 ### Vault Storage
 
 ```
-~/AlphaOs-Vault/VOICE/
+~/vault/VOICE/
 └── VOICE-YYYY-MM-DD_HHMM.md
 ```
 
@@ -345,7 +345,7 @@ core4ctl recent [count]         # Recent weeks
 
 ### Data Format
 
-Weekly JSON files in `~/AlphaOS-Vault/Alpha_Core4/`:
+Weekly JSON files in `~/vault/Alpha_Core4/`:
 
 ```json
 {
@@ -516,7 +516,7 @@ core4/api/today.js
 All data stored in markdown/JSON:
 
 ```
-~/AlphaOS-Vault/
+~/vault/
 ├── Door/           # doorctl data
 ├── GAME/           # gamectl maps
 └── Alpha_Core4/    # core4ctl data
@@ -528,7 +528,7 @@ All data stored in markdown/JSON:
 
 ```bash
 # Vault location
-export AOS_VAULT_DIR=~/AlphaOS-Vault
+export AOS_VAULT_DIR=~/vault
 
 # Editor preference
 export EDITOR=micro
@@ -604,7 +604,7 @@ ls $AOS_VAULT_DIR
 task export door.name:Ausbildung
 
 # Check weekly JSON
-cat ~/AlphaOS-Vault/Alpha_Core4/core4_week_*.json | jq
+cat ~/vault/Alpha_Core4/core4_week_*.json | jq
 ```
 
 ### UI not pretty
@@ -647,4 +647,4 @@ which gum fzf glow bat micro
 - `game/README.md` - THE GAME documentation
 - `core4/README.md` - THE CORE FOUR documentation
 - `DOCS/AOSCTL.md` - Meta launcher
-- `AlphaOS-Vault/ALPHA_OS/` - Elliott Hulse's philosophy
+- `vault/ALPHA_OS/` - Elliott Hulse's philosophy

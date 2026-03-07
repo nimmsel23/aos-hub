@@ -22,7 +22,7 @@ write_env_file() {
 # αOS Taskwarrior export snapshot (optional overrides)
 # AOS_TASK_EXPORT_FILTER=status:pending
 # AOS_TASK_EXPORT_PATH=$HOME/.local/share/alphaos/task_export.json
-# AOS_TASK_EXPORT_VAULT_PATH=$HOME/AlphaOS-Vault/.alphaos/task_export.json
+# AOS_TASK_EXPORT_VAULT_PATH=$HOME/vault/.alphaos/task_export.json
 # AOS_TASK_EXPORT_COPY_TO_VAULT=1
 EOF
 }

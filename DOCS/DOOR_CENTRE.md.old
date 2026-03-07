@@ -52,7 +52,7 @@ Door Centre functionality is distributed across:
 
 ### Data Persistence
 
-**Primary Storage:** `~/AlphaOS-Vault/Door/.door-flow.json`
+**Primary Storage:** `~/vault/Door/.door-flow.json`
 
 **Structure:**
 ```json
@@ -386,14 +386,14 @@ curl -X POST http://127.0.0.1:8799/api/door/export \
 ```json
 {
   "ok": true,
-  "markdown_path": "~/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md",
+  "markdown_path": "~/vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md",
   "hits_pushed": 4,
   "ticktick_tasks": ["task_id_1", "task_id_2", "task_id_3", "task_id_4"]
 }
 ```
 
 **Markdown Export Location:**
-- Path: `~/AlphaOS-Vault/Door/War-Stacks/YYYY-MM-DD_Title.md`
+- Path: `~/vault/Door/War-Stacks/YYYY-MM-DD_Title.md`
 - Format: αOS War Stack template (Trigger/Narrative/Validation/Impact + 4 Hits)
 
 **Taskwarrior Integration:**
@@ -443,7 +443,7 @@ curl -X POST http://127.0.0.1:8799/api/door/profit \
 
 **Storage:** Added to `flow.profits` array in `.door-flow.json`
 
-**Export:** Can be exported to `~/AlphaOS-Vault/Door/4-Profit/YYYY-MM-DD_Title.md`
+**Export:** Can be exported to `~/vault/Door/4-Profit/YYYY-MM-DD_Title.md`
 
 ---
 
@@ -487,7 +487,7 @@ curl -X POST http://127.0.0.1:8799/api/door/profit \
 │ PRODUCTION (Hit List)                                       │
 │                                                             │
 │ POST /api/door/export                                      │
-│ → Export markdown to ~/AlphaOS-Vault/Door/War-Stacks/     │
+│ → Export markdown to ~/vault/Door/War-Stacks/     │
 │ → Push 4 Hits to Taskwarrior (+door +warstack)            │
 │ → Optional: Push to TickTick                              │
 │                                                             │
@@ -502,7 +502,7 @@ curl -X POST http://127.0.0.1:8799/api/door/profit \
 │ → What worked? What didn't?                                │
 │ → Learnings for next Door                                  │
 │                                                             │
-│ Export reflection → ~/AlphaOS-Vault/Door/4-Profit/        │
+│ Export reflection → ~/vault/Door/4-Profit/        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -521,7 +521,7 @@ Door War (Eisenhower evaluation)
     ↓
 War Stack Bot (conversational inquiry) OR Index Node UI
     ↓
-War Stack markdown → ~/AlphaOS-Vault/Door/War-Stacks/
+War Stack markdown → ~/vault/Door/War-Stacks/
     ↓
 Taskwarrior (4 Hits as tasks)
     ↓
@@ -694,7 +694,7 @@ Profit reflection → Learning loop
 → Bot exports to vault + pushes to Taskwarrior
 
 # Result
-→ War Stack: ~/AlphaOS-Vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md
+→ War Stack: ~/vault/Door/War-Stacks/2026-01-02_Vitaltrainer-Module-6.md
 → Taskwarrior: 4 tasks with +door +warstack tags
 → TickTick: 4 tasks synced (if enabled)
 ```
@@ -766,7 +766,7 @@ curl -X POST http://127.0.0.1:8799/api/door/doorwar \
   -d '{"candidates":[{"title":"Test","tags":["business"],"priority":3}]}' | jq
 
 # 4. Check persistence
-cat ~/AlphaOS-Vault/Door/.door-flow.json | jq
+cat ~/vault/Door/.door-flow.json | jq
 
 # 5. Web UI navigation
 open http://127.0.0.1:8799/door

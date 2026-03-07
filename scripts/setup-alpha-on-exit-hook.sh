@@ -40,7 +40,7 @@ write_env_file() {
 # Task export snapshot (on-exit)
 # AOS_TASK_EXPORT_FILTER=status:pending
 # AOS_TASK_EXPORT_PATH=$HOME/.local/share/alphaos/task_export.json
-# AOS_TASK_EXPORT_VAULT_PATH=$HOME/AlphaOS-Vault/.alphaos/task_export.json
+# AOS_TASK_EXPORT_VAULT_PATH=$HOME/vault/.alphaos/task_export.json
 # AOS_TASK_EXPORT_COPY_TO_VAULT=1
 # AOS_TASK_EXPORT_MIN_INTERVAL_SEC=15
 EOF
@@ -83,6 +83,6 @@ msg "  $ENV_FILE"
 msg ""
 msg "Notes:"
 msg "  - Writes snapshot to: ~/.local/share/alphaos/task_export.json"
-msg "  - Copies into Vault:  ~/AlphaOS-Vault/.alphaos/task_export.json (default)"
+msg "  - Copies into Vault:  ~/vault/.alphaos/task_export.json (default)"
 msg "  - With your vault rclone push, GAS can read it from Drive."
 

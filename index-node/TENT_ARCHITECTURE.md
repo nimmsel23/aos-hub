@@ -415,7 +415,7 @@ Component #4: New Targets (cascade-aligned Focus/Fire targets + War Stacks neede
 
 **POST /api/tent/save-weekly**
 
-Save complete weekly Tent session to `~/AlphaOS-Vault/Alpha_Tent/tent_{week}.md`.
+Save complete weekly Tent session to `~/vault/Alpha_Tent/tent_{week}.md`.
 
 ```bash
 curl -X POST http://localhost:8799/api/tent/save-weekly \
@@ -660,7 +660,7 @@ curl http://localhost:8799/api/tent/component/targets?week=2026-W03 | jq
 8. User reviews, adds manual notes
 9. Click "Save Weekly Tent Session"
 10. POST to `/api/tent/save-weekly` with markdown
-11. Markdown saved to `~/AlphaOS-Vault/Alpha_Tent/tent_{week}.md`
+11. Markdown saved to `~/vault/Alpha_Tent/tent_{week}.md`
 
 ## Key Principles
 

@@ -142,6 +142,23 @@ doctor() {
   else
     ui_warn "rclone-vitaltrainer-copy.sh not found"
   fi
+
+  local required_targets="${AOS_SYNC_REQUIRED_TARGETS:-aos-hub}"
+  ui_info "required aos-sync targets: ${required_targets}"
+  local t
+  for t in ${required_targets}; do
+    local timer="aos-sync@${t}.timer"
+    local enabled active
+    enabled="$(systemctl --user is-enabled "$timer" 2>/dev/null || true)"
+    active="$(systemctl --user is-active "$timer" 2>/dev/null || true)"
+    [[ -z "$enabled" ]] && enabled="-"
+    [[ -z "$active" ]] && active="-"
+    if [[ "$enabled" == "enabled" && "$active" == "active" ]]; then
+      ui_ok "$timer enabled/active"
+    else
+      ui_warn "$timer enabled=${enabled} active=${active}"
+    fi
+  done
 }
 
 ensure_menu_tty() {
@@ -280,6 +297,9 @@ FADARO push:
 aos-hub live backup:
   syncctl hub <status|push> [--dry-run]
 
+Personal folders:
+  syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]
+
 Overwrite-backup env:
   AOS_SYNC_BACKUP_OVERWRITES=1
   AOS_SYNC_BACKUP_BASE_REMOTE=_aos-overwrite-backups
@@ -411,31 +431,25 @@ show_overview() {
     print_flow_row "Vault:Voice" "<->" "$vault_root/Voice" "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
     print_flow_row "Vault:Core4" "<->" "$vault_root/Core4" "${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
 
-    section_title "Domains"
-    local domain_local_base domain_remote_base domain_remote_name
-    domain_local_base="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
-    domain_remote_base="${AOS_DOMAIN_REMOTE_BASE:-}"
-    domain_remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
-    print_flow_row "Domain:BODY"     "<->" "$domain_local_base/BODY"     "${domain_remote_name}:${domain_remote_base}BODY"
-    print_flow_row "Domain:BEING"    "<->" "$domain_local_base/BEING"    "${domain_remote_name}:${domain_remote_base}BEING"
-    print_flow_row "Domain:BALANCE"  "<->" "$domain_local_base/BALANCE"  "${domain_remote_name}:${domain_remote_base}BALANCE"
-    print_flow_row "Domain:BUSINESS" "<->" "$domain_local_base/BUSINESS" "${domain_remote_name}:${domain_remote_base}BUSINESS"
+    section_title "Dokumente"
+    print_flow_row "Dokumente" "->" "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}" "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
 
     section_title "Other Flows"
     local remote_name
     remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
     print_flow_row "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
     print_flow_row "FADARO"       "->"  "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}"             "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
-    print_flow_row "Dokumente"    "->"  "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}"                           "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
     print_flow_row "aos-hub live" "->"  "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}"                                "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
+    print_flow_row "business"     "->"  "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}"                               "${AOS_BUSINESS_REMOTE:-eldanioo:business}"
+    print_flow_row "fitness repo" "->"  "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}"              "${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
 
     section_title "Timers"
     if has_cmd systemctl; then
       local -a timers=(
         "${AOS_HUB_LIVE_TIMER_UNIT:-aos-hub-live-push.timer}"
         "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
-        "${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
-        "${AOS_SAFE_RCLONE_PUSH_TIMER_UNIT:-alphaos-safe-rclone-push.timer}"
+        "vaultctl-push.timer"
+        "vaultctl-push-monitor.timer"
       )
       local t
       for t in "${timers[@]}"; do
@@ -444,7 +458,7 @@ show_overview() {
       done
 
       local -a aos_sync_timers=()
-      mapfile -t aos_sync_timers < <(systemctl --user list-unit-files "aos-sync-*.timer" --no-legend --no-pager 2>/dev/null | awk '{print $1}')
+      mapfile -t aos_sync_timers < <(systemctl --user list-unit-files "aos-sync@*.timer" --no-legend --no-pager 2>/dev/null | awk '{print $1}' | grep -v '^aos-sync@\.timer$')
       if [[ "${#aos_sync_timers[@]}" -gt 0 ]]; then
         echo ""
         ui_info "aos-sync target timers"
@@ -453,6 +467,12 @@ show_overview() {
           print_timer_row "$t"
         done
       fi
+      echo ""
+      ui_info "required (canonical)"
+      print_timer_row "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
+      print_timer_row "vaultctl-push.timer"
+      print_timer_row "vaultctl-push-monitor.timer"
+      print_timer_row "aos-sync@aos-hub.timer"
     else
       printf "  [%s] systemctl missing\n" "$(syncctl_chip warn)"
     fi
@@ -467,38 +487,37 @@ show_overview() {
   section_title "Flows"
   local vault_root
   vault_root="${AOS_VAULT_ROOT:-${AOS_RCLONE_LOCAL:-${AOS_VAULT_DIR:-$HOME/vault}}}"
-  local domain_local_base domain_remote_base domain_remote_name
-  domain_local_base="${AOS_DOMAIN_LOCAL_BASE:-$HOME/Dokumente}"
-  domain_remote_base="${AOS_DOMAIN_REMOTE_BASE:-}"
-  domain_remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
   local remote_name
   remote_name="${AOS_RCLONE_REMOTE_NAME:-eldanioo}"
   print_flow_row_compact "Vault:Game" "<->" "$vault_root/Game" "${AOS_VAULT_REMOTE_GAME:-eldanioo:Alpha_Game}"
   print_flow_row_compact "Vault:Door" "<->" "$vault_root/Door" "${AOS_VAULT_REMOTE_DOOR:-eldanioo:Alpha_Door}"
   print_flow_row_compact "Vault:Voice" "<->" "$vault_root/Voice" "${AOS_VAULT_REMOTE_VOICE:-eldanioo:Alpha_Voice}"
   print_flow_row_compact "Vault:Core4" "<->" "$vault_root/Core4" "${AOS_VAULT_REMOTE_CORE4:-eldanioo:Alpha_Core4}"
-  print_flow_row_compact "Domain:BODY" "<->" "$domain_local_base/BODY" "${domain_remote_name}:${domain_remote_base}BODY"
-  print_flow_row_compact "Domain:BEING" "<->" "$domain_local_base/BEING" "${domain_remote_name}:${domain_remote_base}BEING"
-  print_flow_row_compact "Domain:BALANCE" "<->" "$domain_local_base/BALANCE" "${domain_remote_name}:${domain_remote_base}BALANCE"
-  print_flow_row_compact "Domain:BUSINESS" "<->" "$domain_local_base/BUSINESS" "${domain_remote_name}:${domain_remote_base}BUSINESS"
+  print_flow_row_compact "Dokumente" "->" "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}" "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
   print_flow_row_compact "Vitaltrainer" "<->" "${AOS_VITALTRAINER_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/Vitaltrainer}" "${remote_name}:${AOS_VITALTRAINER_REMOTE_PATH:-Vitaltrainer}"
   print_flow_row_compact "FADARO" "->" "${AOS_FADARO_LOCAL_PATH:-$HOME/Dokumente/BUSINESS/FADARO}" "${remote_name}:${AOS_FADARO_REMOTE_PATH:-FADARO}"
-  print_flow_row_compact "Dokumente" "->" "${AOS_DOKUMENTE_LOCAL_PATH:-$HOME/Dokumente}" "${AOS_DOKUMENTE_REMOTE:-eldanioo:Dokumente}"
   print_flow_row_compact "aos-hub live" "->" "${AOS_AOS_HUB_LOCAL_PATH:-$HOME/aos-hub}" "${AOS_AOS_HUB_REMOTE:-eldanioo:aos-hub-live}"
+  print_flow_row_compact "business" "->" "${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}" "${AOS_BUSINESS_REMOTE:-eldanioo:business}"
+  print_flow_row_compact "fitness repo" "->" "${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}" "${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
 
   section_title "Timers"
   if has_cmd systemctl; then
     local -a timers=(
       "${AOS_HUB_LIVE_TIMER_UNIT:-aos-hub-live-push.timer}"
       "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
-      "${AOS_VAULT_SYNC_TIMER_UNIT:-alphaos-vault-sync.timer}"
-      "${AOS_SAFE_RCLONE_PUSH_TIMER_UNIT:-alphaos-safe-rclone-push.timer}"
+      "vaultctl-push.timer"
+      "vaultctl-push-monitor.timer"
     )
     local t
     for t in "${timers[@]}"; do
       [[ -z "$t" ]] && continue
       print_timer_row_compact "$t"
     done
+    echo "  required:"
+    print_timer_row_compact "${AOS_HUB_ROUTINE_TIMER_UNIT:-aos-hub-backup-daily.timer}"
+    print_timer_row_compact "vaultctl-push.timer"
+    print_timer_row_compact "vaultctl-push-monitor.timer"
+    print_timer_row_compact "aos-sync@aos-hub.timer"
   else
     printf "  [%s] systemctl missing\n" "$(syncctl_chip warn)"
   fi
@@ -766,6 +785,78 @@ run_hub_live() {
   else
     exec "$bin" "$@"
   fi
+}
+
+run_personal() {
+  local target="${1:-}"
+  shift || true
+  [[ -n "$target" ]] || die "Usage: syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]"
+
+  local action="${1:-status}"
+  shift || true
+  local dry=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run|--dry) dry=1 ;;
+      *) die "Usage: syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]" ;;
+    esac
+    shift || true
+  done
+
+  local src="" dst=""
+  case "$target" in
+    business)
+      src="${AOS_BUSINESS_LOCAL_PATH:-$HOME/business}"
+      dst="${AOS_BUSINESS_REMOTE:-eldanioo:business}"
+      ;;
+    fitness)
+      src="${AOS_FITNESS_REPO_LOCAL_PATH:-$HOME/core4-fitness-centre}"
+      dst="${AOS_FITNESS_REPO_REMOTE:-eldanioo:core4-fitness-centre}"
+      ;;
+    *)
+      die "Usage: syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]"
+      ;;
+  esac
+
+  local remote_name="${dst%%:*}:"
+  case "$action" in
+    status)
+      echo "syncctl personal $target status"
+      echo "  local : $src"
+      if [[ -d "$src" ]]; then
+        echo "  local : ok"
+      else
+        echo "  local : missing"
+      fi
+      echo "  remote: $dst"
+      if has_cmd rclone; then
+        if rclone listremotes 2>/dev/null | tr -d '\r' | grep -qx "$remote_name"; then
+          echo "  remote: ok ($remote_name)"
+        else
+          echo "  remote: missing ($remote_name)"
+        fi
+      else
+        echo "  remote: n/a (rclone missing)"
+      fi
+      ;;
+    push|dry-run)
+      has_cmd rclone || die "rclone not found"
+      [[ -d "$src" ]] || die "local path missing: $src"
+      rclone listremotes 2>/dev/null | tr -d '\r' | grep -qx "$remote_name" || die "remote not found: $remote_name"
+      if [[ "$action" == "dry-run" ]]; then
+        dry=1
+      fi
+      local -a opts=(--progress)
+      if [[ "$dry" == "1" ]]; then
+        opts+=(--dry-run)
+      fi
+      msg "syncctl personal $target: $src/ -> $dst/"
+      rclone sync "$src/" "$dst/" "${opts[@]}"
+      ;;
+    *)
+      die "Usage: syncctl personal <business|fitness> <status|push|dry-run> [--dry-run]"
+      ;;
+  esac
 }
 
 menu_targets() {
@@ -1074,6 +1165,7 @@ main() {
     vitaltrainer|vital) run_vitaltrainer "$@" ;;
     fadaro) run_fadaro "$@" ;;
     hub|aos-hub) run_hub_live "$@" ;;
+    personal) run_personal "$@" ;;
     *)
       usage
       die "unknown command: $cmd"

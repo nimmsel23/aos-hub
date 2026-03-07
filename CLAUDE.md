@@ -187,24 +187,24 @@ my_extension:
 3. GAS Web App (cloud fallback)
 
 All output same format:
-- Markdown in `~/AlphaOS-Vault/Door/War-Stacks/`
+- Markdown in `~/vault/Door/War-Stacks/`
 - Taskwarrior commands
 
 **Core4 Logging:**
 - UI → Bridge `/bridge/core4/log`
-- Bridge writes JSON to `~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json`
-- Weekly summary exported to `~/AlphaOS-Vault/Alpha_Tent/`
+- Bridge writes JSON to `~/vault/Alpha_Core4/core4_week_YYYY-Wxx.json`
+- Weekly summary exported to `~/vault/Alpha_Tent/`
 
 **Fruits/Facts:**
 - Questions in `index-node/data/fruits_questions.json`
-- Answers in `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`
-- Export to `~/AlphaOS-Vault/Game/Fruits/*.md`
+- Answers in `~/vault/Game/Fruits/fruits_store.json`
+- Export to `~/vault/Game/Fruits/*.md`
 
 ## Storage Conventions
 
 ### Vault Structure
 ```
-~/AlphaOS-Vault/
+~/vault/
 ├── Door/
 │   ├── 1-Potential/         # Hot List
 │   ├── 2-Plan/              # Door War
@@ -257,7 +257,7 @@ ROUTER_CONFIG=./config.yaml
 AOS_BRIDGE_HOST=0.0.0.0
 AOS_BRIDGE_PORT=8080
 AOS_TZ=Europe/Vienna
-AOS_VAULT_DIR=~/AlphaOS-Vault
+AOS_VAULT_DIR=~/vault
 AOS_GAS_WEBHOOK_URL=<GAS webhook>
 AOS_GAS_CHAT_ID=<Telegram chat>
 AOS_TASK_EXECUTE=1                      # Allow task execution
@@ -377,7 +377,7 @@ curl http://127.0.0.1:8080/health
 # Open: /game, /game/tent, /door, /voice, /facts
 
 # 5. Door Export Test
-# Create Hot List → Export → Check ~/AlphaOS-Vault/Door/1-Potential/
+# Create Hot List → Export → Check ~/vault/Door/1-Potential/
 
 # 6. Core4 Bridge
 # Toggle task → Check Bridge logs
@@ -404,7 +404,7 @@ curl http://127.0.0.1:8080/health
 - For remote: `TERMINAL_ALLOW_REMOTE=1` (security risk!)
 
 **Vault files not saving**
-- Check `~/AlphaOS-Vault` exists
+- Check `~/vault` exists
 - Verify permissions on vault directories
 - Check env vars point to correct paths
 

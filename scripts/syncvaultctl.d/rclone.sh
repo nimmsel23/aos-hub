@@ -57,12 +57,12 @@ show_rclone_status() {
         vital_script="$repo_root/scripts/utils/rclone-vitaltrainer-copy.sh"
     fi
 
-    # AlphaOS-Vault (push/pull via vaultctl)
+    # vault (push/pull via vaultctl)
     local vaultctl
     vaultctl="$(vaultctl_cmd)" || true
     if [ -n "${vaultctl:-}" ]; then
         echo ""
-        print_msg "$BOLD$BLUE" "📚 AlphaOS-Vault (push/pull copy)"
+        print_msg "$BOLD$BLUE" "📚 vault (push/pull copy)"
         run_allow_fail vaultctl_run status
     fi
 

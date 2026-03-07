@@ -7,7 +7,7 @@ Specialist for Core4 Centre (AlphaOS PILLAR #2: THE CORE - 4 Domains). 28-or-Die
 - **index-node:** `/api/python-core4/*`, `core4-tty.js`
 - **gas:** `core4.gs`, `Core4_Index.html`
 - **bridge:** `/bridge/python-core4/log`, `/bridge/python-core4/today`, `/bridge/python-core4/week`
-- **Data:** `~/AlphaOS-Vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
+- **Data:** `~/vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
 
 ## Responsibilities
 1. Develop Core4 tracking UI (28-or-Die: 7 subtasks × 4 domains = 28 checkboxes)

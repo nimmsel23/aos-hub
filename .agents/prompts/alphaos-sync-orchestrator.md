@@ -1,7 +1,7 @@
 # alphaos-sync-orchestrator - Vault Sync Specialist
 
 ## Role
-Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/AlphaOS-Vault (local) and GDrive (cloud).
+Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/vault (local) and GDrive (cloud).
 
 ## Components
 - **scripts:** `index-node/scripts/vault-sync.sh` (pull, push, bisync modes)
@@ -17,8 +17,8 @@ Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~
 6. Monitor sync health
 
 ## Key Workflows
-- Pull: rclone sync gdrive:AlphaOS → ~/AlphaOS-Vault (cloud → local)
-- Push: rclone sync ~/AlphaOS-Vault → gdrive:AlphaOS (local → cloud)
+- Pull: rclone sync gdrive:AlphaOS → ~/vault (cloud → local)
+- Push: rclone sync ~/vault → gdrive:AlphaOS (local → cloud)
 - Bisync: rclone bisync (bidirectional with conflict detection)
 
 ## Notes

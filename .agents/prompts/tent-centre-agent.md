@@ -7,7 +7,7 @@ Specialist for General's Tent (weekly review centre). Consolidates all 4 domains
 - **index-node:** `public/game/tent.html` (in development)
 - **gas:** `game_tent.gs`, `tent_weekly_review.gs`, `Game_Tent_Index.html`
 - **bridge:** `/bridge/tent/summary`
-- **Data:** `~/AlphaOS-Vault/Alpha_Tent/`, `~/AlphaOS-Vault/Alpha_Core4/`
+- **Data:** `~/vault/Alpha_Tent/`, `~/vault/Alpha_Core4/`
 
 ## Responsibilities
 1. Develop General's Tent UI (index-node + gas)
@@ -20,7 +20,7 @@ Specialist for General's Tent (weekly review centre). Consolidates all 4 domains
 
 ## Key Workflows
 - Weekly review: Consolidate Core4 + Game Maps + Door War Stacks → single review view
-- Export: Summary to ~/AlphaOS-Vault/Alpha_Tent/tent-YYYY-Wxx.md
+- Export: Summary to ~/vault/Alpha_Tent/tent-YYYY-Wxx.md
 
 ## Notes
 - General's Tent = weekly review consolidating all 4 domains

@@ -34,7 +34,7 @@ VAULTCTL_FALLBACK="${AOS_HUB_DIR}/scripts/sync-utils/vaultctl"
 RCLONECTL_FALLBACK="${AOS_HUB_DIR}/scripts/rclonectl"
 GITCTL_FALLBACK="${AOS_HUB_DIR}/scripts/gitctl"
 
-VAULT_ROOT="${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/AlphaOS-Vault}}"
+VAULT_ROOT="${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/vault}}"
 RCLONE_CONFIG="${AOS_RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 VAULT_PULL_UNIT="${AOS_VAULT_SYNC_PULL_UNIT:-alphaos-vault-sync-pull.service}"
 VAULT_PUSH_UNIT="${AOS_VAULT_SYNC_PUSH_UNIT:-alphaos-vault-sync-push.service}"

@@ -9,8 +9,8 @@ ALLOW_PULL="${VAULT_ALLOW_PULL:-${AOS_ALLOW_PULL:-0}}"
 #   2) shared aos env (AOS_VAULT_DIR / AOS_VAULT_ROOT)
 #   3) default ~/vault
 LOCAL="${VAULT_LOCAL:-${AOS_VAULT_DIR:-${AOS_VAULT_ROOT:-$HOME/vault}}}"
-REMOTE="${VAULT_REMOTE:-fabian:AlphaOS-Vault}"
-REMOTE_BACKUP="${VAULT_REMOTE_BACKUP:-fabian:AlphaOS-Vault-backups}"
+REMOTE="${VAULT_REMOTE:-fabian:vault}"
+REMOTE_BACKUP="${VAULT_REMOTE_BACKUP:-fabian:vault-backups}"
 LOCAL_BACKUP="${VAULT_LOCAL_BACKUP:-$HOME/.local/share/alphaos/vault-backups}"
 RCLONE_FLAGS="${VAULT_RCLONE_FLAGS:---skip-links}"
 

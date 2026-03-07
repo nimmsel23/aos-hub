@@ -10,7 +10,7 @@ core4_load_env || true
 core4_recompute_config
 
 DEFAULT_SOURCE_DIR="${AOS_CORE4_MOUNT_DIR:-$CORE4_MOUNT_DIR}"
-DEFAULT_TARGET_DIR="${AOS_HQ_CORE4_DIR:-${AOS_HQ_MOUNT_DIR:-$HOME/AlphaOS-Vault/Alpha_HQ}}"
+DEFAULT_TARGET_DIR="${AOS_HQ_CORE4_DIR:-${AOS_HQ_MOUNT_DIR:-$HOME/vault/Alpha_HQ}}"
 
 trim_trailing_slash() {
   local p="${1:-}"
@@ -158,7 +158,7 @@ Commands:
 Examples:
   core4-migratectl migrate-hq
   core4-migratectl migrate-hq --apply
-  core4-migratectl migrate-hq --apply --source ~/AlphaOS-Vault/Alpha_Core4 --target ~/AlphaOS-Vault/Alpha_HQ
+  core4-migratectl migrate-hq --apply --source ~/vault/Alpha_Core4 --target ~/vault/Alpha_HQ
 EOF
 }
 

@@ -62,7 +62,7 @@ We now have a **Domain-State System** that tracks strategic state across all cen
 }
 ```
 
-**Storage:** `~/AlphaOS-Vault/.states/{DOMAIN}.json`
+**Storage:** `~/vault/.states/{DOMAIN}.json`
 
 ---
 

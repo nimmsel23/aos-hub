@@ -12,7 +12,7 @@ The aos-hub agent system provides specialized agents for developing, maintaining
 
 1. **LAYER 1: LOCAL PC** - index-node (8799), bridge (8080), router bot, python bots
 2. **LAYER 2: CLOUD (GAS)** - Google Apps Script fallback centres
-3. **LAYER 3: DATA LAYER** - AlphaOS-Vault (rclone + systemd sync)
+3. **LAYER 3: DATA LAYER** - vault (rclone + systemd sync)
 4. **LAYER 4: NOTIFICATION** - Telegram (multi-bot ecosystem)
 
 Each Centre Agent understands BOTH index-node (Node.js) and gas (Apps Script) implementations, plus associated bots, data structures, and deployment workflows.
@@ -50,7 +50,7 @@ Complete specialist for Door Centre ecosystem. Understands index-node, gas, pyth
 - **index-node:** `/api/door/*`, `public/door/`
 - **gas:** `door.gs`, `door_main.gs`, `door_profit.gs`, `door_warstack.gs`, `Door_*.html`
 - **Bots:** `python-warstack/warstack_bot.py`, `router/extensions/door_flow.py`
-- **Data:** `~/AlphaOS-Vault/Door/` (1-Potential, 2-Plan, War-Stacks, 3-Production, 4-Profit)
+- **Data:** `~/vault/Door/` (1-Potential, 2-Plan, War-Stacks, 3-Production, 4-Profit)
 
 **Triggers:**
 - "Door Centre"
@@ -97,7 +97,7 @@ Complete specialist for Game Centre ecosystem. Manages strategic navigation thro
 - **index-node:** `/api/game/*`, `public/game/fire.html`, `public/game/tent.html`
 - **gas:** `game_main.gs`, `game_fire.gs`, `game_focus.gs`, `game_frame.gs`, `game_freedom.gs`, `game_tent.gs`, `game_shared.gs`, `Game_*.html`
 - **Bots:** `python-firemap/firemap_bot.py`, `router/extensions/firemap_commands.py`
-- **Data:** `~/AlphaOS-Vault/Game/` (Frame, IPW, Freedom, Focus, Fire), `~/AlphaOS-Vault/Alpha_Tent/`
+- **Data:** `~/vault/Game/` (Frame, IPW, Freedom, Focus, Fire), `~/vault/Alpha_Tent/`
 
 **Triggers:**
 - "Game Centre"
@@ -146,7 +146,7 @@ Specialist for Voice Centre (AlphaOS PILLAR #3: THE VOICE - Mental Mastery). Dev
 **Components:**
 - **index-node:** `/api/voice/*`, `public/voice/index.html`
 - **gas:** `voice.gs`, `voice_*.html`, `voicecentre.html`
-- **Data:** `~/AlphaOS-Vault/VOICE/`
+- **Data:** `~/vault/VOICE/`
 
 **Triggers:**
 - "Voice Centre"
@@ -184,7 +184,7 @@ Complete specialist for Core4 Centre (AlphaOS PILLAR #2: THE CORE). Manages 28-o
 - **gas:** `core4.gs`, `Core4_Index.html`
 - **bridge:** `/bridge/python-core4/log`, `/bridge/python-core4/today`, `/bridge/python-core4/week`
 - **Bots:** `router/extensions/core4_actions.py` (disabled by default)
-- **Data:** `~/AlphaOS-Vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
+- **Data:** `~/vault/Alpha_Core4/`, `~/.local/share/alphaos/task_export.json`, `~/.local/share/alphaos/task_sync_map.json`
 
 **Triggers:**
 - "Core4"
@@ -229,7 +229,7 @@ Specialist for Fruits Centre (daily knowledge capture). Manages both gas single 
 - **gas:** `fruits.gs` (single) + `fruits-standalone/` (codex deployed)
 - **bridge:** `/bridge/fruits/answer`
 - **Bots:** `router/extensions/fruits_daily.py`
-- **Data:** `~/AlphaOS-Vault/Game/Fruits/` (fruits_store.json, *.md)
+- **Data:** `~/vault/Game/Fruits/` (fruits_store.json, *.md)
 
 **Triggers:**
 - "Fruits Centre"
@@ -268,7 +268,7 @@ Specialist for General's Tent (weekly review centre). Consolidates all 4 domains
 - **index-node:** `public/game/tent.html` (in development)
 - **gas:** `game_tent.gs`, `tent_weekly_review.gs`, `Game_Tent_Index.html`
 - **bridge:** `/bridge/tent/summary`
-- **Data:** `~/AlphaOS-Vault/Alpha_Tent/`, `~/AlphaOS-Vault/Alpha_Core4/`
+- **Data:** `~/vault/Alpha_Tent/`, `~/vault/Alpha_Core4/`
 
 **Triggers:**
 - "General's Tent"
@@ -332,7 +332,7 @@ Specialist for CreatorKing Centre - SEPARATE DIMENSION outside AlphaOS. Manages 
 - Own Telegram bot with polling (not webhook)
 - Script Properties: TELEGRAM_BOT_TOKEN, TG_DEFAULT_CHAT_ID, GEMINI_API_KEY
 - Daily flow: 08:00 question → user replies → 20:00 Gemini insights
-- Storage: Drive creatorking_store.json (NOT AlphaOS-Vault)
+- Storage: Drive creatorking_store.json (NOT vault)
 
 ---
 
@@ -429,7 +429,7 @@ Specialist for aiohttp bridge service. Manages Tailscale↔GAS connection, Core4
 **Purpose:** Wurmloch management (rclone + systemd sync between local and cloud)
 
 **Description:**
-Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/AlphaOS-Vault (local) and GDrive (cloud). Handles pull/push/bisync modes.
+Specialist for rclone + systemd vault sync. Manages bidirectional sync between ~/vault (local) and GDrive (cloud). Handles pull/push/bisync modes.
 
 **Components:**
 - **scripts:** `index-node/scripts/vault-sync.sh` (pull, push, bisync)

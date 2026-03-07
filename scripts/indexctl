@@ -21,8 +21,12 @@ source "$ROOT_DIR/scripts/ctl-lib.sh"
 source "$ROOT_DIR/scripts/lib/aos-env.sh"
 aos_env_load "" "$ROOT_DIR" || true
 
+: "${CTL_CHOOSE_PROMPT:=indexctl}"
+: "${CTL_CHOOSE_PREFER:=gum}"
+
 USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
+BASE_URL="${AOS_INDEX_BASE_URL:-${HEALTH_URL%/health}}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
 
 ensure_user_runtime_dir() {
@@ -70,22 +74,236 @@ user_state() {
 health_check() {
   if ! has_cmd curl; then
     warn "curl not found"
-    return 0
+    return 1
   fi
-  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+  if curl -fsS --connect-timeout 3 --max-time 8 "$HEALTH_URL" >/dev/null 2>&1; then
     msg "✅ health OK: $HEALTH_URL"
+    return 0
   else
     warn "health failed: $HEALTH_URL"
+    return 1
   fi
 }
 
+http_status() {
+  local url="${1:-}"
+  local code
+  if ! has_cmd curl; then
+    printf "000\n"
+    return 0
+  fi
+  code="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 8 "$url" 2>/dev/null || true)"
+  [[ -n "$code" ]] || code="000"
+  printf "%s\n" "$code"
+}
+
+doctor_line_ok() {
+  local label="$1"
+  local detail="${2:-}"
+  if [[ -n "$detail" ]]; then
+    msg "  [ok]   $label: $detail"
+  else
+    msg "  [ok]   $label"
+  fi
+}
+
+doctor_line_fail() {
+  local label="$1"
+  local detail="${2:-}"
+  if [[ -n "$detail" ]]; then
+    msg "  [fail] $label: $detail"
+  else
+    msg "  [fail] $label"
+  fi
+}
+
+doctor_line_warn() {
+  local label="$1"
+  local detail="${2:-}"
+  if [[ -n "$detail" ]]; then
+    msg "  [warn] $label: $detail"
+  else
+    msg "  [warn] $label"
+  fi
+}
+
+service_load_state() {
+  if ! user_bus_ok; then
+    printf "unknown\n"
+    return 0
+  fi
+  local out
+  out="$(systemctl --user show "$USER_SERVICE_NAME" -p LoadState --value 2>/dev/null || true)"
+  [[ -n "$out" ]] || out="unknown"
+  printf "%s\n" "$out"
+}
+
+service_enabled_state() {
+  if ! user_bus_ok; then
+    printf "unknown\n"
+    return 0
+  fi
+  local out
+  out="$(systemctl --user is-enabled "$USER_SERVICE_NAME" 2>/dev/null || true)"
+  [[ -n "$out" ]] || out="unknown"
+  printf "%s\n" "$out"
+}
+
+service_main_pid() {
+  if ! user_bus_ok; then
+    printf "0\n"
+    return 0
+  fi
+  local out
+  out="$(systemctl --user show "$USER_SERVICE_NAME" -p MainPID --value 2>/dev/null || true)"
+  [[ -n "$out" ]] || out="0"
+  printf "%s\n" "$out"
+}
+
 doctor() {
+  local fails=0 warns=0
+  local bus_state load_state active_state enabled_state main_pid
+  local hs_health hs_menu payload payload_ok payload_service
+
   msg "Indexctl doctor (user-service only)"
+  msg "Root        : $ROOT_DIR"
   msg "User service: $USER_SERVICE_NAME"
+  msg "Base URL    : $BASE_URL"
   msg "Health URL  : $HEALTH_URL"
+
   msg ""
-  msg "User state  : $(user_state)"
-  health_check
+  msg "Checks:"
+
+  if has_cmd systemctl; then
+    doctor_line_ok "systemctl" "$(command -v systemctl)"
+  else
+    doctor_line_fail "systemctl" "missing"
+    fails=$((fails + 1))
+  fi
+
+  if has_cmd curl; then
+    doctor_line_ok "curl" "$(command -v curl)"
+  else
+    doctor_line_fail "curl" "missing (health probes disabled)"
+    fails=$((fails + 1))
+  fi
+
+  if user_bus_ok; then
+    bus_state="ok"
+    doctor_line_ok "user bus" "reachable"
+  else
+    bus_state="fail"
+    doctor_line_fail "user bus" "unreachable (check linger/login session)"
+    fails=$((fails + 1))
+  fi
+
+  load_state="$(service_load_state)"
+  case "$load_state" in
+    loaded) doctor_line_ok "unit load-state" "$load_state" ;;
+    unknown|not-found)
+      doctor_line_fail "unit load-state" "$load_state"
+      fails=$((fails + 1))
+      ;;
+    *)
+      doctor_line_warn "unit load-state" "$load_state"
+      warns=$((warns + 1))
+      ;;
+  esac
+
+  active_state="$(user_state)"
+  if [[ "$active_state" == "active" ]]; then
+    doctor_line_ok "unit active-state" "$active_state"
+  else
+    doctor_line_warn "unit active-state" "$active_state"
+    warns=$((warns + 1))
+  fi
+
+  enabled_state="$(service_enabled_state)"
+  case "$enabled_state" in
+    enabled) doctor_line_ok "unit enabled-state" "$enabled_state" ;;
+    disabled|static|indirect) doctor_line_warn "unit enabled-state" "$enabled_state" ; warns=$((warns + 1)) ;;
+    unknown)
+      if [[ "$bus_state" == "fail" ]]; then
+        doctor_line_warn "unit enabled-state" "$enabled_state (user bus unavailable)"
+      else
+        doctor_line_warn "unit enabled-state" "$enabled_state"
+      fi
+      warns=$((warns + 1))
+      ;;
+    *)
+      doctor_line_warn "unit enabled-state" "$enabled_state"
+      warns=$((warns + 1))
+      ;;
+  esac
+
+  main_pid="$(service_main_pid)"
+  if [[ "$main_pid" =~ ^[0-9]+$ ]] && [[ "$main_pid" -gt 0 ]]; then
+    doctor_line_ok "unit main-pid" "$main_pid"
+  else
+    doctor_line_warn "unit main-pid" "$main_pid"
+    warns=$((warns + 1))
+  fi
+
+  hs_health="$(http_status "$HEALTH_URL")"
+  if [[ "$hs_health" == "200" ]]; then
+    doctor_line_ok "health endpoint" "$hs_health $HEALTH_URL"
+  else
+    doctor_line_fail "health endpoint" "${hs_health:-000} $HEALTH_URL"
+    fails=$((fails + 1))
+  fi
+
+  hs_menu="$(http_status "$BASE_URL/menu")"
+  if [[ "$hs_menu" == "200" ]]; then
+    doctor_line_ok "menu endpoint" "$hs_menu $BASE_URL/menu"
+  else
+    doctor_line_warn "menu endpoint" "${hs_menu:-000} $BASE_URL/menu"
+    warns=$((warns + 1))
+  fi
+
+  payload="$(curl -fsS --connect-timeout 3 --max-time 8 "$HEALTH_URL" 2>/dev/null || true)"
+  if [[ -z "$payload" ]]; then
+    doctor_line_fail "health payload" "empty/unreadable"
+    fails=$((fails + 1))
+  else
+    payload_ok=""
+    payload_service=""
+    if has_jq; then
+      payload_ok="$(jq -r '.ok // empty' <<<"$payload" 2>/dev/null || true)"
+      payload_service="$(jq -r '.service // empty' <<<"$payload" 2>/dev/null || true)"
+    else
+      [[ "$payload" == *'"ok":true'* ]] && payload_ok="true"
+      if [[ "$payload" =~ \"service\":\"([^\"]+)\" ]]; then
+        payload_service="${BASH_REMATCH[1]}"
+      fi
+    fi
+
+    if [[ "$payload_ok" == "true" ]]; then
+      doctor_line_ok "health payload.ok" "true"
+    else
+      doctor_line_warn "health payload.ok" "missing/false"
+      warns=$((warns + 1))
+    fi
+
+    if [[ -n "$payload_service" ]]; then
+      if [[ "$payload_service" == "index-centre" ]]; then
+        doctor_line_ok "health payload.service" "$payload_service"
+      else
+        doctor_line_warn "health payload.service" "$payload_service (expected index-centre)"
+        warns=$((warns + 1))
+      fi
+    else
+      doctor_line_warn "health payload.service" "missing"
+      warns=$((warns + 1))
+    fi
+  fi
+
+  msg ""
+  if [[ $fails -eq 0 ]]; then
+    msg "Doctor result: PASS (warnings=$warns)"
+    return 0
+  fi
+  msg "Doctor result: FAIL (fails=$fails warnings=$warns)"
+  return 1
 }
 
 mode_status() {
@@ -127,6 +345,39 @@ hub_doctor() {
   die "not executable and bash not found: $HUB_DOCTOR"
 }
 
+menu() {
+  local action=""
+  action="$(choose \
+    "status" \
+    "doctor" \
+    "start" \
+    "restart" \
+    "stop" \
+    "logs" \
+    "enable" \
+    "disable" \
+    "mode-status" \
+    "mode-dev" \
+    "hub-doctor" \
+    "quit" || true)"
+
+  case "$action" in
+    status) status_user_svc ;;
+    doctor) doctor ;;
+    start) start_user_svc ;;
+    restart) restart_user_svc ;;
+    stop) stop_user_svc ;;
+    logs) logs_user_svc ;;
+    enable) enable_user_svc ;;
+    disable) disable_user_svc ;;
+    mode-status) mode_status ;;
+    mode-dev) mode_dev ;;
+    hub-doctor) hub_doctor ;;
+    quit|"") return 0 ;;
+    *) return 0 ;;
+  esac
+}
+
 usage() {
   cat <<EOF
 indexctl - manage αOS index-node user service
@@ -136,6 +387,7 @@ Compatibility note:
   - System-service workflow was removed from this tool.
 
 Usage:
+  scripts/indexctl menu
   scripts/indexctl start|stop|restart|status|logs
   scripts/indexctl enable|disable
   scripts/indexctl user-start|user-stop|user-status
@@ -144,6 +396,7 @@ Usage:
   scripts/indexctl hub-doctor
 
 Env:
+  AOS_INDEX_BASE_URL=http://127.0.0.1:8799
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
   AOS_INDEX_USER_SERVICE=aos-index-dev.service
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor
@@ -151,7 +404,15 @@ EOF
 }
 
 cmd="${1:-}"
+if [[ -z "$cmd" ]]; then
+  if ctl_can_prompt; then
+    cmd="menu"
+  else
+    cmd="help"
+  fi
+fi
 case "$cmd" in
+  menu) menu ;;
   start) start_user_svc ;;
   stop) stop_user_svc ;;
   restart) restart_user_svc ;;

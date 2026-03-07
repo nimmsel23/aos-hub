@@ -52,8 +52,8 @@
 // - Drive: Alpha_Door/1-Potential/*.md (individual idea files)
 // - Drive: Alpha_Door/1-Potential/hotlist_index.json (index for local tools)
 // - Sheets: HotList_Log (analytics tracking)
-// - Local: ~/AlphaOS-Vault/Door/1-Potential/*.md (synced via rclone)
-// - Local: ~/AlphaOS-Vault/Door/1-Potential/hotlist_index.json
+// - Local: ~/vault/Door/1-Potential/*.md (synced via rclone)
+// - Local: ~/vault/Door/1-Potential/hotlist_index.json
 //
 // IMPORTANT NOTES:
 // - .md files are SOURCE OF TRUTH for GAS (reads directly from Drive)

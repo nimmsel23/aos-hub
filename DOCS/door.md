@@ -255,8 +255,8 @@ hotlist_setupUuidSyncTrigger()  // Creates 15-min trigger
 - `GET /api/door/hotlist` - List items with UUIDs
 
 **Storage:**
-- `~/AlphaOS-Vault/Door/.door-flow.json` - Tracking file with UUIDs
-- `~/AlphaOS-Vault/Door/1-Potential/` - Markdown files
+- `~/vault/Door/.door-flow.json` - Tracking file with UUIDs
+- `~/vault/Door/1-Potential/` - Markdown files
 
 **Taskwarrior Integration:**
 ```bash
@@ -516,7 +516,7 @@ hot "Test CLI Hot List"
 task project:HotList list
 
 # 3. Check markdown created
-ls ~/AlphaOS-Vault/Door/1-Potential/
+ls ~/vault/Door/1-Potential/
 ```
 
 ---

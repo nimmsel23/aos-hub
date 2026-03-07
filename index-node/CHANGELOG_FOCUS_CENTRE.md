@@ -120,13 +120,13 @@ SORT domain ASC
 
 ```bash
 # List all BODY focus maps
-grep -l "domain: BODY" ~/AlphaOS-Vault/Game/Focus/*.md
+grep -l "domain: BODY" ~/vault/Game/Focus/*.md
 
 # Extract all habits from BODY maps
-awk '/^domain: BODY/,/^## HABITS/ {if (/^## HABITS/) p=1; next} p && /^## / {exit} p' ~/AlphaOS-Vault/Game/Focus/*.md
+awk '/^domain: BODY/,/^## HABITS/ {if (/^## HABITS/) p=1; next} p && /^## / {exit} p' ~/vault/Game/Focus/*.md
 
 # Find Focus Maps from December 2025
-grep -l "month: December 2025" ~/AlphaOS-Vault/Game/Focus/*.md
+grep -l "month: December 2025" ~/vault/Game/Focus/*.md
 ```
 
 ### Added - Cascade Integration (Freedom → Focus → Fire)
@@ -230,7 +230,7 @@ tags:
 - Generates YAML with `focus_maps:` references
 - Constructs Focus Map filenames from current month
 - Posts to `/api/game/export` endpoint
-- Saves to `~/AlphaOS-Vault/Game/Fire/`
+- Saves to `~/vault/Game/Fire/`
 
 #### Freedom Map YAML Front Matter
 
@@ -355,13 +355,13 @@ SORT date DESC
 
 ```bash
 # Find which Fire Maps use a specific Focus Map
-grep -l "BODY_focus_January_2026" ~/AlphaOS-Vault/Game/Fire/*.md
+grep -l "BODY_focus_January_2026" ~/vault/Game/Fire/*.md
 
 # Extract focus_maps object from Fire Map
-awk '/^focus_maps:/,/^[a-z]/ {print}' ~/AlphaOS-Vault/Game/Fire/fire_2026-W03.md
+awk '/^focus_maps:/,/^[a-z]/ {print}' ~/vault/Game/Fire/fire_2026-W03.md
 
 # List all Fire Maps with their Focus references
-grep -H "focus_maps:" ~/AlphaOS-Vault/Game/Fire/*.md
+grep -H "focus_maps:" ~/vault/Game/Fire/*.md
 ```
 
 **Benefits:**
@@ -452,7 +452,7 @@ grep -H "focus_maps:" ~/AlphaOS-Vault/Game/Fire/*.md
 #### Index Node Backend (`server.js:2885-2957`)
 - **GET `/api/game/focus/state`**
   - Returns all 4 domain states
-  - Storage: `~/AlphaOS-Vault/Game/Focus/.focus-state.json`
+  - Storage: `~/vault/Game/Focus/.focus-state.json`
   - Fallback: Empty states if file doesn't exist
 
 - **POST `/api/game/focus/state`**
@@ -513,7 +513,7 @@ grep -H "focus_maps:" ~/AlphaOS-Vault/Game/Fire/*.md
 
 **Index Node:**
 ```
-~/AlphaOS-Vault/Game/Focus/
+~/vault/Game/Focus/
 ├── .focus-state.json              # Auto-save state (all domains)
 ├── BODY_focus_December_2025.md    # Locked maps
 ├── BEING_focus_current.md
@@ -603,7 +603,7 @@ UserProperties:
 **No Breaking Changes** - All existing functionality preserved.
 
 **New Files Created:**
-- Index Node: `~/AlphaOS-Vault/Game/Focus/.focus-state.json`
+- Index Node: `~/vault/Game/Focus/.focus-state.json`
 - GAS: UserProperties key `FOCUS_STATE`
 
 **Existing Maps Compatible:**

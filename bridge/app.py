@@ -31,7 +31,7 @@ STARTED_AT = datetime.now(timezone.utc)
 DEFAULT_TZ = os.getenv("AOS_TZ", "Europe/Vienna")
 TZ = ZoneInfo(DEFAULT_TZ)
 
-VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "AlphaOS-Vault")).expanduser()
+VAULT_DIR = Path(os.getenv("AOS_VAULT_DIR", Path.home() / "vault")).expanduser()
 
 # Core4 storage model (important):
 # - Truth = append-only event ledger under `.core4/events/<YYYY-MM-DD>/*.json`

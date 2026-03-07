@@ -8,14 +8,14 @@ Standalone Telegram bot for guided War Stack creation. It writes a full War Stac
 
 ## What It Does
 - Interactive Q&A flow for a War Stack (Domain, Door, 4 Hits, Insights, Lessons).
-- Writes markdown to `~/AlphaOS-Vault/Weekly/` by default.
+- Writes markdown to `~/vault/Weekly/` by default.
 - Posts a summary + the full markdown into Telegram (optional).
 - `/resume` loads the JSON draft from `WARSTACK_DATA_DIR` (local).
 
 ## Environment Variables
 - `WARSTACK_BOT_TOKEN` (required)
 - `TELEGRAM_BOT_TOKEN` (fallback if above missing)
-- `OBSIDIAN_VAULT` (defaults to `~/AlphaOS-Vault`)
+- `OBSIDIAN_VAULT` (defaults to `~/vault`)
 - `WARSTACK_DATA_DIR` (defaults to `~/.local/share/warstack`)
 - `GEMINI_API_KEY` (optional; strategist feedback)
 - `GEMINI_MODEL` (optional; default `gemini-2.5-flash`)

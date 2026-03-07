@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VAULT_DIR="${AOS_VAULT_DIR:-$HOME/AlphaOS-Vault}"
+VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
 TENT_DIR="$VAULT_DIR/GAME/Tent"
 
 # Get current week's tent file

@@ -164,7 +164,7 @@ Config via `~/.env/fire.env` oder `AOS_FIREMAP_*` Umgebungsvariablen.
 Fuer Bots/UIs (schnell lesbar, kein `task export` pro Request):
 
 - **Default:** `~/.local/share/alphaos/task_export.json`
-- **Vault-Copy:** `~/AlphaOS-Vault/.alphaos/task_export.json` (optional, fuer GAS via Drive)
+- **Vault-Copy:** `~/vault/.alphaos/task_export.json` (optional, fuer GAS via Drive)
 - **Aktualisiert durch:** `on-exit.99-alphaos.py` Hook (nach jeder Task-Aktion)
 
 ### GAS: Snapshot aus Drive lesen
@@ -193,10 +193,10 @@ function aos_twDate_(value) {
 
 ```bash
 # 1. War Stack -> Fire Map
-warstack-to-firemap.sh ~/AlphaOs-Vault/DOOR/War-Stacks/WAR_STACK_X.md
+warstack-to-firemap.sh ~/vault/DOOR/War-Stacks/WAR_STACK_X.md
 
 # 2. Fire Map -> Taskwarrior
-fire-to-tasks.sh ~/AlphaOs-Vault/GAME/Fire/FIRE_MAP_BODY_KWxx_2026.md
+fire-to-tasks.sh ~/vault/GAME/Fire/FIRE_MAP_BODY_KWxx_2026.md
 
 # 3. Pruefen
 task fired    # heute

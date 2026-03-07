@@ -4,7 +4,7 @@
 - UI: `http://127.0.0.1:8799/game/fire`
 
 ## Storage
-- Vault: `~/AlphaOS-Vault/Game/Fire` (local)
+- Vault: `~/vault/Game/Fire` (local)
 
 ## API (Node)
 - `GET /api/fire/day` (Taskwarrior primary, TickTick fallback)

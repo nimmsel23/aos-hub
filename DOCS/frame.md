@@ -255,7 +255,7 @@ FIRE (Weekly map - daily action steps, making impossible possible)
 
 **Planned:**
 - Local Frame Map UI
-- Vault storage: `~/AlphaOS-Vault/Game/Frame/`
+- Vault storage: `~/vault/Game/Frame/`
 - API endpoints: `/api/frame/save`, `/api/frame/list`
 
 ---
@@ -299,7 +299,7 @@ getRecentFrames(5)  // Should show last 5 Frame Maps
 - [freedom.md](freedom.md) - Next step after Frame
 - [game.md](game.md) - Complete GAME system overview
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
-- [AlphaOS-THE-GAME.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Game philosophy (Chapter 32)
+- [AlphaOS-THE-GAME.md](~/Dokumente/vault/ALPHA_OS/AlphaOS-THE-GAME.md) - Elliott Hulse Game philosophy (Chapter 32)
 
 ---
 

@@ -10,7 +10,7 @@ This folder is the documentation home for everything Focus-related in `aos-hub`.
 
 ## Blueprint Reference
 
-- Source text: `~/AlphaOS-Vault/AlphaOS-blueprints/34 - Focus.md` (Elliott Hulse, Chapter 34)
+- Source text: `~/vault/AlphaOS-blueprints/34 - Focus.md` (Elliott Hulse, Chapter 34)
 
 ## Where The Code Lives
 
@@ -25,8 +25,8 @@ This folder is the documentation home for everything Focus-related in `aos-hub`.
 
 ## Storage
 
-- Focus Maps (markdown): `~/AlphaOS-Vault/Game/Focus/*.md`
-- Draft autosave state: `~/AlphaOS-Vault/Game/Focus/.focus-state.json`
+- Focus Maps (markdown): `~/vault/Game/Focus/*.md`
+- Draft autosave state: `~/vault/Game/Focus/.focus-state.json`
 
 ## File Format
 
@@ -51,5 +51,5 @@ Fire Maps use these bases in their YAML `focus_maps:` object to connect executio
 
 ## Troubleshooting
 
-- If saved maps do not show up in the UI, verify the vault exists at `~/AlphaOS-Vault/Game/Focus/`.
+- If saved maps do not show up in the UI, verify the vault exists at `~/vault/Game/Focus/`.
 - If Fire Map cascade queries break, check Focus filenames stayed stable (no renames without updating Fire YAML).

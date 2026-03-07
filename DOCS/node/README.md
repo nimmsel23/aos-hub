@@ -29,7 +29,7 @@ API endpoints → server.js
     ↓
 Data Layer:
   ├─ Taskwarrior (via `task` CLI)
-  ├─ Vault markdown files (~/AlphaOS-Vault/)
+  ├─ Vault markdown files (~/vault/)
   ├─ Local JSON stores (~/.local/share/alphaos/)
   └─ Bridge (:8080) for GAS ↔ Taskwarrior communication
 ```
@@ -40,7 +40,7 @@ Data Layer:
 
 ### VOICE Centre
 - **UI:** `http://127.0.0.1:8799/voice`
-- **Storage:** `~/Voice` OR `~/AlphaOS-Vault/VOICE`
+- **Storage:** `~/Voice` OR `~/vault/VOICE`
 - **APIs:**
   - `POST /api/voice/export` - Save session
   - `POST /api/voice/autosave` - Auto-save draft
@@ -52,7 +52,7 @@ Data Layer:
 
 ### Game Centre
 - **UI:** `http://127.0.0.1:8799/game`
-- **Storage:** `~/AlphaOS-Vault/Game/`
+- **Storage:** `~/vault/Game/`
 
 **Sub-centres:**
 - **Frame:** `/game/frame` → Frame Maps
@@ -96,7 +96,7 @@ CORE4_TW_SYNC=true
 
 ### Fruits Centre
 - **UI:** `http://127.0.0.1:8799/facts`
-- **Storage:** `~/AlphaOS-Vault/Game/Fruits/`
+- **Storage:** `~/vault/Game/Fruits/`
 
 **APIs:**
 - `GET /api/fruits` - Get all data
@@ -110,8 +110,8 @@ CORE4_TW_SYNC=true
 **Env:**
 ```bash
 FRUITS_QUESTIONS=data/fruits_questions.json
-FRUITS_STORE=~/AlphaOS-Vault/Game/Fruits/fruits_store.json
-FRUITS_EXPORT_DIR=~/AlphaOS-Vault/Game/Fruits
+FRUITS_STORE=~/vault/Game/Fruits/fruits_store.json
+FRUITS_EXPORT_DIR=~/vault/Game/Fruits
 ```
 
 ---
@@ -731,7 +731,7 @@ Menu and health:
 
 General's Tent:
 
-- `POST /api/generals/report` - save weekly report markdown to `~/AlphaOS-Vault/Game/Tent`
+- `POST /api/generals/report` - save weekly report markdown to `~/vault/Game/Tent`
 - `GET /api/generals/latest?type=frame|freedom|focus|fire|voice` - latest markdown metadata
 
 Fruits:
@@ -854,11 +854,11 @@ Core server:
 Vault paths and exports:
 
 - `FRUITS_QUESTIONS` (default `data/fruits_questions.json`)
-- `FRUITS_DIR` (default `~/AlphaOS-Vault/Game/Fruits`)
+- `FRUITS_DIR` (default `~/vault/Game/Fruits`)
 - `FRUITS_STORE` (default `FRUITS_DIR/fruits_store.json`)
 - `FRUITS_EXPORT_DIR` (default `FRUITS_DIR`)
-- `DOOR_FLOW_PATH` (default `~/AlphaOS-Vault/Door/.door-flow.json`)
-- `VOICE_VAULT_DIR` (default auto-detects `~/Voice`, else `~/AlphaOS-Vault/VOICE`)
+- `DOOR_FLOW_PATH` (default `~/vault/Door/.door-flow.json`)
+- `VOICE_VAULT_DIR` (default auto-detects `~/Voice`, else `~/vault/VOICE`)
 
 Sync and automation:
 
@@ -871,7 +871,7 @@ Sync and automation:
 - `SYNC_TAGS` (default `door,hit,strike,core4,fire`)
 - `SYNC_MAP` (default `~/.local/share/alphaos/task_sync_map.json`)
 - `RCLONE_RC_URL` (default `http://127.0.0.1:5572`)
-- `RCLONE_TARGET` (default `fabian:AlphaOS-Vault`)
+- `RCLONE_TARGET` (default `fabian:vault`)
 - `RCLONE_BACKUP_TARGET` (default `${RCLONE_TARGET}-backups`)
 - `RCLONE_FLAGS` (default `--update --skip-links --create-empty-src-dirs`)
 - `DOOR_HITS_TICKTICK` (set `1` to push War Stack hits)
@@ -899,11 +899,11 @@ Sync and automation:
 
 Door Centre can export markdown directly into your vault:
 
-- Hot List → `~/AlphaOS-Vault/Door/1-Potential`
-- Door War → `~/AlphaOS-Vault/Door/2-Plan`
-- War Stack → `~/AlphaOS-Vault/Door/War-Stacks`
-- Hit List → `~/AlphaOS-Vault/Door/3-Production`
-- Profit → `~/AlphaOS-Vault/Door/4-Profit`
+- Hot List → `~/vault/Door/1-Potential`
+- Door War → `~/vault/Door/2-Plan`
+- War Stack → `~/vault/Door/War-Stacks`
+- Hit List → `~/vault/Door/3-Production`
+- Profit → `~/vault/Door/4-Profit`
 
 ### TickTick Push (Optional)
 
@@ -1007,10 +1007,10 @@ scripts/task_sync_hook.py
 
 Game sub-centres export markdown into the vault:
 
-- Frame → `~/AlphaOS-Vault/Game/Frame`
-- Freedom → `~/AlphaOS-Vault/Game/Freedom`
-- Focus → `~/AlphaOS-Vault/Game/Focus`
-- Fire → `~/AlphaOS-Vault/Game/Fire`
+- Frame → `~/vault/Game/Frame`
+- Freedom → `~/vault/Game/Freedom`
+- Focus → `~/vault/Game/Focus`
+- Fire → `~/vault/Game/Fire`
 
 ### TickTick Push (Optional)
 
@@ -1041,7 +1041,7 @@ Mappings are stored in:
 ## Vault Sync (rclone)
 
 - Script: `scripts/vault-sync.sh` (modes: `pull`, `push`, default `bisync`).
-- Defaults: local `~/AlphaOS-Vault`, remote `fabian:AlphaOS-Vault`, remote backups `fabian:AlphaOS-Vault-backups`, local backups `~/.local/share/alphaos/vault-backups/`.
+- Defaults: local `~/vault`, remote `fabian:vault`, remote backups `fabian:vault-backups`, local backups `~/.local/share/alphaos/vault-backups/`.
 - Backups: `--backup-dir` keeps overwritten/deleted files in timestamped folders; bisync resolves conflicts by newer mtime and tracks renames.
 - Symlinks: default is to skip symlinks (`--skip-links`); override flags via `VAULT_RCLONE_FLAGS` (e.g. `--copy-links`).
 - Systemd templates: `systemd/alphaos-vault-sync-pull.service` (pull on boot), `systemd/alphaos-vault-sync-push.service` (push on shutdown).
@@ -1051,7 +1051,7 @@ Mappings are stored in:
 ## Troubleshooting
 
 - `menu.yaml` not loading - ensure valid YAML/JSON and `MENU_YAML` points to it.
-- Vault reads empty - confirm `~/AlphaOS-Vault` exists and expected subfolders are present.
+- Vault reads empty - confirm `~/vault` exists and expected subfolders are present.
 - TickTick push fails - check `~/.alpha_os/tick.env` and token/project values.
 - Taskwarrior export missing - verify `TASK_EXPORT` path and that it is valid JSON.
 - Terminal websocket rejected - `TERMINAL_ENABLED` must not be `0`, and remote access needs `TERMINAL_ALLOW_REMOTE=1`.

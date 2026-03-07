@@ -28,7 +28,7 @@ Bidirectional sync between Taskwarrior Core4 tasks and TickTick with AI-powered 
 task add project:core4 +core4 +fitness "Morning workout" due:today | ticktick_sync.py --stdin
 ```
 - Creates TickTick task automatically
-- Stores UUID mapping in `~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json`
+- Stores UUID mapping in `~/vault/.alphaos/core4_ticktick_map.json`
 - Adds `TW_UUID: <uuid>` to TickTick task content
 
 **2. TickTick → Taskwarrior (completion sync)**
@@ -81,7 +81,7 @@ export CORE4_TICKTICK_COMPLETE_ENDPOINT="..."  # Custom completion endpoint
 
 ### UUID Mapping Storage
 
-**Primary:** `~/AlphaOS-Vault/.alphaos/core4_ticktick_map.json`
+**Primary:** `~/vault/.alphaos/core4_ticktick_map.json`
 **Legacy:** `~/.local/share/alphaos/core4_ticktick_map.json` (symlink)
 
 **Format:**
@@ -193,7 +193,7 @@ door_uuid_sync.py --door-uuid a1b2c3d4-... --ticktick-id 63f8e7c9a1b2
 2. Appends UUID to description:
    ```
    Taskwarrior Door UUID: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-   Obsidian File: obsidian://open?vault=AlphaOS-Vault&file=Door/War-Stacks/...
+   Obsidian File: obsidian://open?vault=vault&file=Door/War-Stacks/...
    ```
 3. Updates project: `POST /project/{id}` with new description
 

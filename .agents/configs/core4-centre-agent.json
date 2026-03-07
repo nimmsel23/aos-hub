@@ -27,7 +27,7 @@
       "router/extensions/core4_actions.py (Taskwarrior shortcuts - disabled by default)"
     ],
     "data": [
-      "~/AlphaOS-Vault/Alpha_Core4/core4_week_YYYY-Wxx.json (weekly JSON)",
+      "~/vault/Alpha_Core4/core4_week_YYYY-Wxx.json (weekly JSON)",
       "~/.local/share/alphaos/task_export.json (Taskwarrior export)",
       "~/.local/share/alphaos/task_sync_map.json (UUID bridge for TickTick)"
     ]

@@ -186,7 +186,7 @@ sync:
   on_conflict: "taskwarrior_wins"  # taskwarrior_wins, ticktick_wins, ask
 
 uuid_mapping:
-  storage: "~/AlphaOS-Vault/.alphaos/tw_ticktick_map.json"
+  storage: "~/vault/.alphaos/tw_ticktick_map.json"
   legacy_symlink: "~/.local/share/alphaos/tw_ticktick_map.json"
 
 gemini:
@@ -317,7 +317,7 @@ ticktick_status() {
     fi
 
     # Mapping stats
-    local map_file="$HOME/AlphaOS-Vault/.alphaos/tw_ticktick_map.json"
+    local map_file="$HOME/vault/.alphaos/tw_ticktick_map.json"
     if [[ -f "$map_file" ]]; then
         local count=$(jq 'length' "$map_file")
         echo ""
@@ -344,7 +344,7 @@ ticktick_sync() {
 }
 
 ticktick_map() {
-    local map_file="$HOME/AlphaOS-Vault/.alphaos/tw_ticktick_map.json"
+    local map_file="$HOME/vault/.alphaos/tw_ticktick_map.json"
     if [[ ! -f "$map_file" ]]; then
         echo "No mapping file found"
         exit 1

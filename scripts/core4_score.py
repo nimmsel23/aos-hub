@@ -12,7 +12,7 @@ from urllib import request, parse
 
 BRIDGE_URL = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
 CORE4_DIR = Path(
-    os.environ.get("AOS_CORE4_DIR", Path.home() / "AlphaOS-Vault" / "Alpha_Core4")
+    os.environ.get("AOS_CORE4_DIR", Path.home() / "vault" / "Alpha_Core4")
 ).expanduser()
 
 

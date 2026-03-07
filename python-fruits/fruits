@@ -40,19 +40,19 @@ if raw_store:
 STORE_YAML = Path(
     os.environ.get(
         "FRUITS_STORE_YAML",
-        _yaml_path or os.path.expanduser("~/AlphaOS-Vault/Game/Fruits/fruits_store.yaml"),
+        _yaml_path or os.path.expanduser("~/vault/Game/Fruits/fruits_store.yaml"),
     )
 )
 STORE_JSON = Path(
     os.environ.get(
         "FRUITS_STORE_JSON",
-        _json_path or os.path.expanduser("~/AlphaOS-Vault/Game/Fruits/fruits_store.json"),
+        _json_path or os.path.expanduser("~/vault/Game/Fruits/fruits_store.json"),
     )
 )
 LEGACY_CSV = Path(
     os.environ.get(
         "FRUITS_LEGACY_CSV",
-        os.path.expanduser("~/AlphaOs-Vault/.config/fruits.csv"),
+        os.path.expanduser("~/vault/.config/fruits.csv"),
     )
 )
 

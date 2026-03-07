@@ -138,8 +138,8 @@ FRUITS_DEFAULT_CHAT_ID     // Default Telegram chat
 
 #### Storage
 - **Questions JSON:** `data/fruits_questions.json`
-- **Store JSON:** `FRUITS_STORE` (default: `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`)
-- **Export Dir:** `FRUITS_EXPORT_DIR` (default: `~/AlphaOS-Vault/Game/Fruits`)
+- **Store JSON:** `FRUITS_STORE` (default: `~/vault/Game/Fruits/fruits_store.json`)
+- **Export Dir:** `FRUITS_EXPORT_DIR` (default: `~/vault/Game/Fruits`)
 
 #### API (Node.js Endpoints)
 
@@ -329,8 +329,8 @@ dailyQuestion()  // Manual run
 # .env
 FRUITS_QUESTIONS=/path/to/fruits_questions.json
 FRUITS_DIR=~/.local/share/alphaos/fruits
-FRUITS_STORE=~/AlphaOS-Vault/Game/Fruits/fruits_store.json
-FRUITS_EXPORT_DIR=~/AlphaOS-Vault/Game/Fruits
+FRUITS_STORE=~/vault/Game/Fruits/fruits_store.json
+FRUITS_EXPORT_DIR=~/vault/Game/Fruits
 ```
 
 ### First Week Workflow
@@ -420,8 +420,8 @@ Quick recovery (Apps Script editor):
 
 ## Terminal CLI (python-fruits)
 
-- Primary store: YAML (default `~/AlphaOS-Vault/Game/Fruits/fruits_store.yaml`)
-- JSON mirror for GAS: `~/AlphaOS-Vault/Game/Fruits/fruits_store.json`
+- Primary store: YAML (default `~/vault/Game/Fruits/fruits_store.yaml`)
+- JSON mirror for GAS: `~/vault/Game/Fruits/fruits_store.json`
 - Edit mode (fzf): select a previously answered question and refine the fact
 - Legacy CSV migration supported via `FRUITS_LEGACY_CSV`
 
@@ -434,7 +434,7 @@ Quick recovery (Apps Script editor):
 - [core4.md](core4.md) - Daily Habits
 - [gas/README.md](../gas/README.md) - GAS HQ full docs
 - [node/README.md](../node/README.md) - Node.js server docs
-- [AlphaOS-THE-VOICE.md](~/Dokumente/AlphaOs-Vault/ALPHA_OS/AlphaOS-THE-VOICE.md) - Elliott Hulse Blueprint (Chapter 21 - Submit)
+- [AlphaOS-THE-VOICE.md](~/Dokumente/vault/ALPHA_OS/AlphaOS-THE-VOICE.md) - Elliott Hulse Blueprint (Chapter 21 - Submit)
 
 ---
 

@@ -50,7 +50,7 @@ Both sides can initiate requests:
 - `AOS_BRIDGE_HOST` (default `0.0.0.0`)
 - `AOS_BRIDGE_PORT` (default `8080`)
 - `AOS_TZ` (default `Europe/Vienna`)
-- `AOS_VAULT_DIR` (default `~/AlphaOS-Vault`)
+- `AOS_VAULT_DIR` (default `~/vault`)
 - `AOS_CORE4_LOCAL_DIR` (default `<vault>/Core4`) — Primary Core4 event storage
 - `AOS_CORE4_MOUNT_DIR` (default `<vault>/Alpha_Core4`) — **DEPRECATED: Set to `/nonexistent`** (see Performance Notes below)
 - `AOS_FRUITS_DIR` (default `<vault>/Alpha_Fruits`)
@@ -81,12 +81,12 @@ Both sides can initiate requests:
 
 ### Rclone mapping mode (Drive root folders)
 
-If your Google Drive has domain folders like `Alpha_Core4`, `Alpha_Voice`, etc. (instead of a single `AlphaOS-Vault/...` tree),
+If your Google Drive has domain folders like `Alpha_Core4`, `Alpha_Voice`, etc. (instead of a single `vault/...` tree),
 set `AOS_RCLONE_REMOTE` to the remote root (e.g. `eldanioo:`) and define `AOS_RCLONE_MAP`:
 
 ```bash
 AOS_RCLONE_REMOTE=eldanioo:
-AOS_RCLONE_LOCAL=~/AlphaOS-Vault
+AOS_RCLONE_LOCAL=~/vault
 AOS_RCLONE_MAP=Core4=Alpha_Core4,Voice=Alpha_Voice,Door=Alpha_Door,Game=Alpha_Game
 ```
 
@@ -210,7 +210,7 @@ GAS HQ WebApp / Bots
         |
         |  writes JSON/MD into local vault
         v
-AlphaOS-Vault (local)
+vault (local)
         |
         |  Node (8799) reads local JSON/MD
         v

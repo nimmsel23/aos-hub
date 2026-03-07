@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VAULT_PATH="$HOME/AlphaOS-Vault"
+VAULT_PATH="$HOME/vault"
 LOG_FILE="$HOME/.dotfiles/logs/door-lifecycle.log"
 
 mkdir -p "$(dirname "$LOG_FILE")"
