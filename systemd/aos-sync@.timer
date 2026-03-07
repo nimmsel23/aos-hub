@@ -2,8 +2,7 @@
 Description=αOS Sync Timer (%i)
 
 [Timer]
-# default schedule (override per-target with --at)
-OnCalendar=daily
+OnCalendar=*-*-* 23:00:00
 Persistent=true
 
 [Install]
