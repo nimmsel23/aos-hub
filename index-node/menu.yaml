@@ -14,32 +14,32 @@
     {
       "label": "Vital Hub",
       "cmd": "vitalctx",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/"
+      "url": "/vitalctx"
     },
     {
       "label": "Fitness Centre",
       "cmd": "fitness",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/fitness/"
+      "url": "/fitnessctx"
     },
     {
       "label": "Entspannungs Centre",
       "cmd": "entspannung",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/entspannung/"
+      "url": "/entspannung"
     },
     {
       "label": "Ernaehrungs Centre",
       "cmd": "ernaehrung",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/ernaehrung/"
+      "url": "/ernaehrung"
     },
     {
       "label": "Klientenverwaltung",
       "cmd": "clientctx",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/clientctx/"
+      "url": "/clientctx"
     },
     {
       "label": "Vital Dojo",
       "cmd": "dojo",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/dojo/"
+      "url": "/dojo"
     },
 
     {
