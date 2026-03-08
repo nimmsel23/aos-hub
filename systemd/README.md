@@ -16,7 +16,7 @@ Services that run under your user account, don't require root.
 - `aos-bridge-dev.service` - Bridge (dev)
 
 **Active Timers:**
-- `aos-hub-live-push.timer` (optional, user scope live sync)
+- `aos-hub-push.timer` (optional, user scope mirror sync)
 
 **Behavior:**
 - User services only use user-owned env files (e.g. `~/.env/*.env`). They must not depend on `/etc/*`.

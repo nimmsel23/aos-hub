@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily aos-hub backup push (via syncctl)
+Description=Daily aos-hub push (via syncctl)
 After=network-online.target
 Wants=network-online.target
 
@@ -9,7 +9,7 @@ ExecStart=/home/alpha/.local/bin/syncctl hub push
 WorkingDirectory=%h
 Environment=HOME=%h
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin
-StandardOutput=append:%h/.local/share/alphaos/logs/aos-hub-live-push.log
-StandardError=append:%h/.local/share/alphaos/logs/aos-hub-live-push.log
+StandardOutput=append:%h/.local/share/alphaos/logs/aos-hub-push.log
+StandardError=append:%h/.local/share/alphaos/logs/aos-hub-push.log
 ExecCondition=/bin/test -f %h/.config/rclone/rclone.conf
 TimeoutStartSec=6h

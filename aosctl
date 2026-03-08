@@ -1387,7 +1387,7 @@ run_status() {
     _sync_shown=$((_sync_shown + 1))
   done < <(systemctl list-units --all --no-legend 2>/dev/null \
     | awk '{print $1}' | grep "^aos-.*\.timer$" | sort)
-  # user: aos-sync@* + aos-hub-live + alphaos sync-related
+  # user: aos-sync@* + aos-hub-push + alphaos sync-related
   while IFS= read -r unit; do
     [[ -n "$unit" ]] || continue
     local _ua; _ua="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
@@ -1396,7 +1396,7 @@ run_status() {
     _sync_shown=$((_sync_shown + 1))
   done < <(systemctl --user list-units --all --no-legend 2>/dev/null \
     | awk '{print $1}' \
-    | grep -E "^(aos-sync@|aos-hub-live|alphaos-vault-sync|alphaos-safe-rclone|alphaos-dokumente)" \
+    | grep -E "^(aos-sync@|aos-hub-push|alphaos-vault-sync|alphaos-safe-rclone|alphaos-dokumente)" \
     | grep "\.timer$" | sort)
   [[ "$_sync_shown" -eq 0 ]] && msg "  (none active)"
   msg ""

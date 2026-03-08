@@ -1,6 +1,6 @@
 [Unit]
-Description=Daily 23:00 aos-hub backup push
-Requires=aos-hub-live-push.service
+Description=Daily 23:00 aos-hub push
+Requires=aos-hub-push.service
 
 [Timer]
 OnCalendar=*-*-* 23:00:00
