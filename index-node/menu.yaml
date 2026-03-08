@@ -12,10 +12,36 @@
       "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
     },
     {
+      "label": "Vital Hub",
+      "cmd": "vitalctx",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/"
+    },
+    {
       "label": "Fitness Centre",
       "cmd": "fitness",
-      "url": "https://ideapad.tail7a15d6.ts.net/fitnessctx"
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/fitness/"
     },
+    {
+      "label": "Entspannungs Centre",
+      "cmd": "entspannung",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/entspannung/"
+    },
+    {
+      "label": "Ernaehrungs Centre",
+      "cmd": "ernaehrung",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/ernaehrung/"
+    },
+    {
+      "label": "Klienten Base",
+      "cmd": "clients",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/clients/"
+    },
+    {
+      "label": "Vital Dojo",
+      "cmd": "dojo",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/dojo/"
+    },
+
     {
       "label": "Being GPT",
       "cmd": "being",
