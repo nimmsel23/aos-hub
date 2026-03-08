@@ -32,9 +32,9 @@
       "url": "https://ideapad.tail7a15d6.ts.net:8788/ernaehrung/"
     },
     {
-      "label": "Klienten Base",
-      "cmd": "clients",
-      "url": "https://ideapad.tail7a15d6.ts.net:8788/clients/"
+      "label": "Klientenverwaltung",
+      "cmd": "clientctx",
+      "url": "https://ideapad.tail7a15d6.ts.net:8788/clientctx/"
     },
     {
       "label": "Vital Dojo",
