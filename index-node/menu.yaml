@@ -28,8 +28,8 @@
     },
     {
       "label": "Ernaehrungs Centre",
-      "cmd": "ernaehrung",
-      "url": "/ernaehrung"
+      "cmd": "fuel",
+      "url": "/fuel"
     },
     {
       "label": "Klientenverwaltung",
