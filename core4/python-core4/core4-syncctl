@@ -9,17 +9,60 @@ source "$APP_DIR/core4-lib.sh"
 core4_load_env || true
 core4_recompute_config
 
+run_rclone_copy_syncctl() {
+  local label="$1"
+  local src="$2"
+  local dst="$3"
+  shift 3
+
+  local rclone_bin
+  rclone_bin="${AOS_RCLONE_BIN:-$(command -v rclone || true)}"
+  [[ -n "${rclone_bin:-}" && -x "$rclone_bin" ]] || die "rclone not found"
+
+  local output rc=0
+  output="$(
+    "$rclone_bin" copy "$src" "$dst" "$@" \
+      --stats=1s \
+      --stats-one-line \
+      --contimeout 5s \
+      --timeout 30s \
+      --retries 1 \
+      --low-level-retries 1 \
+      2>&1
+  )" || rc=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    printf "%s\n" "$output" >&2
+    return "$rc"
+  fi
+
+  local last transferred
+  last="$(printf "%s\n" "$output" | tail -n 1)"
+  transferred="$(printf "%s\n" "$last" | sed -n 's/.*Transferred:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p')"
+  if [[ -n "${transferred:-}" && "$transferred" != "0" && -x "$HOME/.dotfiles/bin/tele" ]]; then
+    "$HOME/.dotfiles/bin/tele" -s "Core4 ${label}: transferred ${transferred}" >/dev/null 2>&1 || true
+  fi
+  return 0
+}
+
 sync_all() {
   local vaultctl
   vaultctl="$(vaultctl_cmd || true)"
   [[ -n "${vaultctl:-}" ]] || die "vaultctl not found"
-  exec "$vaultctl" sync
+  pull_core4
+  exec "$vaultctl" core4 push
 }
 
 push_core4() {
+  local vaultctl
+  vaultctl="$(vaultctl_cmd || true)"
+  if [[ -n "${vaultctl:-}" ]]; then
+    exec "$vaultctl" core4 push
+  fi
+
   [[ -d "$CORE4_LOCAL_DIR" ]] || die "missing local Core4 dir: $CORE4_LOCAL_DIR"
-  # Only push ledger/seal metadata; avoid Drive duplicates for derived JSON.
-  run_rclone_copy "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" \
+  # Fallback path when vaultctl is unavailable.
+  run_rclone_copy_syncctl "push" "$CORE4_LOCAL_DIR" "$CORE4_REMOTE" \
     --filter "+ events/**" \
     --filter "+ sealed/**" \
     --filter "+ sealed-months/**" \
@@ -31,7 +74,7 @@ pull_core4() {
   mkdir -p "$CORE4_LOCAL_DIR"
 
   # Primary: Pull from Alpha_HQ (private HQ)
-  run_rclone_copy "pull" "$CORE4_REMOTE_HQ" "$CORE4_LOCAL_DIR" \
+  run_rclone_copy_syncctl "pull" "$CORE4_REMOTE_HQ" "$CORE4_LOCAL_DIR" \
     --filter "+ events/**" \
     --filter "+ sealed/**" \
     --filter "+ sealed-months/**" \
@@ -41,7 +84,7 @@ pull_core4() {
   # Secondary (optional): Pull from Alpha_Core4 (standalone multi-user tracker)
   # Events merge automatically (different filenames due to different sources)
   if [[ "${AOS_CORE4_PULL_STANDALONE:-1}" == "1" ]]; then
-    run_rclone_copy "pull" "$CORE4_REMOTE_STANDALONE" "$CORE4_LOCAL_DIR" \
+    run_rclone_copy_syncctl "pull" "$CORE4_REMOTE_STANDALONE" "$CORE4_LOCAL_DIR" \
       --filter "+ events/**" \
       --filter "+ sealed/**" \
       --filter "+ sealed-months/**" \
@@ -56,11 +99,16 @@ pull_core4() {
   if command -v notify-send >/dev/null 2>&1; then
     local today_events
     local day
+    local events_flat=0
+    local events_legacy=0
     day="$(date +%Y-%m-%d)"
-    today_events=$(( \
-      $(find "$CORE4_LOCAL_DIR/events/$day" -type f 2>/dev/null | wc -l) + \
-      $(find "$CORE4_LOCAL_DIR/.core4/events/$day" -type f 2>/dev/null | wc -l) \
-    ))
+    if [[ -d "$CORE4_LOCAL_DIR/events/$day" ]]; then
+      events_flat=$(find "$CORE4_LOCAL_DIR/events/$day" -type f 2>/dev/null | wc -l)
+    fi
+    if [[ -d "$CORE4_LOCAL_DIR/.core4/events/$day" ]]; then
+      events_legacy=$(find "$CORE4_LOCAL_DIR/.core4/events/$day" -type f 2>/dev/null | wc -l)
+    fi
+    today_events=$((events_flat + events_legacy))
     notify-send -u low "Core4" "Synced from Drive (${today_events} events today)"
   fi
 }
@@ -70,9 +118,12 @@ usage() {
 Usage: core4-syncctl <command>
 
 Commands:
-  sync        Run vaultctl sync (Game/Door/Voice/Core4 copy)
-  sync-core4  Push Core4 ledger (.core4/**) to Drive
+  sync        Pull Core4 ledger then push via vaultctl core4
+  push-core4  Push Core4 ledger (.core4/**) to Drive
   pull-core4  Pull Core4 ledger (.core4/**) from Drive + rebuild
+
+Legacy aliases (compat):
+  sync-core4
 EOF
 }
 
@@ -82,7 +133,7 @@ shift || true
 case "$cmd" in
   -h|--help|help) usage ;;
   sync) sync_all ;;
-  sync-core4|push-core4|push) push_core4 ;;
-  pull-core4|pull) pull_core4 ;;
+  sync-core4|push-core4) push_core4 ;;
+  pull-core4) pull_core4 ;;
   *) usage; exit 1 ;;
 esac

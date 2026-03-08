@@ -22,7 +22,7 @@ core4_load_env() {
 
 core4_recompute_config() {
   HUB_DIR="${AOS_HUB_DIR:-$ROOT_DIR}"
-  CORE4_TRACKER="${CORE4_TRACKER:-$HUB_DIR/core4/python-core4/tracker.py}"
+  CORE4_TRACKER="${CORE4_TRACKER:-$HUB_DIR/core4/python-core4/core4.py}"
 
   UNIT_SRC_DIR="${HUB_DIR}/systemd"
   UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"

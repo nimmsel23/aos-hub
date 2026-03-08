@@ -5,7 +5,7 @@
 set -euo pipefail
 
 VAULT_DIR="${AOS_VAULT_DIR:-$HOME/vault}"
-CORE4_DIR="$VAULT_DIR/Alpha_Core4"
+CORE4_DIR="${AOS_CORE4_LOCAL_DIR:-$HOME/.core4}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/alphaos"
 
 # Get week number in YYYY-Wxx format

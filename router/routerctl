@@ -45,7 +45,7 @@ UNIT_FILE="$SYSTEMD_DIR/$ROUTER_NAME.service"
 # =========================
 # Heartbeat (fixed GAS WebApp URL)
 # =========================
-HB_NAME="${HB_NAME:-alphaos-heartbeat}"
+HB_NAME="${HB_NAME:-aos-heartbeat}"
 HB_URL="${HB_URL:-https://script.google.com/macros/s/AKfycbysk1LEX9r05qiKKvNevayAc8OSESqItpWDbKhepBJjOdEcx8Cav4MGVqyCXsjcv9Chmw/exec}"
 HB_HOST="${HB_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 HB_BOOT_DELAY="${HB_BOOT_DELAY:-30s}"

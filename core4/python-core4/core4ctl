@@ -89,10 +89,14 @@ Habits:
 Taskwarrior:
   core4ctl list|today|week|done [task-args...]
 
-Sync:
-  core4ctl sync        # vaultctl sync (whole vault)
+Sync (timer-first):
+  vaultctl core4 status
+  vaultctl core4 init
+
+Manual sync (emergency):
+  core4ctl sync        # pull-core4 + vaultctl core4 push
   core4ctl pull-core4  # pull .core4/** from Drive + rebuild
-  core4ctl sync-core4  # push .core4/** to Drive
+  core4ctl push-core4  # push .core4/** to Drive
   core4ctl probe [all|today|week [YYYY-Www]]
 
 Systemd:
@@ -133,10 +137,6 @@ fi
 
 case "$cmd" in
   -h|--help|help)
-    shim_notice
-    usage
-    ;;
-  help)
     shim_notice
     usage
     ;;
@@ -198,7 +198,7 @@ case "$cmd" in
     trackctl "$cmd" "$@"
     ;;
 
-  sync|sync-core4|push|push-core4|pull|pull-core4)
+  sync|sync-core4|push-core4|pull-core4)
     syncctl "$cmd" "$@"
     ;;
 

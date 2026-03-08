@@ -25,10 +25,12 @@ status() {
   if [[ -d "$events_flat" || -d "$events_legacy" ]]; then
     msg "events (local):"
     local files=0
-    files=$(( \
-      $(find "$events_flat" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l) + \
-      $(find "$events_legacy" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l) \
-    ))
+    if [[ -d "$events_flat" ]]; then
+      files=$((files + $(find "$events_flat" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l)))
+    fi
+    if [[ -d "$events_legacy" ]]; then
+      files=$((files + $(find "$events_legacy" -maxdepth 2 -type f -name '*.json' 2>/dev/null | wc -l)))
+    fi
     printf "  files=%s\n" "$files"
   fi
   if [[ -f "$CORE4_LOCAL_DIR/core4_daily.csv" ]]; then

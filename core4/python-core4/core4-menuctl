@@ -34,7 +34,7 @@ menu() {
     sources) exec "$APP_DIR/core4-trackctl" sources ;;
     "build (rebuild day/week)") exec "$APP_DIR/core4-trackctl" build ;;
     "pull (core4 only)") exec "$APP_DIR/core4-syncctl" pull-core4 ;;
-    "push (core4 only)") exec "$APP_DIR/core4-syncctl" sync-core4 ;;
+    "push (core4 only)") exec "$APP_DIR/core4-syncctl" push-core4 ;;
     "sync (vaultctl)") exec "$APP_DIR/core4-syncctl" sync ;;
     "install timers") exec "$APP_DIR/core4-servicectl" install-timers ;;
     doctor) exec "$APP_DIR/core4-clinctl" doctor ;;

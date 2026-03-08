@@ -4974,6 +4974,8 @@ app.get("/profit/", (_req, res) => res.redirect(301, "/pwa/profit/"));
 app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
 app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
+app.get("/clients", (_req, res) => res.redirect(302, "http://127.0.0.1:8788/clientctx/"));
+app.get("/clients/", (_req, res) => res.redirect(302, "http://127.0.0.1:8788/clientctx/"));
 app.get("/game/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/game/frame", (_req, res) => res.redirect(302, "/pwa/frame/"));
 app.get("/game/freedom", (_req, res) => res.redirect(302, "/pwa/freedom/"));
@@ -6845,7 +6847,23 @@ function checkPort(port, host = "127.0.0.1", timeoutMs = 400) {
 
 app.get("/api/system/ports", async (_req, res) => {
   try {
-    const ports = [8799, 8780, 8080, 8788];
+    // Keep this aligned with the active local runtimes and ctx services.
+    const ports = [
+      8799, // index-node
+      8780, // pwa standalone
+      8080, // bridge
+      4100, // clientctx
+      8781, // core4ctx
+      8782, // firectx
+      8783, // focusctx
+      8784, // framectx
+      8785, // freedomctx
+      8786, // doorctx
+      8787, // gamectx
+      8788, // fitnessctx
+      8790, // memoirsctx
+      8791, // daily ctx
+    ];
     const checks = await Promise.all(ports.map(async (port) => ({
       port,
       ok: await checkPort(port),

@@ -7,6 +7,10 @@ const refreshBtn = document.getElementById("refresh");
 
 const ROUTES = [
   { label: "Index", path: "/" },
+  { label: "Vital Hub Admin (Clientctx)", path: "http://127.0.0.1:8788/clientctx/" },
+  { label: "Vital Hub Client (Sample)", path: "http://127.0.0.1:4100/c/client/" },
+  { label: "Vital Hub Fitness Tracker (Sample)", path: "http://127.0.0.1:4100/c/client/fitness/" },
+  { label: "Vital Hub Private Tracker", path: "http://127.0.0.1:8788/fitness/" },
   { label: "PWA Game", path: "/pwa/game/" },
   { label: "PWA Core4", path: "/pwa/core4/" },
   { label: "PWA Fire", path: "/pwa/fire/" },
@@ -17,14 +21,13 @@ const ROUTES = [
   { label: "Game Hub", path: "/game/" },
   { label: "Game Tent", path: "/game/tent" },
   { label: "Bridge", path: "/bridge" },
-  { label: "FitnessCTX", path: "/fitnessctx" },
   { label: "Memoirs", path: "/memoirs/" },
 ];
 
 function renderRoutes() {
   const base = window.location.origin;
   routeGrid.innerHTML = ROUTES.map((r) => {
-    const url = base + r.path;
+    const url = /^https?:\/\//.test(r.path) ? r.path : base + r.path;
     return `
       <a class="item" href="${url}" target="_blank" rel="noopener">
         <div class="item-title">${r.label}</div>

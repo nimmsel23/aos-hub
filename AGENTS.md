@@ -212,6 +212,13 @@ All `*ctl` entrypoints currently under `aos-hub/`:
   - quick debug/runbook commands (curl/ctl helpers)
 - Prefer a single "mental model" doc per system and link to it from component READMEs (see `DOCS/DOC_SYSTEM.md`).
 
+## Critical Sync Script Guardrail
+- Zentrale Sync-/CTL-Skripte sind Core-Infra und muessen bei Refactors aktiv mitgezogen/geupdatet werden (nicht vergessen, nicht still veralten lassen).
+- Bestehende Flows duerfen nicht brechen; Breaking Changes nur mit expliziter Migration (Runtime-Caller, systemd Units/Timer, Wrapper in `~/.dotfiles/bin`).
+- Kritische Pfade (mindestens): `scripts/syncctl`, `scripts/sync-utils/vaultctl`, `scripts/gitctl`, `scripts/hubctl`, `scripts/ctl-lib.sh`, `scripts/sync-utils/common.sh`, `scripts/sync-utils/rclone-aos-hub-push.sh`, `scripts/sync-utils/rclone-vital-hub-push.sh`, `scripts/sync-utils/rclone-dokumente-push.sh`, `scripts/sync-utils/rclone-vitaltrainer-copy.sh`.
+- Nach Aenderungen immer Smoke-Check: `<ctl> status`, mindestens ein realer Run/Push, plus zugehoeriger `systemctl --user status`/`list-timers`.
+- Frontdoor-Regel: `syncctx` (bzw. `rclone_dash`) ist der User-Einstieg; die oben genannten Sync-Skripte sind Backend-Implementierungen und muessen als solche stabil gehalten werden.
+
 ## Registry Policy
 - `registry.tsv` is the command inventory SSOT for discoverability and naming.
 - Every user-facing command/frontdoor must have a `registry.tsv` entry (`id`, label, command, kind, source, description).

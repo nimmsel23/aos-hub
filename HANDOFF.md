@@ -151,6 +151,23 @@ Stand: 2026-03-02
 - Port-Trennung:
   - PWA standalone: `8780`
   - `fitnessctx`: `8788` (belegt/bleibt reserviert)
+- Vital Hub Runtime (pinned):
+  - `4100` = clients only (`/c/<client>/...`), no admin/clientctx exposure
+  - `8788` = Mr Coach variant incl. `clientctx` admin console
+  - naming (`vital-hub`/`vitalctx`/`vital centre`) may vary, split stays fixed
 - Vault-Policy umgesetzt im neuen Service:
   - `ReadWritePaths=%h/vault`
   - `Dokumente/*Vault` aus PWA-Service entfernt.
+
+## codex-closeout (2026-03-08)
+- Vital runtime split finalized and pinned:
+  - `4100` = clients-only (`/c/<client>/...`), no `clientctx` exposure.
+  - `8788` = coach/admin runtime incl. `clientctx`.
+- New wrappers:
+  - `clientctx` (admin on `8788`)
+  - `vitalctx` (client-only on `4100`)
+  - `clientdb` fish CLI for client DB operations.
+- Index-node redirect set:
+  - `8799/clients` and `8799/clients/` -> `http://127.0.0.1:8788/clientctx/`
+- Root handoff refreshed for Claude-Code:
+  - `~/HANDOFF.md` now contains the canonical continuation state.

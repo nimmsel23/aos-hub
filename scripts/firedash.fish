@@ -1,5 +1,4 @@
 #!/usr/bin/env fish
-set -euo pipefail
 
 set root (cd (dirname (status -f))/..; pwd)
 set firectl "$root/game/fire/firectl"
@@ -45,7 +44,7 @@ function pwa_local_health
   else
     set base "http://127.0.0.1:8799/health"
   end
-  set base (string replace -r "/health$" "" "$base")
+  set base (string replace -r '/health$' '' "$base")
   set url "$base/pwa/fire/"
   set code (http_status "$url")
   if string match -rq '^(2|3)' -- "$code"

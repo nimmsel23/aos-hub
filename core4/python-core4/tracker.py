@@ -23,6 +23,12 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
+# Allow module imports from python-core4/ (parent of this file).
+THIS_DIR = Path(__file__).resolve().parent
+ROOT_DIR = THIS_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 # Module imports — all core logic lives in focused modules
 from core4_types import (
     CORE4CTL,
@@ -49,7 +55,6 @@ from core4_ledger import (
     build_day,
     build_week,
     is_already_logged,
-    list_events_for_day,
     load_week,
 )
 from core4_tw import (
@@ -236,7 +241,7 @@ def main(argv: list[str]) -> int:
 
     def finish(code: int) -> int:
         if sync_push:
-            if not run_core4ctl("sync-core4"):
+            if not run_core4ctl("push-core4"):
                 return 1 if code == 0 else code
         return code
 
@@ -261,7 +266,8 @@ def main(argv: list[str]) -> int:
             "  core4 -w --date 2026-01-13\n"
             "  core4 -w --quiet    # score only\n"
             "\n"
-            "Sync Core4 only (pull before push):\n"
+            "Sync is timer-driven by default (vaultctl core4).\n"
+            "Manual sync is emergency-only:\n"
             "  core4 sync\n"
             "  core4 --pull\n"
             "  core4 --push\n"
@@ -309,24 +315,9 @@ def main(argv: list[str]) -> int:
         skip_journal = True
         argv = [choice]
 
-    if argv and argv[0] in ("sources", "source", "debug"):
-        return finish(show_sources())
-
-    if argv and argv[0] in ("build", "rebuild"):
-        # Explicit rebuild that writes derived artifacts (day/week) to the primary Core4 dir.
-        day_raw = argv[1] if len(argv) > 1 else None
-        try:
-            day = parse_day(day_raw)
-        except Exception as exc:
-            print(f"core4: {exc}", file=sys.stderr)
-            return finish(2)
-        try:
-            build_week(day, write=True)
-            build_day(day, write=True)
-        except Exception as exc:
-            print(f"core4: build failed: {exc}", file=sys.stderr)
-            return finish(1)
-        return finish(0)
+    admin_result = handle_admin_command(argv, finish=finish, run_core4ctl=run_core4ctl)
+    if admin_result is not None:
+        return admin_result
 
     if argv and argv[0] in ("menu", "actions"):
         choice = prompt_action_menu()
@@ -358,13 +349,13 @@ def main(argv: list[str]) -> int:
         elif choice == "Sync (pull+push)":
             if not run_core4ctl("pull-core4"):
                 return 1
-            if not run_core4ctl("sync-core4"):
+            if not run_core4ctl("push-core4"):
                 return 1
             return 0
         elif choice == "Pull (Core4 only)":
             return 0 if run_core4ctl("pull-core4") else 1
         elif choice == "Push (Core4 only)":
-            return 0 if run_core4ctl("sync-core4") else 1
+            return 0 if run_core4ctl("push-core4") else 1
         elif choice == "Sources":
             return finish(show_sources())
         elif choice == "Build day/week (write)":
@@ -376,11 +367,33 @@ def main(argv: list[str]) -> int:
         elif choice == "Finalize month":
             month = f"{date.today().year:04d}-{date.today().month:02d}"
             return 0 if run_core4ctl("finalize-month", month) else 1
+        return finish(0)
+
+
+def handle_admin_command(argv: list[str], *, finish, run_core4ctl) -> Optional[int]:
+    if argv and argv[0] in ("sources", "source", "debug"):
+        return finish(show_sources())
+
+    if argv and argv[0] in ("build", "rebuild"):
+        day_raw = argv[1] if len(argv) > 1 else None
+        try:
+            day = parse_day(day_raw)
+        except Exception as exc:
+            print(f"core4: {exc}", file=sys.stderr)
+            return finish(2)
+        try:
+            build_week(day, write=True)
+            build_day(day, write=True)
+        except Exception as exc:
+            print(f"core4: build failed: {exc}", file=sys.stderr)
+            return finish(1)
+        return finish(0)
 
     if argv and argv[0] in ("sync", "core4sync", "sync-core4"):
+        print("core4: manual sync path (legacy/emergency). regular sync runs via vaultctl core4 timer.", file=sys.stderr)
         if not run_core4ctl("pull-core4"):
             return 1
-        if not run_core4ctl("sync-core4"):
+        if not run_core4ctl("push-core4"):
             return 1
         return 0
 
@@ -476,6 +489,8 @@ def main(argv: list[str]) -> int:
         res = prune_events(keep_weeks=keep_weeks)
         print(json.dumps(res, ensure_ascii=False))
         return finish(0)
+
+    return None
 
     # Score shortcuts:
     # - `core4 -w` (week total)

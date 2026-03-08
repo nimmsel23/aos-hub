@@ -17,7 +17,7 @@ BRIDGE_HEALTH_URL="${AOS_BRIDGE_HEALTH_URL:-http://127.0.0.1:8080/health}"
 USER_UNITS_DEFAULT=(
   "alphaos-router.service"
   "aos-bridge.service"
-  "alphaos-heartbeat.timer"
+  "aos-heartbeat.timer"
   "aos-vault-push-eldanioo.timer"
   "dokumente-push-fabian.timer"
 )

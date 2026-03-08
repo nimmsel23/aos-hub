@@ -6,7 +6,7 @@ set -euo pipefail
 BRIDGE_URL="${AOS_BRIDGE_URL:-http://localhost:8080}"
 REFRESH="${CORE4_DASHBOARD_REFRESH:-60}"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/tracker.py}"
+TRACKER="${CORE4_TRACKER:-${SCRIPT_DIR}/core4.py}"
 
 usage() {
   cat <<'EOF'
