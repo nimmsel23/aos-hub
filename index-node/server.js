@@ -506,11 +506,22 @@ app.get(["/entspannung", "/entspannung/"], (req, res) =>
 app.get(["/fuel", "/fuel/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/fuel/"))
 );
-app.get(["/fuel", "/fuel/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/fuel/"))
-);
 app.get(["/dojo", "/dojo/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/dojo/"))
+);
+
+// 4 Domains shortcuts
+app.get(["/body", "/body/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/"))
+);
+app.get(["/being", "/being/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
+);
+app.get(["/balance", "/balance/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
+);
+app.get(["/business", "/business/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
 );
 
 app.use((req, res, next) => {
