@@ -88,6 +88,26 @@ function pwa_tailnet_health
   return 1
 end
 
+function gcal_task_count
+  if not test -x "$firectl"
+    warn_line "gcal tasks" "firectl not found"
+    return 1
+  end
+  set doctor_output ($firectl gcal doctor 2>/dev/null)
+  if test $status -ne 0
+    warn_line "gcal tasks" "doctor failed"
+    return 1
+  end
+  set due_today (echo $doctor_output | string match -r 'due_today=(.+)' | string replace 'due_today=' '')
+  set overdue (echo $doctor_output | string match -r 'overdue=(.+)' | string replace 'overdue=' '')
+
+  if test -z "$due_today"; set due_today "?"; end
+  if test -z "$overdue"; set overdue "?"; end
+
+  ok_line "gcal tasks" "due:today=$due_today overdue=$overdue"
+  return 0
+end
+
 section "Fire Dashboard"
 echo "Now: "(date "+%Y-%m-%d %H:%M:%S %Z")
 divider
@@ -104,6 +124,10 @@ divider
 section "PWA Reachability"
 pwa_local_health
 pwa_tailnet_health
+
+divider
+section "Google Calendar"
+gcal_task_count
 
 divider
 section "Weekly Telegram Timer"

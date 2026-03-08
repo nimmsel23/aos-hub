@@ -318,6 +318,9 @@ status() {
   fire_daily_compact || true
   pwa_local_compact || true
   pwa_tailnet_compact || true
+  echo ""
+  ui_title "gcal status"
+  gcal_cmd doctor
 }
 
 logs() {
