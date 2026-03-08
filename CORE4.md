@@ -136,7 +136,7 @@ Common units:
 1. Check status: `c4` or `core4 -d`
 2. Log habits: `core4 <habit>` or dashboard (`core4`)
 3. Weekly check: `wcore4` and `core4 -w`
-4. Ops only when needed: `core4ctl status|build|sync-core4|pull-core4`
+4. Ops only when needed: `core4ctl status|build`, check the timer with `vaultctl core4 status` (or `vaultctl core4 init` to reinstall). Use `core4ctl pull-core4`/`core4ctl push-core4` only for emergency/manual syncs.
 
 ## 9) Troubleshooting Quick Checks
 

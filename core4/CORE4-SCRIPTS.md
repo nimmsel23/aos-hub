@@ -41,8 +41,8 @@ Es ist kein Nutzer-Quickstart, sondern eine Maintainer-Referenz.
   - Taskwarrior-Wrapper (`list`, `today`, `week`, `done`)
 
 - `core4/python-core4/core4-syncctl`
-  - `sync` via `vaultctl`
-  - `sync-core4` / `push-core4`: pusht nur Ledger (`.core4/**`)
+  - `sync` workflows now delegate to `vaultctl core4`
+  - `push-core4`: explicit ledger push (fallback when vaultctl is unavailable)
   - `pull-core4`: zieht Ledger von Drive (HQ + optional Standalone) und baut lokal Derived Artefakte neu
 
 - `core4/python-core4/core4-apictl`
@@ -115,12 +115,12 @@ Hinweis:
 
 ## `core4ctl` Routing (was wohin delegiert)
 
-`core4ctl` ist absichtlich klein. Das Mapping ist die zentrale Architekturentscheidung:
+- `core4ctl` ist absichtlich klein. Das Mapping ist die zentrale Architekturentscheidung:
 
 - `menu` -> `core4-menuctl`
 - `doctor`, `install-cli` -> `core4-clinctl`
 - Tracker-/Taskwarrior-Befehle -> `core4-trackctl`
-- Sync-Befehle (`sync`, `pull-core4`, `sync-core4`) -> `core4-syncctl`
+- Sync-Befehle (`sync`, `pull-core4`, `push-core4`) -> `core4-syncctl`
 - `probe` -> `core4-apictl`
 - Mount-/Timer-Befehle -> `core4-servicectl`
 
