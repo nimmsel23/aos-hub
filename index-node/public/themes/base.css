@@ -3,6 +3,7 @@
  *   =============================== */
 
 :root {
+  /* Default font - can be overridden by themes */
   --font-mono: "Courier New", monospace, sans-serif;
   --border-radius-sm: 12px;
   --border-radius-md: 16px;
