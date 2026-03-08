@@ -1,4 +1,7 @@
 [data-theme="copper"] {
+  /* Font - industrial metal */
+  --font-mono: "Space Mono", "Consolas", "Courier New", monospace;
+
   --bg: #0a0c0f;
   --bg-primary: #0a0c0f;
   --bg-secondary: #10151c;

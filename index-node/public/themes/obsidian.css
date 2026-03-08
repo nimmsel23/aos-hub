@@ -1,4 +1,7 @@
 [data-theme="obsidian"] {
+  /* Font - mystical coding */
+  --font-mono: "Victor Mono", "Fira Code", "Courier New", monospace;
+
   --bg: #07080c;
   --bg-primary: #07080c;
   --bg-secondary: #0e1020;

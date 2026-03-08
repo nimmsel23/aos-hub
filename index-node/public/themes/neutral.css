@@ -1,4 +1,7 @@
 [data-theme="neutral"] {
+  /* Font - clean and neutral */
+  --font-mono: "IBM Plex Mono", "Menlo", "DejaVu Sans Mono", monospace;
+
   --bg-primary: #1a1d23;
   --bg-secondary: #22272e;
   --bg-tertiary: #2d333b;

@@ -1,4 +1,7 @@
 [data-theme="aurora"] {
+  /* Font - northern lights aesthetic */
+  --font-mono: "Hack", "Consolas", "Monaco", monospace;
+
   --bg: #050b1a;
   --bg-primary: #050b1a;
   --bg-secondary: #0b1533;

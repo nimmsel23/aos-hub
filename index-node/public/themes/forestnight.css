@@ -1,4 +1,7 @@
 [data-theme="forestnight"] {
+  /* Font - deep woods */
+  --font-mono: "Overpass Mono", "Lucida Console", "Courier New", monospace;
+
   --bg: #050d0a;
   --bg-primary: #050d0a;
   --bg-secondary: #0a1612;

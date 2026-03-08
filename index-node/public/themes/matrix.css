@@ -1,4 +1,7 @@
 [data-theme="matrix"] {
+  /* Font - classic monospace for that terminal vibe */
+  --font-mono: "Courier New", "Courier", monospace;
+
   --bg-primary: #000;
   --bg-secondary: rgba(0, 20, 0, 0.55);
   --bg-tertiary: rgba(0, 0, 0, 0.85);

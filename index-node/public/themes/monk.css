@@ -1,4 +1,7 @@
 [data-theme="monk"] {
+  /* Font - zen manuscript */
+  --font-mono: "Noto Sans Mono", "PT Mono", "Courier New", monospace;
+
   --bg: #f7f2e8;
   --bg-primary: #f7f2e8;
   --bg-secondary: #fffaf1;

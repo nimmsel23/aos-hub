@@ -1,4 +1,7 @@
 [data-theme="slate"] {
+  /* Font */
+  --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+
   --bg-primary: #10151b;
   --bg-secondary: #171d25;
   --bg-tertiary: #1e2732;

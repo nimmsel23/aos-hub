@@ -1,4 +1,7 @@
 [data-theme="bloodred"] {
+  /* Font - gothic */
+  --font-mono: "Roboto Mono", "Andale Mono", "Courier New", monospace;
+
   --bg: #0a0a0a;
   --bg-primary: #0a0a0a;
   --bg-secondary: #111111;

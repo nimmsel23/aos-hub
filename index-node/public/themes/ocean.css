@@ -1,4 +1,7 @@
 [data-theme="ocean"] {
+  /* Font */
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+
   --bg-primary: #0f172a;
   --bg-secondary: #111827;
   --bg-tertiary: #172033;

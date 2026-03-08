@@ -1,4 +1,7 @@
 [data-theme="inkgold"] {
+  /* Font - calligraphy */
+  --font-mono: "Cousine", "Droid Sans Mono", "Courier New", monospace;
+
   --bg: #07070a;
   --bg-primary: #07070a;
   --bg-secondary: #0f0f15;

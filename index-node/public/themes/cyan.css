@@ -1,4 +1,7 @@
 [data-theme="cyan"] {
+  /* Font - sleek cyber aesthetic */
+  --font-mono: "Anonymous Pro", "Inconsolata", "Courier New", monospace;
+
   --bg-primary: #000;
   --bg-secondary: rgba(0, 18, 20, 0.55);
   --bg-tertiary: rgba(0, 10, 15, 0.85);

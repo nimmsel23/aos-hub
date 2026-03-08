@@ -1,4 +1,7 @@
 [data-theme="dawn"] {
+  /* Font - warm sunrise */
+  --font-mono: "Ubuntu Mono", "Liberation Mono", "Courier New", monospace;
+
   --bg: #0b0a08;
   --bg-primary: #0b0a08;
   --bg-secondary: #14110d;
