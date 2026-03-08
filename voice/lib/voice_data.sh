@@ -6,8 +6,9 @@ set -euo pipefail
 # Environment
 VOICE_DIR="${AOS_VAULT_DIR:-$HOME/vault}/Voice"
 VOICE_FALLBACK_DIR="$HOME/vault/VOICE"
+CORE4_JOURNAL_DIR="$HOME/.core4/journal"
 
-# Determine voice directory
+# Determine voice directory (for standalone sessions)
 get_voice_dir() {
   if [[ -d "$VOICE_DIR" ]]; then
     echo "$VOICE_DIR"
@@ -15,6 +16,28 @@ get_voice_dir() {
     echo "$VOICE_FALLBACK_DIR"
   else
     echo "$VOICE_DIR"  # Default to vault location
+  fi
+}
+
+# Get voice file path (Core4-aware)
+get_voice_file_path() {
+  local domain="${1:-}"
+  local timestamp
+  timestamp=$(date '+%Y-%m-%d_%H%M')
+
+  if [[ -n "$domain" ]]; then
+    # Domain-specific: save to Core4 journal
+    local today
+    today=$(date '+%Y-%m-%d')
+    local day_dir="$CORE4_JOURNAL_DIR/$today"
+    mkdir -p "$day_dir"
+    echo "$day_dir/$domain.md"
+  else
+    # Standalone: save to VOICE directory
+    local vdir
+    vdir=$(get_voice_dir)
+    mkdir -p "$vdir"
+    echo "$vdir/VOICE-$timestamp.md"
   fi
 }
 

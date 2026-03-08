@@ -30,18 +30,39 @@ cmd_list() {
 }
 
 cmd_start() {
+  local domain=""
+
+  # Check if domain specified
+  if [[ -n "${1:-}" ]]; then
+    case "$1" in
+      body|being|balance|business)
+        domain="$1"
+        ;;
+      *)
+        ui_err "Invalid domain: $1"
+        ui_info "Valid domains: body, being, balance, business"
+        return 1
+        ;;
+    esac
+  fi
+
   ui_title "VOICE Session - 4 Steps to Mental Mastery"
+  if [[ -n "$domain" ]]; then
+    ui_info "Domain: ${domain^^}"
+  fi
   echo ""
   ui_info "This will guide you through:"
   ui_info "  🛑 STOP - Pattern interrupt"
-  ui_info "  🙏 SUBMIT - Face truth"
+  ui_info "  📝 SUBMIT - Face truth (4F: Facts/Feelings/Focus/Fruit)"
   ui_info "  ⚔️  STRUGGLE - Rewrite story"
   ui_info "  ⚡ STRIKE - Decisive action"
   echo ""
 
-  if ui_confirm "Start interactive session?"; then
+  # Source enhanced session if available
+  if [[ -f "$LIB_DIR/voice_session_v2.sh" ]]; then
+    source "$LIB_DIR/voice_session_v2.sh"
     local file
-    file=$(interactive_session)
+    file=$(interactive_session_v2 "$domain")
     echo ""
     ui_ok "Session complete!"
 
@@ -53,11 +74,27 @@ cmd_start() {
       format_session "$file"
     fi
   else
-    ui_info "Creating template only..."
-    local file
-    file=$(quick_session)
-    ui_ok "Template created: $file"
-    "$EDITOR" "$file"
+    # Fallback to original
+    if ui_confirm "Start interactive session?"; then
+      local file
+      file=$(interactive_session)
+      echo ""
+      ui_ok "Session complete!"
+
+      if ui_confirm "Open in editor?"; then
+        "$EDITOR" "$file"
+      fi
+
+      if ui_confirm "View with glow?"; then
+        format_session "$file"
+      fi
+    else
+      ui_info "Creating template only..."
+      local file
+      file=$(quick_session)
+      ui_ok "Template created: $file"
+      "$EDITOR" "$file"
+    fi
   fi
 }
 
