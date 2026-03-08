@@ -26,7 +26,7 @@ start_server() {
   cd "$REPO/fitnessctx"
   : > "$LOGFILE"
   echo "Starting npm run dev ... logs -> $LOGFILE"
-  HOST=0.0.0.0 API_PORT="$API_PORT" (npm run dev >"$LOGFILE" 2>&1 &) 
+  HOST=0.0.0.0 API_PORT="$API_PORT" npm run dev >"$LOGFILE" 2>&1 &
   sleep 0.5
 }
 
