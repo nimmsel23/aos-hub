@@ -2,7 +2,7 @@
 # Full-screen-ish TUI wrapper for fitnessctx dev (Port 8788)
 set -euo pipefail
 
-REPO="/home/alpha/core4-fitness-centre"
+REPO="/home/alpha/vital-hub"
 API_PORT="${API_PORT:-8788}"
 LOGFILE="/tmp/fitnessctx-dev.log"
 
