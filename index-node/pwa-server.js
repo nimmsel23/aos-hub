@@ -167,6 +167,9 @@ export function createApp() {
     }
   });
 
+  // Short URL alias
+  app.get(["/mobile", "/mobile/"], (_req, res) => res.redirect(302, "/pwa/mobile.html"));
+
   // Mobile links from menu.yaml — used by /pwa/mobile.html (independent of index-node)
   app.get("/pwa/mobile-links", (_req, res) => {
     try {
