@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 
 ENV_PATH = Path(os.path.expanduser("~/.config/alpha-os/hooks.env"))
-TICK_ENV_PATH = Path(os.path.expanduser("~/.alpha_os/tick.env"))
+TICK_ENV_PATH = Path(os.path.expanduser("~/.aos/tick.env"))
 GLOBAL_ENV_PATH = Path(os.environ.get("AOS_ENV_FILE") or os.path.expanduser("~/.env/aos.env"))
 PROTECTED_KEYS = set(os.environ.keys())
 
@@ -387,7 +387,7 @@ _HABIT_LABELS = {
 
 
 def _load_tick_config() -> dict:
-    """Token + project from ~/.alpha_os/tick.env; env vars override."""
+    """Token + project from ~/.aos/tick.env; env vars override."""
     cfg: dict[str, str] = {}
     if TICK_ENV_PATH.exists():
         try:

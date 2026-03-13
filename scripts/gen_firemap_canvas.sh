@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TEMPLATE_DIR="${AOS_FIREMAP_TEMPLATE_DIR:-$HOME/.alpha_os/logs/firemap}"
+TEMPLATE_DIR="${AOS_FIREMAP_TEMPLATE_DIR:-$HOME/.aos/logs/firemap}"
 CANVAS_DIR="${AOS_CANVAS_DIR:-$HOME/ObsidianVault/Canvas}"
 
 WEEK="$(date +%V)"

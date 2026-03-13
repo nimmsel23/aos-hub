@@ -28,7 +28,7 @@ ProtectHome=read-only
 ReadOnlyPaths=%h/aos-hub/index-node
 ReadWritePaths=%h/.task
 ReadWritePaths=%h/.local/share/alphaos
-ReadWritePaths=%h/.alpha_os
+ReadWritePaths=%h/.aos
 ReadWritePaths=%h/vault
 
 ProtectControlGroups=true

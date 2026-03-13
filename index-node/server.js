@@ -585,7 +585,7 @@ const GAS_URLS_FILE = String(
 const AOS_REGISTRY_PATH =
   process.env.AOS_REGISTRY_PATH || path.join(os.homedir(), ".aos", "registry.tsv");
 const TICK_ENV_PATH =
-  process.env.TICK_ENV || path.join(os.homedir(), ".alpha_os", "tick.env");
+  process.env.TICK_ENV || path.join(os.homedir(), ".aos", "tick.env");
 const TASK_EXPORT_PATH =
   process.env.TASK_EXPORT ||
   path.join(os.homedir(), ".local", "share", "alphaos", "task_export.json");
