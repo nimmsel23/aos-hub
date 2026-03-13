@@ -24,7 +24,7 @@ aos_env_load "" "$ROOT_DIR" || true
 : "${CTL_CHOOSE_PROMPT:=indexctl}"
 : "${CTL_CHOOSE_PREFER:=gum}"
 
-USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index.service}"
 HEALTH_URL="${AOS_INDEX_HEALTH_URL:-http://127.0.0.1:8799/health}"
 BASE_URL="${AOS_INDEX_BASE_URL:-${HEALTH_URL%/health}}"
 HUB_DOCTOR="${AOS_HUB_DOCTOR:-$ROOT_DIR/scripts/aos-doctor}"
@@ -398,7 +398,7 @@ Usage:
 Env:
   AOS_INDEX_BASE_URL=http://127.0.0.1:8799
   AOS_INDEX_HEALTH_URL=http://127.0.0.1:8799/health
-  AOS_INDEX_USER_SERVICE=aos-index-dev.service
+  AOS_INDEX_USER_SERVICE=aos-index.service
   AOS_HUB_DOCTOR=$ROOT_DIR/scripts/aos-doctor
 EOF
 }

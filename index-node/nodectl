@@ -40,7 +40,7 @@ PIN_STORE_DIR="${PIN_STORE_DIR:-$HOME/.aos}"
 PIN_CONFIG_PATH="${PIN_CONFIG_PATH:-$PIN_STORE_DIR/pin.json}"
 PIN_SESSIONS_PATH="${PIN_SESSIONS_PATH:-$PIN_STORE_DIR/pin-sessions.json}"
 PIN_DISABLE_FLAG_PATH="${PIN_DISABLE_FLAG_PATH:-$PIN_STORE_DIR/pin.disabled}"
-USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index-dev.service}"
+USER_SERVICE_NAME="${AOS_INDEX_USER_SERVICE:-aos-index.service}"
 
 [[ -d "$INDEX_ROOT" ]] || { echo "ERROR: index-node not found: $INDEX_ROOT" >&2; exit 1; }
 
@@ -305,7 +305,7 @@ Examples:
   nodectl core4-check all
 
 Env overrides:
-  AOS_INDEX_USER_SERVICE=aos-index-dev.service
+  AOS_INDEX_USER_SERVICE=aos-index.service
 
 EOF
 }
