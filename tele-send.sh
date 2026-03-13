@@ -3,7 +3,7 @@
 set -euo pipefail
 
 CHAT_ID_DEFAULT="8442781308"
-TOKEN_FILE="$HOME/core4-fitness-centre/fitness.env"
+TOKEN_FILE="$HOME/.fitnessctx/fitness.env"
 
 if [[ -f "$TOKEN_FILE" ]]; then
   # shellcheck disable=SC1090

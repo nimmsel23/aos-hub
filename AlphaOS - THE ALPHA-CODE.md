@@ -1,1 +1,0 @@
-/home/alpha/Dokumente/ALPHA_OS/AlphaOS - THE ALPHA-CODE.md
