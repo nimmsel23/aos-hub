@@ -19,6 +19,7 @@ const HOST = process.env.PWA_HOST || "0.0.0.0";
 const PORT = Number(process.env.PWA_PORT || 8780);
 const PUBLIC_DIR = process.env.PWA_PUBLIC_DIR || path.join(process.cwd(), "public");
 const PWA_ROOT = path.join(PUBLIC_DIR, "pwa");
+const MENU_YAML_FILE = process.env.MENU_YAML || path.join(process.cwd(), "menu.yaml");
 const GAS_ENV_FILE = String(
   process.env.AOS_GAS_ENV_FILE || path.join(os.homedir(), ".env", "gas.env")
 ).trim();
@@ -163,6 +164,20 @@ export function createApp() {
       });
     } catch (err) {
       return res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  // Mobile links from menu.yaml — used by /pwa/mobile.html (independent of index-node)
+  app.get("/pwa/mobile-links", (_req, res) => {
+    try {
+      const raw = fs.existsSync(MENU_YAML_FILE)
+        ? yaml.load(fs.readFileSync(MENU_YAML_FILE, "utf8"))
+        : null;
+      const mobile_links = Array.isArray(raw?.mobile_links) ? raw.mobile_links : [];
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ mobile_links });
+    } catch (err) {
+      return res.status(500).json({ mobile_links: [], error: String(err) });
     }
   });
 
