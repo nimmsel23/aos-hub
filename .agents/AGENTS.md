@@ -1,8 +1,30 @@
 # aos-hub Agent Registry
 
-**Last Updated:** 2026-01-15
+**Last Updated:** 2026-03-13
 **Total Agents:** 11 (11 Active, 0 Planned)
 **Repository:** aos-hub - AlphaOS Hub & Spoke Infrastructure
+
+---
+
+## System Status (2026-03-13)
+
+**Hardware:** Ideapad (laptop)
+**OS:** EndeavourOS (fresh installation)
+**User:** alpha
+**Hostname:** Alpha
+**Network:** Tailscale active (`ideapad.tail75ad16.ts.net` - updated config from prior install)
+
+**Snapshot System:** Timeshift BTRFS with subvolumes (replaces Snapper)
+- Initial snapshot: 2026-03-13_12-11-57
+- Snapshots bootable via GRUB menu
+- Retention: 10 daily, 4 weekly, 3 monthly
+
+**Backup Strategy:**
+- **USB "ALPHA-BACKUP":** Historical home directory archive (restore point for future)
+- **Timeshift BTRFS:** Primary snapshot mechanism (automatic daily backups)
+- **Git Sync:** Auto-sync via systemd timers (vault, dotfiles, aos-hub)
+
+---
 
 ---
 
