@@ -14,6 +14,10 @@ const LISTS = [
   { key: "all", label: "All" },
 ];
 
+// GAS fallback endpoint for offline queue persistence
+// Deploy URL from https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/deployments
+const GAS_FALLBACK_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+
 const state = {
   items: loadJson(STORAGE.items, []),
   queue: loadJson(STORAGE.queue, []),
@@ -28,15 +32,19 @@ const state = {
 
 // Helper to check ACTUAL server connectivity (not just navigator.onLine fake)
 async function checkServerOnline() {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 3000);
   try {
     const response = await fetch("/api/door/potential/hotlist?mode=active", {
       method: "GET",
       cache: "no-store",
-      timeout: 3000,
+      signal: controller.signal,
     });
     return response.ok;
   } catch (_err) {
     return false;
+  } finally {
+    clearTimeout(tid);
   }
 }
 
@@ -518,6 +526,7 @@ async function flushQueue() {
 
   const remaining = [];
   let processed = 0;
+  let gasQueued = 0;
 
   for (let index = 0; index < state.queue.length; index += 1) {
     const entry = state.queue[index];
@@ -532,21 +541,48 @@ async function flushQueue() {
       });
       processed += 1;
     } catch (err) {
-      remaining.push(entry, ...state.queue.slice(index + 1));
-      state.queue = remaining;
-      persistState();
-      render();
-      setStatus(`Queue flush stopped: ${err.message}`, "error");
-      setBusy(false);
-      return;
+      // Bridge failed for this entry: try GAS fallback
+      try {
+        await apiJson(GAS_FALLBACK_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            title: entry.title,
+            description: entry.description,
+            source: entry.source || "pwa-offline-gas-fallback",
+          }),
+        });
+        gasQueued += 1;
+      } catch (gasErr) {
+        // Both failed: keep in local queue
+        remaining.push(entry);
+      }
     }
   }
 
-  state.queue = [];
+  state.queue = remaining;
   persistState();
-  await loadRemoteItems();
+  render();
+
+  if (processed > 0) {
+    await loadRemoteItems();
+  }
+
   setBusy(false);
-  setStatus(`Flushed ${processed} queued capture${processed === 1 ? "" : "s"}.`, "ok");
+
+  if (remaining.length === 0) {
+    const totalMsg = `${processed + gasQueued} queued capture${processed + gasQueued === 1 ? "" : "s"}`;
+    if (gasQueued > 0) {
+      setStatus(`${totalMsg} (${processed} to Bridge, ${gasQueued} to cloud fallback).`, "ok");
+    } else {
+      setStatus(`Flushed ${totalMsg}.`, "ok");
+    }
+  } else {
+    const msgs = [];
+    if (processed > 0) msgs.push(`${processed} to Bridge`);
+    if (gasQueued > 0) msgs.push(`${gasQueued} to cloud`);
+    msgs.push(`${remaining.length} still queued locally`);
+    setStatus(`Partial flush: ${msgs.join(", ")}.`, "warning");
+  }
 }
 
 async function captureIdeas() {
@@ -592,7 +628,29 @@ async function captureIdeas() {
     await loadRemoteItems();
     setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} added.`, "ok");
   } catch (err) {
-    setStatus(`Add failed: ${err.message}`, "error");
+    // Bridge failed: try GAS fallback
+    try {
+      setStatus(`Bridge unreachable. Trying cloud fallback...`, "info");
+      await apiJson(GAS_FALLBACK_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          title: ideas.join("\n"),
+          description: "",
+          source: "pwa-gas-fallback",
+        }),
+      });
+      refs.captureInput.value = "";
+      setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} queued to cloud fallback.`, "warning");
+    } catch (gasErr) {
+      // Both failed: queue locally
+      ideas.forEach((title) => {
+        state.queue.unshift(queueEntryFor(title));
+      });
+      refs.captureInput.value = "";
+      persistState();
+      render();
+      setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} queued locally (no cloud access).`, "warning");
+    }
   } finally {
     setBusy(false);
   }
