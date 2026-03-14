@@ -680,10 +680,35 @@ window.addEventListener("offline", () => {
   setStatus("Offline. Cached list stays available and new captures will queue locally.", "info");
 });
 
+// Periodic health check (every 10s) to detect real connectivity vs navigator.onLine fake
+setInterval(async () => {
+  const wasOnline = state.online;
+  state.online = await checkServerOnline();
+
+  // If status changed, update UI and notify user
+  if (wasOnline && !state.online) {
+    updateStatusIndicators();
+    render();
+    setStatus("Server unreachable. New captures will queue locally.", "warning");
+  } else if (!wasOnline && state.online) {
+    updateStatusIndicators();
+    render();
+    setStatus("Server reachable. Syncing...", "info");
+    await flushQueue();
+    await loadRemoteItems();
+  }
+}, 10000);
+
 (async function boot() {
   updateStatusIndicators();
   render();
   try {
+    // Check actual server connectivity, not just navigator.onLine
+    setStatus("Checking server connectivity...", "info");
+    state.online = await checkServerOnline();
+    updateStatusIndicators();
+    render();
+
     await loadRemoteItems();
     if (state.online && state.queue.length) {
       await flushQueue();
