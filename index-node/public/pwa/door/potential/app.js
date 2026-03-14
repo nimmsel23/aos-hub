@@ -30,8 +30,9 @@ const state = {
 async function checkServerOnline() {
   try {
     const response = await fetch("/api/door/potential/hotlist?mode=active", {
-      method: "HEAD",
+      method: "GET",
       cache: "no-store",
+      timeout: 3000,
     });
     return response.ok;
   } catch (_err) {
