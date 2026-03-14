@@ -26,6 +26,19 @@ const state = {
   statusTone: "info",
 };
 
+// Helper to check ACTUAL server connectivity (not just navigator.onLine fake)
+async function checkServerOnline() {
+  try {
+    const response = await fetch("/api/door/potential/hotlist?mode=active", {
+      method: "HEAD",
+      cache: "no-store",
+    });
+    return response.ok;
+  } catch (_err) {
+    return false;
+  }
+}
+
 const refs = {
   listNav: document.getElementById("listNav"),
   captureInput: document.getElementById("captureInput"),
