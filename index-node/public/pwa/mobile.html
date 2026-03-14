@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="αOS" />
+    <meta name="theme-color" content="#0b1017" />
+    <link rel="manifest" href="/pwa/mobile-manifest.json" />
+    <link rel="apple-touch-icon" href="/pwa/mobile-icon.svg" />
+    <title>αOS Mobile</title>
+    <style>
+      :root {
+        --bg: #0b1017;
+        --panel: #111a24;
+        --line: #23384f;
+        --text: #e6edf5;
+        --muted: #93a4b8;
+        --accent: #7bc3ff;
+        --tap: #162333;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        min-height: 100dvh;
+        padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0)
+                 env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+      }
+
+      header {
+        padding: 20px 16px 12px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      header h1 {
+        font-size: 22px;
+        letter-spacing: 0.01em;
+      }
+      header span {
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      #grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px 10px;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        transition: background 0.12s, border-color 0.12s;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      .item:active {
+        background: var(--tap);
+        border-color: var(--accent);
+      }
+
+      #status {
+        padding: 10px 16px 4px;
+        font-size: 11px;
+        color: var(--muted);
+        text-align: center;
+      }
+      #status.err { color: #ff6f7d; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>αOS</h1>
+      <span>Mobile</span>
+    </header>
+
+    <p id="status">laden…</p>
+    <div id="grid"></div>
+
+    <script>
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("status");
+
+      async function load() {
+        try {
+          const res = await fetch("/pwa/mobile-links", { cache: "no-store" });
+          if (!res.ok) throw new Error(res.status);
+          const data = await res.json();
+          const links = Array.isArray(data?.mobile_links) ? data.mobile_links : [];
+          if (!links.length) {
+            status.textContent = "keine mobile_links konfiguriert";
+            status.classList.add("err");
+            return;
+          }
+          grid.innerHTML = links.map(({ label, url, target }) => {
+            const t = target || "_self";
+            return `<a class="item" href="${url}" target="${t}" rel="noopener noreferrer">${label}</a>`;
+          }).join("");
+          status.textContent = "";
+        } catch (e) {
+          status.textContent = "fehler beim laden — " + e.message;
+          status.classList.add("err");
+        }
+      }
+
+      load();
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/pwa/mobile-sw.js", { scope: "/pwa/mobile" });
+      }
+    </script>
+  </body>
+</html>

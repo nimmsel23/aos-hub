@@ -1,0 +1,19 @@
+{
+  "name": "αOS Mobile",
+  "short_name": "αOS",
+  "description": "αOS Mobile Launcher",
+  "start_url": "/pwa/mobile.html",
+  "scope": "/pwa/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0b1017",
+  "background_color": "#0b1017",
+  "icons": [
+    {
+      "src": "/pwa/mobile-icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

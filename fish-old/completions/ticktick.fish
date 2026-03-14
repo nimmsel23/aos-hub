@@ -1,0 +1,1 @@
+abbr tt "tickadd"
