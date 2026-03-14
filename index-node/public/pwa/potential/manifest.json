@@ -1,8 +1,8 @@
 {
   "id": "/pwa/potential/",
-  "name": "AlphaOS Potential",
-  "short_name": "Potential",
-  "description": "Standalone AlphaOS Hot List app",
+  "name": "α Potential v2",
+  "short_name": "α Potential",
+  "description": "Standalone Hot List app (real-time sync)",
   "start_url": "/pwa/potential/",
   "scope": "/pwa/potential/",
   "display": "standalone",
