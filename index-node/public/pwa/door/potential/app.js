@@ -14,9 +14,10 @@ const LISTS = [
   { key: "all", label: "All" },
 ];
 
-// GAS fallback endpoint for offline queue persistence
-// Deploy URL from https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/deployments
-const GAS_FALLBACK_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+// ===== CONFIG: GAS Fallback =====
+const BRIDGE_URL = 'http://localhost:8080/api/door/potential/hotlist';
+const GAS_FALLBACK_URL = 'https://script.google.com/macros/s/AKfycbx3KWcOm32s-OxexAJqIdyQiariZxfUusKgHWLslqGHetzZzDKOdeBrohdeSqPBFzLV/exec?key=6090cff1bedb13f5c310ea52d9ee298a';
+const MAX_RETRIES = 3;
 
 const state = {
   items: loadJson(STORAGE.items, []),
@@ -518,6 +519,62 @@ async function loadRemoteItems() {
   render();
 }
 
+// ===== HELPER: Generic POST with timeout =====
+async function postToEndpoint(url, payload, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') throw new Error('Timeout');
+    throw err;
+  }
+}
+
+// ===== HELPER: Post to GAS =====
+async function postToGas(item) {
+  const payload = {
+    title: item.title,
+    description: item.description || '',
+    source: item.source || '',
+    capturedAt: item.capturedAt
+  };
+  const result = await postToEndpoint(GAS_FALLBACK_URL, payload);
+  if (result.ok) return { success: true, rowId: result.rowId };
+  throw new Error(result.error || 'GAS failed');
+}
+
+// ===== HELPER: Mark row synced in GAS =====
+async function markGasSynced(rowId) {
+  const payload = {
+    action: 'mark_synced',
+    rowId: rowId
+  };
+  await postToEndpoint(GAS_FALLBACK_URL, payload);
+}
+
+// ===== HELPER: Fetch gas_synced items =====
+async function fetchGasSyncedItems() {
+  const payload = { action: 'get_gas_synced' };
+  const result = await postToEndpoint(GAS_FALLBACK_URL, payload);
+  return result.ok ? (result.items || []) : [];
+}
+
+// ===== HELPER: Show fallback status =====
+function showFallbackStatus(msg) {
+  setStatus(msg, 'warning');
+}
+
+
 async function flushQueue() {
   if (!state.online || !state.queue.length) return;
 
@@ -724,12 +781,42 @@ refs.searchInput.addEventListener("input", () => {
   render();
 });
 
+// Sync recovery from GAS (get items that were queued there while offline)
+async function syncRecoveryFromGAS() {
+  try {
+    const resp = await fetch(GAS_FALLBACK_URL + '&action=get_gas_synced');
+    const data = await resp.json();
+    if (!data.ok || !data.items) return;
+
+    for (let item of data.items) {
+      try {
+        await apiJson("/api/door/potential/hotlist", {
+          method: "POST",
+          body: JSON.stringify({
+            title: item.title,
+            description: item.description,
+            source: item.source || 'pwa-gas-recovery',
+            capturedAt: item.capturedAt || item.timestamp
+          }),
+        });
+        // Mark as synced in GAS
+        await fetch(GAS_FALLBACK_URL + '&action=mark_synced&rowId=' + item.rowId);
+      } catch (err) {
+        console.warn('Recovery sync failed for item:', err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('GAS recovery fetch failed:', err.message);
+  }
+}
+
 window.addEventListener("online", async () => {
   state.online = true;
   updateStatusIndicators();
   setStatus("Back online. Syncing queued captures...", "info");
   render();
   await flushQueue();
+  await syncRecoveryFromGAS();
   await loadRemoteItems();
 });
 
