@@ -15,7 +15,7 @@ const LISTS = [
 ];
 
 // ===== CONFIG: GAS Fallback =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbx3KWcOm32s-OxexAJqIdyQiariZxfUusKgHWLslqGHetzZzDKOdeBrohdeSqPBFzLV/exec?key=6090cff1bedb13f5c310ea52d9ee298a';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwA_shrnrhU5tXH3M9noBAYHpgwsdZINxey0V86-vXK8D3YcaK2bUBAT0IBd5YwWZgF/exec?key=6090cff1bedb13f5c310ea52d9ee298a';
 
 const state = {
   items: loadJson(STORAGE.items, []),
