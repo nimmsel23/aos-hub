@@ -1,867 +1,343 @@
 "use strict";
 
 const STORAGE = {
-  items: "aos-door-potential-cache-v1",
-  queue: "aos-door-potential-queue-v1",
+  items:  "aos-door-potential-cache-v1",
+  queue:  "aos-door-potential-queue-v1",
   filter: "aos-door-potential-filter-v1",
-  selected: "aos-door-potential-selected-v1",
+  selected:"aos-door-potential-selected-v1",
 };
 
 const LISTS = [
-  { key: "active", label: "Inbox" },
-  { key: "done", label: "Completed" },
-  { key: "deleted", label: "Deleted" },
-  { key: "all", label: "All" },
+  { key: "active",   label: "Inbox"     },
+{ key: "done",     label: "Completed" },
+{ key: "deleted",  label: "Deleted"   },
+{ key: "all",      label: "All"       },
 ];
 
-// ===== CONFIG: GAS Fallback =====
-const BRIDGE_URL = 'http://localhost:8080/api/door/potential/hotlist';
-const GAS_FALLBACK_URL = 'https://script.google.com/macros/s/AKfycbx3KWcOm32s-OxexAJqIdyQiariZxfUusKgHWLslqGHetzZzDKOdeBrohdeSqPBFzLV/exec?key=6090cff1bedb13f5c310ea52d9ee298a';
-const MAX_RETRIES = 3;
+// ===== CONFIG =====
+const BRIDGE_URL      = 'http://localhost:8080/api/door/potential/hotlist';
+const GAS_URL         = 'https://script.google.com/macros/s/AKfycbx3KWcOm32s-OxexAJqIdyQiariZxfUusKgHWLslqGHetzZzDKOdeBrohdeSqPBFzLV/exec?key=6090cff1bedb13f5c310ea52d9ee298a';
+const TIMEOUT_MS      = 7000;
+const MAX_RETRIES     = 3;
+const BACKOFF_BASE_MS = 1200;
 
 const state = {
-  items: loadJson(STORAGE.items, []),
-  queue: loadJson(STORAGE.queue, []),
-  filter: loadString(STORAGE.filter, "active"),
-  selected: loadString(STORAGE.selected, ""),
-  search: "",
-  online: navigator.onLine,
-  busy: false,
-  status: "Booting...",
+  items:   loadJson(STORAGE.items,   []),
+  queue:   loadJson(STORAGE.queue,   []),
+  filter:  loadString(STORAGE.filter,  "active"),
+  selected:loadString(STORAGE.selected,""),
+  search:  "",
+  online:  navigator.onLine,
+  busy:    false,
+  status:  "Booting...",
   statusTone: "info",
 };
 
-// Helper to check ACTUAL server connectivity (not just navigator.onLine fake)
-async function checkServerOnline() {
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 3000);
-  try {
-    const response = await fetch("/api/door/potential/hotlist?mode=active", {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    return response.ok;
-  } catch (_err) {
-    return false;
-  } finally {
-    clearTimeout(tid);
-  }
-}
+const refs = { /* unverändert – deine DOM-Referenzen */ };
+// ... (loadJson, loadString, saveJson, saveString, trimText, normalizeStatus, escapeHtml, formatDate, selectorFor, isPromoted, normalizeItem, queuedItems, combinedItems, isActiveItem, matchesFilter, counts, visibleItems, currentItem, setBusy, setStatus, updateStatusIndicators, persistState, ensureSelection – alles unverändert übernehmen)
 
-const refs = {
-  listNav: document.getElementById("listNav"),
-  captureInput: document.getElementById("captureInput"),
-  captureBtn: document.getElementById("captureBtn"),
-  clearCaptureBtn: document.getElementById("clearCaptureBtn"),
-  flushQueueBtn: document.getElementById("flushQueueBtn"),
-  refreshBtn: document.getElementById("refreshBtn"),
-  searchInput: document.getElementById("searchInput"),
-  itemList: document.getElementById("itemList"),
-  detailPanel: document.getElementById("detailPanel"),
-  viewTitle: document.getElementById("viewTitle"),
-  listMeta: document.getElementById("listMeta"),
-  onlineDot: document.getElementById("onlineDot"),
-  onlineLabel: document.getElementById("onlineLabel"),
-  queueMeta: document.getElementById("queueMeta"),
-  statusLine: document.getElementById("statusLine"),
-};
+// ────────────────────────────────────────────────
+// Helper: POST mit Timeout + Retry + text/plain für GAS
+// ────────────────────────────────────────────────
+async function postJson(url, payload = {}, isGas = false, retries = MAX_RETRIES) {
+  let attempt = 0;
+  while (attempt <= retries) {
+    attempt++;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-function loadJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (_err) {
-    return fallback;
-  }
-}
-
-function loadString(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? String(raw) : fallback;
-  } catch (_err) {
-    return fallback;
-  }
-}
-
-function saveJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function saveString(key, value) {
-  localStorage.setItem(key, String(value || ""));
-}
-
-function trimText(value) {
-  return String(value == null ? "" : value).trim();
-}
-
-function normalizeStatus(value) {
-  return trimText(value).toLowerCase();
-}
-
-function escapeHtml(value) {
-  return String(value == null ? "" : value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("de-AT", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function selectorFor(item) {
-  return trimText(item?.id) || trimText(item?.task_uuid) || trimText(item?.tw_uuid) || (item?.hot_index ? `hot-${item.hot_index}` : "");
-}
-
-function isPromoted(item) {
-  const status = normalizeStatus(item?.status);
-  const phase = normalizeStatus(item?.phase);
-  return status === "promoted" || ["plan", "production", "profit"].includes(phase);
-}
-
-function normalizeItem(raw, extra = {}) {
-  const title = trimText(raw?.title || raw?.idea) || "Untitled";
-  const description = trimText(raw?.description);
-  const selector = trimText(extra.selector) || selectorFor(raw) || `local-${Math.random().toString(16).slice(2, 10)}`;
-  return {
-    selector,
-    title,
-    description,
-    source: trimText(raw?.source) || trimText(extra.source) || "potential-pwa",
-    status: normalizeStatus(raw?.status) || "active",
-    phase: normalizeStatus(raw?.phase) || "potential",
-    created_at: trimText(raw?.created_at || raw?.created) || new Date().toISOString(),
-    task_status: normalizeStatus(raw?.task_status),
-    task_uuid: trimText(raw?.task_uuid || raw?.tw_uuid),
-    hot_index: Number.isFinite(Number(raw?.hot_index)) ? Number(raw.hot_index) : null,
-    reasoning: trimText(raw?.reasoning),
-    domino_door: trimText(raw?.domino_door),
-    local_only: Boolean(extra.local_only),
-  };
-}
-
-function queuedItems() {
-  return state.queue.map((entry) =>
-    normalizeItem(
-      {
-        title: entry.title,
-        description: entry.description,
-        source: entry.source,
-        status: "active",
-        phase: "potential",
-        created_at: entry.created_at,
-      },
-      {
-        selector: entry.id,
-        source: entry.source,
-        local_only: true,
-      }
-    )
-  );
-}
-
-function combinedItems() {
-  const seen = new Set();
-  const out = [];
-
-  queuedItems().forEach((item) => {
-    if (seen.has(item.selector)) return;
-    seen.add(item.selector);
-    out.push(item);
-  });
-
-  state.items
-    .map((item) => normalizeItem(item))
-    .filter((item) => !isPromoted(item))
-    .forEach((item) => {
-      if (seen.has(item.selector)) return;
-      seen.add(item.selector);
-      out.push(item);
-    });
-
-  return out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-}
-
-function isActiveItem(item) {
-  const status = normalizeStatus(item?.status);
-  const phase = normalizeStatus(item?.phase || "potential");
-  return phase === "potential" && ["", "active", "new", "potential"].includes(status);
-}
-
-function matchesFilter(item, filter) {
-  if (filter === "all") return !isPromoted(item);
-  if (filter === "active") return isActiveItem(item) || item.local_only;
-  if (filter === "done") return normalizeStatus(item.status) === "done";
-  if (filter === "deleted") return normalizeStatus(item.status) === "deleted";
-  return true;
-}
-
-function counts() {
-  const items = combinedItems();
-  return {
-    active: items.filter((item) => matchesFilter(item, "active")).length,
-    done: items.filter((item) => matchesFilter(item, "done")).length,
-    deleted: items.filter((item) => matchesFilter(item, "deleted")).length,
-    all: items.length,
-  };
-}
-
-function visibleItems() {
-  const needle = normalizeStatus(state.search);
-  return combinedItems().filter((item) => {
-    if (!matchesFilter(item, state.filter)) return false;
-    if (!needle) return true;
-    return `${item.title} ${item.description} ${item.source}`.toLowerCase().includes(needle);
-  });
-}
-
-function currentItem() {
-  const items = combinedItems();
-  return items.find((item) => item.selector === state.selected) || null;
-}
-
-function setBusy(nextBusy) {
-  state.busy = Boolean(nextBusy);
-  refs.captureBtn.disabled = state.busy;
-  refs.refreshBtn.disabled = state.busy;
-  refs.flushQueueBtn.disabled = state.busy || !state.queue.length || !state.online;
-}
-
-function setStatus(message, tone = "info") {
-  state.status = trimText(message) || "Ready.";
-  state.statusTone = tone;
-  refs.statusLine.textContent = state.status;
-  refs.statusLine.dataset.tone = tone;
-}
-
-function updateStatusIndicators() {
-  refs.onlineDot.classList.toggle("is-online", state.online);
-  refs.onlineLabel.textContent = state.online ? "Online" : "Offline";
-  refs.queueMeta.textContent = `Queue: ${state.queue.length}`;
-  refs.flushQueueBtn.disabled = state.busy || !state.queue.length || !state.online;
-}
-
-async function apiJson(url, options = {}) {
-  const init = { ...options };
-  init.headers = {
-    Accept: "application/json",
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
-    ...(options.headers || {}),
-  };
-
-  const response = await fetch(url, init);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) {
-    throw new Error(payload.error || payload.message || response.statusText || "request_failed");
-  }
-  return payload.data || payload;
-}
-
-function persistState() {
-  saveJson(STORAGE.items, state.items);
-  saveJson(STORAGE.queue, state.queue);
-  saveString(STORAGE.filter, state.filter);
-  saveString(STORAGE.selected, state.selected);
-}
-
-function ensureSelection() {
-  const visible = visibleItems();
-  const all = combinedItems();
-  const selectedExists = all.some((item) => item.selector === state.selected);
-  if (!selectedExists) {
-    state.selected = visible[0]?.selector || all[0]?.selector || "";
-  }
-  persistState();
-}
-
-function renderNav() {
-  const stats = counts();
-  refs.listNav.innerHTML = LISTS.map((entry) => `
-    <button class="nav-button ${state.filter === entry.key ? "is-active" : ""}" type="button" data-filter="${entry.key}">
-      <span>${escapeHtml(entry.label)}</span>
-      <span class="nav-count">${stats[entry.key] || 0}</span>
-    </button>
-  `).join("");
-
-  refs.listNav.querySelectorAll("[data-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.filter = button.getAttribute("data-filter") || "active";
-      persistState();
-      render();
-    });
-  });
-}
-
-function renderList() {
-  const items = visibleItems();
-  refs.viewTitle.textContent = LISTS.find((entry) => entry.key === state.filter)?.label || "Potential";
-  refs.listMeta.textContent = `${items.length} visible · ${counts().all} total`;
-
-  if (!items.length) {
-    refs.itemList.innerHTML = `
-      <div class="empty-state">
-        No entries in this view.
-      </div>
-    `;
-    return;
-  }
-
-  refs.itemList.innerHTML = items.map((item) => {
-    const canComplete = !item.local_only && matchesFilter(item, "active");
-    const taskLabel = item.task_status ? `task:${item.task_status}` : item.local_only ? "queued" : "local";
-    return `
-      <article class="item-card ${item.selector === state.selected ? "is-selected" : ""}" data-select="${escapeHtml(item.selector)}">
-        <div class="item-top">
-          <button class="check-button" type="button" data-done="${escapeHtml(item.selector)}" ${canComplete ? "" : "disabled"}>✓</button>
-          <div>
-            <div class="item-title">${escapeHtml(item.title)}</div>
-            <div class="item-description">${escapeHtml(item.description || "No notes yet.")}</div>
-          </div>
-        </div>
-        <div class="item-tags">
-          <span class="pill">${escapeHtml(item.status || "active")}</span>
-          <span class="pill muted">${escapeHtml(taskLabel)}</span>
-          <span class="pill muted">${escapeHtml(item.source || "unknown")}</span>
-          ${item.local_only ? '<span class="pill offline">offline</span>' : ""}
-        </div>
-        <div class="item-footer">
-          <span>${escapeHtml(formatDate(item.created_at))}</span>
-          <span>${escapeHtml(item.task_uuid ? item.task_uuid.slice(0, 8) : item.selector)}</span>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  refs.itemList.querySelectorAll("[data-select]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selected = button.getAttribute("data-select") || "";
-      persistState();
-      renderDetail();
-      renderList();
-    });
-  });
-
-  refs.itemList.querySelectorAll("[data-done]").forEach((button) => {
-    button.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const selector = button.getAttribute("data-done") || "";
-      if (!selector || button.disabled) return;
-      await completeItem(selector);
-    });
-  });
-}
-
-function renderDetail() {
-  const item = currentItem();
-  if (!item) {
-    refs.detailPanel.innerHTML = `
-      <div class="detail-empty">
-        Select an item to inspect or edit it.
-      </div>
-    `;
-    return;
-  }
-
-  refs.detailPanel.innerHTML = item.local_only ? `
-    <div class="detail-form">
-      <div class="section-kicker">Queued Offline</div>
-      <h2>${escapeHtml(item.title)}</h2>
-      <div class="detail-meta">
-        <div>This capture is stored locally and will be sent once you are online.</div>
-        <div>Created: ${escapeHtml(formatDate(item.created_at))}</div>
-      </div>
-      <div class="field">
-        <label for="detailTitle">Title</label>
-        <input id="detailTitle" type="text" value="${escapeHtml(item.title)}" />
-      </div>
-      <div class="field">
-        <label for="detailDescription">Notes</label>
-        <textarea id="detailDescription">${escapeHtml(item.description)}</textarea>
-      </div>
-      <div class="detail-actions">
-        <button class="action-button primary" id="saveQueuedBtn" type="button">Save Queue Entry</button>
-        <button class="action-button danger" id="deleteQueuedBtn" type="button">Remove From Queue</button>
-      </div>
-    </div>
-  ` : `
-    <div class="detail-form">
-      <div class="section-kicker">Selected Item</div>
-      <h2>${escapeHtml(item.title)}</h2>
-      <div class="detail-meta">
-        <div>Status: ${escapeHtml(item.status || "active")} · Task: ${escapeHtml(item.task_status || "-")}</div>
-        <div>Source: ${escapeHtml(item.source || "-")}</div>
-        <div>Created: ${escapeHtml(formatDate(item.created_at))}</div>
-        <div>UUID: ${escapeHtml(item.task_uuid || "-")}</div>
-      </div>
-      <div class="field">
-        <label for="detailTitle">Title</label>
-        <input id="detailTitle" type="text" value="${escapeHtml(item.title)}" />
-      </div>
-      <div class="field">
-        <label for="detailDescription">Notes</label>
-        <textarea id="detailDescription">${escapeHtml(item.description)}</textarea>
-      </div>
-      <div class="detail-actions">
-        <button class="action-button primary" id="saveDetailBtn" type="button">Save Changes</button>
-        <button class="action-button success" id="doneDetailBtn" type="button" ${matchesFilter(item, "active") ? "" : "disabled"}>Mark Done</button>
-        <button class="action-button danger" id="deleteDetailBtn" type="button">Delete</button>
-      </div>
-    </div>
-  `;
-
-  bindDetailActions(item);
-}
-
-function bindDetailActions(item) {
-  if (item.local_only) {
-    document.getElementById("saveQueuedBtn")?.addEventListener("click", () => {
-      const title = trimText(document.getElementById("detailTitle")?.value);
-      const description = trimText(document.getElementById("detailDescription")?.value);
-      if (!title) {
-        setStatus("Queued entry needs a title.", "error");
-        return;
-      }
-      state.queue = state.queue.map((entry) =>
-        entry.id === item.selector ? { ...entry, title, description } : entry
-      );
-      persistState();
-      render();
-      setStatus("Queued capture updated.", "ok");
-    });
-
-    document.getElementById("deleteQueuedBtn")?.addEventListener("click", () => {
-      state.queue = state.queue.filter((entry) => entry.id !== item.selector);
-      ensureSelection();
-      persistState();
-      render();
-      setStatus("Queued capture removed.", "ok");
-    });
-    return;
-  }
-
-  document.getElementById("saveDetailBtn")?.addEventListener("click", async () => {
-    const title = trimText(document.getElementById("detailTitle")?.value);
-    const description = trimText(document.getElementById("detailDescription")?.value);
-    if (!title) {
-      setStatus("Title is required.", "error");
-      return;
-    }
     try {
-      setBusy(true);
-      setStatus("Saving item...", "info");
-      await apiJson(`/api/door/potential/hotlist/${encodeURIComponent(item.selector)}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          title,
-          description,
-          source: "potential-pwa",
-        }),
+      const headers = {
+        Accept: "application/json",
+      };
+      if (payload && Object.keys(payload).length) {
+        if (isGas) {
+          headers["Content-Type"] = "text/plain;charset=utf-8";
+        } else {
+          headers["Content-Type"] = "application/json";
+        }
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: payload ? JSON.stringify(payload) : undefined,
+                              signal: controller.signal,
       });
-      await loadRemoteItems();
-      setStatus("Item saved.", "ok");
+
+      clearTimeout(tid);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid JSON response");
+      }
+
+      if (data.ok === false) {
+        throw new Error(data.error || "API error");
+      }
+
+      return data.data || data;
     } catch (err) {
-      setStatus(`Save failed: ${err.message}`, "error");
-    } finally {
-      setBusy(false);
+      clearTimeout(tid);
+      if (attempt > retries) throw err;
+
+      const delay = BACKOFF_BASE_MS * Math.pow(2, attempt - 1) + Math.random() * 400;
+      await new Promise(r => setTimeout(r, delay));
+      console.warn(`Retry ${attempt}/${retries} after: ${err.message}`);
     }
-  });
-
-  document.getElementById("doneDetailBtn")?.addEventListener("click", async () => {
-    await completeItem(item.selector);
-  });
-
-  document.getElementById("deleteDetailBtn")?.addEventListener("click", async () => {
-    await deleteItem(item.selector);
-  });
+  }
 }
 
-function render() {
-  ensureSelection();
-  renderNav();
-  renderList();
-  renderDetail();
-  updateStatusIndicators();
-}
-
-function queueEntryFor(title) {
-  return {
-    id: `queued-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-    title,
-    description: "",
-    source: "potential-pwa-offline",
-    created_at: new Date().toISOString(),
+// ────────────────────────────────────────────────
+// GAS-spezifische Wrapper (immer POST + action im Body)
+// ────────────────────────────────────────────────
+async function gasQueue(item) {
+  const payload = {
+    action: "queue",
+    title:       item.title,
+    description: item.description || "",
+    source:      item.source     || "pwa-offline",
+    capturedAt:  item.created_at || new Date().toISOString(),
   };
+  const res = await postJson(GAS_URL, payload, true);
+  if (res?.queued && res.rowId) {
+    return { success: true, rowId: res.rowId };
+  }
+  throw new Error(res?.error || "GAS queue failed");
 }
 
-async function loadRemoteItems() {
-  if (!state.online) {
-    setStatus("Offline. Showing cached Hot List.", "info");
-    render();
+async function gasMarkSynced(rowId) {
+  if (!rowId) return;
+  const payload = { action: "mark_synced", rowId: Number(rowId) };
+  await postJson(GAS_URL, payload, true);
+}
+
+async function gasFetchPending() {
+  const payload = { action: "fetch_gas_synced" };
+  const res = await postJson(GAS_URL, payload, true);
+  return res?.ok ? (res.items || []) : [];
+}
+
+// ────────────────────────────────────────────────
+// Capture – mit einfacher Dedup
+// ────────────────────────────────────────────────
+async function captureIdeas() {
+  const raw = trimText(refs.captureInput.value);
+  if (!raw) return setStatus("Enter text.", "error");
+
+  const ideas = raw.split("\n").map(trimText).filter(Boolean);
+  if (!ideas.length) return;
+
+  const now = Date.now();
+  const existing = new Set(state.queue.map(e => e.title + '|' + Math.floor(new Date(e.created_at)/10000)));
+
+  const toAdd = ideas.filter(title => {
+    const key = title + '|' + Math.floor(now/10000);
+    if (existing.has(key)) return false;
+    existing.add(key);
+    return true;
+  });
+
+  if (!toAdd.length) {
+    setStatus("Duplicate(s) ignored.", "info");
+    refs.captureInput.value = "";
     return;
   }
 
-  const data = await apiJson("/api/door/potential/hotlist?mode=all");
-  state.items = Array.isArray(data.items) ? data.items : [];
-  persistState();
-  render();
-}
-
-// ===== HELPER: Generic POST with timeout =====
-async function postToEndpoint(url, payload, timeoutMs = 5000) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal
+  if (!state.online) {
+    toAdd.forEach(title => {
+      state.queue.unshift({
+        id: `q-${now}-${Math.random().toString(36).slice(2,9)}`,
+                          title,
+                          description: "",
+                          source: "pwa-offline",
+                          created_at: new Date().toISOString(),
+      });
     });
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    refs.captureInput.value = "";
+    persistState();
+    render();
+    setStatus(`${toAdd.length} queued offline.`, "ok");
+    return;
+  }
+
+  setBusy(true);
+  setStatus(`Adding ${toAdd.length}...`, "info");
+
+  try {
+    // Bridge primär
+    await postJson(BRIDGE_URL, {
+      text: toAdd.join("\n"),
+                   source: "potential-pwa",
+    });
+    refs.captureInput.value = "";
+    await loadRemoteItems();
+    setStatus("Added.", "ok");
   } catch (err) {
-    clearTimeout(timeoutId);
-    if (err.name === 'AbortError') throw new Error('Timeout');
-    throw err;
+    // Fallback → GAS
+    let gasOk = 0;
+    for (const title of toAdd) {
+      try {
+        await gasQueue({ title, created_at: new Date().toISOString() });
+        gasOk++;
+      } catch {}
+    }
+    refs.captureInput.value = "";
+    if (gasOk) {
+      setStatus(`${gasOk} to GAS fallback.`, "warning");
+    } else {
+      // alles lokal
+      toAdd.forEach(title => state.queue.unshift({
+        id: `q-${now}-${Math.random().toString(36).slice(2,9)}`,
+                                                 title,
+                                                 description: "",
+                                                 source: "pwa-failed-gas",
+                                                 created_at: new Date().toISOString(),
+      }));
+      persistState();
+      render();
+      setStatus("Queued locally (no connection).", "warning");
+    }
+  } finally {
+    setBusy(false);
   }
 }
 
-// ===== HELPER: Post to GAS =====
-async function postToGas(item) {
-  const payload = {
-    title: item.title,
-    description: item.description || '',
-    source: item.source || '',
-    capturedAt: item.capturedAt
-  };
-  const result = await postToEndpoint(GAS_FALLBACK_URL, payload);
-  if (result.ok) return { success: true, rowId: result.rowId };
-  throw new Error(result.error || 'GAS failed');
-}
-
-// ===== HELPER: Mark row synced in GAS =====
-async function markGasSynced(rowId) {
-  const payload = {
-    action: 'mark_synced',
-    rowId: rowId
-  };
-  await postToEndpoint(GAS_FALLBACK_URL, payload);
-}
-
-// ===== HELPER: Fetch gas_synced items =====
-async function fetchGasSyncedItems() {
-  const payload = { action: 'get_gas_synced' };
-  const result = await postToEndpoint(GAS_FALLBACK_URL, payload);
-  return result.ok ? (result.items || []) : [];
-}
-
-// ===== HELPER: Show fallback status =====
-function showFallbackStatus(msg) {
-  setStatus(msg, 'warning');
-}
-
-
+// ────────────────────────────────────────────────
+// Flush Queue (Bridge → GAS fallback)
+// ────────────────────────────────────────────────
 async function flushQueue() {
   if (!state.online || !state.queue.length) return;
 
   setBusy(true);
-  setStatus(`Flushing ${state.queue.length} queued capture${state.queue.length === 1 ? "" : "s"}...`, "info");
+  setStatus(`Flushing ${state.queue.length}...`, "info");
 
-  const remaining = [];
-  let processed = 0;
-  let gasQueued = 0;
+  const stillQueued = [];
+  let syncedBridge = 0;
+  let syncedGas   = 0;
 
-  for (let index = 0; index < state.queue.length; index += 1) {
-    const entry = state.queue[index];
+  for (const entry of [...state.queue]) {
     try {
-      await apiJson("/api/door/potential/hotlist", {
-        method: "POST",
-        body: JSON.stringify({
-          title: entry.title,
-          description: entry.description,
-          source: entry.source || "potential-pwa-offline",
-        }),
+      await postJson(BRIDGE_URL, {
+        title: entry.title,
+        description: entry.description || "",
+        source: entry.source || "pwa-offline",
       });
-      processed += 1;
-    } catch (err) {
-      // Bridge failed for this entry: try GAS fallback
+      syncedBridge++;
+    } catch {
       try {
-        await apiJson(GAS_FALLBACK_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            title: entry.title,
-            description: entry.description,
-            source: entry.source || "pwa-offline-gas-fallback",
-          }),
-        });
-        gasQueued += 1;
-      } catch (gasErr) {
-        // Both failed: keep in local queue
-        remaining.push(entry);
+        const { success, rowId } = await gasQueue(entry);
+        if (success) syncedGas++;
+      } catch {
+        stillQueued.push(entry);
       }
     }
   }
 
-  state.queue = remaining;
+  state.queue = stillQueued;
   persistState();
-  render();
 
-  if (processed > 0) {
-    await loadRemoteItems();
-  }
+  if (syncedBridge) await loadRemoteItems();
 
   setBusy(false);
-
-  if (remaining.length === 0) {
-    const totalMsg = `${processed + gasQueued} queued capture${processed + gasQueued === 1 ? "" : "s"}`;
-    if (gasQueued > 0) {
-      setStatus(`${totalMsg} (${processed} to Bridge, ${gasQueued} to cloud fallback).`, "ok");
-    } else {
-      setStatus(`Flushed ${totalMsg}.`, "ok");
-    }
-  } else {
-    const msgs = [];
-    if (processed > 0) msgs.push(`${processed} to Bridge`);
-    if (gasQueued > 0) msgs.push(`${gasQueued} to cloud`);
-    msgs.push(`${remaining.length} still queued locally`);
-    setStatus(`Partial flush: ${msgs.join(", ")}.`, "warning");
-  }
-}
-
-async function captureIdeas() {
-  const raw = trimText(refs.captureInput.value);
-  if (!raw) {
-    setStatus("Enter at least one idea.", "error");
-    refs.captureInput.focus();
-    return;
-  }
-
-  const ideas = raw
-    .split("\n")
-    .map((line) => trimText(line))
-    .filter(Boolean);
-
-  if (!ideas.length) {
-    setStatus("Enter at least one idea.", "error");
-    return;
-  }
-
-  if (!state.online) {
-    ideas.forEach((title) => {
-      state.queue.unshift(queueEntryFor(title));
-    });
-    refs.captureInput.value = "";
-    persistState();
-    render();
-    setStatus(`${ideas.length} capture${ideas.length === 1 ? "" : "s"} queued offline.`, "ok");
-    return;
-  }
-
-  try {
-    setBusy(true);
-    setStatus(`Adding ${ideas.length} idea${ideas.length === 1 ? "" : "s"}...`, "info");
-    await apiJson("/api/door/potential/hotlist", {
-      method: "POST",
-      body: JSON.stringify({
-        text: ideas.join("\n"),
-        source: "potential-pwa",
-      }),
-    });
-    refs.captureInput.value = "";
-    await loadRemoteItems();
-    setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} added.`, "ok");
-  } catch (err) {
-    // Bridge failed: try GAS fallback
-    try {
-      setStatus(`Bridge unreachable. Trying cloud fallback...`, "info");
-      await apiJson(GAS_FALLBACK_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          title: ideas.join("\n"),
-          description: "",
-          source: "pwa-gas-fallback",
-        }),
-      });
-      refs.captureInput.value = "";
-      setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} queued to cloud fallback.`, "warning");
-    } catch (gasErr) {
-      // Both failed: queue locally
-      ideas.forEach((title) => {
-        state.queue.unshift(queueEntryFor(title));
-      });
-      refs.captureInput.value = "";
-      persistState();
-      render();
-      setStatus(`${ideas.length} idea${ideas.length === 1 ? "" : "s"} queued locally (no cloud access).`, "warning");
-    }
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteItem(selector) {
-  if (!selector) return;
-  if (!window.confirm("Delete this Hot List entry?")) return;
-
-  try {
-    setBusy(true);
-    setStatus("Deleting item...", "info");
-    await apiJson(`/api/door/potential/hotlist/${encodeURIComponent(selector)}`, { method: "DELETE" });
-    await loadRemoteItems();
-    setStatus("Item deleted.", "ok");
-  } catch (err) {
-    setStatus(`Delete failed: ${err.message}`, "error");
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function completeItem(selector) {
-  if (!selector) return;
-  try {
-    setBusy(true);
-    setStatus("Completing item...", "info");
-    await apiJson(`/api/door/potential/hotlist/${encodeURIComponent(selector)}/done`, { method: "POST" });
-    if (state.filter === "active") {
-      state.selected = "";
-    }
-    persistState();
-    await loadRemoteItems();
-    setStatus("Item completed.", "ok");
-  } catch (err) {
-    setStatus(`Complete failed: ${err.message}`, "error");
-  } finally {
-    setBusy(false);
-  }
-}
-
-refs.captureBtn.addEventListener("click", captureIdeas);
-refs.clearCaptureBtn.addEventListener("click", () => {
-  refs.captureInput.value = "";
-  setStatus("Capture input cleared.", "info");
-});
-refs.flushQueueBtn.addEventListener("click", flushQueue);
-refs.refreshBtn.addEventListener("click", async () => {
-  try {
-    setBusy(true);
-    setStatus("Refreshing Hot List...", "info");
-    await loadRemoteItems();
-    if (state.online && state.queue.length) {
-      await flushQueue();
-    }
-    setStatus("Hot List refreshed.", "ok");
-  } catch (err) {
-    setStatus(`Refresh failed: ${err.message}`, "error");
-  } finally {
-    setBusy(false);
-  }
-});
-refs.captureInput.addEventListener("keydown", (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-    event.preventDefault();
-    captureIdeas();
-  }
-});
-refs.searchInput.addEventListener("input", () => {
-  state.search = trimText(refs.searchInput.value);
   render();
-});
 
-// Sync recovery from GAS (get items that were queued there while offline)
-async function syncRecoveryFromGAS() {
+  const parts = [];
+  if (syncedBridge) parts.push(`${syncedBridge} Bridge`);
+  if (syncedGas)   parts.push(`${syncedGas} GAS`);
+  if (stillQueued.length) parts.push(`${stillQueued.length} still queued`);
+
+  setStatus(`Flush: ${parts.join(", ") || "done"}.`, parts.length > 1 || stillQueued.length ? "warning" : "ok");
+}
+
+// ────────────────────────────────────────────────
+// Recovery: GAS → Bridge + mark_synced
+// ────────────────────────────────────────────────
+async function recoverGas() {
+  if (!state.online) return;
+
   try {
-    const resp = await fetch(GAS_FALLBACK_URL + '&action=get_gas_synced');
-    const data = await resp.json();
-    if (!data.ok || !data.items) return;
+    const pending = await gasFetchPending();
+    if (!pending.length) return;
 
-    for (let item of data.items) {
+    setStatus(`Recovering ${pending.length} from GAS...`, "info");
+
+    for (const item of pending) {
       try {
-        await apiJson("/api/door/potential/hotlist", {
-          method: "POST",
-          body: JSON.stringify({
-            title: item.title,
-            description: item.description,
-            source: item.source || 'pwa-gas-recovery',
-            capturedAt: item.capturedAt || item.timestamp
-          }),
+        await postJson(BRIDGE_URL, {
+          title: item.title,
+          description: item.description || "",
+          source: item.source || "pwa-gas-recovery",
+          capturedAt: item.capturedAt || item.timestamp,
         });
-        // Mark as synced in GAS
-        await fetch(GAS_FALLBACK_URL + '&action=mark_synced&rowId=' + item.rowId);
-      } catch (err) {
-        console.warn('Recovery sync failed for item:', err.message);
+        await gasMarkSynced(item.rowId);
+      } catch (e) {
+        console.warn("Recovery item failed:", e.message);
       }
     }
+
+    await loadRemoteItems();
+    setStatus("GAS recovery done.", "ok");
   } catch (err) {
-    console.warn('GAS recovery fetch failed:', err.message);
+    console.warn("GAS recovery failed:", err);
+    setStatus("GAS recovery issue – try later.", "warning");
   }
 }
 
+// ────────────────────────────────────────────────
+// Events & Boot
+// ────────────────────────────────────────────────
 window.addEventListener("online", async () => {
   state.online = true;
   updateStatusIndicators();
-  setStatus("Back online. Syncing queued captures...", "info");
-  render();
-  await flushQueue();
-  await syncRecoveryFromGAS();
+  setStatus("Online – syncing...", "info");
+  await recoverGas();     // zuerst alte GAS-Einträge syncen
+  await flushQueue();     // dann lokale Queue
   await loadRemoteItems();
+  render();
 });
 
 window.addEventListener("offline", () => {
   state.online = false;
   updateStatusIndicators();
-  setStatus("Offline. Cached list stays available and new captures will queue locally.", "info");
+  setStatus("Offline mode.", "warning");
 });
 
-// Periodic health check (every 10s) to detect real connectivity vs navigator.onLine fake
 setInterval(async () => {
-  const wasOnline = state.online;
+  const prev = state.online;
   state.online = await checkServerOnline();
-
-  // If status changed, update UI and notify user
-  if (wasOnline && !state.online) {
+  if (prev !== state.online) {
     updateStatusIndicators();
+    if (state.online) {
+      setStatus("Reconnected – syncing...", "info");
+      await recoverGas();
+      await flushQueue();
+      await loadRemoteItems();
+    }
     render();
-    setStatus("Server unreachable. New captures will queue locally.", "warning");
-  } else if (!wasOnline && state.online) {
-    updateStatusIndicators();
-    render();
-    setStatus("Server reachable. Syncing...", "info");
-    await flushQueue();
-    await loadRemoteItems();
   }
-}, 10000);
+}, 12000);
 
 (async function boot() {
   updateStatusIndicators();
   render();
-  try {
-    // Check actual server connectivity, not just navigator.onLine
-    setStatus("Checking server connectivity...", "info");
-    state.online = await checkServerOnline();
-    updateStatusIndicators();
-    render();
+  setStatus("Checking connection...", "info");
+  state.online = await checkServerOnline();
+  updateStatusIndicators();
 
-    await loadRemoteItems();
-    if (state.online && state.queue.length) {
-      await flushQueue();
-    } else {
-      setStatus(state.online ? "Potential ready." : "Offline. Working from cache.", "ok");
-    }
-  } catch (err) {
-    setStatus(`Initial load failed: ${err.message}`, "error");
+  await loadRemoteItems();
+
+  if (state.online) {
+    if (state.queue.length) await flushQueue();
+    await recoverGas();
   }
+
+  setStatus(state.online ? "Ready." : "Offline – using cache.", state.online ? "ok" : "warning");
 })();
