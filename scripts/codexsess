@@ -13,7 +13,7 @@ set -euo pipefail
 # existing branches (it will fail and tell you).
 # ============================================================
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 ALIASCTL="$ROOT_DIR/scripts/aos-aliasctl"
 
