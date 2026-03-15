@@ -376,56 +376,6 @@ app.get("/api/pin/status", (_req, res) => {
 
 app.use("/api", pinBarrier);
 
-function fitnessCtxTarget(req) {
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  const rawHost = forwardedHost || String(req.headers.host || "").trim();
-  const out = new URL("http://127.0.0.1/");
-  try {
-    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
-    out.hostname = parsed.hostname || "127.0.0.1";
-  } catch (_) {
-    out.hostname = "127.0.0.1";
-  }
-  out.port = "8788";
-  out.pathname = "/";
-  return out.toString();
-}
-
-function vitalCtxTarget(req, pathname = "/") {
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  const rawHost = forwardedHost || String(req.headers.host || "").trim();
-  const out = new URL("http://127.0.0.1/");
-  try {
-    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
-    out.hostname = parsed.hostname || "127.0.0.1";
-  } catch (_) {
-    out.hostname = "127.0.0.1";
-  }
-  out.port = "8788";
-  out.pathname = pathname;
-  return out.toString();
-}
-
-function devAppTarget(req, port, pathname = "/") {
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  const rawHost = forwardedHost || String(req.headers.host || "").trim();
-  const out = new URL("http://127.0.0.1/");
-  try {
-    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
-    out.hostname = parsed.hostname || "127.0.0.1";
-  } catch (_) {
-    out.hostname = "127.0.0.1";
-  }
-  out.port = String(port);
-  out.pathname = pathname;
-  return out.toString();
-}
 
 function isDoorCtxUiPath(pathname) {
   const p = String(pathname || "");
@@ -501,36 +451,34 @@ async function proxyDoorctx(req, res, next) {
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
-// vitalctx = fitness+fuel+relax hub → 8788 Startseite
-app.get(["/vitalctx", "/vitalctx/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/"))
+app.get(["/vitalctx", "/vitalctx/"], (_req, res) =>
+  res.redirect(302, "http://localhost:8788/")
 );
-// Dev app shortcuts → host-aware redirects (work via Tailscale too)
-app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 9002))
+app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (_req, res) =>
+  res.redirect(302, "http://localhost:9002/")
 );
-app.get(["/fuel", "/fuel/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 9000))
+app.get(["/fuel", "/fuel/"], (_req, res) =>
+  res.redirect(302, "http://localhost:9000/")
 );
-app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 9001))
+app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (_req, res) =>
+  res.redirect(302, "http://localhost:9001/")
 );
 
-app.get(["/dojo", "/dojo/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/dojo/"))
+app.get(["/dojo", "/dojo/"], (_req, res) =>
+  res.redirect(302, "http://localhost:8788/dojo/")
 );
 
 // /c/<id>/ → 4100 (client-only)
 app.use("/c", (req, res) =>
-  res.redirect(302, devAppTarget(req, 4100, req.originalUrl || req.url))
+  res.redirect(302, `http://localhost:4100${req.originalUrl || req.url}`)
 );
 
 // 4 Domains shortcuts
-app.get(["/body", "/body/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/"))
+app.get(["/body", "/body/"], (_req, res) =>
+  res.redirect(302, "http://localhost:8788/")
 );
-app.get(["/being", "/being/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 9001, "/"))
+app.get(["/being", "/being/"], (_req, res) =>
+  res.redirect(302, "http://localhost:9001/")
 );
 
 app.use((req, res, next) => {
