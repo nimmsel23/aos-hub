@@ -501,6 +501,10 @@ async function proxyDoorctx(req, res, next) {
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
+// vitalctx = fitness+fuel+relax hub → 8788 Startseite
+app.get(["/vitalctx", "/vitalctx/"], (req, res) =>
+  res.redirect(302, devAppTarget(req, 8788, "/"))
+);
 // Dev app shortcuts → host-aware redirects (work via Tailscale too)
 app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, res) =>
   res.redirect(302, devAppTarget(req, 9002))
