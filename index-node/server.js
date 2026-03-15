@@ -517,7 +517,7 @@ app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (req, res) =>
 );
 
 app.get(["/dojo", "/dojo/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/dojo/"))
+  res.redirect(302, vitalCtxTarget(req, "/dojo/"))
 );
 
 // /c/<id>/ → 4100 (client-only)
@@ -527,10 +527,10 @@ app.use("/c", (req, res) =>
 
 // 4 Domains shortcuts
 app.get(["/body", "/body/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/"))
+  res.redirect(302, vitalCtxTarget(req, "/"))
 );
 app.get(["/being", "/being/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 9001, "/"))
+  res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
 );
 
 app.use((req, res, next) => {
