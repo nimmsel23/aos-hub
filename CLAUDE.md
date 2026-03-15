@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Router Bot** = Telegram interface that routes commands to centres
 - **Bridge (8080)** = Data flow service for Core4/Fruits/Tent/Tasks
 - **GAS** = Cloud fallback when laptop is offline
+- **vital-hub-konsole (8788)** = Vitaltrainer Hub — Konsole + Klienten + App-Routing (server.mjs, voller Mode)
+- **vital-hub client-only (4100)** = Klienten-Zugang — nur /c/<id>/ (server.mjs, CLIENT_ONLY=1)
 
 ## Development Commands
 
