@@ -6865,7 +6865,7 @@ app.get("/api/system/ports", async (_req, res) => {
       8799, // index-node
       8780, // pwa standalone
       8080, // bridge
-      4100, // clientctx
+      4100, // vital-hub client-only
       8781, // core4ctx
       8782, // firectx
       8783, // focusctx
@@ -6873,9 +6873,12 @@ app.get("/api/system/ports", async (_req, res) => {
       8785, // freedomctx
       8786, // doorctx
       8787, // gamectx
-      8788, // fitnessctx
+      8788, // vital-hub konsole
       8790, // memoirsctx
       8791, // daily ctx
+      9001, // entspannungsctx (vital dev)
+      9000, // fuelctx (vital dev)
+      9002, // fitnessctx (vital dev)
     ];
     const checks = await Promise.all(ports.map(async (port) => ({
       port,

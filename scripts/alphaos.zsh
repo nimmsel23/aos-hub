@@ -64,6 +64,31 @@ aos_core4_today() {
   _aos_get "$AOS_BRIDGE_URL/bridge/core4/today"
 }
 
+# ── Ports ────────────────────────────────────────────────────────────────────
+
+aos_ports() {
+  _aos_get "$AOS_INDEX_URL/api/system/ports" 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+labels = {
+  8799: 'index-node',      8780: 'pwa-standalone',
+  8080: 'bridge',          4100: 'vital-hub client-only',
+  8781: 'core4ctx',        8782: 'firectx',
+  8783: 'focusctx',        8784: 'framectx',
+  8785: 'freedomctx',      8786: 'doorctx',
+  8787: 'gamectx',         8788: 'vital-hub konsole',
+  8790: 'memoirsctx',      8791: 'daily ctx',
+  9001: 'entspannungsctx', 9000: 'fuelctx',
+  9002: 'fitnessctx',
+}
+for p in data.get('ports', []):
+    port = p['port']
+    icon = '✓' if p['ok'] else '✗'
+    label = labels.get(port, '')
+    print(f'{icon} {port}  {label}')
+" 2>/dev/null || echo "Index Node offline"
+}
+
 # ── Health ───────────────────────────────────────────────────────────────────
 
 aos_health() {
