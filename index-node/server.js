@@ -521,22 +521,10 @@ app.get(["/dojo", "/dojo/"], (req, res) =>
 );
 
 // Client-only routes to port 4100
-app.use("/c", (req, res) => {
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  const rawHost = forwardedHost || String(req.headers.host || "").trim();
-  const out = new URL("http://127.0.0.1/");
-  try {
-    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
-    out.hostname = parsed.hostname || "127.0.0.1";
-  } catch (_) {
-    out.hostname = "127.0.0.1";
-  }
-  out.port = "4100";
-  out.pathname = req.originalUrl || req.url;
-  res.redirect(302, out.toString());
-});
+// /c/<id>/ → 4100 (client-only)
+app.use("/c", (req, res) =>
+  res.redirect(302, devAppTarget(req, 4100, req.originalUrl || req.url))
+);
 
 // 4 Domains shortcuts
 app.get(["/body", "/body/"], (req, res) =>
