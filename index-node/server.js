@@ -541,9 +541,6 @@ app.get(["/body", "/body/"], (req, res) =>
 app.get(["/being", "/being/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
 );
-app.get(["/balance", "/balance/", "/business", "/business/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
-);
 
 app.use((req, res, next) => {
   const pathname = String(req.path || req.url || "");
