@@ -7,11 +7,11 @@ const refreshBtn = document.getElementById("refresh");
 
 const ROUTES = [
   { label: "Index", path: "/" },
-  { label: "Konsole", path: "http://127.0.0.1:8788/konsole/" },
-  { label: "Klienten", path: "http://127.0.0.1:8788/klienten/" },
-  { label: "Fitness Centre", path: "http://127.0.0.1:9002/" },
-  { label: "Entspannungs Centre", path: "http://127.0.0.1:9001/" },
-  { label: "Ernaehrungs Centre", path: "http://127.0.0.1:9000/" },
+  { label: "Konsole", path: "/konsole/" },
+  { label: "Klienten", path: "/klienten/" },
+  { label: "Fitness Centre", path: "/fitness/" },
+  { label: "Entspannungs Centre", path: "/entspannung/" },
+  { label: "Ernaehrungs Centre", path: "/fuel/" },
   { label: "PWA Game", path: "/pwa/game/" },
   { label: "PWA Core4", path: "/pwa/core4/" },
   { label: "PWA Fire", path: "/pwa/fire/" },
