@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 
 ENV_PATH = Path(os.path.expanduser("~/.config/alpha-os/hooks.env"))
-TICK_ENV_PATH = Path(os.path.expanduser("~/.aos/tick.env"))
+# LEGACY: TICK_ENV_PATH = Path(os.path.expanduser("~/.aos/tick.env"))
 GLOBAL_ENV_PATH = Path(os.environ.get("AOS_ENV_FILE") or os.path.expanduser("~/.env/aos.env"))
 PROTECTED_KEYS = set(os.environ.keys())
 
@@ -386,80 +386,9 @@ _HABIT_LABELS = {
 }
 
 
-def _load_tick_config() -> dict:
-    """Token + project from ~/.aos/tick.env; env vars override."""
-    cfg: dict[str, str] = {}
-    if TICK_ENV_PATH.exists():
-        try:
-            for line in TICK_ENV_PATH.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                cfg[key.strip()] = value.strip().strip('"').strip("'")
-        except Exception:
-            pass
-    return {
-        "token": os.environ.get("TICKTICK_TOKEN") or cfg.get("TICKTICK_TOKEN") or cfg.get("TICKTICK_API_TOKEN") or "",
-        "project_id": os.environ.get("TICKTICK_PROJECT_ID") or cfg.get("TICKTICK_PROJECT_ID") or cfg.get("TICKTICK_PROJECT") or "",
-    }
-
-
-def send_ticktick_done(domain: str, habit: str, tags: list[str]) -> None:
-    """Core4 completion log: create + close a TickTick task.
-
-    Fire-and-forget — any error is swallowed so the hook never blocks.
-    Disable entirely with AOS_CORE4_TICKTICK=0.
-    """
-    cfg = _load_tick_config()
-    token = cfg["token"]
-    if not token:
-        return
-
-    from urllib import request as _urlreq
-
-    tagged_day = _date_from_core4_tag(tags)
-    date_str = tagged_day.isoformat() if tagged_day else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    domain_cap = domain.capitalize() if domain else ""
-    habit_label = _HABIT_LABELS.get(habit, habit.capitalize() if habit else "")
-    title = f"{domain_cap}: {habit_label}" if domain_cap else habit_label or "Core4"
-
-    body: dict = {
-        "title": title,
-        "tags": [t for t in [domain, habit] if t],
-        "content": date_str,
-    }
-    if cfg["project_id"]:
-        body["projectId"] = cfg["project_id"]
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-    try:
-        # create
-        req = _urlreq.Request(
-            "https://api.ticktick.com/open/v1/task",
-            data=json.dumps(body).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        resp = _urlreq.urlopen(req, timeout=5)
-        task_id = json.loads(resp.read().decode("utf-8")).get("id")
-        if not task_id:
-            return
-
-        # close
-        close_req = _urlreq.Request(
-            f"https://api.ticktick.com/open/v1/task/{task_id}/close",
-            data=b"",
-            headers=headers,
-            method="POST",
-        )
-        _urlreq.urlopen(close_req, timeout=5)
-    except Exception:
-        return
+# LEGACY: TickTick integration removed — use Bridge/GAS pipeline instead
+# def _load_tick_config() -> dict: ...
+# def send_ticktick_done(domain: str, habit: str, tags: list[str]) -> None: ...
 
 
 def main() -> int:
@@ -515,8 +444,8 @@ def main() -> int:
                 )
                 send_tele_text(done_text)
         if status == "completed":
-            if completed_transition and os.environ.get("AOS_CORE4_TICKTICK", "1") == "1":
-                send_ticktick_done(domain, habit, tags)
+            # LEGACY: if completed_transition and os.environ.get("AOS_CORE4_TICKTICK", "1") == "1":
+            #     send_ticktick_done(domain, habit, tags)
             payload = {
                 "type": "core4_task_done",
                 "timestamp": now_iso(),
