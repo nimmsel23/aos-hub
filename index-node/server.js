@@ -541,11 +541,8 @@ app.get(["/body", "/body/"], (req, res) =>
 app.get(["/being", "/being/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
 );
-app.get(["/balance", "/balance/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
-);
-app.get(["/business", "/business/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
+app.get(["/balance", "/balance/", "/business", "/business/"], (req, res) =>
+  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
 );
 
 app.use((req, res, next) => {
@@ -5050,8 +5047,9 @@ app.get("/profit/", (_req, res) => res.redirect(301, "/pwa/profit/"));
 app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
 app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
-app.get("/clients", (_req, res) => res.redirect(302, "http://127.0.0.1:8788/clientctx/"));
-app.get("/clients/", (_req, res) => res.redirect(302, "http://127.0.0.1:8788/clientctx/"));
+app.get(["/clients", "/clients/", "/clientctx", "/clientctx/"], (req, res) =>
+  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
+);
 app.get("/game/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/game/frame", (_req, res) => res.redirect(302, "/pwa/frame/"));
 app.get("/game/freedom", (_req, res) => res.redirect(302, "/pwa/freedom/"));
