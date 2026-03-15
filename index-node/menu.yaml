@@ -12,29 +12,24 @@
       "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
     },
     {
-      "label": "Vital Hub",
-      "cmd": "vitalctx",
-      "url": "/vitalctx"
+      "label": "Konsole",
+      "cmd": "konsole",
+      "url": "http://localhost:8788/konsole/"
     },
     {
       "label": "Fitness Centre",
       "cmd": "fitness",
-      "url": "/fitnessctx"
+      "url": "http://localhost:9002/"
     },
     {
       "label": "Entspannungs Centre",
       "cmd": "entspannung",
-      "url": "/entspannung"
+      "url": "http://localhost:9001/"
     },
     {
       "label": "Ernaehrungs Centre",
       "cmd": "fuel",
-      "url": "/fuel"
-    },
-    {
-      "label": "Klientenverwaltung",
-      "cmd": "clientctx",
-      "url": "/clientctx"
+      "url": "http://localhost:9000/"
     },
     {
       "label": "Vital Dojo",
@@ -150,18 +145,18 @@
     { "label": "FREEDOM", "url": "https://ideapad.tail7a15d6.ts.net/pwa/freedom/", "target": "_self" },
     { "label": "DOOR", "url": "https://ideapad.tail7a15d6.ts.net/pwa/door/", "target": "_self" },
     { "label": "GAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/game/", "target": "_self" },
-    { "label": "FITNESS", "url": "https://ideapad.tail7a15d6.ts.net/fitnessctx", "target": "_self" },
+    { "label": "FITNESS", "url": "http://localhost:9002/", "target": "_self" },
     { "label": "MEMOIRS", "url": "https://ideapad.tail7a15d6.ts.net/pwa/memoirs/", "target": "_self" },
     { "label": "LINKS", "url": "/links.html", "target": "_self" }
   ],
   "pwa_ctx": {
-    "core4": { "port": 8781, "service": "aos-pwa-core4-ctx.service" },
-    "fire": { "port": 8782, "service": "aos-pwa-fire-ctx.service" },
-    "focus": { "port": 8783, "service": "aos-pwa-focus-ctx.service" },
-    "frame": { "port": 8784, "service": "aos-pwa-frame-ctx.service" },
-    "freedom": { "port": 8785, "service": "aos-pwa-freedom-ctx.service" },
+    "core4": { "port": 8781, "service": "pwa-core4-ctx.service" },
+    "fire": { "port": 8782, "service": "pwa-fire-ctx.service" },
+    "focus": { "port": 8783, "service": "pwa-focus-ctx.service" },
+    "frame": { "port": 8784, "service": "pwa-frame-ctx.service" },
+    "freedom": { "port": 8785, "service": "pwa-freedom-ctx.service" },
     "door": { "port": 8786, "service": "aos-doorctx.service" },
-    "game": { "port": 8787, "service": "aos-pwa-game-ctx.service" },
-    "memoirs": { "port": 8790, "service": "aos-pwa-memoirs-ctx.service" }
+    "game": { "port": 8787, "service": "pwa-game-ctx.service" },
+    "memoirs": { "port": 8790, "service": "pwa-memoirs-ctx.service" }
   }
 }
