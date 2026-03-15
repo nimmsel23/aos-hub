@@ -583,6 +583,38 @@ async def handle_queue_flush(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "sent": sent})
 
 
+async def handle_vitalctx_klient_neu(request: web.Request) -> web.Response:
+    """Run klient-neu for a new client submitted via GAS fallback form."""
+    try:
+        body = await _read_json(request)
+        vorname = (body.get("vorname") or "").strip()
+        nachname = (body.get("nachname") or "").strip()
+        if not vorname:
+            return web.json_response({"ok": False, "error": "vorname required"}, status=400)
+        name = f"{vorname} {nachname}".strip()
+        klient_neu = Path.home() / "vital-hub" / "bin" / "klient-neu"
+        if not klient_neu.exists():
+            return web.json_response({"ok": False, "error": "klient-neu not found"}, status=500)
+        proc = await asyncio.create_subprocess_exec(
+            str(klient_neu), name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        if proc.returncode != 0:
+            err = stderr.decode().strip()
+            LOGGER.error("klient-neu failed (rc=%d): %s", proc.returncode, err)
+            return web.json_response({"ok": False, "error": err}, status=500)
+        out = stdout.decode().strip()
+        LOGGER.info("klient-neu ok: %s → %s", name, out.splitlines()[0] if out else "")
+        return web.json_response({"ok": True, "name": name, "output": out})
+    except asyncio.TimeoutError:
+        return web.json_response({"ok": False, "error": "klient-neu timeout"}, status=504)
+    except Exception as exc:
+        LOGGER.error("handle_vitalctx_klient_neu: %s", exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+
 def _safe_name(name: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "_", name.strip())
     if not cleaned or cleaned in {".", ".."}:
@@ -3211,6 +3243,8 @@ def create_app() -> web.Application:
             web.post("/bridge/warstack/draft", handle_warstack_draft),
             web.post("/queue/flush", handle_queue_flush),
             web.post("/bridge/queue/flush", handle_queue_flush),
+            web.post("/vitalctx/klient-neu", handle_vitalctx_klient_neu),
+            web.post("/bridge/vitalctx/klient-neu", handle_vitalctx_klient_neu),
             web.post("/telegram/send", handle_telegram_send),
             web.post("/bridge/telegram/send", handle_telegram_send),
             web.post("/sync/push", handle_sync_push),
