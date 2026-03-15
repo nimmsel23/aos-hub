@@ -410,6 +410,23 @@ function vitalCtxTarget(req, pathname = "/") {
   return out.toString();
 }
 
+function devAppTarget(req, port, pathname = "/") {
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+    .split(",")[0]
+    .trim();
+  const rawHost = forwardedHost || String(req.headers.host || "").trim();
+  const out = new URL("http://127.0.0.1/");
+  try {
+    const parsed = new URL(`http://${rawHost || "127.0.0.1"}`);
+    out.hostname = parsed.hostname || "127.0.0.1";
+  } catch (_) {
+    out.hostname = "127.0.0.1";
+  }
+  out.port = String(port);
+  out.pathname = pathname;
+  return out.toString();
+}
+
 function isDoorCtxUiPath(pathname) {
   const p = String(pathname || "");
   return (
@@ -484,27 +501,23 @@ async function proxyDoorctx(req, res, next) {
 // Memoirs → PWA redirect (must be before static middleware)
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
-// Fitness context shortcut should land on the dedicated fitness service.
-app.get(["/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, res) =>
-  res.redirect(302, fitnessCtxTarget(req))
-);
-app.get(/^\/pwa\/fitness\/.+$/, (req, res) => res.redirect(302, fitnessCtxTarget(req)));
-
-// Vital Hub redirects to port 8788
-app.get(["/vitalctx", "/vitalctx/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/"))
-);
-app.get(["/clientctx", "/clientctx/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
-);
-app.get(["/clients", "/clients/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/clientctx/"))
-);
-app.get(["/entspannung", "/entspannung/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
+// Dev app shortcuts → host-aware redirects (work via Tailscale too)
+app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (req, res) =>
+  res.redirect(302, devAppTarget(req, 9002))
 );
 app.get(["/fuel", "/fuel/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/fuel/"))
+  res.redirect(302, devAppTarget(req, 9000))
+);
+app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (req, res) =>
+  res.redirect(302, devAppTarget(req, 9001))
+);
+
+// Vital Hub redirects to port 8788
+app.get(["/vitalctx", "/vitalctx/", "/konsole", "/konsole/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/konsole/"))
+);
+app.get(["/klienten", "/klienten/"], (req, res) =>
+  res.redirect(302, vitalCtxTarget(req, "/klienten/"))
 );
 app.get(["/dojo", "/dojo/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/dojo/"))
