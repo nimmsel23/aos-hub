@@ -452,7 +452,10 @@ async function proxyDoorctx(req, res, next) {
 app.get("/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/memoirs/", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get(["/vitalctx", "/vitalctx/"], (_req, res) =>
-  res.redirect(302, "http://localhost:8788/")
+  res.redirect(302, "http://localhost:4100/")
+);
+app.get(["/konsole", "/konsole/"], (_req, res) =>
+  res.redirect(302, "http://localhost:8788/konsole/")
 );
 app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (_req, res) =>
   res.redirect(302, "http://localhost:9002/")
