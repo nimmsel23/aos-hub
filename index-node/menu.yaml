@@ -17,6 +17,11 @@
       "url": "http://localhost:8788/konsole/"
     },
     {
+      "label": "Klienten",
+      "cmd": "klienten",
+      "url": "http://localhost:4100/"
+    },
+    {
       "label": "Fitness Centre",
       "cmd": "fitness",
       "url": "http://localhost:9002/"
