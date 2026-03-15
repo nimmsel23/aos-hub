@@ -5044,8 +5044,8 @@ app.get("/profit/", (_req, res) => res.redirect(301, "/pwa/profit/"));
 app.get("/fruits", (_req, res) => res.redirect(302, "/facts"));
 app.get("/fruits/", (_req, res) => res.redirect(302, "/facts"));
 app.get("/door", (_req, res) => res.redirect(302, "/door/"));
-app.get(["/clients", "/clients/", "/clientctx", "/clientctx/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
+app.get(["/clients", "/clients/", "/clientctx", "/clientctx/", "/klienten", "/klienten/"], (_req, res) =>
+  res.redirect(302, "/klienten/")
 );
 app.get("/game/memoirs", (_req, res) => res.redirect(302, "/pwa/memoirs/"));
 app.get("/game/frame", (_req, res) => res.redirect(302, "/pwa/frame/"));
