@@ -512,12 +512,12 @@ app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (req, res) =>
   res.redirect(302, devAppTarget(req, 9001))
 );
 
-// Vital Hub redirects to port 8788
+// Vital Hub shortcuts
 app.get(["/vitalctx", "/vitalctx/", "/konsole", "/konsole/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/konsole/"))
+  res.redirect(302, devAppTarget(req, 8788, "/konsole/"))
 );
 app.get(["/klienten", "/klienten/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/klienten/"))
+  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
 );
 app.get(["/dojo", "/dojo/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/dojo/"))
