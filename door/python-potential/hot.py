@@ -318,7 +318,7 @@ def modify_task_metadata(
 
 
 def create_hot_task(idea: str, file_path: Path | None = None, priority: str = "") -> tuple[str, str]:
-    args = ["task", "rc.hooks=0", "add", f"project:{HOT_PROJECT}", "+hot", "+potential"]
+    args = ["task", "rc.hooks=0", "add", f"project:{HOT_PROJECT}", "+hot"]
     priority_value = normalize_priority(priority)
     if priority_value:
         args.append(f"priority:{priority_value}")
@@ -843,7 +843,7 @@ def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
         "status": "active",
         "phase": "potential",
         "quadrant": None,
-        "tags": ["hot", "potential"],
+        "tags": ["hot"],
     }
     if task_error:
         entry["task_status"] = "missing"
