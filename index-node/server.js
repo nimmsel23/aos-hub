@@ -512,13 +512,6 @@ app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (req, res) =>
   res.redirect(302, devAppTarget(req, 9001))
 );
 
-// Vital Hub shortcuts
-app.get(["/vitalctx", "/vitalctx/", "/konsole", "/konsole/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/konsole/"))
-);
-app.get(["/klienten", "/klienten/"], (req, res) =>
-  res.redirect(302, devAppTarget(req, 8788, "/klienten/"))
-);
 app.get(["/dojo", "/dojo/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/dojo/"))
 );
