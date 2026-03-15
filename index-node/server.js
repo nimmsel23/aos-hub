@@ -530,7 +530,7 @@ app.get(["/body", "/body/"], (req, res) =>
   res.redirect(302, vitalCtxTarget(req, "/"))
 );
 app.get(["/being", "/being/"], (req, res) =>
-  res.redirect(302, vitalCtxTarget(req, "/entspannung/"))
+  res.redirect(302, devAppTarget(req, 9001, "/"))
 );
 
 app.use((req, res, next) => {
