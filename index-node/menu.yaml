@@ -12,14 +12,14 @@
       "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
     },
     {
-      "label": "Konsole",
-      "cmd": "konsole",
+      "label": "Klientenverwaltung",
+      "cmd": "k",
       "url": "http://localhost:8788/konsole/"
     },
     {
       "label": "Klienten",
-      "cmd": "klienten",
-      "url": "http://localhost:4100/"
+      "cmd": "c",
+      "url": "http://localhost:4100/c/"
     },
     {
       "label": "Fitness Centre",
