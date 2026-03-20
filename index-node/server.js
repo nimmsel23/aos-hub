@@ -467,8 +467,8 @@ app.get(["/entspannung", "/entspannung/", "/relax", "/relax/"], (_req, res) =>
   res.redirect(302, "http://localhost:9001/")
 );
 
-app.get(["/dojo", "/dojo/"], (_req, res) =>
-  res.redirect(302, "http://localhost:8788/dojo/")
+app.get(["/arena/", "/dojo/"], (_req, res) =>
+  res.redirect(302, "http://localhost:5173/arena/")
 );
 
 // /c/<id>/ → 4100 (client-only)
@@ -478,7 +478,7 @@ app.use("/c", (req, res) =>
 
 // 4 Domains shortcuts
 app.get(["/body", "/body/"], (_req, res) =>
-  res.redirect(302, "http://localhost:8788/")
+  res.redirect(302, "http://localhost:9002/")
 );
 app.get(["/being", "/being/"], (_req, res) =>
   res.redirect(302, "http://localhost:9001/")
@@ -556,7 +556,7 @@ const SYNC_MAP_PATH =
   path.join(os.homedir(), ".local", "share", "alphaos", "task_sync_map.json");
 const RCLONE_RC_URL = process.env.RCLONE_RC_URL || "http://127.0.0.1:5572";
 const RCLONE_TARGET =
-  process.env.RCLONE_TARGET || "fabian:vault";
+  process.env.RCLONE_TARGET || "eldanioo:alpha/vault";
 const RCLONE_FLAGS = String(
   process.env.RCLONE_FLAGS || "--update --skip-links --create-empty-src-dirs"
 )
@@ -4052,7 +4052,7 @@ function resolveDoorChapterPaths(source) {
   ].map((name) => path.join(vault, "AlphaOS-blueprints", name));
 
   if (source === "alphaos") {
-    return [path.join(vault, "ALPHA_OS", "ALPHA_OS - THE DOOR.md")];
+    return [path.join(vault, "AlphaOS", "ALPHA_OS - THE-DOOR.md")];
   }
 
   return blueprints;
@@ -6267,7 +6267,7 @@ app.get("/api/game/chapters", (req, res) => {
   }
 });
 
-app.get("/api/doc", (req, res) => {
+app.get("/api/doc", (req, loadGameChaptersres) => {
   try {
     const name = (req.query?.name || "door").toLowerCase();
     const content = loadDoc(name);

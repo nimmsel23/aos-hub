@@ -143,11 +143,13 @@
   ]
   ,
   "mobile_links": [
-    { "label": "CORE4", "url": "https://ideapad.tail7a15d6.ts.net/pwa/core4/", "target": "_self" },
+    { "label": "CORE4", "url": "/pwa/core4/", "target": "_self" },
     { "label": "FIRE", "url": "https://ideapad.tail7a15d6.ts.net/pwa/fire/", "target": "_self" },
     { "label": "FOCUS", "url": "https://ideapad.tail7a15d6.ts.net/pwa/focus/", "target": "_self" },
-    { "label": "FRAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/frame/", "target": "_self" },
     { "label": "FREEDOM", "url": "https://ideapad.tail7a15d6.ts.net/pwa/freedom/", "target": "_self" },
+    { "label": "FRAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/frame/", "target": "_self" },
+
+    { "label": "VOICE", "url": "https://ideapad.tail7a15d6.ts.net/pwa/memoirs/", "target": "_self" },
     { "label": "DOOR", "url": "https://ideapad.tail7a15d6.ts.net/pwa/door/", "target": "_self" },
     { "label": "GAME", "url": "https://ideapad.tail7a15d6.ts.net/pwa/game/", "target": "_self" },
     { "label": "FITNESS", "url": "http://localhost:9002/", "target": "_self" },
