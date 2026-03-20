@@ -457,6 +457,9 @@ app.get(["/vitalctx", "/vitalctx/"], (_req, res) =>
 app.get(["/konsole", "/konsole/"], (_req, res) =>
   res.redirect(302, "http://localhost:8788/konsole/")
 );
+app.get("/konsole/*", (req, res) =>
+  res.redirect(302, `http://localhost:8788${req.path}`)
+);
 app.get(["/fitness", "/fitness/", "/fitnessctx", "/fitnessctx/", "/pwa/fitness", "/pwa/fitness/"], (_req, res) =>
   res.redirect(302, "http://localhost:9002/")
 );
