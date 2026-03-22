@@ -12,24 +12,37 @@
       <div class="kicker">αOS · INDEX NODE</div>
       <div class="title">Serve / Funnel Links (incl. Vital Hub)</div>
     </div>
-    <button id="refresh" class="btn">Refresh</button>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <button id="tabLocal" class="btn btn-active">Lokal</button>
+      <button id="tabTailscale" class="btn">Tailscale</button>
+      <button id="refresh" class="btn">Refresh</button>
+    </div>
   </header>
 
   <main class="wrap">
-    <section class="card">
-      <div class="card-title">Routes (This Host / Vital Hub)</div>
-      <div class="grid" id="routeGrid"></div>
-    </section>
+    <div id="viewLocal">
+      <section class="card">
+        <div class="card-title">Routes (Lokal)</div>
+        <div class="grid" id="routeGrid"></div>
+      </section>
 
-    <section class="card">
-      <div class="card-title">Active Ports</div>
-      <div class="grid" id="portGrid"></div>
-    </section>
+      <section class="card">
+        <div class="card-title">Active Ports</div>
+        <div class="grid" id="portGrid"></div>
+      </section>
 
-    <section class="card">
-      <div class="card-title">Menu Links</div>
-      <div class="grid" id="menuGrid"></div>
-    </section>
+      <section class="card">
+        <div class="card-title">Menu Links</div>
+        <div class="grid" id="menuGrid"></div>
+      </section>
+    </div>
+
+    <div id="viewTailscale" style="display:none">
+      <section class="card">
+        <div class="card-title">Tailscale Funnel Routes</div>
+        <div class="grid" id="tailscaleGrid"></div>
+      </section>
+    </div>
   </main>
 
   <script src="/links.js"></script>

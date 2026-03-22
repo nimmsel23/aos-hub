@@ -55,6 +55,11 @@ a { color: inherit; text-decoration: none; }
   text-transform: uppercase;
   cursor: pointer;
 }
+.btn-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
 
 .wrap {
   padding: 16px;
