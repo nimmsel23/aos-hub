@@ -1,3 +1,8 @@
+# CHANGELOG
+# 2026-03-22  Links auf relative Pfade umgestellt (weg von direkten Port-Referenzen).
+#             Hub-interne Redirects übernehmen das Routing zu den Dev-Servern.
+#             cmd-Felder bleiben englisch (Suchbefehle im Hub).
+
 {
   "links": [
     {
@@ -14,27 +19,27 @@
     {
       "label": "Konsole",
       "cmd": "konsole",
-      "url": "http://localhost:8788/konsole/"
+      "url": "/konsole"
     },
     {
       "label": "Klienten",
       "cmd": "klienten",
-      "url": "http://localhost:8788/klienten/"
+      "url": "/klienten"
     },
     {
       "label": "Fitness Centre",
       "cmd": "fitness",
-      "url": "http://localhost:9002/"
+      "url": "/fitness"
     },
     {
       "label": "Entspannungs Centre",
       "cmd": "entspannung",
-      "url": "http://localhost:9001/"
+      "url": "/entspannung"
     },
     {
       "label": "Ernaehrungs Centre",
       "cmd": "fuel",
-      "url": "http://localhost:9000/"
+      "url": "/fuel"
     },
     {
       "label": "Vital Dojo",
