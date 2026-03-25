@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# hit_open.sh
+# Usage: hit_open.sh <UUID>
+
+UUID="$1"
+
+# Alle Annotationen holen
+ANNOS=$(task "$UUID" _get annotations 2>/dev/null)
+
+FILE_URL=$(printf '%s\n' "$ANNOS" \
+  | grep -m1 '^file://' \
+  | sed 's|^file://||')
+
+if [ -z "$FILE_URL" ]; then
+  echo "Keine file:// Annotation gefunden für Task $UUID" >&2
+  exit 1
+fi
+
+# Falls der Pfad Leerzeichen o.ä. hat
+FILE_PATH="$FILE_URL"
+
+if [ ! -f "$FILE_PATH" ]; then
+  echo "Datei existiert nicht: $FILE_PATH" >&2
+  exit 1
+fi
+
+"${EDITOR:-nvim}" "$FILE_PATH"

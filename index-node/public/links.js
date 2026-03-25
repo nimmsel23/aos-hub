@@ -10,29 +10,29 @@ const tabTailscale = document.getElementById("tabTailscale");
 const viewLocal = document.getElementById("viewLocal");
 const viewTailscale = document.getElementById("viewTailscale");
 
-// Relative zu diesem Host (lokal: localhost:8799)
+// Relative zu diesem Host (lokal: localhost:8799 = ~/aos-hub/index-node/server.js)
 const ROUTES = [
-  { label: "Index Node", path: "/" },
-  { label: "Konsole", path: "/konsole/" },
-  { label: "Klienten (Coach)", path: "/klienten/" },
-  { label: "Klient-Zugang", path: "http://127.0.0.1:4200/" },
-  { label: "Vital Coach", path: "http://127.0.0.1:8800/" },
-  { label: "Fitness Centre", path: "http://127.0.0.1:9002/fitness/" },
-  { label: "Fuel Centre", path: "http://127.0.0.1:9000/fuel/" },
-  { label: "Entspannungs Centre", path: "http://127.0.0.1:9001/" },
+  { label: "aOS-Hub", path: "/" },
+  { label: "Klientenverwaltung", path: "/konsole/" },
+  { label: "Klientenschmiede", path: "/klienten/" },
+  { label: "Vital-Klienten", path: "http://127.0.0.1:4200/" },
+  { label: "Coach-Hub", path: "http://127.0.0.1:8788/" },
+  { label: "Fitness", path: "http://127.0.0.1:9002/fitness/" },
+  { label: "Fuel", path: "http://127.0.0.1:9000/" },
+  { label: "Entspannung", path: "http://127.0.0.1:9001/" },
   { label: "Dev Server", path: "http://127.0.0.1:9099/" },
   { label: "PWA", path: "/pwa/" },
-  { label: "PWA Game", path: "/pwa/game/" },
-  { label: "PWA Core4", path: "/pwa/core4/" },
-  { label: "PWA Fire", path: "/pwa/fire/" },
-  { label: "PWA Focus", path: "/pwa/focus/" },
-  { label: "PWA Frame", path: "/pwa/frame/" },
-  { label: "PWA Freedom", path: "/pwa/freedom/" },
-  { label: "PWA Door", path: "/pwa/door/" },
-  { label: "PWA Memoirs", path: "/pwa/memoirs/" },
-  { label: "Game Hub", path: "/game/" },
-  { label: "Game Tent", path: "/game/tent" },
-  { label: "Bridge", path: "http://127.0.0.1:8080/" },
+  { label: "The Game", path: "/pwa/game/" },
+  { label: "The Door", path: "/pwa/door/" },
+  { label: "The Voice", path: "/pwa/memoirs/" },
+  { label: "The Core4", path: "/pwa/core4/" },
+  { label: "Fire Map", path: "/pwa/fire/" },
+  { label: "Focus Map", path: "/pwa/focus/" },
+  { label: "Freedom Map", path: "/pwa/freedom/" },
+  { label: "Frame Map", path: "/pwa/frame/" },
+  { label: "The Desktop Game Hub", path: "/game/" },
+  { label: "General's Tent", path: "/game/tent" },
+  { label: "Bridge", path: "https://script.google.com/macros/s/AKfycbzclkoJfDoCkGwuLFWaJkOsR55r_R1axScfw672sIqr/dev" },
 ];
 
 const TS = "https://ideapad.tail7a15d6.ts.net";

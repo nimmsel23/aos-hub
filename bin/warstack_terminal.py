@@ -1,0 +1,1 @@
+/home/alpha/aos-hub/door/python-warstack/warstack_terminal.py

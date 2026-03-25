@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=αOS Index (HTTPS)
+Exec=/opt/thorium-browser/thorium-browser "--profile-directory=Profile 1" --ignore-profile-directory-if-not-exists https://ideapad.tail7a15d6.ts.net/
+Icon=/home/alpha/.config/thorium/Profile 1/Web Shortcut Icons/shortcut-493abdfd6c128f4e14902001f465e702.png
+URL=https://ideapad.tail7a15d6.ts.net/
+Comment=Open https://ideapad.tail7a15d6.ts.net/ in a new tab in Thorium.

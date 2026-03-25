@@ -6,7 +6,7 @@ import path from "path";
 const router = express.Router();
 
 function getFitnessCentreRepoDir() {
-  return String(process.env.FITNESS_CENTRE_DIR || path.join(os.homedir(), "core4-fitness-centre"));
+  return String(process.env.FITNESS_CENTRE_DIR || path.join(os.homedir(), "vital-hub/vitalctx"));
 }
 
 function parseSimpleEnv(content) {

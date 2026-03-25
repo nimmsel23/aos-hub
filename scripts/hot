@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Anmerkung: EIGENTLICH ist task add ohne project oder priority perfekt für Hot List.
+
+VAULT="$HOME/vault"
+DIR="$VAULT/Door/1-Potential"
+
+mkdir -p "$DIR"
+
+if [ $# -eq 0 ]; then
+  echo "Usage: hot \"Idea text ...\""
+  exit 1
+fi
+
+IDEA="$*"
+DATE=$(date +%Y-%m-%d)
+TIME=$(date +%H:%M)
+STAMP=$(date +%Y-%m-%d_%H%M)
+SLUG=$(echo "$IDEA" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9\-]//g')
+
+FILE="$DIR/${STAMP}_${SLUG}.md"
+
+# 1) Taskwarrior
+task add +hot project:HotList "$IDEA" >/dev/null
+
+# 2) Datei erstellen
+cat <<EOF > "$FILE"
+# 🔥 HOT IDEA  
+**Captured:** $DATE $TIME  
+**Idea:** $IDEA  
+**Status:** inbox  
+**Tags:** @hot
+
+- [ ] HOT: $IDEA
+
+---
+
+## Notes
+(weitere Gedanken hier eintragen)
+
+
+EOF
+
+echo "🔥 Hot idea saved → $FILE"
+
+rclone copy "$FILE" "eldanioo:Alpha_Door/1-Potential/" --ignore-existing >/dev/null 2>&1 &
+

@@ -1,0 +1,390 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# User-side Door TUI.
+# Contract for future code work:
+# - `door` is the preferred command for humans.
+# - `doorctx` is the compatibility executable that implements the user TUI.
+# - `doorctl` stays the engine/system CLI underneath.
+# - Methodology/docs belong in `aos-hub/DOOR.md`, not duplicated here.
+# - Keep this file focused on user interaction, not backend ontology.
+
+ROOT_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
+DOORCTL_BIN="${DOORCTL_BIN:-$ROOT_DIR/door/cli/doorctl}"
+PWACTX_BIN="${PWACTX_BIN:-$HOME/.dotfiles/bin/pwactx}"
+DOOR_APP="door"
+
+# Source shared library
+CTX_NAME="doorctx"
+CTX_DEFAULT_SERVICE="aos-doorctx.service"
+CTX_DEFAULT_URL="http://127.0.0.1:8786/"
+
+_lib="${AOSCTX_LIB:-${0:A:h}/aosctx-lib.zsh}"
+[[ -f "$_lib" ]] && source "$_lib" || { echo "[doorctx] aosctx-lib.zsh not found at $_lib" >&2; exit 1; }
+
+DOORCTL_BIN="$(resolve_bin "$DOORCTL_BIN" doorctl)" || die "doorctl not found"
+PWACTX_BIN="$(resolve_bin "$PWACTX_BIN" pwactx)" || die "pwactx not found"
+
+doorctl() {
+  "$DOORCTL_BIN" "$@"
+}
+
+doorpwa() {
+  "$PWACTX_BIN" "$DOOR_APP" "$@"
+}
+
+current_door() {
+  doorctl current 2>/dev/null || true
+}
+
+runtime_status_text() {
+  doorpwa status 2>/dev/null || true
+}
+
+dashboard_json() {
+  have_cmd jq || return 1
+  doorctl --json dashboard 2>/dev/null
+}
+
+render_overview() {
+  local cur
+  cur="$(current_door)"
+
+  title "Door Context"
+  printf "Time:         %s\n" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  printf "Current Door: %s\n" "${cur:-<none>}"
+  render_runtime_summary
+}
+
+render_json_snapshot() {
+  local json="${1:?json}"
+  local hot_count
+  local focus_count
+  local stalled
+  local total
+
+  hot_count="$(printf "%s" "$json" | jq -r '.hotlist | length' 2>/dev/null || echo 0)"
+  focus_count="$(printf "%s" "$json" | jq -r '.focus | length' 2>/dev/null || echo 0)"
+  stalled="$(printf "%s" "$json" | jq -r '.health.summary.stalled // 0' 2>/dev/null || echo 0)"
+  total="$(printf "%s" "$json" | jq -r '.health.summary.total // 0' 2>/dev/null || echo 0)"
+
+  echo
+  title "4P Snapshot"
+  printf "Potential:  %s\n" "$(printf "%s" "$json" | jq -r '.counts.potential // 0' 2>/dev/null || echo 0)"
+  printf "Plan:       %s\n" "$(printf "%s" "$json" | jq -r '.counts.plan // 0' 2>/dev/null || echo 0)"
+  printf "Production: %s\n" "$(printf "%s" "$json" | jq -r '.counts.production // 0' 2>/dev/null || echo 0)"
+  printf "Profit:     %s\n" "$(printf "%s" "$json" | jq -r '.counts.profit // 0' 2>/dev/null || echo 0)"
+  printf "Health:     stalled=%s of %s doors\n" "$stalled" "$total"
+
+  echo
+  title "Potential / Hot List"
+  if [[ "$hot_count" == "0" ]]; then
+    echo "No active Hot List entries"
+  else
+    printf "%s" "$json" | jq -r '
+      .hotlist[:5][] |
+      "- " + ((.idea // .title // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:88])
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Production / Focus"
+  if [[ "$focus_count" == "0" ]]; then
+    echo "No pending Door tasks"
+  else
+    printf "%s" "$json" | jq -r '
+      .focus[:5][] |
+      "- " + ((.description // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:84])
+        + " [" + ((.domino_door // .project // "-") | tostring) + "]"
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Phase Notes"
+  echo "Potential  = Hot List"
+  echo "Plan       = Door War + War Stack"
+  echo "Production = Hit List execution on the Daily Fire Map"
+  echo "Profit     = Achieved / Done / review"
+}
+
+render_snapshot() {
+  local json=""
+
+  clear_screen
+  render_overview
+  json="$(dashboard_json || true)"
+
+  if [[ -n "$json" ]]; then
+    render_json_snapshot "$json"
+  else
+    echo
+    title "Snapshot"
+    echo "JSON dashboard unavailable. Falling back to doorctl dashboard."
+    echo
+    doorctl dashboard || true
+  fi
+
+  if can_prompt; then
+    echo
+    title "Actions"
+    echo "[1] Potential / Hot List    [2] Plan / Door War      [3] War Stack wizard"
+    echo "[4] Production / Focus      [5] Profit / Review      [6] Current Door"
+    echo "[7] Chapters                [8] PWA status           [9] Open PWA"
+    echo "[a] Add Hot                 [s] Start PWA            [R] Restart PWA"
+    echo "[x] Stop PWA                [l] Logs                 [q] Quit"
+  fi
+}
+
+set_current_door_interactive() {
+  local cur
+  local next
+
+  cur="$(current_door)"
+  clear_screen
+  title "Current Door"
+  printf "Current Door: %s\n" "${cur:-<none>}"
+  echo "Enter a new Door name, or type clear to unset it."
+  next="$(prompt_with_default "Door" "$cur" || true)"
+
+  [[ -n "$next" ]] || return 0
+  if [[ "$next" == "clear" || "$next" == "-" ]]; then
+    doorctl current clear
+  else
+    doorctl current "$next"
+  fi
+
+  echo
+  pause_screen
+}
+
+hot_add_interactive() {
+  local idea=""
+  clear_screen
+  title "Potential / Add Hot"
+  printf "Hot idea: "
+  read -r idea || return 0
+  [[ -n "${idea// }" ]] || return 0
+  doorctl hot add "$idea"
+  echo
+  pause_screen
+}
+
+war_wizard() {
+  local door_name="${1:-}"
+  local cur=""
+
+  if [[ -z "$door_name" ]]; then
+    cur="$(current_door)"
+    door_name="$(prompt_with_default "War Stack Door" "$cur" || true)"
+  fi
+
+  [[ -n "$door_name" ]] || return 0
+  doorctl current "$door_name" >/dev/null 2>&1 || true
+  clear_screen
+  title "War Stack Wizard"
+  doorctl war "$door_name" edit
+  echo
+  pause_screen
+}
+
+show_production() {
+  local cur
+  cur="$(current_door)"
+
+  clear_screen
+  title "Production / Hit List / Fire"
+  echo "Door stays strategic."
+  echo "Daily execution runs on the Daily Fire Map."
+  echo
+  doorctl focus || true
+
+  if [[ -n "$cur" ]]; then
+    echo
+    title "Current Door Hits: $cur"
+    doorctl hits "$cur" || true
+  fi
+
+  echo
+  pause_screen
+}
+
+show_help() {
+  cat <<'EOF'
+doorctx
+
+User-side Door frontdoor / terminal dashboard.
+
+Usage:
+  doorctx                     # interactive TUI
+  doorctx menu|dashboard|tui  # interactive TUI / snapshot
+  doorctx status              # combined Door + PWA status
+
+User flows:
+  doorctx hot [args...]       # Potential / Hot List via doorctl
+  doorctx plan                # Door War view
+  doorctx war [door]          # War Stack wizard (uses current Door by default)
+  doorctx production          # focus / hit-list handoff view
+  doorctx profit              # review / profit view
+  doorctx chapters [args...]  # local chapter reader
+  doorctx current [name|clear]
+
+Runtime:
+  doorctx open|start|stop|restart|logs|enable|disable
+
+System-side engine remains: doorctl
+EOF
+}
+
+menu_loop() {
+  local choice=""
+
+  while true; do
+    render_snapshot
+    printf "Select: "
+    read -r choice || return 0
+
+    case "$choice" in
+      ""|r)
+        ;;
+      1)
+        run_screen "Potential / Hot List" doorctl hot list
+        ;;
+      2)
+        run_screen "Plan / Door War" doorctl doorwar list
+        ;;
+      3)
+        war_wizard
+        ;;
+      4)
+        show_production
+        ;;
+      5)
+        run_screen "Profit / Review" doorctl review
+        ;;
+      6)
+        set_current_door_interactive
+        ;;
+      7)
+        clear_screen
+        doorctl chapters
+        ;;
+      8)
+        run_screen "Door PWA Status" doorpwa status
+        ;;
+      9)
+        run_screen "Door PWA URL" doorpwa open
+        ;;
+      a|A)
+        hot_add_interactive
+        ;;
+      s)
+        run_screen "Start Door PWA" doorpwa start
+        ;;
+      R)
+        run_screen "Restart Door PWA" doorpwa restart
+        ;;
+      x|X)
+        run_screen "Stop Door PWA" doorpwa stop
+        ;;
+      l|L)
+        clear_screen
+        title "Door PWA Logs"
+        doorpwa logs
+        ;;
+      q|Q)
+        return 0
+        ;;
+      *)
+        ;;
+    esac
+  done
+}
+
+main() {
+  local cmd="${1:-}"
+
+  if [[ -z "$cmd" ]]; then
+    if can_prompt; then
+      cmd="menu"
+    else
+      cmd="status"
+    fi
+  else
+    shift || true
+  fi
+
+  case "$cmd" in
+    menu|dashboard|tui)
+      if can_prompt; then
+        menu_loop
+      else
+        render_snapshot
+      fi
+      ;;
+    status)
+      render_snapshot
+      ;;
+    hot|potential)
+      if [[ "$#" -eq 0 ]]; then
+        doorctl hot list
+      else
+        doorctl hot "$@"
+      fi
+      ;;
+    plan|doorwar)
+      if [[ "$#" -eq 0 ]]; then
+        doorctl doorwar list
+      else
+        doorctl doorwar "$@"
+      fi
+      ;;
+    war|warstack)
+      if [[ "$#" -eq 0 ]]; then
+        war_wizard
+      elif [[ "$#" -eq 1 ]]; then
+        war_wizard "$1"
+      else
+        doorctl war "$@"
+      fi
+      ;;
+    production|focus)
+      if [[ "$#" -eq 0 ]]; then
+        show_production
+      else
+        doorctl production "$@"
+      fi
+      ;;
+    hits|hitlist)
+      doorctl hits "$@"
+      ;;
+    profit|review)
+      if [[ "$#" -eq 0 ]]; then
+        doorctl review
+      else
+        doorctl profit "$@"
+      fi
+      ;;
+    chapters|chapter)
+      doorctl chapters "$@"
+      ;;
+    current)
+      if [[ "$#" -eq 0 ]]; then
+        doorctl current
+      else
+        doorctl current "$@"
+      fi
+      ;;
+    open|start|stop|restart|logs|enable|disable)
+      doorpwa "$cmd" "$@"
+      ;;
+    help|-h|--help)
+      show_help
+      ;;
+    *)
+      show_help >&2
+      die "unknown command: $cmd"
+      ;;
+  esac
+}
+
+main "$@"

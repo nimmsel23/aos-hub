@@ -1,0 +1,1 @@
+/home/alpha/aos-hub/door/python-potential/hot.py

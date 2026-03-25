@@ -1,0 +1,402 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# User-side Game TUI.
+# Contract for future code work:
+# - `game` is the preferred command for humans.
+# - `gamectx` is the compatibility executable that implements the user TUI.
+# - `gamectl` stays the engine/system CLI underneath.
+# - Methodology/docs belong in `aos-hub/GAME.md`, not duplicated here.
+# - Keep this file focused on user interaction, not backend ontology.
+
+ROOT_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
+GAMECTL_BIN="${GAMECTL_BIN:-$ROOT_DIR/game/cli/gamectl}"
+PWACTX_BIN="${PWACTX_BIN:-$HOME/.dotfiles/bin/pwactx}"
+GAME_APP="game"
+
+# Source shared library
+CTX_NAME="gamectx"
+CTX_DEFAULT_SERVICE="aos-gamectx.service"
+CTX_DEFAULT_URL="http://127.0.0.1:8787/"
+
+_lib="${AOSCTX_LIB:-${0:A:h}/aosctx-lib.zsh}"
+[[ -f "$_lib" ]] && source "$_lib" || { echo "[gamectx] aosctx-lib.zsh not found at $_lib" >&2; exit 1; }
+
+GAMECTL_BIN="$(resolve_bin "$GAMECTL_BIN" gamectl)" || die "gamectl not found"
+PWACTX_BIN="$(resolve_bin "$PWACTX_BIN" pwactx)" || die "pwactx not found"
+
+gamectl() {
+  "$GAMECTL_BIN" "$@"
+}
+
+gamepwa() {
+  "$PWACTX_BIN" "$GAME_APP" "$@"
+}
+
+current_domain() {
+  gamectl current-domain 2>/dev/null || true
+}
+
+runtime_status_text() {
+  gamepwa status 2>/dev/null || true
+}
+
+dashboard_json() {
+  have_cmd jq || return 1
+  gamectl --json dashboard 2>/dev/null
+}
+
+render_overview() {
+  local cur
+  cur="$(current_domain)"
+
+  title "Game Context"
+  printf "Time:           %s\n" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  printf "Current Domain: %s\n" "${cur:-<none>}"
+  render_runtime_summary
+}
+
+render_json_snapshot() {
+  local json="${1:?json}"
+  local frame_count
+  local freedom_count
+  local focus_count
+  local fire_count
+  local stalled
+  local total
+
+  frame_count="$(printf "%s" "$json" | jq -r '.maps.frame | length' 2>/dev/null || echo 0)"
+  freedom_count="$(printf "%s" "$json" | jq -r '.maps.freedom | length' 2>/dev/null || echo 0)"
+  focus_count="$(printf "%s" "$json" | jq -r '.maps.focus | length' 2>/dev/null || echo 0)"
+  fire_count="$(printf "%s" "$json" | jq -r '.maps.fire | length' 2>/dev/null || echo 0)"
+  stalled="$(printf "%s" "$json" | jq -r '.health.summary.stalled // 0' 2>/dev/null || echo 0)"
+  total="$(printf "%s" "$json" | jq -r '.health.summary.total // 0' 2>/dev/null || echo 0)"
+
+  echo
+  title "Maps Hierarchy"
+  printf "Frame:   %s (Wo bin ich jetzt?)\n" "$frame_count"
+  printf "Freedom: %s (Wo will ich hin?)\n" "$freedom_count"
+  printf "Focus:   %s (Wie komme ich dorthin?)\n" "$focus_count"
+  printf "Fire:    %s (Was ist jetzt zu tun?)\n" "$fire_count"
+  printf "Health:  stalled=%s of %s maps\n" "$stalled" "$total"
+
+  echo
+  title "Frame Map - Wo bin ich jetzt?"
+  if [[ "$frame_count" == "0" ]]; then
+    echo "No Frame Map entries"
+  else
+    printf "%s" "$json" | jq -r '
+      .maps.frame[:5][] |
+      "- " + ((.reality // .title // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:88])
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Freedom Map - Wo will ich hin?"
+  if [[ "$freedom_count" == "0" ]]; then
+    echo "No Freedom Map entries"
+  else
+    printf "%s" "$json" | jq -r '
+      .maps.freedom[:5][] |
+      "- " + ((.goal // .title // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:88])
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Focus Map - Wie komme ich dorthin?"
+  if [[ "$focus_count" == "0" ]]; then
+    echo "No Focus Map entries"
+  else
+    printf "%s" "$json" | jq -r '
+      .maps.focus[:5][] |
+      "- " + ((.mission // .description // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:84])
+        + " [" + ((.domain // "-") | tostring) + "]"
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Fire Map - Was ist jetzt zu tun?"
+  if [[ "$fire_count" == "0" ]]; then
+    echo "No Fire Map entries"
+  else
+    printf "%s" "$json" | jq -r '
+      .maps.fire[:5][] |
+      "- " + ((.strike // .description // "Untitled") | tostring | gsub("[\r\n]+"; " ") | .[0:84])
+        + " [" + ((.domain // "-") | tostring) + "]"
+    ' 2>/dev/null
+  fi
+
+  echo
+  title "Maps Cascade"
+  echo "Frame    = Wo bin ich jetzt? (Current Reality)"
+  echo "Freedom  = Wo will ich hin? (Destination/Goal)"
+  echo "Focus    = Wie komme ich dorthin? (Plan/Method)"
+  echo "Fire     = Was ist jetzt zu tun? (Immediate Actions)"
+  echo "Daily    = Hit List execution"
+}
+
+render_snapshot() {
+  local json=""
+
+  clear_screen
+  render_overview
+  json="$(dashboard_json || true)"
+
+  if [[ -n "$json" ]]; then
+    render_json_snapshot "$json"
+  else
+    echo
+    title "Snapshot"
+    echo "JSON dashboard unavailable. Falling back to gamectl dashboard."
+    echo
+    gamectl dashboard || true
+  fi
+
+  if can_prompt; then
+    echo
+    title "Actions"
+    echo "[1] Frame Map        [2] Freedom Map      [3] Focus Map"
+    echo "[4] Fire Map         [5] General's Tent   [6] Current Domain"
+    echo "[7] Chapters         [8] PWA status       [9] Open PWA"
+    echo "[a] Add Frame        [s] Start PWA        [R] Restart PWA"
+    echo "[x] Stop PWA         [l] Logs             [q] Quit"
+  fi
+}
+
+set_current_domain_interactive() {
+  local cur
+  local next
+
+  cur="$(current_domain)"
+  clear_screen
+  title "Current Domain"
+  printf "Current Domain: %s\n" "${cur:-<none>}"
+  echo "Enter a new Domain name (BODY/BEING/BALANCE/BUSINESS), or type clear to unset it."
+  next="$(prompt_with_default "Domain" "$cur" || true)"
+
+  [[ -n "$next" ]] || return 0
+  if [[ "$next" == "clear" || "$next" == "-" ]]; then
+    gamectl current-domain clear
+  else
+    gamectl current-domain "$next"
+  fi
+
+  echo
+  pause_screen
+}
+
+frame_wizard() {
+  local domain="${1:-}"
+  local cur=""
+
+  if [[ -z "$domain" ]]; then
+    cur="$(current_domain)"
+    domain="$(prompt_with_default "Frame Map Domain" "$cur" || true)"
+  fi
+
+  [[ -n "$domain" ]] || return 0
+  gamectl current-domain "$domain" >/dev/null 2>&1 || true
+  clear_screen
+  title "Frame Map Wizard"
+  gamectl frame "$domain" edit
+  echo
+  pause_screen
+}
+
+show_fire_map() {
+  local cur
+  cur="$(current_domain)"
+
+  clear_screen
+  title "Fire Map - Was ist jetzt zu tun?"
+  echo "Immediate actions and next steps."
+  echo
+  gamectl fire || true
+
+  if [[ -n "$cur" ]]; then
+    echo
+    title "Fire Map Actions: $cur"
+    gamectl fire "$cur" || true
+  fi
+
+  echo
+  pause_screen
+}
+
+show_help() {
+  cat <<'EOF'
+gamectx
+
+User-side Game frontdoor / terminal dashboard.
+
+Usage:
+  gamectx                     # interactive TUI
+  gamectx menu|dashboard|tui  # interactive TUI / snapshot
+  gamectx status              # combined Game + PWA status
+
+User flows:
+  gamectx frame [domain]      # Frame Map (Wo bin ich jetzt?)
+  gamectx freedom [domain]    # Freedom Map (Wo will ich hin?)
+  gamectx focus [domain]      # Focus Map (Wie komme ich dorthin?)
+  gamectx fire [domain]       # Fire Map (Was ist jetzt zu tun?)
+  gamectx tent [domain]       # General's Tent (Weekly review)
+  gamectx chapters [args...]  # local chapter reader
+  gamectx current-domain [name|clear]
+
+Runtime:
+  gamectx open|start|stop|restart|logs|enable|disable
+
+System-side engine remains: gamectl
+EOF
+}
+
+menu_loop() {
+  local choice=""
+
+  while true; do
+    render_snapshot
+    printf "Select: "
+    read -r choice || return 0
+
+    case "$choice" in
+      ""|r)
+        ;;
+      1)
+        run_screen "Frame Map - Wo bin ich jetzt?" gamectl frame list
+        ;;
+      2)
+        run_screen "Freedom Map - Wo will ich hin?" gamectl freedom list
+        ;;
+      3)
+        run_screen "Focus Map - Wie komme ich dorthin?" gamectl focus list
+        ;;
+      4)
+        show_fire_map
+        ;;
+      5)
+        run_screen "General's Tent - Weekly Review" gamectl tent
+        ;;
+      6)
+        set_current_domain_interactive
+        ;;
+      7)
+        clear_screen
+        gamectl chapters
+        ;;
+      8)
+        run_screen "Game PWA Status" gamepwa status
+        ;;
+      9)
+        run_screen "Game PWA URL" gamepwa open
+        ;;
+      a|A)
+        frame_wizard
+        ;;
+      s)
+        run_screen "Start Game PWA" gamepwa start
+        ;;
+      R)
+        run_screen "Restart Game PWA" gamepwa restart
+        ;;
+      x|X)
+        run_screen "Stop Game PWA" gamepwa stop
+        ;;
+      l|L)
+        clear_screen
+        title "Game PWA Logs"
+        gamepwa logs
+        ;;
+      q|Q)
+        return 0
+        ;;
+      *)
+        ;;
+    esac
+  done
+}
+
+main() {
+  local cmd="${1:-}"
+
+  if [[ -z "$cmd" ]]; then
+    if can_prompt; then
+      cmd="menu"
+    else
+      cmd="status"
+    fi
+  else
+    shift || true
+  fi
+
+  case "$cmd" in
+    menu|dashboard|tui)
+      if can_prompt; then
+        menu_loop
+      else
+        render_snapshot
+      fi
+      ;;
+    status)
+      render_snapshot
+      ;;
+    frame)
+      if [[ "$#" -eq 0 ]]; then
+        gamectl frame list
+      else
+        gamectl frame "$@"
+      fi
+      ;;
+    freedom)
+      if [[ "$#" -eq 0 ]]; then
+        gamectl freedom list
+      else
+        gamectl freedom "$@"
+      fi
+      ;;
+    focus)
+      if [[ "$#" -eq 0 ]]; then
+        gamectl focus list
+      else
+        gamectl focus "$@"
+      fi
+      ;;
+    fire)
+      if [[ "$#" -eq 0 ]]; then
+        show_fire_map
+      elif [[ "$#" -eq 1 ]]; then
+        gamectl fire "$1"
+      else
+        gamectl fire "$@"
+      fi
+      ;;
+    tent|review|generals-tent)
+      if [[ "$#" -eq 0 ]]; then
+        gamectl tent
+      else
+        gamectl tent "$@"
+      fi
+      ;;
+    chapters|chapter)
+      gamectl chapters "$@"
+      ;;
+    current-domain)
+      if [[ "$#" -eq 0 ]]; then
+        gamectl current-domain
+      else
+        gamectl current-domain "$@"
+      fi
+      ;;
+    open|start|stop|restart|logs|enable|disable)
+      gamepwa "$cmd" "$@"
+      ;;
+    help|-h|--help)
+      show_help
+      ;;
+    *)
+      show_help >&2
+      die "unknown command: $cmd"
+      ;;
+  esac
+}
+
+main "$@"

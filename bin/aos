@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""
+AlphaOS Launcher - Extended Features Layer
+Purpose: Plugin system, YAML configs, advanced routing
+Primary UI: fish/zsh Command Center (beautiful, fast)
+Extended: Python launcher (plugins, config, logging)
+
+Usage:
+  alphaos-launcher                 # Interactive menu (Python UI)
+  alphaos-launcher --shell         # Launch fish/zsh Command Center
+  alphaos-launcher --pillar door   # Direct pillar execution
+  alphaos-launcher --config file   # Custom config
+  alphaos-launcher --list          # List all pillars
+"""
+from __future__ import annotations
+import os, sys, subprocess, shutil, argparse
+from pathlib import Path
+from typing import Dict, Any, Optional
+import logging
+
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
+try:
+    from colorama import init as colorama_init, Fore, Style
+    colorama_init(autoreset=True)
+except ImportError:
+    class _Dummy:
+        def __getattr__(self, *_): return ""
+    Fore = Style = _Dummy()
+    def colorama_init(*args, **kwargs): pass
+
+# Paths
+DOTFILES = Path.home() / ".dotfiles"
+CONFIG_DIR = Path.home() / ".alphaos"
+CFG_FILE = CONFIG_DIR / "launcher.yaml"
+LOG_FILE = CONFIG_DIR / "launcher.log"
+ALPHAOS_VAULT = Path.home() / "AlphaOs-Vault"
+
+# Setup
+CONFIG_DIR.mkdir(exist_ok=True)
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Default config
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "shell": {
+        "primary": "fish",  # fish or zsh
+        "command_center": "alphaos-command",  # aos, alphaos-command
+        "fallback": "bash"
+    },
+    "pillars": {
+        "door": {
+            "name": "THE DOOR",
+            "desc": "Weekly Tactics (4P Flow)",
+            "shell_func": "door",  # fish/zsh function
+            "sub": {
+                "potential": {"func": "door-potential", "desc": "Hot List"},
+                "plan": {"func": "door-plan", "desc": "War Stack"},
+                "production": {"func": "door-production", "desc": "Hit List"},
+                "profit": {"func": "door-profit", "desc": "General's Tent"}
+            }
+        },
+        "game": {
+            "name": "THE GAME",
+            "desc": "Strategic Maps (Frame/Freedom/Focus/Fire)",
+            "shell_func": "frame-game",  # default to frame
+            "sub": {
+                "frame": {"func": "frame-game", "desc": "Frame Map"},
+                "freedom": {"func": "freedom-game", "desc": "Freedom Map"},
+                "focus": {"func": "focus-game", "desc": "Focus Map"},
+                "fire": {"func": "fire-game", "desc": "Fire Map"}
+            }
+        },
+        "voice": {
+            "name": "THE VOICE",
+            "desc": "Mental Mastery (STOP→SUBMIT→STRUGGLE→STRIKE)",
+            "shell_func": "voice-session"
+        }
+    },
+    "plugins": [],  # Future: plugin entry points
+    "logging": {
+        "enabled": True,
+        "level": "INFO"
+    }
+}
+
+def load_config() -> Dict[str, Any]:
+    """Load YAML config or return defaults."""
+    if not HAS_YAML or not CFG_FILE.exists():
+        return DEFAULT_CONFIG
+
+    try:
+        with CFG_FILE.open() as f:
+            config = yaml.safe_load(f) or {}
+        logging.info(f"Loaded config from {CFG_FILE}")
+        # Merge with defaults
+        return {**DEFAULT_CONFIG, **config}
+    except Exception as e:
+        logging.error(f"Failed to load config: {e}")
+        print(f"{Fore.RED}Config error: {e}{Style.RESET_ALL}")
+        return DEFAULT_CONFIG
+
+def detect_shell() -> str:
+    """Detect current shell or preferred shell."""
+    # Check SHELL env var
+    shell_path = os.environ.get('SHELL', '')
+    if 'fish' in shell_path:
+        return 'fish'
+    elif 'zsh' in shell_path:
+        return 'zsh'
+
+    # Check which shells are available
+    if shutil.which('fish'):
+        return 'fish'
+    elif shutil.which('zsh'):
+        return 'zsh'
+    else:
+        return 'bash'
+
+def launch_shell_command_center(config: Dict[str, Any]) -> int:
+    """Launch fish/zsh Command Center (primary UI)."""
+    shell_config = config.get('shell', {})
+    shell = shell_config.get('primary', detect_shell())
+    command = shell_config.get('command_center', 'alphaos-command')
+
+    print(f"{Fore.CYAN}Launching AlphaOS Command Center ({shell})...{Style.RESET_ALL}")
+    logging.info(f"Launching shell Command Center: {shell} {command}")
+
+    try:
+        # Execute shell function in interactive shell
+        if shell == 'fish':
+            subprocess.run(['fish', '-c', command], check=False)
+        elif shell == 'zsh':
+            subprocess.run(['zsh', '-i', '-c', command], check=False)
+        else:
+            print(f"{Fore.YELLOW}No AlphaOS shell integration found.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}Install fish or zsh with AlphaOS Command Center.{Style.RESET_ALL}")
+            return 1
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to launch shell: {e}")
+        print(f"{Fore.RED}Error launching shell: {e}{Style.RESET_ALL}")
+        return 1
+
+def execute_pillar(pillar_id: str, sub_id: Optional[str], config: Dict[str, Any]) -> int:
+    """Execute pillar via shell function."""
+    pillars = config.get('pillars', {})
+
+    if pillar_id not in pillars:
+        print(f"{Fore.RED}Unknown pillar: {pillar_id}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Available: {', '.join(pillars.keys())}{Style.RESET_ALL}")
+        return 1
+
+    pillar = pillars[pillar_id]
+    shell = config['shell'].get('primary', detect_shell())
+
+    # Determine function to execute
+    if sub_id:
+        subs = pillar.get('sub', {})
+        if sub_id not in subs:
+            print(f"{Fore.RED}Unknown sub-command: {sub_id}{Style.RESET_ALL}")
+            return 1
+        func = subs[sub_id]['func']
+    else:
+        func = pillar.get('shell_func')
+        if not func:
+            print(f"{Fore.RED}No default function for {pillar_id}{Style.RESET_ALL}")
+            return 1
+
+    print(f"{Fore.CYAN}Executing: {func}{Style.RESET_ALL}")
+    logging.info(f"Executing pillar: {pillar_id}/{sub_id or 'default'} -> {func}")
+
+    try:
+        if shell == 'fish':
+            subprocess.run(['fish', '-c', func], check=False)
+        elif shell == 'zsh':
+            subprocess.run(['zsh', '-i', '-c', func], check=False)
+        else:
+            print(f"{Fore.YELLOW}Shell not supported: {shell}{Style.RESET_ALL}")
+            return 1
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to execute: {e}")
+        print(f"{Fore.RED}Execution error: {e}{Style.RESET_ALL}")
+        return 1
+
+def list_pillars(config: Dict[str, Any]):
+    """List all available pillars."""
+    print(f"{Fore.CYAN}AlphaOS Pillars:{Style.RESET_ALL}\n")
+
+    pillars = config.get('pillars', {})
+    for pillar_id, pillar in pillars.items():
+        name = pillar.get('name', 'Unknown')
+        desc = pillar.get('desc', '')
+        subs = pillar.get('sub', {})
+
+        print(f"  {Fore.YELLOW}{pillar_id:<10}{Style.RESET_ALL} {name:<15} - {desc}")
+
+        if subs:
+            for sub_id, sub in subs.items():
+                sub_desc = sub.get('desc', '')
+                print(f"    └─ {sub_id:<8} {sub_desc}")
+        print()
+
+def python_interactive_menu(config: Dict[str, Any]):
+    """Python fallback menu (when shell not available)."""
+    pillars = config.get('pillars', {})
+
+    while True:
+        os.system('clear')
+        print(f"{Fore.YELLOW}╔═══════════════════════════════════════╗{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}║  AlphaOS Launcher (Python Mode)      ║{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}╚═══════════════════════════════════════╝{Style.RESET_ALL}")
+        print()
+
+        for pillar_id, pillar in pillars.items():
+            name = pillar.get('name', 'Unknown')
+            print(f"  [{pillar_id}] {name}")
+
+        print(f"\n  [s] Shell Command Center")
+        print(f"  [l] List all")
+        print(f"  [q] Quit")
+
+        try:
+            choice = input(f"\n{Fore.GREEN}▶ Choice: {Style.RESET_ALL}").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{Fore.MAGENTA}Sovereignty through Structure.{Style.RESET_ALL}")
+            sys.exit(0)
+
+        if choice == 'q':
+            print(f"\n{Fore.MAGENTA}Sovereignty through Structure.{Style.RESET_ALL}")
+            sys.exit(0)
+        elif choice == 's':
+            launch_shell_command_center(config)
+        elif choice == 'l':
+            os.system('clear')
+            list_pillars(config)
+            input(f"\n{Fore.YELLOW}Press Enter...{Style.RESET_ALL}")
+        elif choice in pillars:
+            execute_pillar(choice, None, config)
+            input(f"\n{Fore.YELLOW}Press Enter...{Style.RESET_ALL}")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="AlphaOS Launcher - Extended Features Layer",
+        add_help=False
+    )
+    parser.add_argument("--shell", "-s", action="store_true", help="Launch shell Command Center")
+    parser.add_argument("--pillar", "-p", help="Execute pillar directly")
+    parser.add_argument("--sub", help="Execute pillar sub-command")
+    parser.add_argument("--list", "-l", action="store_true", help="List all pillars")
+    parser.add_argument("--config", "-c", help="Custom config file")
+    parser.add_argument("--help", "-h", action="store_true", help="Show help")
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
+
+    args = parser.parse_args()
+
+    # Load config
+    config = load_config()
+    if args.config and Path(args.config).exists():
+        try:
+            with open(args.config) as f:
+                custom = yaml.safe_load(f) if HAS_YAML else {}
+            config = {**config, **custom}
+        except Exception as e:
+            print(f"{Fore.RED}Config error: {e}{Style.RESET_ALL}")
+
+    # Handle arguments
+    if args.help:
+        print(f"""{Fore.CYAN}AlphaOS Launcher{Style.RESET_ALL}
+
+{Fore.YELLOW}Usage:{Style.RESET_ALL}
+  alphaos-launcher                    # Interactive menu
+  alphaos-launcher --shell            # Shell Command Center (primary)
+  alphaos-launcher --pillar door      # Execute pillar
+  alphaos-launcher -p door --sub plan # Execute sub-command
+  alphaos-launcher --list             # List pillars
+
+{Fore.YELLOW}Architecture:{Style.RESET_ALL}
+  Primary:  fish/zsh Command Center (beautiful, fast)
+  Extended: Python launcher (plugins, config, routing)
+
+{Fore.YELLOW}Config:{Style.RESET_ALL}
+  File: {CFG_FILE}
+  Log:  {LOG_FILE}
+""")
+        sys.exit(0)
+
+    elif args.version:
+        print("AlphaOS Launcher v3.0.0 (2025) - Integrated with fish/zsh")
+        sys.exit(0)
+
+    elif args.list:
+        list_pillars(config)
+        sys.exit(0)
+
+    elif args.shell:
+        sys.exit(launch_shell_command_center(config))
+
+    elif args.pillar:
+        sys.exit(execute_pillar(args.pillar, args.sub, config))
+
+    else:
+        # Default: Try shell Command Center first, fallback to Python menu
+        shell = detect_shell()
+        if shell in ['fish', 'zsh']:
+            print(f"{Fore.CYAN}Tip: Use 'aos' or 'alphaos-command' directly in {shell}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}Launching Shell Command Center...{Style.RESET_ALL}\n")
+            sys.exit(launch_shell_command_center(config))
+        else:
+            python_interactive_menu(config)
+
+if __name__ == "__main__":
+    main()

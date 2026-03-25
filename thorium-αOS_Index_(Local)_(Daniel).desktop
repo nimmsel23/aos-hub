@@ -1,9 +1,0 @@
-#!/usr/bin/env xdg-open
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=αOS Index (Local) (Daniel)
-Exec=/opt/thorium-browser/thorium-browser --profile-directory=Default --ignore-profile-directory-if-not-exists http://127.0.0.1:8799/
-Icon=/home/alpha/.config/thorium/Default/Web Shortcut Icons/shortcut-497c8d446db8a5d271818408b32b2821.png
-URL=http://127.0.0.1:8799/
-Comment=Open http://127.0.0.1:8799/ in a new tab in Thorium.
