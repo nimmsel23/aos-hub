@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+"""
+ALPHA_OS – FIVE PILLARS SHELL (2025 modern) - FIXED VERSION
+• Root‑Launcher for alpha‑code / ‑core / ‑voice / ‑door / ‑game / -fruits
+• Supports Door‑War + Hot‑List
+• YAML‑Config & dynamic plugin registry → automatic menu extension
+• CLI‑Bypass: five-pillars --pillar door --sub h
+• Streamlit/Textual aware launcher
+"""
+from __future__ import annotations
+import os, sys, subprocess, shutil, argparse, importlib.metadata as md, webbrowser
+from functools import lru_cache
+from pathlib import Path
+from typing import Dict, Any, List, Tuple, Optional
+import logging
+import json
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+try:
+    from colorama import init as colorama_init, Fore, Style
+except ImportError:
+    class _Dummy:
+        def __getattr__(self, *_):
+            return ""
+    Fore = Style = _Dummy()
+    def colorama_init(*args, **kwargs):  # Fixed this line
+        pass
+colorama_init(autoreset=True)
+
+# Enhanced configuration with better path handling
+DEV_ROOT = Path.home() / "dev" / "alpha-os"
+BIN_DIR  = Path.home() / "bin"
+CONFIG_DIR = Path.home() / "AlphaOS-Vault" / ".config"
+CFG_FILE = CONFIG_DIR / "pillars.yaml"
+LOG_FILE = Path.home() / "AlphaOS-Vault" / ".logs" / "pillars.log"
+CLEAR = "cls" if os.name == "nt" else "clear"
+GPT_LINK = "https://chatgpt.com/g/g-p-67fec7da91c4819188e88874c4449caf-core-4-the-voice/project"
+
+# Shell builtin commands that need shell=True
+SHELL_BUILTINS = {
+    'cd', 'pwd', 'history', 'alias', 'exit', 'logout', 'source', 'export',
+    'unset', 'set', 'eval', 'exec', 'jobs', 'fg', 'bg', 'disown', 'ulimit'
+}
+
+# Regular shell commands that can be executed directly
+SHELL_COMMANDS = {
+    'ls', 'mkdir', 'rmdir', 'rm', 'cp', 'mv', 'cat', 'grep', 'find', 'which',
+    'chmod', 'chown', 'ps', 'kill', 'top', 'htop', 'df', 'du', 'free',
+    'uname', 'whoami', 'date', 'cal', 'echo', 'printf', 'wc', 'sort',
+    'uniq', 'head', 'tail', 'less', 'more', 'tar', 'gzip', 'gunzip',
+    'zip', 'unzip', 'wget', 'curl', 'ssh', 'scp', 'git', 'sudo', 'su',
+    'clear', 'reboot', 'shutdown', 'neofetch', 'pacman', 'yay'
+}
+
+# Setup logging
+def setup_logging():
+    CONFIG_DIR.mkdir(exist_ok=True)
+    logging.basicConfig(
+        filename=LOG_FILE,
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        filemode='a'
+    )
+
+setup_logging()
+
+# Enhanced fallback config with more examples
+DEFAULT_PILLARS: Dict[str, Dict[str, Any]] = {
+    "q": {
+        "name": "EXIT",
+        "desc": "   Go outside & penetrate the world",
+        "exec": None,
+        "sub": None,
+    },
+    "example": {
+        "name": "EXAMPLE",
+        "desc": "   Example pillar with submodules",
+        "exec": None,
+        "sub": {
+            "1": {"title": "Test Command", "exec": ["echo", "Hello Alpha!"]},
+            "2": {"title": "Python Version", "exec": [sys.executable, "--version"]}
+        }
+    }
+}
+
+def validate_pillar_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and sanitize pillar configuration."""
+    validated = {}
+    for key, pillar in config.items():
+        # Convert numeric keys to strings for consistency
+        key_str = str(key)
+
+        if not isinstance(pillar, dict):
+            logging.warning(f"Invalid pillar config for '{key_str}': not a dict")
+            continue
+
+        # Required fields
+        if "name" not in pillar or "desc" not in pillar:
+            logging.warning(f"Invalid pillar config for '{key_str}': missing name or desc")
+            continue
+
+        # Validate exec field
+        exec_val = pillar.get("exec")
+        if exec_val is not None and not (
+            callable(exec_val) or
+            isinstance(exec_val, (str, list)) or
+            exec_val == "webbrowser_open"
+        ):
+            logging.warning(f"Invalid exec type for pillar '{key_str}': {type(exec_val)}")
+            pillar["exec"] = None
+
+        validated[key_str] = pillar
+
+    return validated
+
+def load_yaml_cfg() -> Dict[str, Any]:
+    """Load and parse YAML config, handling special cases like webbrowser_open."""
+    if not yaml or not CFG_FILE.exists():
+        return {}
+
+    try:
+        with CFG_FILE.open() as f:
+            config = yaml.safe_load(f) or {}
+
+        # Validate configuration
+        config = validate_pillar_config(config)
+
+        # Handle special case for callable exec (e.g., GPT webbrowser_open)
+        for key, pillar in config.items():
+            if pillar.get("exec") == "webbrowser_open":
+                pillar["exec"] = lambda: webbrowser.open(GPT_LINK, new=2)
+
+        logging.info(f"Loaded {len(config)} pillars from YAML config")
+        return config
+
+    except Exception as e:
+        error_msg = f"YAML‑Config Fehler: {e}"
+        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
+        logging.error(error_msg)
+        return {}
+
+def load_plugin_pillars() -> Dict[str, Any]:
+    """Load pillars from installed plugins."""
+    pillars: Dict[str, Any] = {}
+    try:
+        for ep in md.entry_points(group="alphaos.pillars"):
+            try:
+                data = ep.load()()
+                if isinstance(data, dict):
+                    pillar_id = str(data.get("id", ep.name))
+                    pillars[pillar_id] = data
+                    logging.info(f"Loaded plugin pillar: {pillar_id}")
+            except Exception as e:
+                logging.error(f"Failed to load plugin {ep.name}: {e}")
+    except Exception as e:
+        logging.error(f"Failed to load plugin pillars: {e}")
+
+    return pillars
+
+@lru_cache(maxsize=128)
+def _which(cmd: str) -> Optional[str]:
+    """Cached which command lookup."""
+    return shutil.which(cmd)
+
+def run_exec(cmd: Any) -> bool:
+    """Execute command with enhanced error handling and logging."""
+    if not cmd:
+        return False
+
+    try:
+        if callable(cmd):
+            cmd()
+            logging.info("Executed callable command successfully")
+            return True
+
+        if isinstance(cmd, list):
+            exe = cmd[0]
+
+            # Special handling for shell builtins - need shell=True
+            if exe in SHELL_BUILTINS:
+                # Join command as string for shell execution
+                cmd_str = ' '.join(cmd)
+                # Expand ~ manually for cd command
+                if exe == 'cd' and len(cmd) > 1:
+                    cmd_str = f"cd {os.path.expanduser(cmd[1])}"
+                result = subprocess.run(cmd_str, shell=True, check=False)
+                logging.info(f"Executed shell builtin: {cmd_str} (exit code: {result.returncode})")
+                return result.returncode == 0
+
+            # Regular shell commands - run directly
+            if exe in SHELL_COMMANDS:
+                result = subprocess.run(cmd, shell=False, check=False)
+                logging.info(f"Executed shell command: {' '.join(cmd)} (exit code: {result.returncode})")
+                return result.returncode == 0
+
+            # Try system command first
+            if _which(exe):
+                result = subprocess.run(cmd, check=False)
+                logging.info(f"Executed system command: {' '.join(cmd)} (exit code: {result.returncode})")
+                return result.returncode == 0
+
+            # Try streamlit execution
+            path = DEV_ROOT / exe
+            if path.suffix == ".py" and "streamlit" in exe:
+                result = subprocess.run(["streamlit", "run", str(path), *cmd[1:]], check=False)
+                logging.info(f"Executed streamlit app: {exe}")
+                return result.returncode == 0
+
+            # Try as Python module (but not for known shell commands/builtins)
+            if exe not in SHELL_COMMANDS and exe not in SHELL_BUILTINS:
+                mod_name = exe.replace("-", "_")
+                try:
+                    result = subprocess.run([sys.executable, "-m", mod_name, *cmd[1:]], check=False)
+                    if result.returncode == 0:
+                        logging.info(f"Executed Python module: {mod_name}")
+                        return True
+                except Exception:
+                    pass
+
+            # Try as local Python file
+            pyfile = DEV_ROOT / f"{exe}.py"
+            if pyfile.exists():
+                result = subprocess.run([sys.executable, str(pyfile), *cmd[1:]], check=False)
+                logging.info(f"Executed local Python file: {pyfile}")
+                return result.returncode == 0
+
+        elif isinstance(cmd, str):
+            # Handle string commands - always use shell=True for string commands
+            result = subprocess.run(cmd, shell=True, check=False)
+            logging.info(f"Executed shell command: {cmd}")
+            return result.returncode == 0
+
+    except Exception as e:
+        error_msg = f"Failed to execute command {cmd}: {e}"
+        logging.error(error_msg)
+        print(f"{Fore.RED}❌ {error_msg}{Style.RESET_ALL}")
+        return False
+
+    error_msg = f"Command not found or invalid: {cmd}"
+    logging.warning(error_msg)
+    print(f"{Fore.RED}❌ {error_msg}{Style.RESET_ALL}")
+    return False
+
+# Enhanced argument parsing
+parser = argparse.ArgumentParser(
+    description="AlphaOS Five Pillars Shell",
+    add_help=False
+)
+parser.add_argument("--pillar", "-p", help="Direct pillar execution")
+parser.add_argument("--sub", "-s", help="Sub-command for pillar")
+parser.add_argument("--list", "-l", action="store_true", help="List all available pillars")
+parser.add_argument("--config", "-c", help="Path to custom config file")
+parser.add_argument("--help", "-h", action="store_true", help="Show help")
+parser.add_argument("--version", "-v", action="store_true", help="Show version")
+args, unknown = parser.parse_known_args()
+
+# Load configuration
+PILLARS = DEFAULT_PILLARS.copy()
+if args.config and Path(args.config).exists():
+    # Load custom config file
+    try:
+        with open(args.config) as f:
+            custom_config = yaml.safe_load(f) if yaml else json.load(f)
+        PILLARS.update(validate_pillar_config(custom_config))
+    except Exception as e:
+        print(f"{Fore.RED}Failed to load custom config: {e}{Style.RESET_ALL}")
+else:
+    PILLARS.update(load_yaml_cfg())
+
+PILLARS.update(load_plugin_pillars())
+
+BANNER = f""" {Fore.YELLOW}
+ ╔══════════════════════════════════════════════════════════════╗
+ ║                                                              ║
+ ║                                                              ║
+ ║              ⚔️  AlphaOS   :::   CORE TERMINAL               ║
+ ║                                                              ║
+ ║           Rise  •  Execute   •  Reflect  •  Repeat           ║
+ ║                                                              ║
+ ║                    {len(PILLARS)} Modules Loaded                         ║
+ ║                                                              ║
+ ╚══════════════════════════════════════════════════════════════╝
+{Style.RESET_ALL}"""
+
+def safe_input(prompt: str) -> str:
+    """Safe input with keyboard interrupt handling."""
+    try:
+        return input(prompt)
+    except (KeyboardInterrupt, EOFError):
+        print(f"\n{Fore.RED} 💫 Arise, Alpha.{Style.RESET_ALL}")
+        logging.info("User interrupted session")
+        sys.exit(0)
+
+def sub_menu(sub: Dict[str, Dict[str, Any]], pillar_name: str):
+    """Enhanced sub-menu with better error handling."""
+    while True:
+        os.system(CLEAR)
+        print(f"{Fore.CYAN}>>> {pillar_name} – Submodule{Style.RESET_ALL}\n")
+
+        if not sub:
+            print(f"{Fore.RED}No submodules available.{Style.RESET_ALL}")
+            safe_input("⏎ return …")
+            break
+
+        for k, data in sub.items():
+            title = data.get('title', 'Unknown')
+            print(f"  [{k}] {title}")
+        print("  [b] Back\n")
+
+        choice = safe_input(f"{Fore.GREEN}▶ Auswahl: {Style.RESET_ALL}").strip().lower()
+
+        if choice == "b":
+            break
+
+        if choice in sub:
+            sub_data = sub[choice]
+            title = sub_data.get('title', 'Unknown')
+            exe = sub_data.get('exec')
+
+            print(f"\n{Fore.CYAN}>> Starte 💫 {title}{Style.RESET_ALL}\n")
+            success = run_exec(exe)
+
+            status = "✅ Success" if success else "❌ Failed"
+            print(f"\n{Fore.YELLOW}{status}{Style.RESET_ALL}")
+            safe_input(f"\n{Fore.YELLOW}⏎ return …{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.RED}Invalid selection: {choice}{Style.RESET_ALL}")
+            safe_input("⏎ continue …")
+
+def list_pillars():
+    """List all available pillars."""
+    print(f"{Fore.CYAN}Available Pillars:{Style.RESET_ALL}\n")
+    for key, data in sorted(PILLARS.items(), key=lambda x: (x[0].isdigit(), x[0])):
+        name = data.get('name', 'Unknown')
+        desc = data.get('desc', 'No description')
+        has_sub = '(+sub)' if data.get('sub') else ''
+        print(f"  [{key}] {Fore.YELLOW}{name:<12}{Style.RESET_ALL} {desc} {Fore.GREEN}{has_sub}{Style.RESET_ALL}")
+
+def interactive_loop():
+    """Main interactive loop with enhanced features."""
+    while True:
+        os.system(CLEAR)
+        print(BANNER)
+
+        # Sort pillars: numbers first, then letters
+        sorted_pillars = sorted(PILLARS.items(), key=lambda x: (not x[0].isdigit(), x[0]))
+
+        for key, data in sorted_pillars:
+            name = data.get('name', 'Unknown')
+            desc = data.get('desc', 'No description')
+            has_sub = '🔗' if data.get('sub') else '  '
+            print(f"[{key}] {has_sub} {Fore.YELLOW}{name:<10}{Style.RESET_ALL} – {desc}")
+
+        print(f"\n{Fore.CYAN}Commands: [l]ist, [h]elp, [q]uit{Style.RESET_ALL}")
+        choice = safe_input(f"\n{Fore.GREEN}▶ choose pillar: {Style.RESET_ALL}").strip()
+
+        if choice.lower() in ['l', 'list']:
+            os.system(CLEAR)
+            list_pillars()
+            safe_input(f"\n{Fore.YELLOW}⏎ return …{Style.RESET_ALL}")
+        elif choice.lower() in ['h', 'help']:
+            show_help()
+        else:
+            handle_choice(choice)
+
+def handle_choice(choice: str):
+    """Handle pillar selection with enhanced error handling."""
+    if choice.lower() == "q":
+        print(f"\n{Fore.MAGENTA}Sovereignty through Structure. Living by Intention – not Reaction.{Style.RESET_ALL}")
+        logging.info("User exited normally")
+        sys.exit(0)
+
+    # Try exact match first (including numeric keys)
+    pillar = PILLARS.get(choice)
+
+    # If not found, try lowercase
+    if not pillar:
+        pillar = PILLARS.get(choice.lower())
+
+    if not pillar:
+        print(f"{Fore.RED}NO PILLAR SELECTED: '{choice}'{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Available keys: {', '.join(sorted(PILLARS.keys()))}{Style.RESET_ALL}")
+        safe_input("⏎ continue …")
+        return
+
+    name = pillar.get("name", "Unknown")
+    exe = pillar.get("exec")
+    subs = pillar.get("sub")
+
+    if subs:
+        sub_menu(subs, name)
+    elif exe:
+        print(f"\n{Fore.CYAN}>> Starte {name}{Style.RESET_ALL}\n")
+        cmd = exe + unknown if isinstance(exe, list) else exe
+        success = run_exec(cmd)
+
+        status = "✅ Success" if success else "❌ Failed"
+        print(f"\n{Fore.YELLOW}{status}{Style.RESET_ALL}")
+        safe_input(f"\n{Fore.YELLOW}⏎ return …{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.RED}No executable module defined for '{name}'.{Style.RESET_ALL}")
+        safe_input("⏎ continue …")
+
+def show_help():
+    """Show help information."""
+    os.system(CLEAR)
+    help_text = f"""{Fore.CYAN}Five Pillars Shell - Help{Style.RESET_ALL}
+
+{Fore.YELLOW}Usage:{Style.RESET_ALL}
+  five-pillars                    # Interactive mode
+  five-pillars --pillar <id>      # Direct pillar execution
+  five-pillars --sub <key>        # Execute submodule
+  five-pillars --list             # List all pillars
+  five-pillars --config <file>    # Use custom config
+
+{Fore.YELLOW}Configuration:{Style.RESET_ALL}
+  Config file: {CFG_FILE}
+  Log file:    {LOG_FILE}
+
+{Fore.YELLOW}Examples:{Style.RESET_ALL}
+  five-pillars --pillar 1         # Execute pillar 1
+  five-pillars --pillar door --sub h
+  five-pillars -p core -s analyze -- --verbose
+  five-pillars --list | grep VOICE
+
+{Fore.YELLOW}Available Keys:{Style.RESET_ALL}
+  {', '.join(sorted(PILLARS.keys()))}
+"""
+    print(help_text)
+    safe_input(f"\n{Fore.YELLOW}⏎ return …{Style.RESET_ALL}")
+
+if __name__ == "__main__":
+    if args.help:
+        show_help()
+        sys.exit(0)
+    elif args.version:
+        print("Five Pillars Shell v2.0.1 (2025) - FIXED")
+        sys.exit(0)
+    elif args.list:
+        list_pillars()
+        sys.exit(0)
+    elif args.pillar:
+        if args.sub and args.pillar in PILLARS and PILLARS[args.pillar].get('sub'):
+            # Handle direct sub-command execution
+            subs = PILLARS[args.pillar]['sub']
+            if args.sub in subs:
+                exe = subs[args.sub].get('exec')
+                success = run_exec(exe)
+                sys.exit(0 if success else 1)
+        handle_choice(args.pillar)
+    else:
+        interactive_loop()
