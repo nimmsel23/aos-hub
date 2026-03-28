@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+import typer
+import os
+from datetime import date, datetime
+import glob
+import json
+
+app = typer.Typer(help="ALPHA_OS - General's Tent: Weekly Review & Strategiezentrum.")
+
+REVIEW_DIR = os.path.expanduser("~/.aos/tent")
+os.makedirs(REVIEW_DIR, exist_ok=True)
+
+def iso_week():
+    today = date.today()
+    return today.isocalendar()[0], today.isocalendar()[1]
+
+def review_filename(year=None, week=None):
+    if not year or not week:
+        year, week = iso_week()
+    return os.path.join(REVIEW_DIR, f"generals_tent_{year}-W{week:02d}.md")
+
+def review_files():
+    return sorted(glob.glob(os.path.join(REVIEW_DIR, "generals_tent_*.md")), reverse=True)
+
+def prompt_score(label, max_points):
+    while True:
+        score = typer.prompt(f"{label} (0-{max_points})", default="0")
+        try:
+            score = int(score)
+            if 0 <= score <= max_points:
+                return score
+        except ValueError:
+            pass
+        typer.echo("Ungültige Eingabe.")
+
+@app.command()
+def new():
+    """Neue General's Tent Review für diese Woche anlegen."""
+    year, week = iso_week()
+    filename = review_filename(year, week)
+    if os.path.exists(filename):
+        typer.confirm(f"Review für {year}-W{week} existiert bereits. Überschreiben?", abort=True)
+
+    typer.echo(f"\n--- GENERAL'S TENT WEEKLY REVIEW --- [{year}-W{week}] ---\n")
+    tags = typer.prompt("Tags (kommagetrennt, optional)", default="")
+    fire_status = typer.prompt("Fire Map Status (on track/off track)", default="on track")
+    focus_status = typer.prompt("Focus Map Status (on track/off track)", default="on track")
+    freedom_status = typer.prompt("Freedom Map Status (on track/off track)", default="on track")
+    core_score = prompt_score("Core 4 Score", 28)
+    stack_score = prompt_score("Stack Score", 7)
+    door_score = prompt_score("Door/Hit Score", 21)
+    lessons = typer.prompt("Welche Lektionen hast du diese Woche gelernt?")
+    correction = typer.prompt("Was muss nächste Woche angepasst werden?")
+    new_targets = typer.prompt("Was sind die wichtigsten Ziele für die kommende Woche?")
+
+    content = f"""# General's Tent Weekly Review ({year}-W{week})
+
+tags: {tags}
+
+## 1. Return & Report
+- Fire Map: {fire_status}
+- Focus Map: {focus_status}
+- Freedom Map: {freedom_status}
+- Core 4 Score: {core_score}/28
+- Stack Score: {stack_score}/7
+- Door/Hit Score: {door_score}/21
+
+## 2. Lessons Learned
+{lessons}
+
+## 3. Course Correction
+{correction}
+
+## 4. New Targets
+{new_targets}
+"""
+
+    with open(filename, "w") as f:
+        f.write(content)
+    typer.echo(f"\nReview gespeichert unter: {filename}")
+
+@app.command()
+def list(n: int = 10):
+    """Letzte n Reviews auflisten."""
+    files = review_files()[:n]
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    for f in files:
+        with open(f, encoding="utf-8") as review:
+            header = review.readline().strip()
+            print(f"- {os.path.basename(f)}: {header}")
+
+@app.command()
+def show(file: str = typer.Argument(None)):
+    """Eine Review anzeigen (by filename, oder Auswahl)."""
+    files = review_files()
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    if not file:
+        typer.echo("Wähle eine Review aus:")
+        for idx, f in enumerate(files):
+            print(f"{idx+1}: {os.path.basename(f)}")
+        idx = typer.prompt("Nummer", default="1")
+        try:
+            idx = int(idx) - 1
+            file = files[idx]
+        except:
+            typer.echo("Ungültige Auswahl.")
+            return
+    if os.path.exists(file):
+        with open(file, encoding="utf-8") as review:
+            print(review.read())
+    else:
+        typer.echo("Datei nicht gefunden.")
+
+@app.command()
+def edit():
+    """Vorhandene Review bearbeiten."""
+    files = review_files()
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    typer.echo("Wähle eine Review aus:")
+    for idx, f in enumerate(files):
+        print(f"{idx+1}: {os.path.basename(f)}")
+    idx = typer.prompt("Nummer", default="1")
+    try:
+        idx = int(idx) - 1
+        file = files[idx]
+    except:
+        typer.echo("Ungültige Auswahl.")
+        return
+    # Naiv: edit im default editor
+    os.system(f"${{EDITOR:-nano}} '{file}'")
+
+@app.command()
+def stats(n: int = 4):
+    """Statistik der letzten n Reviews anzeigen (Durchschnittswerte)."""
+    files = review_files()[:n]
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    core_scores, stack_scores, door_scores, on_track = [], [], [], 0
+    for f in files:
+        with open(f, encoding="utf-8") as review:
+            txt = review.read()
+        try:
+            core = int(txt.split("Core 4 Score:")[1].split("/")[0].strip())
+            core_scores.append(core)
+            stack = int(txt.split("Stack Score:")[1].split("/")[0].strip())
+            stack_scores.append(stack)
+            door = int(txt.split("Door/Hit Score:")[1].split("/")[0].strip())
+            door_scores.append(door)
+            if "on track" in txt:
+                on_track += 1
+        except Exception:
+            continue
+    n = len(core_scores)
+    if n == 0:
+        typer.echo("Keine auswertbaren Daten.")
+        return
+    print(f"\nDurchschnitt (letzte {n} Wochen):")
+    print(f"Core4: {sum(core_scores)/n:.2f}/28")
+    print(f"Stack: {sum(stack_scores)/n:.2f}/7")
+    print(f"Door:  {sum(door_scores)/n:.2f}/21")
+    print(f"Anteil 'on track' Maps: {on_track/n*100:.1f}%")
+
+@app.command()
+def export(fmt: str = typer.Option("csv", help="Format: csv oder json")):
+    """Alle Reviews exportieren (CSV oder JSON)."""
+    files = review_files()
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    data = []
+    for f in files:
+        with open(f, encoding="utf-8") as review:
+            txt = review.read()
+        item = {
+            "filename": os.path.basename(f),
+            "date": f.split("_")[-1][:-3],
+            "core_score": int(txt.split("Core 4 Score:")[1].split("/")[0].strip()),
+            "stack_score": int(txt.split("Stack Score:")[1].split("/")[0].strip()),
+            "door_score": int(txt.split("Door/Hit Score:")[1].split("/")[0].strip()),
+            "fire_status": "on track" if "Fire Map: on track" in txt else "off track",
+            "tags": txt.split("tags:")[1].split("\n")[0].strip() if "tags:" in txt else "",
+        }
+        data.append(item)
+    if fmt == "csv":
+        import csv
+        csvfile = os.path.join(REVIEW_DIR, "generals_tent_export.csv")
+        with open(csvfile, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(data[0].keys()))
+            writer.writeheader()
+            writer.writerows(data)
+        typer.echo(f"Exportiert nach: {csvfile}")
+    elif fmt == "json":
+        jsonfile = os.path.join(REVIEW_DIR, "generals_tent_export.json")
+        with open(jsonfile, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        typer.echo(f"Exportiert nach: {jsonfile}")
+
+@app.command()
+def quickstart():
+    """Neue Review basierend auf Vorwoche (Werte übernehmen, Texte neu eingeben)."""
+    files = review_files()
+    if not files:
+        typer.echo("Keine Reviews vorhanden.")
+        return
+    with open(files[0], encoding="utf-8") as f:
+        txt = f.read()
+    import re
+    def extract_score(key, txt, default=0):
+        try:
+            return int(re.search(f"{key} Score: (\\d+)", txt).group(1))
+        except:
+            return default
+    core_score = extract_score("Core 4", txt)
+    stack_score = extract_score("Stack", txt)
+    door_score = extract_score("Door/Hit", txt)
+    fire_status = "on track" if "Fire Map: on track" in txt else "off track"
+    focus_status = "on track" if "Focus Map: on track" in txt else "off track"
+    freedom_status = "on track" if "Freedom Map: on track" in txt else "off track"
+    tags = ""
+    typer.echo("Werte der letzten Woche übernommen. Textabschnitte bitte neu eingeben:")
+    lessons = typer.prompt("Welche Lektionen hast du diese Woche gelernt?")
+    correction = typer.prompt("Was muss nächste Woche angepasst werden?")
+    new_targets = typer.prompt("Was sind die wichtigsten Ziele für die kommende Woche?")
+    year, week = iso_week()
+    filename = review_filename(year, week)
+    content = f"""# General's Tent Weekly Review ({year}-W{week})
+
+tags: {tags}
+
+## 1. Return & Report
+- Fire Map: {fire_status}
+- Focus Map: {focus_status}
+- Freedom Map: {freedom_status}
+- Core 4 Score: {core_score}/28
+- Stack Score: {stack_score}/7
+- Door/Hit Score: {door_score}/21
+
+## 2. Lessons Learned
+{lessons}
+
+## 3. Course Correction
+{correction}
+
+## 4. New Targets
+{new_targets}
+"""
+    with open(filename, "w") as f:
+        f.write(content)
+    typer.echo(f"Neue Review gespeichert unter: {filename}")
+
+if __name__ == "__main__":
+    app()

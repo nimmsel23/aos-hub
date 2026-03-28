@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+import typer
+from datetime import date
+import os
+
+app = typer.Typer(help="Alpha OS – FREEDOM MAP: Deine Ideal Parallel World definieren.")
+
+DOMAINS = ["Body", "Being", "Balance", "Business"]
+QUESTIONS = [
+    "Wie sieht dein ideales Leben/Bild in diesem Bereich in 10 Jahren aus, wenn ALLES möglich wäre?",
+    "Wer bist du dort? Was kannst/besitzt/erlebst du?",
+    "Wie fühlt sich das an?",
+    "Was ist das mutigste Ziel in diesem Bereich?",
+    "Was hält dich aktuell noch davon ab?"
+]
+
+def write_to_markdown(results, filename):
+    with open(filename, "w") as f:
+        f.write(f"# FREEDOM MAP – {date.today()}\n\n")
+        for domain, answers in results.items():
+            f.write(f"## {domain}\n")
+            for q, a in zip(QUESTIONS, answers):
+                f.write(f"**{q}**\n{a}\n\n")
+    print(f"\nErgebnis gespeichert in {filename}")
+
+@app.command()
+def freedom():
+    typer.echo("FREEDOM MAP – Deine große Vision für alle Core-Bereiche.")
+    results = {}
+    for domain in DOMAINS:
+        typer.echo(f"\n=== {domain.upper()} ===")
+        answers = []
+        for q in QUESTIONS:
+            a = typer.prompt(q)
+            answers.append(a)
+        results[domain] = answers
+
+    # Speichern in Markdown (Obsidian-ready)
+    folder = os.path.expanduser("~/.aos/freedom")
+    os.makedirs(folder, exist_ok=True)
+    filename = os.path.join(folder, f"freedom_{date.today()}.md")
+    write_to_markdown(results, filename)
+    typer.echo("\nFreedom Map abgeschlossen! Lies dir deine Vision regelmäßig durch.")
+
+if __name__ == "__main__":
+    app()

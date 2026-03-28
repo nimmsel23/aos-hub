@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+import typer
+from datetime import date, timedelta
+import os
+import calendar
+
+app = typer.Typer(help="Alpha OS – FIRE MAP: Weekly War (4×4 Strikes) zur Erreichung deiner Focus Mission.")
+
+DOMAINS = ["Body", "Being", "Balance", "Business"]
+DOMAIN_ICONS = {"Body": "🔴", "Being": "🔵", "Balance": "🟡", "Business": "🟢"}
+DOMAIN_SUBS = {
+    "Body": "Fitness + Fuel",
+    "Being": "Meditation + Memoirs",
+    "Balance": "Partner + Posterity",
+    "Business": "Discover + Declare"
+}
+
+def get_week_info():
+    """Get current week number and date range."""
+    today = date.today()
+    iso_cal = today.isocalendar()
+    year = iso_cal[0]
+    week = iso_cal[1]
+
+    # Get Monday of current week
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+
+    return week, year, monday, sunday
+
+def get_weekday_dates(monday):
+    """Get dates for each day of the week."""
+    days = {}
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    for i, day in enumerate(weekdays):
+        current_date = monday + timedelta(days=i)
+        days[day] = current_date.strftime("%d.%m")
+    return days
+
+def write_domain_section(f, domain, icon, sub):
+    """Write a single domain section with War Stack structure."""
+    f.write(f"### {icon} {domain.upper()} ({sub}) - 4 Strikes\n\n")
+    f.write(f"**The Domino Door:** [Welche Door wird diese Woche geöffnet?]\n\n")
+    f.write("**War Stack Context:**\n")
+    f.write("- **Trigger:** [Was hat diese Door getriggert?]\n")
+    f.write("- **Narrative:** [Welche Story erzählst du dir über diese Door?]\n")
+    f.write("- **Impact if Opened:** [Was ändert sich wenn diese Door geöffnet wird?]\n\n")
+    f.write("**War Stack - 4 Hits:**\n\n")
+
+    for i in range(1, 5):
+        f.write(f"{i}. **Hit #{i}:**\n")
+        f.write("   - Fact: [Messbares Ergebnis]\n")
+        f.write("   - Obstacle: [Was könnte verhindern]\n")
+        f.write("   - **Strike:** [Strategischer Move]\n\n")
+
+    f.write("---\n\n")
+
+def write_to_markdown(week, year, monday, sunday, weekly_mission, filename):
+    """Write Fire Map to markdown."""
+    weekday_dates = get_weekday_dates(monday)
+
+    with open(filename, "w") as f:
+        f.write(f"# 🔥 FIRE MAP | KW {week} {year}\n\n")
+        f.write(f"**Woche:** KW {week} ({monday.strftime('%d.%m.%Y')} - {sunday.strftime('%d.%m.%Y')})\n")
+        f.write(f"**Status:** Weekly War\n")
+        f.write(f"**Parent:** [[FOCUS_MAP_[Monat]]] - Monthly Mission\n")
+        f.write(f"**Review:** General's Tent (Ende der Woche)\n\n")
+        f.write("---\n\n")
+
+        f.write("## 🎯 WEEKLY MISSION\n\n")
+        f.write("**From Focus Map:**\n")
+        f.write("[Was ist der Primary Focus dieser Woche aus dem Monthly Mission?]\n\n")
+        f.write(f"**This Week's War:**\n{weekly_mission}\n\n")
+        f.write("---\n\n")
+
+        f.write("## 🔥 4×4 WEEKLY WAR (16 Tasks)\n\n")
+
+        for domain in DOMAINS:
+            icon = DOMAIN_ICONS[domain]
+            sub = DOMAIN_SUBS[domain]
+            write_domain_section(f, domain, icon, sub)
+
+        f.write("## 📅 DAILY BREAKDOWN\n\n")
+
+        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        for day in weekdays:
+            day_date = weekday_dates[day]
+            f.write(f"### {day} {day_date}:\n")
+            f.write("**Priority Strikes:**\n")
+            f.write("-\n-\n\n")
+            f.write("**Core Score Target:** __/4\n\n")
+            f.write("---\n\n")
+
+        f.write("## 📊 WEEKLY SCORECARD\n\n")
+        f.write("**Target:** 28 or Die (4 points/day × 7 days)\n\n")
+        f.write("| Day | Body | Being | Balance | Business | Total |\n")
+        f.write("|-----|------|-------|---------|----------|-------|\n")
+
+        for day in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]:
+            f.write(f"| {day} | __/1 | __/1  | __/1    | __/1     | __/4  |\n")
+
+        f.write("| **TOTAL** | __/7 | __/7 | __/7 | __/7 | **__/28** |\n\n")
+        f.write("---\n\n")
+
+        f.write("## 🏕️ GENERAL'S TENT (End of Week Review)\n\n")
+        f.write(f"**Conducted:** {sunday.strftime('%d.%m.%Y')}\n\n")
+        f.write("### Did I Win the Weekly War?\n")
+        f.write("- [ ] YES - All 16 Strikes completed\n")
+        f.write("- [ ] PARTIAL - ___ / 16 Strikes completed\n")
+        f.write("- [ ] NO - Course correction needed\n\n")
+        f.write("### Core Score:\n")
+        f.write("**Total:** __/28\n")
+        f.write("**Status:** [ ] 28 or Die ✅ | [ ] Below 28 - Course Correction\n\n")
+        f.write("### Lessons Learned:\n-\n-\n\n")
+        f.write("### Course Corrections for Next Week:\n-\n-\n\n")
+        f.write("### New Targets:\n-\n-\n\n")
+        f.write("---\n\n")
+
+        f.write("## 🔗 LINKS\n\n")
+        f.write("- **Focus Map:** [[FOCUS_MAP_[Monat]]]\n")
+        f.write(f"- **Next Fire Map:** [[FIRE_MAP_KW{week+1}_{year}]]\n")
+        f.write("- **THE GAME MOC:** [[📖 MOC - THE GAME]]\n\n")
+        f.write("---\n\n")
+        f.write('**🜂 "Wars aren\'t won in one big move; they\'re won through a series of decisive battles."** - Elliott Hulse\n')
+
+    print(f"\n✅ Fire Map gespeichert in {filename}")
+
+@app.command()
+def fire(
+    week: int = typer.Option(None, help="Wochennummer (optional, default: aktuelle Woche)"),
+    simple: bool = typer.Option(False, "--simple", help="Simplified mode: nur 4 Hits total statt 16")
+):
+    """Create Fire Map for current or specified week."""
+    if week is None:
+        week, year, monday, sunday = get_week_info()
+    else:
+        # Calculate Monday and Sunday for given week
+        year = date.today().year
+        jan_1 = date(year, 1, 1)
+        # ISO week 1 starts on first Monday
+        days_to_monday = (7 - jan_1.weekday()) % 7
+        first_monday = jan_1 + timedelta(days=days_to_monday)
+        if first_monday.isocalendar()[1] != 1:
+            first_monday += timedelta(days=7)
+
+        monday = first_monday + timedelta(weeks=week-1)
+        sunday = monday + timedelta(days=6)
+
+    typer.echo(f"\n🔥 FIRE MAP – Weekly War für KW {week} {year}\n")
+    typer.echo("Elliott: 'Wars aren't won in one big move; they're won through a series of decisive battles.'\n")
+
+    if simple:
+        typer.echo("⚡ SIMPLIFIED MODE: Erstelle Fire Map mit 4 Hits total (manuelle Domain-Zuweisung)\n")
+
+        weekly_mission = typer.prompt("Was muss diese Woche gewonnen werden?")
+
+        hits = []
+        for i in range(1, 5):
+            typer.echo(f"\n🎯 Hit #{i}:")
+            fact = typer.prompt("  Fact (messbares Ergebnis)")
+            obstacle = typer.prompt("  Obstacle (was könnte verhindern)")
+            strike = typer.prompt("  Strike (strategischer Move)")
+            hits.append({"fact": fact, "obstacle": obstacle, "strike": strike})
+
+        # TODO: Write simplified template with 4 hits
+        typer.echo("\n⚠️  SIMPLIFIED MODE: Bitte verteile die 4 Hits manuell auf die Domains im generierten File.")
+
+    else:
+        typer.echo("📋 TEMPLATE MODE: Erstelle Fire Map Template zum manuellen Ausfüllen\n")
+        weekly_mission = typer.prompt("Was muss diese Woche gewonnen werden?")
+
+    # Save to markdown
+    folder = os.path.expanduser("~/.aos/fire")
+    os.makedirs(folder, exist_ok=True)
+    filename = os.path.join(folder, f"FIRE_MAP_KW{week}_{year}.md")
+
+    write_to_markdown(week, year, monday, sunday, weekly_mission, filename)
+
+    typer.echo("\n✅ Fire Map abgeschlossen!")
+    typer.echo(f"📍 Fülle jetzt die 4×4 War Stacks aus (16 Strikes total)")
+    typer.echo(f"📍 Review am Ende der Woche: tent")
+    typer.echo(f"\n💡 TIP: Verwende `warstack to-fire` um Hits aus War Stack zu importieren")
+
+@app.command()
+def sync():
+    """Sync current week's Fire Map to Taskwarrior."""
+    week, year, _, _ = get_week_info()
+
+    typer.echo(f"🔄 Syncing Fire Map KW{week} {year} → Taskwarrior\n")
+
+    # Call existing bash script
+    import subprocess
+    script_path = os.path.expanduser("~/.dotfiles/bin/firemap")
+
+    if os.path.exists(script_path):
+        result = subprocess.run([script_path, "sync"], capture_output=True, text=True)
+        print(result.stdout)
+        if result.returncode != 0:
+            print(result.stderr)
+    else:
+        typer.echo(f"❌ firemap script not found at {script_path}")
+        typer.echo("Install: Place firemap CLI in ~/.dotfiles/bin/")
+
+if __name__ == "__main__":
+    app()

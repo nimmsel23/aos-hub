@@ -38,7 +38,7 @@ DOTFILES = Path.home() / ".dotfiles"
 CONFIG_DIR = Path.home() / ".alphaos"
 CFG_FILE = CONFIG_DIR / "launcher.yaml"
 LOG_FILE = CONFIG_DIR / "launcher.log"
-ALPHAOS_VAULT = Path.home() / "AlphaOs-Vault"
+ALPHAOS_VAULT = Path.home() / ".aos" / "vault"
 
 # Setup
 CONFIG_DIR.mkdir(exist_ok=True)
