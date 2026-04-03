@@ -11,6 +11,41 @@ Each entry should include:
 
 ## Unreleased
 
+### 2026-03-28
+
+**index-node / pwa:**
+- fix: Core4 PWA Port 8781 → 8728 (Mnemonik: 8 Habits, 7 Tage, 28 Punkte)
+- refactor: Port-Referenz in menu.yaml, server.js, aosctl, scripts/alphaos.zsh aktualisiert
+- refactor: systemd-Unit pwa-core4-ctx.service Port angepasst
+- refactor: Monitoring-Skripte boot-notify-enhanced, aos-node-tui, aos-node-watch aktualisiert
+- fix: core4ctx.zsh CTX_DEFAULT_URL 8788 → 8728 (war fälschlicherweise vital-hub Coach-Port)
+
+**bridge:**
+- refactor: eigene bridge.env statt aos.env (nur bridge-relevante Vars)
+- fix: Service EnvironmentFile → ~/.env/bridge.env
+
+**core4:**
+- fix: core4_paths.py Fallback auf ~/.core4 (statt vault/Core4)
+- refactor: core4_paths.py liest ~/.env/core4.env statt /etc/aos/aos.env
+- fix: Tracker + Bridge + c4 zeigen alle auf gleichen Datenpfad ~/.core4
+- feat: Neue ~/.env/core4.env für Tracker (Storage, Vault, Bridge-URL)
+- refactor: systemd user service (aos-bridge.service) → system service (/etc/systemd/system)
+- fix: aos-bridge.service User=alpha mit EnvironmentFile=/etc/aos/bridge.env
+- docs: bridge.env Symlink /etc/aos/bridge.env ← ~/.env/bridge.env
+
+**aos-dev (NEW):**
+- feat: core4-server.js — Standalone Core4 PWA server (port 8728)
+  - Imports routes/core4.js directly (no monolithic imports)
+  - Serves public/core4/ statically (clean structure, no /pwa prefix)
+  - Exports: createApp(), startServer() functions
+  - API endpoints: /api/core4/* (inherited from routes/core4.js)
+  - Zero Bridge/Index-Node dependencies — completely independent
+  - Template for future standalone servers (fire, fitness, etc.)
+  - First implementation of doorctx-server.js pattern in aos-dev
+
+**index-node:**
+- fix: scanForCore4Metrics() liest Week-JSON aus ~/.core4/ statt vault/Core4/
+
 ### 2026-02-26
 
 **bridge:**

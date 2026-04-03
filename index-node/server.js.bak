@@ -51,7 +51,7 @@ const UI_BASIC_AUTH_READY =
 
 if (UI_BASIC_AUTH_ENABLED && !UI_BASIC_AUTH_READY) {
   console.warn(
-    "[index-node] AOS_UI_BASIC_AUTH=0 but credentials are missing. Protected routes will return 503."
+    "[index-node] AOS_UI_BASIC_AUTH=1 but credentials are missing. Protected routes will return 503."
   );
 }
 
@@ -533,15 +533,15 @@ const TICK_ENV_PATH =
   process.env.TICK_ENV || path.join(os.homedir(), ".aos", "tick.env");
 const TASK_EXPORT_PATH =
   process.env.TASK_EXPORT ||
-  path.join(os.homedir(), ".aos", "data", "task_export.json");
+  path.join(os.homedir(), ".local", "share", "alphaos", "task_export.json");
 const TASK_BIN = process.env.TASK_BIN || "task";
 const TASKRC = process.env.TASKRC || "";
 const TASK_CACHE_TTL = Number(process.env.TASK_CACHE_TTL || 30);
 const TASK_EXPORT_FILTER = String(process.env.TASK_EXPORT_FILTER || "").trim();
-const CORE4_TW_SYNC = process.env.CORE4_TW_SYNC !== "1";
+const CORE4_TW_SYNC = process.env.CORE4_TW_SYNC !== "0";
 const CORE4_JOURNAL_DIR =
   process.env.CORE4_JOURNAL_DIR ||
-  path.join(getVaultDir(), ".core4", "Journal", "Entries");
+  path.join(getVaultDir(), "Alpha_Journal", "Entries");
 const CORE4_STORAGE_DIR_ENV = String(process.env.CORE4_STORAGE_DIR || "").trim();
 const CORE4_MOUNT_DIR_ENV = String(process.env.CORE4_MOUNT_DIR || "").trim();
 const CORE4_STORAGE_FALLBACK_DIR = String(
@@ -550,7 +550,13 @@ const CORE4_STORAGE_FALLBACK_DIR = String(
 ).trim();
 const BRIDGE_TOKEN = String(process.env.AOS_BRIDGE_TOKEN || "").trim();
 const BRIDGE_TOKEN_HEADER = String(process.env.AOS_BRIDGE_TOKEN_HEADER || "X-Bridge-Token").trim();
-
+const SYNC_TAGS = String(process.env.SYNC_TAGS || "door,hit,strike,core4,fire")
+  .split(",")
+  .map((tag) => tag.trim())
+  .filter(Boolean);
+const SYNC_MAP_PATH =
+  process.env.SYNC_MAP ||
+  path.join(os.homedir(), ".local", "share", "alphaos", "task_sync_map.json");
 const RCLONE_RC_URL = process.env.RCLONE_RC_URL || "http://127.0.0.1:5572";
 const RCLONE_TARGET =
   process.env.RCLONE_TARGET || "eldanioo:alpha/vault";
@@ -1838,10 +1844,12 @@ function scanForWarStacks(doorDir, domain) {
  */
 function scanForCore4Metrics(domain, week) {
   // Core4 week JSON is a derived artifact (rebuilt from `.core4/events`).
-  // Canonical path: ~/.core4/ (single source of truth since 2026-03-28)
-  const core4Dir = process.env.AOS_CORE4_LOCAL_DIR || path.join(os.homedir(), ".core4");
+  // Prefer the local write target (`Core4/`) and fall back to the GDrive mount (`Alpha_Core4/`).
+  const vaultDir = getVaultDir();
   const weekName = `core4_week_${week}.json`;
-  const weekFile = path.join(core4Dir, weekName);
+  const weekFileLocal = path.join(vaultDir, "Core4", weekName);
+  const weekFileMount = path.join(vaultDir, "Alpha_Core4", weekName);
+  const weekFile = fs.existsSync(weekFileLocal) ? weekFileLocal : weekFileMount;
 
   if (!fs.existsSync(weekFile)) {
     console.warn(`[scanForCore4Metrics] Week file not found: ${weekFile}`);
@@ -4964,8 +4972,8 @@ app.get(/^\/pwa\/plan$/, (_req, res) => res.redirect(301, "/pwa/plan/"));
 app.get(/^\/pwa\/production$/, (_req, res) => res.redirect(301, "/pwa/production/"));
 app.get(/^\/pwa\/profit$/, (_req, res) => res.redirect(301, "/pwa/profit/"));
 // Legacy short paths → permanent redirect to new canonical paths
-app.get("/core34",  (req, res) => res.redirect(302, `${req.protocol}://${req.hostname}:9728/`));
-app.get("/core34/", (req, res) => res.redirect(302, `${req.protocol}://${req.hostname}:9728/`));
+app.get("/core4",  (_req, res) => res.redirect(301, "/pwa/core4/"));
+app.get("/core4/", (_req, res) => res.redirect(301, "/pwa/core4/"));
 app.get("/fire",   (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/fire/",  (_req, res) => res.redirect(301, "/pwa/fire/"));
 app.get("/focus",  (_req, res) => res.redirect(301, "/pwa/focus/"));

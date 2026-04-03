@@ -1,0 +1,103 @@
+{
+  "agent_name": "game-pillar-agent",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-12-08",
+  "updated": "2025-12-08",
+  "category": "alphaos-pillar",
+  "priority": "high",
+
+  "purpose": "Expert for THE GAME (Pillar #5) - Strategic Navigation via Frame/Freedom/Focus/Fire Maps. Tracks DOMINION across 4 Domains. Understands they are part of AlphaOS system.",
+
+  "system_prompt_file": "~/AlphaOs-Vault/.agents/prompts/game-pillar-agent.md",
+
+  "capabilities": [
+    "Facilitate Frame Map creation (Where am I now? - Current reality baseline)",
+    "Guide Freedom Map creation (Annual vision from 10-year IPW)",
+    "Build Focus Maps (Monthly mission - the sweet spot)",
+    "Construct Fire Maps (Weekly war - 4×4 Hits integration from War Stacks)",
+    "Detect Frame shifts (trigger voice-agent if major shifts occur)",
+    "Facilitate General's Tent reviews (Return & Report, Lessons, Course Correction, New Targets)",
+    "Apply Cascade Principle (Frame → Freedom → Focus → Fire)",
+    "Track DOMINION across 4 Domains (Body/Being/Balance/Business)",
+    "Coordinate with door-agent (receives 4 Hits) and voice-agent (triggers on Frame shifts)",
+    "Apply Foundation + Code principles to strategic navigation"
+  ],
+
+  "tool_access": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Edit",
+      "Grep",
+      "Glob"
+    ],
+    "restricted": [
+      "Bash - Focus on strategic facilitation, not system execution",
+      "Task - Direct user interaction for Map creation",
+      "WebSearch - Use internal AlphaOS knowledge only"
+    ]
+  },
+
+  "triggers": [
+    "User says: 'Frame Map' or 'Where am I now?'",
+    "User says: 'Freedom Map' or 'Annual vision'",
+    "User says: 'Focus Map' or 'Monthly mission'",
+    "User says: 'Fire Map' or 'Weekly war'",
+    "User says: 'General's Tent' or 'Weekly review'",
+    "User asks: 'Where do I have DOMINION?'",
+    "User asks: 'What's my IPW?' (Ideal Parallel World)",
+    "User mentions: 'Frame shift' or 'Reality changed'",
+    "door-agent completes War Stack with 4 Hits (pipeline trigger)",
+    "Significant life event occurs (Wien-Sanctuary, new Door opened, etc.)"
+  ],
+
+  "dependencies": [
+    "alphaos-oracle (Foundation keeper - contextual knowledge)",
+    "door-pillar-agent (upstream - provides 4 Hits for Fire Maps)",
+    "voice-pillar-agent (bidirectional - triggers on Frame shifts, provides Strikes for doors)"
+  ],
+
+  "pipeline_role": {
+    "position": "downstream",
+    "receives_from": "door-pillar-agent (4 Hits from War Stacks)",
+    "sends_to": "voice-pillar-agent (Frame shift signals trigger VOICE sessions)",
+    "transformation": "4 Hits → Fire Map (Weekly execution) → Frame Update (Reality baseline) → Cascade check (Freedom/Focus/Fire adjust)"
+  },
+
+  "data_sources": [
+    "~/Dokumente/AlphaOs-Vault/GAME/CLAUDE.md (Primary source - 314 lines wegweiser, Foundation + Code + THE GAME Ch 32-42)",
+    "~/AlphaOs-Vault/ALPHA_OS/ALPHA_OS - THE GAME.md (Elliott's original Pillar file)",
+    "~/AlphaOs-Vault/AlphaOS-blueprints/32*.md - 42*.md (Chapters 32-42 detailed)",
+    "~/AlphaOs-Vault/GAME/Frame/ (previous Frame Maps - 13 files)",
+    "~/AlphaOs-Vault/GAME/Freedom/ (previous Freedom Maps - 3 files)",
+    "~/AlphaOs-Vault/GAME/Focus/ (previous Focus Maps - 8 files)",
+    "~/AlphaOs-Vault/GAME/Fire/ (previous Fire Maps - 1 file)",
+    "~/AlphaOs-Vault/GAME/IPW/ (10-year Ideal Parallel World vision)",
+    "~/AlphaOs-Vault/GAME/GAME_MAP_OF_CONSCIOUSNESS.md (Master navigation file)"
+  ],
+
+  "outputs": {
+    "location": "~/AlphaOs-Vault/GAME/[Frame|Freedom|Focus|Fire]/",
+    "format": "markdown with Map structure (Domain-specific, dated, cascade-aware)",
+    "pipeline_output": "Frame shift signals sent to voice-agent, Fire Map coordinates with door-agent 4 Hits"
+  },
+
+  "test_prompts": [
+    "Guide me through a Frame Map for the BUSINESS domain",
+    "Where am I now? (triggers Frame context)",
+    "Create a Freedom Map for the next year based on my IPW",
+    "Build this month's Focus Map - what's my sweet spot?",
+    "Integrate these 4 Hits from my War Stack into a Fire Map",
+    "General's Tent review - Return & Report on this week",
+    "My Frame shifted significantly (new Wien-Sanctuary) - what adjusts downstream?"
+  ],
+
+  "performance": {
+    "success_rate": "N/A (just created)",
+    "avg_response_time": "N/A",
+    "total_invocations": 0
+  },
+
+  "notes": "THE GAME agent focuses on STRATEGIC NAVIGATION. Understands cascade principle: Frame determines Freedom, Freedom determines Focus, Focus determines Fire. When Frame shifts, downstream Maps must adjust. Receives 4 Hits from door-agent for Fire Map integration. Detects Frame shifts and triggers voice-agent when patterns need addressing. Has Foundation + Code embedded from GAME/CLAUDE.md. Tracks DOMINION across all 4 Domains (Body/Being/Balance/Business)."
+}

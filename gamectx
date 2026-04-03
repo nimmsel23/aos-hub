@@ -11,26 +11,26 @@ set -euo pipefail
 
 ROOT_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
 GAMECTL_BIN="${GAMECTL_BIN:-$ROOT_DIR/game/cli/gamectl}"
-PWACTX_BIN="${PWACTX_BIN:-$HOME/.dotfiles/bin/pwactx}"
-GAME_APP="game"
+AOS_DEVCTL_BIN="${AOS_DEVCTL_BIN:-$HOME/aos-dev/aos-devctl}"
 
 # Source shared library
 CTX_NAME="gamectx"
-CTX_DEFAULT_SERVICE="aos-gamectx.service"
+CTX_DEFAULT_SERVICE="aos-game-dev.service"
 CTX_DEFAULT_URL="http://127.0.0.1:8787/"
 
 _lib="${AOSCTX_LIB:-${0:A:h}/aosctx-lib.zsh}"
 [[ -f "$_lib" ]] && source "$_lib" || { echo "[gamectx] aosctx-lib.zsh not found at $_lib" >&2; exit 1; }
 
 GAMECTL_BIN="$(resolve_bin "$GAMECTL_BIN" gamectl)" || die "gamectl not found"
-PWACTX_BIN="$(resolve_bin "$PWACTX_BIN" pwactx)" || die "pwactx not found"
+AOS_DEVCTL_BIN="$(resolve_bin "$AOS_DEVCTL_BIN" aos-devctl)" || die "aos-devctl not found"
+GAME_RUNTIME_CMD="${AOS_DEVCTL_BIN} game"
 
 gamectl() {
   "$GAMECTL_BIN" "$@"
 }
 
-gamepwa() {
-  "$PWACTX_BIN" "$GAME_APP" "$@"
+game_runtime() {
+  $GAME_RUNTIME_CMD "$@"
 }
 
 current_domain() {
@@ -38,7 +38,7 @@ current_domain() {
 }
 
 runtime_status_text() {
-  gamepwa status 2>/dev/null || true
+  game_runtime status 2>/dev/null || true
 }
 
 dashboard_json() {
@@ -157,9 +157,9 @@ render_snapshot() {
     title "Actions"
     echo "[1] Frame Map        [2] Freedom Map      [3] Focus Map"
     echo "[4] Fire Map         [5] General's Tent   [6] Current Domain"
-    echo "[7] Chapters         [8] PWA status       [9] Open PWA"
-    echo "[a] Add Frame        [s] Start PWA        [R] Restart PWA"
-    echo "[x] Stop PWA         [l] Logs             [q] Quit"
+    echo "[7] Chapters         [8] Server status    [9] Open server"
+    echo "[a] Add Frame        [s] Start server     [R] Restart server"
+    echo "[x] Stop server      [l] Logs             [q] Quit"
   fi
 }
 
@@ -232,7 +232,7 @@ User-side Game frontdoor / terminal dashboard.
 Usage:
   gamectx                     # interactive TUI
   gamectx menu|dashboard|tui  # interactive TUI / snapshot
-  gamectx status              # combined Game + PWA status
+  gamectx status              # combined Game + Server status
 
 User flows:
   gamectx frame [domain]      # Frame Map (Wo bin ich jetzt?)
@@ -284,27 +284,27 @@ menu_loop() {
         gamectl chapters
         ;;
       8)
-        run_screen "Game PWA Status" gamepwa status
+        run_screen "Game Server Status" game_runtime status
         ;;
       9)
-        run_screen "Game PWA URL" gamepwa open
+        run_screen "Game Server URL" game_runtime open
         ;;
       a|A)
         frame_wizard
         ;;
       s)
-        run_screen "Start Game PWA" gamepwa start
+        run_screen "Start Game Server" game_runtime start
         ;;
       R)
-        run_screen "Restart Game PWA" gamepwa restart
+        run_screen "Restart Game Server" game_runtime restart
         ;;
       x|X)
-        run_screen "Stop Game PWA" gamepwa stop
+        run_screen "Stop Game Server" game_runtime stop
         ;;
       l|L)
         clear_screen
-        title "Game PWA Logs"
-        gamepwa logs
+        title "Game Server Logs"
+        game_runtime logs
         ;;
       q|Q)
         return 0
@@ -387,7 +387,7 @@ main() {
       fi
       ;;
     open|start|stop|restart|logs|enable|disable)
-      gamepwa "$cmd" "$@"
+      game_runtime "$cmd" "$@"
       ;;
     help|-h|--help)
       show_help

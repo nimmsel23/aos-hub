@@ -1,1 +1,1 @@
-../AlphaOS-THE-GAME.md
+/home/alpha/Dokumente/AlphaOS-THE-GAME.md

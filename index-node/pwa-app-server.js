@@ -6,7 +6,7 @@ import os from "os";
 import yaml from "js-yaml";
 
 const APP = String(process.env.PWA_APP || "").trim().toLowerCase();
-const PORT = Number(process.env.PWA_APP_PORT || 8781);
+const PORT = Number(process.env.PWA_APP_PORT || 8728);
 const HOST = String(process.env.PWA_APP_HOST || "0.0.0.0").trim() || "0.0.0.0";
 const PUBLIC_ROOT = String(
   process.env.PWA_PUBLIC_DIR || path.join(process.cwd(), "public", "pwa")

@@ -11,26 +11,26 @@ set -euo pipefail
 
 ROOT_DIR="${AOS_HUB_DIR:-$HOME/aos-hub}"
 DOORCTL_BIN="${DOORCTL_BIN:-$ROOT_DIR/door/cli/doorctl}"
-PWACTX_BIN="${PWACTX_BIN:-$HOME/.dotfiles/bin/pwactx}"
-DOOR_APP="door"
+AOS_DEVCTL_BIN="${AOS_DEVCTL_BIN:-$HOME/aos-dev/aos-devctl}"
 
 # Source shared library
 CTX_NAME="doorctx"
-CTX_DEFAULT_SERVICE="aos-doorctx.service"
+CTX_DEFAULT_SERVICE="aos-door-dev.service"
 CTX_DEFAULT_URL="http://127.0.0.1:8786/"
 
 _lib="${AOSCTX_LIB:-${0:A:h}/aosctx-lib.zsh}"
 [[ -f "$_lib" ]] && source "$_lib" || { echo "[doorctx] aosctx-lib.zsh not found at $_lib" >&2; exit 1; }
 
 DOORCTL_BIN="$(resolve_bin "$DOORCTL_BIN" doorctl)" || die "doorctl not found"
-PWACTX_BIN="$(resolve_bin "$PWACTX_BIN" pwactx)" || die "pwactx not found"
+AOS_DEVCTL_BIN="$(resolve_bin "$AOS_DEVCTL_BIN" aos-devctl)" || die "aos-devctl not found"
+DOOR_RUNTIME_CMD="${AOS_DEVCTL_BIN} door"
 
 doorctl() {
   "$DOORCTL_BIN" "$@"
 }
 
-doorpwa() {
-  "$PWACTX_BIN" "$DOOR_APP" "$@"
+door_runtime() {
+  $DOOR_RUNTIME_CMD "$@"
 }
 
 current_door() {
@@ -38,7 +38,7 @@ current_door() {
 }
 
 runtime_status_text() {
-  doorpwa status 2>/dev/null || true
+  door_runtime status 2>/dev/null || true
 }
 
 dashboard_json() {
@@ -129,9 +129,9 @@ render_snapshot() {
     title "Actions"
     echo "[1] Potential / Hot List    [2] Plan / Door War      [3] War Stack wizard"
     echo "[4] Production / Focus      [5] Profit / Review      [6] Current Door"
-    echo "[7] Chapters                [8] PWA status           [9] Open PWA"
-    echo "[a] Add Hot                 [s] Start PWA            [R] Restart PWA"
-    echo "[x] Stop PWA                [l] Logs                 [q] Quit"
+    echo "[7] Chapters                [8] Server status        [9] Open server"
+    echo "[a] Add Hot                 [s] Start server         [R] Restart server"
+    echo "[x] Stop server             [l] Logs                 [q] Quit"
   fi
 }
 
@@ -217,7 +217,7 @@ User-side Door frontdoor / terminal dashboard.
 Usage:
   doorctx                     # interactive TUI
   doorctx menu|dashboard|tui  # interactive TUI / snapshot
-  doorctx status              # combined Door + PWA status
+  doorctx status              # combined Door + Server status
 
 User flows:
   doorctx hot [args...]       # Potential / Hot List via doorctl
@@ -269,27 +269,27 @@ menu_loop() {
         doorctl chapters
         ;;
       8)
-        run_screen "Door PWA Status" doorpwa status
+        run_screen "Door Server Status" door_runtime status
         ;;
       9)
-        run_screen "Door PWA URL" doorpwa open
+        run_screen "Door Server URL" door_runtime open
         ;;
       a|A)
         hot_add_interactive
         ;;
       s)
-        run_screen "Start Door PWA" doorpwa start
+        run_screen "Start Door Server" door_runtime start
         ;;
       R)
-        run_screen "Restart Door PWA" doorpwa restart
+        run_screen "Restart Door Server" door_runtime restart
         ;;
       x|X)
-        run_screen "Stop Door PWA" doorpwa stop
+        run_screen "Stop Door Server" door_runtime stop
         ;;
       l|L)
         clear_screen
-        title "Door PWA Logs"
-        doorpwa logs
+        title "Door Server Logs"
+        door_runtime logs
         ;;
       q|Q)
         return 0
@@ -375,7 +375,7 @@ main() {
       fi
       ;;
     open|start|stop|restart|logs|enable|disable)
-      doorpwa "$cmd" "$@"
+      door_runtime "$cmd" "$@"
       ;;
     help|-h|--help)
       show_help

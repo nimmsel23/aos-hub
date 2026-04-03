@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-%h/.env/bridge.env
+EnvironmentFile=-%h/.env/aos.env
 WorkingDirectory=%h/aos-hub/bridge
 ExecStart=/usr/bin/python %h/aos-hub/bridge/app.py --host 0.0.0.0 --port 8080
 Restart=on-failure

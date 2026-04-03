@@ -7,23 +7,16 @@ ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 # shellcheck disable=SC1090
 source "$APP_DIR/bridge-lib.sh"
 
-SERVICE_NAME="${AOS_BRIDGE_USER_SERVICE:-aos-bridge.service}"
-SERVICE_PATH_USER="$ROOT_DIR/systemd/user/$SERVICE_NAME"
-SERVICE_PATH="$SERVICE_PATH_USER"
-USER_SERVICE_DIR="$HOME/.config/systemd/user"
+SERVICE_NAME="aos-bridge.service"
+SERVICE_PATH_SYS="$ROOT_DIR/systemd/system/$SERVICE_NAME"
 
-AOS_ENV_FILE="${AOS_ENV_FILE:-$HOME/.env/aos.env}"
+BRIDGE_ENV_FILE="${BRIDGE_ENV_FILE:-$HOME/.env/bridge.env}"
+AOS_ENV_FILE="${AOS_ENV_FILE:-$BRIDGE_ENV_FILE}"
 
-if [[ ! -f "$SERVICE_PATH" ]]; then
-  die "missing user unit file: $SERVICE_PATH"
-fi
+SERVICE_MODE="$(bridge_detect_mode)"
 
-systemctl_user() { systemctl --user "$@"; }
+systemctl_sys() { sudo systemctl "$@"; }
 
-systemd_user_available() {
-  has_cmd systemctl || return 1
-  systemctl --user show-environment >/dev/null 2>&1
-}
 
 unit_dst_path() {
   echo "$USER_SERVICE_DIR/$SERVICE_NAME"
@@ -48,8 +41,7 @@ show_installed_unit_ref() {
 diagnose_systemd() {
   ui_title "bridgectl systemd diagnose"
 
-  show_installed_unit_ref
-  ui_info "Repo unit: $SERVICE_PATH"
+  ui_info "Repo unit: $SERVICE_PATH_SYS"
 
   load_env_file_if_present "$AOS_ENV_FILE" || true
 
@@ -62,22 +54,17 @@ diagnose_systemd() {
     ui_warn "AOS_HUB_DIR is '/', ExecStart will try: cd /bridge"
   fi
 
-  if ! systemd_user_available; then
-    ui_warn "systemctl --user not available (no user bus)."
-    return 2
-  fi
+  msg ""
+  msg "-- systemctl cat ${SERVICE_NAME} --"
+  systemctl_sys cat "$SERVICE_NAME" --no-pager 2>/dev/null || true
 
   msg ""
-  msg "-- systemctl --user cat ${SERVICE_NAME} --"
-  systemctl_user cat "$SERVICE_NAME" --no-pager 2>/dev/null || true
+  msg "-- systemctl show (selected) --"
+  systemctl_sys show "$SERVICE_NAME" -p FragmentPath -p DropInPaths -p ExecStart -p EnvironmentFiles 2>/dev/null || true
 
   msg ""
-  msg "-- systemctl --user show (selected) --"
-  systemctl_user show "$SERVICE_NAME" -p FragmentPath -p DropInPaths -p ExecStart -p EnvironmentFiles 2>/dev/null || true
-
-  msg ""
-  msg "-- systemctl --user status --"
-  systemctl_user status "$SERVICE_NAME" --no-pager 2>/dev/null || true
+  msg "-- systemctl status --"
+  systemctl_sys status "$SERVICE_NAME" --no-pager 2>/dev/null || true
 }
 
 fix_systemd() {
@@ -88,32 +75,25 @@ fix_systemd() {
     assume_yes=1
   fi
 
-  if ! systemd_user_available; then
-    ui_err "systemctl --user not available (no user bus)."
-    return 2
-  fi
-
-  show_installed_unit_ref
   msg ""
 
   if ((assume_yes)); then
-    ui_info "Applying: link-service --force + daemon-reload + restart"
+    ui_info "Applying: daemon-reload + restart"
   else
-    ui_info "This will update the installed unit symlink and restart the service."
+    ui_info "This will daemon-reload and restart the service."
     ui_confirm "Proceed?" || return 0
   fi
 
-  link_service --force
-  systemctl_user daemon-reload
-  systemctl_user restart "$SERVICE_NAME" || true
+  systemctl_sys daemon-reload
+  systemctl_sys restart "$SERVICE_NAME" || true
 
   msg ""
-  systemctl_user status "$SERVICE_NAME" --no-pager || true
+  systemctl_sys status "$SERVICE_NAME" --no-pager || true
 
   if has_cmd journalctl; then
     msg ""
     msg "-- recent logs --"
-    journalctl --user -u "$SERVICE_NAME" -n 60 --no-pager || true
+    journalctl -u "$SERVICE_NAME" -n 60 --no-pager || true
   fi
 
   status
@@ -133,16 +113,14 @@ link_service() {
     force=1
   fi
 
-  mkdir -p "$USER_SERVICE_DIR"
-
-  local dst="$USER_SERVICE_DIR/$SERVICE_NAME"
+  local dst="/etc/systemd/system/$SERVICE_NAME"
   if [[ -e "$dst" ]]; then
     if ((force)); then
       local ts="$(date +%s)"
       if [[ -L "$dst" ]]; then
-        rm -f "$dst"
+        sudo rm -f "$dst"
       else
-        mv "$dst" "$dst.bak.$ts"
+        sudo mv "$dst" "$dst.bak.$ts"
       fi
     else
       msg "Service already linked: $dst"
@@ -151,7 +129,7 @@ link_service() {
     fi
   fi
 
-  ln -s "$SERVICE_PATH" "$dst"
+  sudo ln -s "$SERVICE_PATH_SYS" "$dst"
   msg "Linked service: $dst"
 }
 
@@ -188,52 +166,24 @@ PY
   local rc=0
   msg ""
 
-  # System scope is reported only for drift detection.
+  # System scope
   if has_cmd systemctl; then
     local sys_active sys_enabled
     sys_active="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
     sys_enabled="$(systemctl is-enabled "aos-bridge.service" 2>/dev/null || true)"
     [[ -z "$sys_active" ]]  && sys_active="-"
     [[ -z "$sys_enabled" ]] && sys_enabled="-"
-    msg "Systemd (system, unmanaged): active=$sys_active enabled=$sys_enabled"
-    if [[ "$sys_active" == "active" ]]; then
-      ui_warn "System bridge is active; canonical mode is user service only ($SERVICE_NAME)."
-    fi
+    msg "Systemd (system): active=$sys_active enabled=$sys_enabled"
   fi
 
-  # User scope (canonical)
-  if systemd_user_available; then
-    local active enabled
-    active="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
-    enabled="$(systemctl_user is-enabled "$SERVICE_NAME" 2>/dev/null || true)"
-    [[ -z "$active" ]]  && active="-"
-    [[ -z "$enabled" ]] && enabled="-"
-    msg "Systemd (user):   active=$active enabled=$enabled  [$SERVICE_NAME]"
-    if [[ "$active" == "active" ]]; then
-      systemctl_user status "$SERVICE_NAME" --no-pager -l --lines=3 2>/dev/null || true
-      msg ""
-    fi
-  else
-    ui_warn "systemctl --user not available (no user bus)."
-    return 2
-  fi
-
-  # Enforce canonical mode: user service must be active.
-  local sys_a dev_a
+  # Service active check
+  local sys_a
   sys_a="$(systemctl is-active "aos-bridge.service" 2>/dev/null || true)"
-  dev_a="$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)"
-  if [[ "$sys_a" == "active" && "$dev_a" == "active" ]]; then
-    ui_warn "Both system and user bridge are active — stop system unit to avoid port conflicts."
-    rc=1
-  fi
-  if [[ "$dev_a" == "active" ]]; then
-    ui_ok "Active mode: user ($SERVICE_NAME)"
+
+  if [[ "$sys_a" == "active" ]]; then
+    ui_ok "Active mode: system ($SERVICE_NAME)"
   else
-    if [[ "$sys_a" == "active" ]]; then
-      ui_warn "User bridge is inactive while system bridge is active (unsupported mode)."
-    else
-      ui_warn "User bridge is inactive."
-    fi
+    ui_warn "System bridge is inactive."
     rc=1
   fi
 
@@ -252,57 +202,42 @@ system_active_state() {
 }
 
 warn_if_system_active() {
-  local sys_a
-  sys_a="$(system_active_state)"
-  if [[ "$sys_a" == "active" ]]; then
-    ui_warn "System bridge is active (aos-bridge.service). bridgectl controls only user service: $SERVICE_NAME."
-  fi
-}
-
-ensure_user_scope() {
-  if ! systemd_user_available; then
-    die "systemctl --user not available (no user bus)."
-  fi
+  # No longer needed - system service is canonical mode
+  return 0
 }
 
 svc_restart() {
-  ensure_user_scope
-  warn_if_system_active
-  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
-    msg "Restarting user service: $SERVICE_NAME"
-    systemctl_user restart "$SERVICE_NAME"
+  local active_check
+  active_check="$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)"
+  if [[ "$active_check" == "active" ]]; then
+    msg "Restarting system service: $SERVICE_NAME"
+    systemctl_sys restart "$SERVICE_NAME"
   else
-    ui_warn "User service inactive. Starting: $SERVICE_NAME"
-    systemctl_user start "$SERVICE_NAME"
+    ui_warn "System service inactive. Starting: $SERVICE_NAME"
+    systemctl_sys start "$SERVICE_NAME"
   fi
 }
 
 svc_start() {
-  ensure_user_scope
-  warn_if_system_active
-  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
-    msg "User service already active: $SERVICE_NAME"
+  if [[ "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
+    msg "System service already active: $SERVICE_NAME"
   else
-    msg "Starting user service: $SERVICE_NAME"
-    systemctl_user start "$SERVICE_NAME"
+    msg "Starting system service: $SERVICE_NAME"
+    systemctl_sys start "$SERVICE_NAME"
   fi
 }
 
 svc_stop() {
-  ensure_user_scope
-  if [[ "$(systemctl_user is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
-    msg "Stopping user service: $SERVICE_NAME"
-    systemctl_user stop "$SERVICE_NAME"
+  if [[ "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)" == "active" ]]; then
+    msg "Stopping system service: $SERVICE_NAME"
+    systemctl_sys stop "$SERVICE_NAME"
   else
-    msg "User service not running: $SERVICE_NAME"
+    msg "System service not running: $SERVICE_NAME"
   fi
-  warn_if_system_active
 }
 
 logs() {
-  ensure_user_scope
-  warn_if_system_active
-  journalctl --user -u "$SERVICE_NAME" -n 200 -f
+  sudo journalctl -u "$SERVICE_NAME" -n 200 -f
 }
 
 env_edit() { "${EDITOR:-nano}" "$AOS_ENV_FILE"; }
@@ -311,25 +246,25 @@ usage() {
   cat <<'__HELP__'
 bridge-servicectl — Manage AOS Bridge systemd service
 
-Canonical mode is systemd user service only (user+linger). No sudo paths.
+Canonical mode is systemd system service. Use with: sudo bridgectl ...
 
 Usage: bridge-servicectl <command>
 
 Commands:
-  status              Show bridge status (user service canonical; system shown as warning)
-  start               Start user bridge service
-  stop                Stop user bridge service
-  restart             Restart user bridge service (or start if inactive)
-  logs                Follow user bridge journal logs
-  enable              Link + enable + start user service
-  env                 Edit ~/.env/aos.env
+  status              Show bridge status
+  start               Start system bridge service
+  stop                Stop system bridge service
+  restart             Restart system bridge service (or start if inactive)
+  logs                Follow system bridge journal logs
+  enable              Link + enable + start system service
+  env                 Edit ~/.env/bridge.env
   install-deps        Install python-aiohttp (Arch)
-  link-service [-f]   Symlink unit file to ~/.config/systemd/user/
+  link-service [-f]   Symlink unit file to /etc/systemd/system/
   diagnose            Systemd unit diagnosis
   fix [--yes]         Fix unit symlink + restart
 
 Env:
-  AOS_ENV_FILE (default: ~/.env/aos.env)
+  BRIDGE_ENV_FILE (default: ~/.env/bridge.env)
 __HELP__
 }
 
@@ -343,7 +278,18 @@ case "$cmd" in
   link-service) link_service "${1:-}" ;;
   diagnose) diagnose_systemd ;;
   fix) fix_systemd "${1:-}" ;;
-  enable) link_service --force; systemctl_user daemon-reload; systemctl_user enable --now "$SERVICE_NAME" ;;
+  enable)
+    if [[ "$SERVICE_MODE" == "system" ]]; then
+      msg "System service mode detected. To enable system bridge:"
+      msg "  sudo ln -sf $SERVICE_PATH_SYS /etc/systemd/system/"
+      msg "  sudo systemctl daemon-reload"
+      msg "  sudo systemctl enable --now aos-bridge.service"
+    else
+      link_service --force
+      systemctl_user daemon-reload
+      systemctl_user enable --now "$SERVICE_NAME"
+    fi
+    ;;
   start) svc_start ;;
   stop) svc_stop ;;
   restart) svc_restart ;;

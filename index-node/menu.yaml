@@ -5,27 +5,21 @@
 
 {
   "links": [
-    {
-      "label": "Anatomie GPT",
+    {"label": "Anatomie GPT",
       "cmd": "anatomie-gpt",
-      "url": "https://chatgpt.com/g/g-p-688e4388100081919eb91b8542b3fc4e-anatomie/project"
-    },
+      "url": "https://chatgpt.com/g/g-p-688e4388100081919eb91b8542b3fc4e-anatomie/project" },
 
-    {
-      "label": "Body GPT",
+    { "label": "Body GPT",
       "cmd": "body",
-      "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project"
-    },
-    {
-      "label": "Konsole",
+      "url": "https://chatgpt.com/g/g-p-688523c8902c8191a81ffe2fde3bbc18-body-gpt/project" },
+
+    { "label": "Konsole",
       "cmd": "konsole",
-      "url": "/konsole"
-    },
-    {
-      "label": "Klienten",
+      "url": "/konsole" },
+
+    { "label": "Klienten",
       "cmd": "klienten",
-      "url": "/klienten"
-    },
+      "url": "/klienten" },
     {
       "label": "Fitness Centre",
       "cmd": "fitness",
@@ -47,8 +41,7 @@
       "url": "/dojo"
     },
 
-    {
-      "label": "Being GPT",
+    { "label": "Being GPT",
       "cmd": "being",
       "url": "https://chatgpt.com/g/g-p-67e3d1630b648191a2b0b4cd86845604-being/project"
     },
@@ -139,11 +132,15 @@
       "url": "/registry"
     },
     {
-      "label": "Creator King Assets",
+      "label": "Creator King Centre",
       "cmd": "king",
       "url": "https://script.google.com/macros/s/AKfycbyXhksbIhXzD_n7YgWSGJ5ChmEnxzm6YgVdepcrwRa0tTTuot6IhQ2QRKOHhcNeoZBQ/exec"
     },
-
+    {
+      "label": "Creator King AssetSheet",
+      "cmd": "assets",
+      "url": "https://script.google.com/macros/s/AKfycbxMAZvgm9SA4ANSI__y_Mnz3qn_2Rg8j1TcSp6BYbouDo5N5tQzBlMmJ8qOg2j2tjxx/exec"
+    },
 
   ]
   ,
@@ -162,7 +159,7 @@
     { "label": "LINKS", "url": "/links.html", "target": "_self" }
   ],
   "pwa_ctx": {
-    "core4": { "port": 8781, "service": "pwa-core4-ctx.service" },
+    "core4": { "port": 8728, "service": "pwa-core4-ctx.service" },
     "fire": { "port": 8782, "service": "pwa-fire-ctx.service" },
     "focus": { "port": 8783, "service": "pwa-focus-ctx.service" },
     "frame": { "port": 8784, "service": "pwa-frame-ctx.service" },

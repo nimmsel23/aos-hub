@@ -17,6 +17,11 @@
 
 ## Technical Debt
 
+- [ ] **Python wrapper optimization:** Replace bash wrapper calls with direct Python imports
+  - [ ] `_run_firectl_print()` → call `firebot.py` directly instead of via `firectl` bash wrapper
+  - [ ] Remove intermediate bash layer: Bridge → firectl (bash) → firebot.py
+  - [ ] Pattern: tracker.py now called directly (not via core4ctl), firebot.py should be same
+  - [ ] Benefit: Remove subprocess overhead, direct Python integration
 - [ ] Review error handling in all handlers
 - [ ] Add structured logging for all operations
 - [ ] Consider splitting app.py into modules if >1000 lines

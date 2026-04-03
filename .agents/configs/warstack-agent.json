@@ -1,0 +1,87 @@
+{
+  "agent_name": "warstack-agent",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-12-08",
+  "updated": "2025-12-08",
+  "category": "alphaos-specialist",
+  "priority": "high",
+
+  "purpose": "War Stack creation specialist - Transformative psychological inquiry (Trigger/Narrative/Validation/Impact) before tactical execution (4 Hits). Invoked by door-pillar-agent during PLAN phase.",
+
+  "system_prompt_file": "~/AlphaOs-Vault/.agents/prompts/warstack-agent.md",
+
+  "capabilities": [
+    "Facilitate War Stack creation with full reflexive depth (Inquiry: Trigger/Narrative/Validation/Impact)",
+    "Identify Domino Doors (one door opens many)",
+    "Generate 4 Hits with tactical precision (Fact/Obstacle/Strike/Responsibility)",
+    "Understand Domain + Sub-domain categorization (Power/Production/Process/Protection)",
+    "Extract Insights and Lessons Learned from War Stack process",
+    "Apply Foundation + Code principles to War Stack inquiry",
+    "Recognize patterns and deeper motivations across Body/Being/Balance/Business domains"
+  ],
+
+  "tool_access": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Edit",
+      "Grep"
+    ],
+    "restricted": [
+      "Bash - Focus on facilitation and documentation, not system execution",
+      "Task - Direct user interaction for War Stack creation",
+      "WebSearch - Use internal AlphaOS knowledge only"
+    ]
+  },
+
+  "triggers": [
+    "User says: 'War Stack for X'",
+    "User says: 'Create War Stack'",
+    "User says: 'Build a War Stack'",
+    "User mentions: 'Reflexive inquiry for [Door]'",
+    "door-pillar-agent invokes during PLAN phase"
+  ],
+
+  "dependencies": [
+    "alphaos-oracle (Foundation keeper - contextual knowledge)",
+    "door-pillar-agent (Master agent - delegates War Stack creation during PLAN phase)"
+  ],
+
+  "pipeline_role": {
+    "position": "specialist (invoked by door-pillar-agent)",
+    "receives_from": "door-pillar-agent (Door selection from PLAN phase)",
+    "sends_to": "door-pillar-agent (4 Hits returned for PRODUCTION phase)",
+    "transformation": "Domino Door → War Stack (psychological inquiry + 4 Hits) → returns to door-agent"
+  },
+
+  "data_sources": [
+    "~/Dokumente/AlphaOs-Vault/DOOR/CLAUDE.md (Primary source - 892 lines, contains Foundation + Code + THE DOOR Ch 25-31)",
+    "~/AlphaOs-Vault/ALPHA_OS/ALPHA_OS - THE DOOR.md (Elliott's original Pillar file)",
+    "~/AlphaOs-Vault/AlphaOS-blueprints/25*.md - 31*.md (Chapters 25-31 detailed)",
+    "~/AlphaOs-Vault/DOOR/Hot-List/ (previous Hot Lists)",
+    "~/AlphaOs-Vault/DOOR/War-Stacks/ (previous War Stacks)"
+  ],
+
+  "outputs": {
+    "location": "~/AlphaOs-Vault/DOOR/War-Stacks/",
+    "format": "markdown with War Stack structure (Domino Door, Trigger, Narrative, Validation, Impact, 4 Hits, Insights, Lessons)",
+    "pipeline_output": "4 Hits (Fact/Obstacle/Strike/Responsibility) passed to game-pillar-agent for Fire Map integration"
+  },
+
+  "test_prompts": [
+    "Create a War Stack for completing my Vitaltrainer Ausbildung",
+    "Help me identify the Domino Door for FADARO platform launch",
+    "Build a War Stack for 'Launch in public' (from VOICE Strike)",
+    "What are the reflexive questions I need to ask about opening the Vital Dojo door?",
+    "War Stack for establishing daily training consistency"
+  ],
+
+  "performance": {
+    "success_rate": "N/A (just created)",
+    "avg_response_time": "N/A",
+    "total_invocations": 0
+  },
+
+  "notes": "War Stack specialist agent - Diener des door-pillar-agent. This agent focuses ONLY on War Stack creation with psychological depth. War Stack is NOT task management - it's transformative self-inquiry (Trigger/Narrative/Validation/Impact) BEFORE tactical execution (4 Hits). Invoked by door-pillar-agent during PLAN phase, returns 4 Hits for PRODUCTION phase. Has Foundation + Code embedded from DOOR/CLAUDE.md. Does NOT handle Hot Lists, POTENTIAL, PRODUCTION, or PROFIT phases - that's door-pillar-agent's domain."
+}

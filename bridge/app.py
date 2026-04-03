@@ -54,6 +54,8 @@ WARSTACK_DIR = Path(
 CORE4_PREFIX = "core4_week_"
 
 GAS_WEBHOOK_URL = os.getenv("AOS_GAS_WEBHOOK_URL", "").strip()
+GAS_HOTLIST_URL = os.getenv("AOS_GAS_HOTLIST_URL", "").strip()
+GAS_HOTLIST_KEY = os.getenv("AOS_GAS_HOTLIST_KEY", "").strip()
 WATCHDOG_WEBHOOK_URL = (
     os.getenv("AOS_WATCHDOG_WEBHOOK_URL", "").strip()
     or os.getenv("AOS_GAS_WATCHDOG_WEBHOOK_URL", "").strip()
@@ -1104,25 +1106,6 @@ def _count_pending_with_tag(tasks: list[Dict[str, Any]], tag: str) -> int:
     return count
 
 
-async def _find_pending_core4_uuid(habit_tag: str, date_key: str) -> Optional[str]:
-    """Live TW query: first pending task with +{habit_tag} due:{date_key}."""
-    if not _task_bin_available():
-        return None
-    proc = await asyncio.create_subprocess_exec(
-        TASK_BIN, f"+{habit_tag}", f"due:{date_key}", "status:pending", "uuids",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, _ = await proc.communicate()
-    if proc.returncode != 0:
-        return None
-    for line in stdout.decode("utf-8", errors="ignore").splitlines():
-        line = line.strip()
-        if TASK_UUID_RE.fullmatch(line):
-            return line
-    return None
-
-
 async def handle_bridge_daily_review_data(_request: web.Request) -> web.Response:
     path = _task_export_path()
     exists = path.exists()
@@ -1411,6 +1394,33 @@ async def _run_core4ctl(args: list[str], timeout_s: float = 120.0) -> dict[str, 
         return {"ok": False, "error": f"core4ctl not found: {CORE4CTL_BIN}"}
     cmd = [CORE4CTL_BIN, *args]
     return await _run_task_report(cmd, timeout_s=timeout_s)
+
+
+async def _run_tracker_done(habit: str, date_key: str) -> None:
+    """Call tracker.py done <habit> --date <date_key> (fire-and-forget).
+
+    This creates a Taskwarrior task (if needed) and marks it as done.
+    Taskwarrior on-modify hooks then fire (Telegram, TickTick, etc).
+    Idempotent via Core4 event ledger.
+    """
+    try:
+        if not TASK_EXEC_ENABLED:
+            return
+        tracker_py = Path(__file__).parent / "core4" / "python-core4" / "tracker.py"
+        if not tracker_py.exists():
+            LOGGER.warning("tracker.py not found: %s", tracker_py)
+            return
+        proc = await asyncio.create_subprocess_exec(
+            "python3", str(tracker_py), habit, "done", "--date", date_key,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err_msg = stderr.decode("utf-8", errors="ignore").strip() or stdout.decode("utf-8", errors="ignore").strip()
+            LOGGER.warning("tracker.py done failed: %s", err_msg[:200])
+    except Exception as e:
+        LOGGER.error("tracker.py done exception: %s", e)
 
 
 def _format_fire_daily_message(report: dict[str, Any]) -> str:
@@ -1979,9 +1989,9 @@ async def handle_core4_log(request: web.Request) -> web.Response:
     _send_desktop_notify(domain, task, points, total_today)
     if CORE4_AUTO_PUSH:
         asyncio.create_task(_core4_auto_push())
-    # Complete matching TW task → on-modify hook fires (tele + TickTick)
+    # Log via tracker.py (creates + completes TW task → on-modify hooks fire)
     if done and TASK_EXEC_ENABLED:
-        asyncio.create_task(_complete_core4_tw_task(_CORE4_TW_TAG.get(task, task), date_key))
+        asyncio.create_task(_run_tracker_done(_CORE4_TW_TAG.get(task, task), date_key))
     return web.json_response({"ok": True, "week": week, "total_today": total_today})
 
 
@@ -2331,31 +2341,6 @@ async def _get_task_uuid(task_id: str) -> Optional[str]:
     return None
 
 
-async def _run_task_done(uuid: str) -> Dict[str, Any]:
-    """Mark a TW task as done by UUID. Fire-and-forget safe."""
-    if not TASK_EXEC_ENABLED:
-        return {"ok": False, "error": "task execution disabled"}
-    if not _task_bin_available():
-        return {"ok": False, "error": "task binary not found"}
-    proc = await asyncio.create_subprocess_exec(
-        TASK_BIN, uuid, "done",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    await proc.communicate()
-    return {"ok": proc.returncode == 0, "uuid": uuid}
-
-
-async def _complete_core4_tw_task(habit_tag: str, date_key: str) -> None:
-    """Find + complete a pending Core4 TW task.  Fire-and-forget safe."""
-    try:
-        uuid = await _find_pending_core4_uuid(habit_tag, date_key)
-        if uuid:
-            await _run_task_done(uuid)
-    except Exception:
-        pass  # never block the event loop
-
-
 async def handle_task_execute(request: web.Request) -> web.Response:
     payload = await _read_json(request)
     single = payload.get("task")
@@ -2457,6 +2442,47 @@ async def handle_task_modify(request: web.Request) -> web.Response:
     result = await _run_task_modify(uuid, updates)
     status = 200 if result.get("ok") else 502
     return web.json_response(result, status=status)
+
+
+async def handle_hotlist_add(request: web.Request) -> web.Response:
+    payload = await _read_json(request)
+    idea = str(payload.get("idea") or payload.get("title") or "").strip()
+    if not idea:
+        return web.json_response({"ok": False, "error": "missing idea"}, status=400)
+
+    description = str(payload.get("description") or "").strip()
+    source = str(payload.get("source") or "cli").strip()
+    created_at = str(payload.get("created_at") or payload.get("capturedAt") or "").strip()
+    if not created_at:
+        from datetime import datetime, timezone
+        created_at = datetime.now(timezone.utc).isoformat()
+
+    gas_result = None
+    if GAS_HOTLIST_URL and GAS_HOTLIST_KEY:
+        try:
+            gas_payload = json.dumps({
+                "action": "queue",
+                "title": idea,
+                "description": description,
+                "source": source,
+                "capturedAt": created_at,
+                "apiKey": GAS_HOTLIST_KEY,
+            })
+            timeout = aiohttp.ClientTimeout(total=6)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    GAS_HOTLIST_URL,
+                    data=gas_payload,
+                    headers={"Content-Type": "text/plain;charset=utf-8"},
+                ) as resp:
+                    gas_result = {"ok": resp.status < 300, "status": resp.status}
+        except Exception as e:
+            LOGGER.warning("hotlist gas sync failed (non-fatal): %s", e)
+            gas_result = {"ok": False, "error": str(e)}
+    else:
+        gas_result = {"ok": False, "error": "AOS_GAS_HOTLIST_URL or AOS_GAS_HOTLIST_KEY not set"}
+
+    return web.json_response({"ok": True, "idea": idea, "gas": gas_result})
 
 
 async def handle_warstack_draft(request: web.Request) -> web.Response:
@@ -3239,6 +3265,8 @@ def create_app() -> web.Application:
             web.post("/bridge/task/execute", handle_task_execute),
             web.post("/task/modify", handle_task_modify),
             web.post("/bridge/task/modify", handle_task_modify),
+            web.post("/hotlist/add", handle_hotlist_add),
+            web.post("/bridge/hotlist/add", handle_hotlist_add),
             web.post("/warstack/draft", handle_warstack_draft),
             web.post("/bridge/warstack/draft", handle_warstack_draft),
             web.post("/queue/flush", handle_queue_flush),

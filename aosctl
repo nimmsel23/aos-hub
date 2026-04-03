@@ -1359,7 +1359,7 @@ run_status() {
 
   # ── Centre Runtimes (ctx + ports) ────────────────────────────
   msg "── Centre Runtimes (ctx + ports) ─────────────────────────────"
-  _status_dual_unit_line "core4 ctx"   "aos-pwa-core4-ctx.service"   "8781"
+  _status_dual_unit_line "core4 ctx"   "aos-pwa-core4-ctx.service"   "8728"
   _status_dual_unit_line "fire ctx"    "aos-pwa-fire-ctx.service"    "8782"
   _status_dual_unit_line "focus ctx"   "aos-pwa-focus-ctx.service"   "8783"
   _status_dual_unit_line "frame ctx"   "aos-pwa-frame-ctx.service"   "8784"

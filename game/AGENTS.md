@@ -12,49 +12,6 @@ Das `tentctl`-Skript (Tent Bot) wird ebenfalls von Codex/Claude-Code gepflegt, w
 - Keep Game-specific implementation in this pillar.
 - `scripts/` is orchestration/frontdoor only and should not contain Game business logic.
 
-## Entrypoints
-- Primary Game tooling stays in `game/` subfolders.
-- Frontdoors:
-  - Production/system view via `aosctl game ...`
-  - Dev/user workflows via `hubctl game ...`
-- Local prototype scaffolding for this Codex flow:
-  - `gamectl proto-flow` (creates cascade samples in `game/*/prototypes/`)
-  - `framectl|freedomctl|focusctl ... scaffold`
-  - `game/fire/firectl scaffold`, `game/tent/tentctl weekly`
-
-## Coding Rules
-- Preserve center boundaries and cascade expectations across Game sub-centres.
-- Prefer canonical paths in this pillar over wrapper indirections in `scripts/`.
-- Reuse shared helper libs for ctl-style scripts (`scripts/ctl-lib.sh`, `scripts/lib/aos-env.sh`).
-
-## Cross-Pillar Boundary (Tent vs Door/Profit)
-- Kapitel-Referenz:
-  - `30 - Profit.md` beschreibt Profit als Abschluss der Door-Woche.
-  - `41 - General_s Tent.md` beschreibt Tent als woechentliche Strategie-/Review-Session.
-- Fuer dieses Repo heisst das praktisch:
-  - Tent sammelt Wochen-Signale (u. a. Profit-Werte) und erstellt den versiegelten Wochen-Review.
-  - Profit-Logik bleibt bei den Door-bezogenen Flows/Artefakten.
-
-## Blueprint-First Rule
-- Game development should start from local chapter/blueprint files inside this pillar.
-- Use those files as behavior intent, then implement in canonical Game paths (`game/fire`, `game/focus`, `game/gas-*`, etc.).
-- Keep chapter-to-implementation mapping explicit in commit/PR notes for non-trivial changes.
-- Primary chapter references are local symlinks in `game/` (e.g. `32 - Frame.md` ... `42 - The Alpha Odyssey.md`) pointing to `AlphaOS-blueprints/`.
-- Additional chapter sources:
-  - `game/gas-game-dev/Game_Freedom_Chapter33.html`
-  - `game/gas-game-dev/Game_Focus_Chapter34.html`
-- If more blueprint files are added, keep them in `game/` and extend this section.
-
-## Lint In Plain Language
-- `scripts/scripts-lint.sh` validates ctl structure and integration consistency.
-- `ERROR` blocks merge/use; fix immediately.
-- `WARN` is a migration hint or legacy reminder; reduce over time.
-
-## Validation
-- Run `bash -n` for changed shell scripts.
-- Run `scripts/scripts-lint.sh` when ctl wiring changes.
-- For prototype cascade smoke checks, run `game/gamectl proto-flow --force`.
-
 # The Game
 
 # Chapter 32 \- Frame
@@ -404,6 +361,7 @@ And each month pushes you closer to conquering your Annual Impossible Game. In t
 Alpha, this isn’t just about metrics or performance. 
 It’s about communion with the divine, a deeper understanding of yourself, and an unwavering commitment to excellence.
 The General’s Tent is your sanctuary, checkpoint, and crucible for transformation. Step inside, and prepare to win your war.
+
 
 # Chapter 42 \- The Alpha Odyssey
 Reflecting on our journey through The Alpha OS we see a path paved with intention, discipline, and a relentless pursuit of truth.

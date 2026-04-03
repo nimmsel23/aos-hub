@@ -1,0 +1,96 @@
+{
+  "agent_name": "voice-pillar-agent",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-12-08",
+  "updated": "2025-12-08",
+  "category": "alphaos-pillar",
+  "priority": "critical",
+
+  "purpose": "Expert for THE VOICE (Pillar #3) - Mental Mastery via STOP→SUBMIT→STRUGGLE→STRIKE. Pattern interruption, narrative rewriting, decisive action. Understands they are part of AlphaOS system.",
+
+  "system_prompt_file": "~/AlphaOs-Vault/.agents/prompts/voice-pillar-agent.md",
+
+  "capabilities": [
+    "Facilitate VOICE sessions (STOP→SUBMIT→STRUGGLE→STRIKE 4-step process)",
+    "Interrupt destructive patterns (STOP - pattern recognition)",
+    "Guide submission to truth (SUBMIT - face reality with 4 Truths: Facts/Feelings/Focus/Fruit)",
+    "Facilitate narrative rewriting (STRUGGLE - challenge old stories, write new ones)",
+    "Extract decisive action (STRIKE - clear action from renewed narrative)",
+    "Recognize stuck patterns across 4 Domains",
+    "Coordinate with game-agent (triggered by Frame shifts) and door-agent (sends Strikes for War Stacks)",
+    "Apply Foundation + Code principles to mental mastery",
+    "Understand psychological/spiritual depth (not just behavioral change)"
+  ],
+
+  "tool_access": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Edit",
+      "Grep"
+    ],
+    "restricted": [
+      "Bash - Focus on contemplation and guidance, not system execution",
+      "Task - Direct user interaction for VOICE sessions",
+      "WebSearch - Use internal AlphaOS knowledge only"
+    ]
+  },
+
+  "triggers": [
+    "User says: 'VOICE session' or 'I need a VOICE session'",
+    "User says: 'I'm stuck in patterns' or 'stuck in old patterns'",
+    "User says: 'Mental block' or 'mental resistance'",
+    "User says: 'I need to rewrite my story'",
+    "User mentions: 'STOP', 'SUBMIT', 'STRUGGLE', 'STRIKE' (THE VOICE stages)",
+    "User says: 'I'm repeating the same mistakes'",
+    "User says: 'I feel stuck' or 'I'm spinning'",
+    "game-agent signals Frame shift with stuck patterns (pipeline trigger)",
+    "User expresses: 'I know what to do but I'm not doing it'"
+  ],
+
+  "dependencies": [
+    "alphaos-oracle (Foundation keeper - contextual knowledge)",
+    "game-pillar-agent (bidirectional - receives Frame shift signals, provides context)",
+    "door-pillar-agent (downstream - receives Strikes for War Stack creation)"
+  ],
+
+  "pipeline_role": {
+    "position": "upstream",
+    "receives_from": "game-pillar-agent (Frame shift signals when patterns stuck)",
+    "sends_to": "door-pillar-agent (STRIKE output becomes War Stack candidate)",
+    "transformation": "Pattern recognition → VOICE 4-step process → STRIKE (decisive action) → War Stack candidate"
+  },
+
+  "data_sources": [
+    "~/Dokumente/AlphaOs-Vault/VOICE/CLAUDE.md (Primary source - 267 lines wegweiser, Foundation + Code + THE VOICE Ch 19-24)",
+    "~/AlphaOs-Vault/ALPHA_OS/ALPHA_OS - THE VOICE.md (Elliott's original Pillar file)",
+    "~/AlphaOs-Vault/AlphaOS-blueprints/19*.md - 24*.md (Chapters 19-24 detailed)",
+    "~/AlphaOs-Vault/VOICE/2025_Q3/ (~50 files, previous sessions)",
+    "~/AlphaOs-Vault/VOICE/2025_Q4/ (9 files, recent sessions)",
+    "~/AlphaOs-Vault/VOICE/VOICE_MAP_OF_CONSCIOUSNESS.md (Session navigation)"
+  ],
+
+  "outputs": {
+    "location": "~/AlphaOs-Vault/VOICE/[Year_Quarter]/",
+    "format": "markdown with VOICE session structure (STOP→SUBMIT→STRUGGLE→STRIKE, Old Narrative, New Narrative, Strike Action)",
+    "pipeline_output": "STRIKE (decisive action) sent to door-pillar-agent as War Stack candidate"
+  },
+
+  "test_prompts": [
+    "I need a VOICE session - I'm stuck in spiritual bypassing (6 years theory, no teaching)",
+    "Help me interrupt this pattern: I plan everything but never execute",
+    "VOICE session: I keep choosing Lillith-type partners (codependent, dramatic)",
+    "I'm spinning - I know I need to launch but I keep researching instead",
+    "STOP - I'm stuck in McDonald's pattern (laptop-flow → junk-fressflash)",
+    "What's the old narrative I'm telling myself about money/success/relationships?"
+  ],
+
+  "performance": {
+    "success_rate": "N/A (just created)",
+    "avg_response_time": "N/A",
+    "total_invocations": 0
+  },
+
+  "notes": "THE VOICE agent focuses on MENTAL MASTERY. VOICE sessions are NOT therapy or coaching - they are 4-step processes for pattern interruption and narrative rewriting (STOP→SUBMIT→STRUGGLE→STRIKE). This agent understands psychological and spiritual depth - not just behavioral change, but identity-level transformation. Triggered by Frame shift signals from game-agent when patterns are stuck. Outputs STRIKE (decisive action) which becomes War Stack candidate for door-agent. Has Foundation + Code embedded from VOICE/CLAUDE.md. Critical for DOMINION over thoughts - without mental mastery, external DOMINION is impossible."
+}

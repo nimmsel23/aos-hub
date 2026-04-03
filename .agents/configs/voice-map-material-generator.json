@@ -1,0 +1,84 @@
+{
+  "agent_name": "voice-map-material-generator",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-12-13",
+  "updated": "2025-12-13",
+  "category": "alphaos-core",
+  "priority": "high",
+
+  "purpose": "Transform 61 VOICE Sessions into organized Map material for Frame/Freedom/Focus Maps",
+
+  "system_prompt_file": "~/Dokumente/AlphaOs-Vault/.agents/prompts/voice-map-material-generator.md",
+
+  "capabilities": [
+    "Read all Q3/Q4 VOICE session files (61 total)",
+    "Extract Frame insights (current reality) per Domain",
+    "Extract Freedom insights (vision/direction) per Domain",
+    "Extract Strikes (actionable items) per Domain",
+    "Categorize by Domain (BODY/BEING/BALANCE/BUSINESS)",
+    "Organize into ready-to-copy markdown sections",
+    "Track session references for each insight",
+    "Prioritize Strikes by urgency/impact",
+    "Identify cross-domain connections"
+  ],
+
+  "tool_access": {
+    "allowed": ["Read", "Write", "Grep", "Glob"],
+    "restricted": ["Bash - only for creating directories", "Edit - only creates new files", "WebSearch - not needed"]
+  },
+
+  "triggers": [
+    "User says: 'Generate Map material from VOICE sessions'",
+    "User says: 'Process VOICE sessions'",
+    "User says: 'Organize VOICE Lego'",
+    "User says: 'Build Map material'"
+  ],
+
+  "dependencies": [],
+
+  "data_sources": [
+    "~/Dokumente/AlphaOs-Vault/VOICE/2025_Q3/*.md (52 files)",
+    "~/Dokumente/AlphaOs-Vault/VOICE/2025_Q4/*.md (9 files)",
+    "~/Dokumente/AlphaOs-Vault/ALPHA_OS/ALPHA_OS - THE VOICE.md (framework reference)"
+  ],
+
+  "outputs": {
+    "location": "~/Dokumente/AlphaOs-Vault/VOICE/MAP_MATERIAL/",
+    "format": "markdown",
+    "files": [
+      "FRAME_MATERIAL_BODY.md",
+      "FRAME_MATERIAL_BEING.md",
+      "FRAME_MATERIAL_BALANCE.md",
+      "FRAME_MATERIAL_BUSINESS.md",
+      "FREEDOM_MATERIAL_BODY.md",
+      "FREEDOM_MATERIAL_BEING.md",
+      "FREEDOM_MATERIAL_BALANCE.md",
+      "FREEDOM_MATERIAL_BUSINESS.md",
+      "STRIKES_EXTRACTED.md"
+    ]
+  },
+
+  "test_prompts": [
+    "Generate Map material from all VOICE sessions",
+    "Process VOICE sessions for BUSINESS Domain",
+    "Show me Frame material for BODY"
+  ],
+
+  "performance": {
+    "success_rate": "TBD",
+    "avg_response_time": "TBD",
+    "total_invocations": 0
+  },
+
+  "notes": "One-time processor that organizes 61 chaotic VOICE Sessions into structured Map material. Enables user to plan real life (außerhalb Computer) by providing ready-to-copy sections for Frame/Freedom Maps. Focus: Map Material Generation.",
+
+  "run_frequency": "On-demand (once initially, re-run when new sessions added)",
+
+  "pipeline_role": {
+    "position": "standalone",
+    "receives_from": "User (manual trigger)",
+    "sends_to": "User (copies material into actual Maps)",
+    "transformation": "Raw VOICE Sessions → Organized Map Material (per Domain)"
+  }
+}

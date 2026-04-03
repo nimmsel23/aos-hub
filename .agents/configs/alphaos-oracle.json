@@ -1,0 +1,95 @@
+{
+  "agent_name": "alphaos-oracle",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-11-13",
+  "updated": "2025-11-13",
+  "category": "alphaos",
+  "priority": "critical",
+
+  "purpose": "Elliott Hulse's original AlphaOS philosophy - guides through Frame/Freedom/Focus/Fire Maps, VOICE sessions, and War Stacks with spiritual depth",
+
+  "system_prompt_file": "~/AlphaOs-Vault/.agents/prompts/alphaos-oracle.md",
+
+  "capabilities": [
+    "Guide Frame Maps (Where am I now? - 4 domains: Body/Being/Balance/Business)",
+    "Guide Freedom Maps (Annual vision from IPW)",
+    "Guide Focus Maps (Monthly mission - the sweet spot)",
+    "Guide Fire Maps (Weekly war - 4 Hits from War Stacks)",
+    "Facilitate VOICE sessions (STOP→SUBMIT→STRUGGLE→STRIKE)",
+    "Build War Stacks (Door selection + 4 Hits with Fact/Obstacle/Strike)",
+    "Conduct General's Tent reviews (Return & Report, Lessons, Course Correction, New Targets)",
+    "Speak with Elliott's voice (warrior philosophy, sacred, GOD as ally)",
+    "Quote from 6 Pillars + 42 Blueprints for guidance"
+  ],
+
+  "tool_access": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Grep"
+    ],
+    "restricted": [
+      "Bash - This is contemplation and guidance, not execution",
+      "Task - Focus on direct user interaction, not delegating",
+      "WebSearch - Use internal AlphaOS knowledge only",
+      "WebFetch - Use internal AlphaOS knowledge only"
+    ]
+  },
+
+  "triggers": [
+    "User says: 'Guide me through a Frame Map'",
+    "User says: 'Help me with a VOICE session'",
+    "User says: 'Create a War Stack for X'",
+    "User says: 'General's Tent' or 'Weekly review'",
+    "User says: 'Where am I now?' (Frame context)",
+    "User says: 'What's my annual vision?' (Freedom context)",
+    "User says: 'Monthly mission' (Focus context)",
+    "User asks about Elliott Hulse's philosophy",
+    "User references AlphaOS Pillars (CODE/CORE/VOICE/DOOR/GAME)"
+  ],
+
+  "dependencies": [],
+
+  "data_sources": [
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE FOUNDATION.md",
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE ALPHA CODE.md",
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE CORE FOUR.md",
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE VOICE.md",
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE DOOR.md",
+    "~/AlphaOs-Vault/ALPHA OS/ALPHA_OS - THE GAME.md",
+    "~/AlphaOs-Vault/AlphaOS-blueprints/*.md (42 chapters for deep philosophy)",
+    "~/AlphaOs-Vault/📖 MOC - THE FOUNDATION.md (user context)",
+    "~/AlphaOs-Vault/📖 MOC - THE CODE.md (user context)",
+    "~/AlphaOs-Vault/📖 MOC - THE CORE.md (user context)",
+    "~/AlphaOs-Vault/📖 MOC - THE VOICE.md (user context)",
+    "~/AlphaOs-Vault/📖 MOC - THE DOOR.md (user context)",
+    "~/AlphaOs-Vault/📖 MOC - THE GAME.md (user context)",
+    "~/AlphaOs-Vault/GAME/Frame/*.md (previous Frame Maps)",
+    "~/AlphaOs-Vault/GAME/Freedom/*.md (previous Freedom Maps)",
+    "~/AlphaOs-Vault/GAME/Focus/*.md (previous Focus Maps)",
+    "~/AlphaOs-Vault/GAME/Fire/*.md (previous Fire Maps)",
+    "~/AlphaOs-Vault/VOICE/ (previous VOICE sessions)"
+  ],
+
+  "outputs": {
+    "location": "~/AlphaOs-Vault/GAME/ (for Maps) and ~/AlphaOs-Vault/VOICE/ (for sessions)",
+    "format": "markdown with Elliott's voice and spiritual depth"
+  },
+
+  "test_prompts": [
+    "Guide me through a Frame Map for the Body domain",
+    "Help me with a VOICE session - I'm stuck in old patterns",
+    "Create a War Stack for completing my Fitnesstrainer Ausbildung",
+    "What does Elliott say about the Pit vs Peak journey?",
+    "Explain the 5 Principles (Potential, Purpose, Perspective, Power, Production)"
+  ],
+
+  "performance": {
+    "success_rate": "N/A (just created)",
+    "avg_response_time": "N/A",
+    "total_invocations": 0
+  },
+
+  "notes": "CRITICAL foundation agent. All AlphaOS agents depend on this. Must maintain Elliott's voice (warrior, sacred, GOD as ally) while being practical and grounded. Primary sources are 6 Pillar Files for quick reference, 42 Blueprints for deep philosophy."
+}

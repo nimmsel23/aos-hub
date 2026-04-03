@@ -103,6 +103,48 @@ run_systemstatus() {
   exec "$bin" trigger "$@"
 }
 
+smart_status() {
+  # Intelligent default output: shows Bridge status aware of which service mode is active
+  bridge_recompute_config
+
+  local service_mode
+  service_mode="$(bridge_detect_mode)"
+
+  msg "Bridge Status"
+  msg "─────────────────────────────────────────"
+
+  # Service state
+  if [[ "$service_mode" == "system" ]]; then
+    local sys_active
+    sys_active="$(systemctl is-active aos-bridge.service 2>/dev/null || echo unknown)"
+    msg "Service:  aos-bridge.service (system scope)"
+    msg "State:    $sys_active"
+  else
+    local user_active
+    user_active="$(systemctl --user is-active aos-bridge.service 2>/dev/null || echo unknown)"
+    msg "Service:  aos-bridge.service (user scope)"
+    msg "State:    $user_active"
+  fi
+
+  msg ""
+
+  # API health
+  if bridge_curl_get "$BRIDGE_BASE_URL/health" >/dev/null 2>&1; then
+    ui_ok "API reachable at $BRIDGE_BASE_URL"
+  else
+    ui_warn "API unreachable at $BRIDGE_BASE_URL"
+  fi
+
+  msg ""
+  msg "Quick commands:"
+  msg "  bridgectl health              Check API /health endpoint"
+  msg "  bridgectl doctor              Full diagnosis"
+  msg "  bridgectl status              Service state details"
+  msg "  bridgectl logs                Follow service logs"
+  msg ""
+  msg "See: bridgectl help"
+}
+
 doctor() {
   ui_title "bridgectl doctor"
 
@@ -146,8 +188,7 @@ doctor() {
   if [[ "$user_active" == "active" ]]; then
     ui_ok "mode: user (canonical)"
   elif [[ "$sys_active" == "active" ]]; then
-    ui_warn "unsupported mode: system-only active"
-    rc=1
+    ui_ok "mode: system (active)"
   else
     ui_warn "mode: none (bridge not active)"
     rc=1
@@ -346,6 +387,7 @@ shift || true
 case "$cmd" in
   -h|--help|help) usage ;;
   menu) menu ;;
+  smart_status) smart_status ;;
   doctor) doctor ;;
 
   status|enable|start|stop|restart|logs|env|install-deps|link-service|diagnose|fix)

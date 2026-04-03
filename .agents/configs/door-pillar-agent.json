@@ -1,0 +1,98 @@
+{
+  "agent_name": "door-pillar-agent",
+  "status": "active",
+  "version": "1.0.0",
+  "created": "2025-12-08",
+  "updated": "2025-12-08",
+  "category": "alphaos-pillar",
+  "priority": "critical",
+
+  "purpose": "Master of THE DOOR (Pillar #4) - 4P Flow expert (Potential → Plan → Production → Profit). Coordinates weekly tactical execution, delegates War Stack creation to warstack-agent, integrates with game-agent for Fire Maps. Understands role in AlphaOS pipeline.",
+
+  "system_prompt_file": "~/AlphaOs-Vault/.agents/prompts/door-pillar-agent.md",
+
+  "capabilities": [
+    "Facilitate POTENTIAL phase (Hot List creation across 4 Domains)",
+    "Facilitate PLAN phase (Door War via Quadrant 2, delegate to warstack-agent for War Stack)",
+    "Facilitate PRODUCTION phase (Big Rocks First, coordinate with game-agent for Fire Maps)",
+    "Facilitate PROFIT phase (Achieved & Done tracking, 'Winners keep score' mindset)",
+    "Understand Eisenhower/Covey Matrix (Q2 = strategic Door selection zone)",
+    "Apply Big Rocks First principle (Jar/Rocks/Sand metaphor)",
+    "Coordinate pipeline: receive Strikes from voice-agent, send 4 Hits to game-agent",
+    "Invoke warstack-agent during PLAN phase for War Stack creation",
+    "Apply Foundation + Code principles to weekly execution"
+  ],
+
+  "tool_access": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Edit",
+      "Grep",
+      "Task (to invoke warstack-agent during PLAN phase)"
+    ],
+    "restricted": [
+      "Bash - Focus on facilitation and coordination, not system execution",
+      "WebSearch - Use internal AlphaOS knowledge only"
+    ]
+  },
+
+  "triggers": [
+    "User says: 'Hot List' or 'What are my possibilities?'",
+    "User says: 'Door War' or 'Which Door should I open?'",
+    "User says: 'Big Rocks' or 'What's my priority this week?'",
+    "User says: 'Achieved & Done' or 'Weekly review'",
+    "User mentions: 'Potential → Plan → Production → Profit' or '4P Flow'",
+    "User asks: 'THE DOOR' or 'Weekly tactics'",
+    "User says: 'Hit List' or 'Weekly execution'",
+    "VOICE session outputs a STRIKE (pipeline trigger)",
+    "User says: 'Winners keep score'"
+  ],
+
+  "dependencies": [
+    "alphaos-oracle (Foundation keeper - contextual knowledge)",
+    "voice-pillar-agent (upstream - provides Strikes as Door candidates)",
+    "warstack-agent (specialist - invoked during PLAN phase for War Stack creation)",
+    "game-pillar-agent (downstream - receives 4 Hits for Fire Maps)"
+  ],
+
+  "pipeline_role": {
+    "position": "middle",
+    "receives_from": "voice-pillar-agent (STRIKE output becomes Door candidate)",
+    "delegates_to": "warstack-agent (War Stack creation during PLAN phase)",
+    "sends_to": "game-pillar-agent (4 Hits input for Fire Maps)",
+    "transformation": "STRIKE/Idea → 4P Flow (Potential/Plan/Production/Profit) → 4 Hits for Fire Map"
+  },
+
+  "data_sources": [
+    "~/Dokumente/AlphaOs-Vault/DOOR/CLAUDE.md (Primary source - 206 lines wegweiser, Foundation + Code + THE DOOR Ch 25-31)",
+    "~/AlphaOs-Vault/ALPHA_OS/ALPHA_OS - THE DOOR.md (Elliott's original Pillar file)",
+    "~/AlphaOs-Vault/AlphaOS-blueprints/25*.md - 31*.md (Chapters 25-31 detailed)",
+    "~/AlphaOs-Vault/DOOR/Hot-List/ (previous Hot Lists)",
+    "~/AlphaOs-Vault/DOOR/War-Stacks/ (previous War Stacks - managed by warstack-agent)"
+  ],
+
+  "outputs": {
+    "potential_location": "~/AlphaOs-Vault/DOOR/Hot-List/",
+    "plan_location": "~/AlphaOs-Vault/DOOR/War-Stacks/ (via warstack-agent)",
+    "format": "markdown with 4P structure",
+    "pipeline_output": "4 Hits (from warstack-agent) passed to game-pillar-agent for Fire Map integration"
+  },
+
+  "test_prompts": [
+    "Help me build a Hot List for this week",
+    "I need to choose which Door to open - Door War",
+    "Coordinate Big Rocks First for my weekly execution",
+    "Weekly review - Achieved & Done tracking",
+    "Full 4P Flow: Potential → Plan → Production → Profit",
+    "I just completed a VOICE session with Strike: 'Launch in public'. Let's do the 4P Flow."
+  ],
+
+  "performance": {
+    "success_rate": "N/A (just created)",
+    "avg_response_time": "N/A",
+    "total_invocations": 0
+  },
+
+  "notes": "THE DOOR 4P Master - coordinates full weekly tactical flow. POTENTIAL (Hot List), PLAN (Door War + delegates to warstack-agent), PRODUCTION (Big Rocks First + game-agent coordination), PROFIT (Achieved & Done). This is NOT warstack-agent - this is the orchestrator of the 4P Flow. Receives Strikes from VOICE, sends 4 Hits to GAME. Has Foundation + Code embedded from DOOR/CLAUDE.md. Part of larger AlphaOS pipeline."
+}

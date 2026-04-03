@@ -32,7 +32,7 @@ ALPHAOS_VAULT = Path(os.environ.get("AOS_VAULT_DIR", Path.home() / "vault"))
 HOT_DIR = ALPHAOS_VAULT / "Door" / "1-Potential"
 HOT_PROJECT = "Potential"
 HOTLIST_FILTER_ARGS = [
-    "alphatype:hot",
+    "((project:Potential or project:POTENTIAL) or (project:HotList or project:HOTLIST))",
     "(status:pending or status:waiting)",
 ]
 ACTIVE_ENTRY_STATUSES = {"", "active", "potential", "new"}
@@ -165,23 +165,14 @@ def ensure_entry_defaults(entry: dict) -> bool:
 def resolve_entry_file(entry: dict) -> Path | None:
     candidates = []
     raw_file = trim_text(entry.get("file"))
-    yaml_name = trim_text(entry.get("yaml_name"))
     md_name = trim_text(entry.get("md_name"))
     if raw_file:
-        p = Path(raw_file)
-        candidates.append(p)
-        # Also try .yaml sibling if stored path is .md
-        if p.suffix == ".md":
-            candidates.append(p.with_suffix(".yaml"))
-    if yaml_name:
-        candidates.append(HOT_DIR / yaml_name)
+        candidates.append(Path(raw_file))
     if md_name:
         candidates.append(HOT_DIR / md_name)
     idea = entry_idea(entry)
     if idea:
-        slug = make_slug(idea)
-        candidates.append(HOT_DIR / f"{slug}.yaml")
-        candidates.append(HOT_DIR / f"{slug}.md")
+        candidates.append(HOT_DIR / f"{make_slug(idea)}.md")
 
     for candidate in candidates:
         if candidate.exists():
@@ -327,7 +318,7 @@ def modify_task_metadata(
 
 
 def create_hot_task(idea: str, file_path: Path | None = None, priority: str = "") -> tuple[str, str]:
-    args = ["task", "rc.hooks=0", "add", "alphatype:hot"]
+    args = ["task", "rc.hooks=0", "add", f"project:{HOT_PROJECT}", "+hot"]
     priority_value = normalize_priority(priority)
     if priority_value:
         args.append(f"priority:{priority_value}")
@@ -462,64 +453,6 @@ def extract_markdown_summary(content: str) -> str:
             continue
         parts.append(text)
     return trim_text(" ".join(parts))[:400]
-
-
-def render_hot_yaml(
-    idea: str,
-    *,
-    description: str = "",
-    source: str = "",
-    task_uuid: str = "",
-    status: str = "active",
-    phase: str = "potential",
-    created: str = "",
-) -> str:
-    idea = trim_text(idea)
-    source = trim_text(source) or "cli"
-    created = trim_text(created) or datetime.now().astimezone().isoformat()
-    status = normalize_status(status) or "active"
-    phase = normalize_status(phase) or "potential"
-    task_uuid = trim_text(task_uuid) or ""
-
-    lines = [
-        f"idea: {idea}",
-        f"tw_uuid: {task_uuid}",
-        f"status: {status}",
-        f"phase: {phase}",
-        f"created: {created}",
-        f"source: {source}",
-    ]
-    description = trim_text(description)
-    if description:
-        lines.append(f"description: |")
-        for line in description.splitlines():
-            lines.append(f"  {line}")
-    return "\n".join(lines) + "\n"
-
-
-def write_hot_yaml(
-    file_path: Path,
-    *,
-    idea: str,
-    description: str = "",
-    source: str = "",
-    task_uuid: str = "",
-    status: str = "active",
-    phase: str = "potential",
-    created: str = "",
-) -> None:
-    file_path.write_text(
-        render_hot_yaml(
-            idea,
-            description=description,
-            source=source,
-            task_uuid=task_uuid,
-            status=status,
-            phase=phase,
-            created=created,
-        ),
-        encoding="utf-8",
-    )
 
 
 def render_hot_markdown(
@@ -858,42 +791,8 @@ def reconcile_hotlist_index(apply_changes: bool = True) -> dict:
     return summary
 
 
-def _notify_bridge(idea: str, description: str, source: str, created_at: str) -> None:
-    """Best-effort: notify Bridge of new hotlist entry + trigger rclone push."""
-    import urllib.request
-    bridge_url = os.environ.get("AOS_BRIDGE_URL", "http://127.0.0.1:8080").rstrip("/")
-
-    try:
-        payload = json.dumps({
-            "idea": idea,
-            "description": description,
-            "source": source,
-            "created_at": created_at,
-        }).encode()
-        req = urllib.request.Request(
-            f"{bridge_url}/bridge/hotlist/add",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        urllib.request.urlopen(req, timeout=3)
-    except Exception:
-        pass
-
-    try:
-        req = urllib.request.Request(
-            f"{bridge_url}/bridge/sync/push",
-            data=b"{}",
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
-
-
 def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
-    """Add idea to Hot List (YAML + JSON + Taskwarrior + Bridge)."""
+    """Add idea to Hot List (MD + JSON + Taskwarrior)."""
     idea = trim_text(idea)
     description = trim_text(description)
     source = trim_text(source)
@@ -901,7 +800,7 @@ def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
 
     slug = make_slug(idea)
     uuid_prefix = secrets.token_hex(2)
-    filename = f"{uuid_prefix}-{slug}.yaml"
+    filename = f"{uuid_prefix}-{slug}.md"
     file_path = HOT_DIR / filename
 
     now = datetime.now().astimezone()
@@ -917,7 +816,7 @@ def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
     except RuntimeError as err:
         task_error = str(err)
 
-    write_hot_yaml(
+    write_hot_markdown(
         file_path,
         idea=idea,
         description=description,
@@ -937,7 +836,7 @@ def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
         "created": iso,
         "created_at": iso,
         "file": str(file_path),
-        "yaml_name": file_path.name,
+        "md_name": file_path.name,
         "tw_uuid": tw_uuid,
         "task_uuid": tw_uuid,
         "task_id": task_id,
@@ -954,8 +853,6 @@ def add_to_hotlist(idea: str, description: str = "", source: str = "") -> dict:
 
     data["items"].append(entry)
     save_hot_index(data)
-
-    _notify_bridge(idea, description, source or "cli", iso)
 
     return {
         "ok": True,
@@ -1168,34 +1065,21 @@ def update_hot_entry(
         stored["file"] = str(file_path)
         changed = True
 
-    file_key = "yaml_name" if file_path.suffix == ".yaml" else "md_name"
-    if trim_text(stored.get(file_key)) != file_path.name:
-        stored[file_key] = file_path.name
+    if trim_text(stored.get("md_name")) != file_path.name:
+        stored["md_name"] = file_path.name
         changed = True
 
-    if file_path.suffix == ".yaml":
-        write_hot_yaml(
-            file_path,
-            idea=next_title,
-            description=next_description,
-            source=next_source,
-            task_uuid=task_uuid,
-            status=entry_status(stored) or "active",
-            phase=entry_phase(stored) or "potential",
-            created=created,
-        )
-    else:
-        write_hot_markdown(
-            file_path,
-            idea=next_title,
-            description=next_description,
-            source=next_source,
-            task_uuid=task_uuid,
-            status=entry_status(stored) or "active",
-            phase=entry_phase(stored) or "potential",
-            created=created,
-            content=next_content,
-        )
+    write_hot_markdown(
+        file_path,
+        idea=next_title,
+        description=next_description,
+        source=next_source,
+        task_uuid=task_uuid,
+        status=entry_status(stored) or "active",
+        phase=entry_phase(stored) or "potential",
+        created=created,
+        content=next_content,
+    )
 
     if update_hot_task_description(task_uuid, next_title):
         task = task_export(task_uuid)

@@ -13,12 +13,11 @@ from core4_types import DEFAULT_VAULT_DIR, week_key
 from datetime import date
 
 
-def _load_aos_env() -> None:
-    """Load /etc/aos/aos.env into os.environ if AOS vars are not already set."""
-    env_file = Path("/etc/aos/aos.env")
-    if not env_file.exists():
+def _load_env_file(path: Path) -> None:
+    """Load env file into os.environ (existing vars take precedence)."""
+    if not path.exists():
         return
-    for line in env_file.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -29,7 +28,7 @@ def _load_aos_env() -> None:
             os.environ[key] = val
 
 
-_load_aos_env()
+_load_env_file(Path.home() / ".env" / "core4.env")
 
 
 def core4_dirs() -> list[Path]:
@@ -69,7 +68,7 @@ def core4_dirs() -> list[Path]:
         if merged:
             return merged
 
-    return [vault_dir / "Core4", vault_dir / "Alpha_Core4"]
+    return [Path("~/.core4").expanduser()]
 
 
 def primary_core4_dir() -> Path:

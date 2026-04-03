@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>General's Tent</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; padding:16px; background:#f7f7f7;}
+  h1,h2,h3{margin:8px 0;}
+  .row{display:flex; gap:12px; flex-wrap:wrap;}
+  .card{background:#fff; border:1px solid #ddd; border-radius:12px; padding:16px; flex:1; min-width:300px; box-shadow:0 2px 4px rgba(0,0,0,0.05);}
+  textarea,input{width:100%; padding:8px; margin-top:4px; border-radius:6px; border:1px solid #ccc; font-family:monospace;}
+  button{margin-top:8px; padding:10px 14px; border:none; border-radius:6px; background:#007bff; color:#fff; cursor:pointer;}
+  button:hover{background:#0056b3;}
+  pre{white-space:pre-wrap; background:#f1f1f1; padding:8px; border-radius:6px;}
+  label{display:block; margin-top:8px;}
+</style>
+</head>
+<body>
+  <h1>🏕️ General's Tent</h1>
+
+  <!-- Week Selector -->
+  <div class="card">
+    <h3>Woche auswählen</h3>
+    <input id="week" placeholder="YYYY-Www"/>
+    <button onclick="load()">Lade Woche</button>
+    <p style="margin-top:4px; color:#555;">Bridge: <span id="bridge">(loading...)</span></p>
+  </div>
+
+  <div class="row">
+    <!-- Component 1: Return & Report -->
+    <div class="card">
+      <h3>1️⃣ Return & Report</h3>
+      <pre id="scores">(loading scores...)</pre>
+      <pre id="maps">(loading maps...)</pre>
+    </div>
+
+    <!-- Component 2: Lessons Learned -->
+    <div class="card">
+      <h3>2️⃣ Lessons Learned</h3>
+      <textarea id="lessons" rows="8" placeholder="Trage hier deine Learnings der Woche ein..."></textarea>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Component 3: Course Correction -->
+    <div class="card">
+      <h3>3️⃣ Course Correction</h3>
+      <textarea id="courseCorrection" rows="6" placeholder="Welche Strategieanpassungen sind nötig?"></textarea>
+    </div>
+
+    <!-- Component 4: New Targets -->
+    <div class="card">
+      <h3>4️⃣ New Targets</h3>
+      <textarea id="newTargets" rows="6" placeholder="Neue Wochenziele und Prioritäten eintragen..."></textarea>
+    </div>
+  </div>
+
+  <!-- TickTick / Digest -->
+  <div class="card">
+    <h3>TickTick Weekly Digest</h3>
+    <pre id="digest">(loading digest...)</pre>
+  </div>
+
+  <button onclick="saveTent()">💾 Woche abschließen / speichern</button>
+
+<script>
+function isoWeekNow(){
+  const d=new Date();
+  const tmp=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=tmp.getUTCDay()||7;
+  tmp.setUTCDate(tmp.getUTCDate()+4-day);
+  const yStart=new Date(Date.UTC(tmp.getUTCFullYear(),0,1));
+  const w=Math.ceil((((tmp-yStart)/86400000)+1)/7);
+  return `${tmp.getUTCFullYear()}-W${String(w).padStart(2,'0')}`;
+}
+
+async function load(){
+  const week = (document.getElementById('week').value || '').trim() || isoWeekNow();
+  const url = `/game/tent/api?week=${encodeURIComponent(week)}`;
+  const r = await fetch(url);
+  const j = await r.json();
+
+  document.getElementById('bridge').textContent = j.bridgeBase || '(unknown)';
+  document.getElementById('scores').textContent = JSON.stringify(j.scores,null,2);
+  document.getElementById('maps').textContent = JSON.stringify(j.maps,null,2);
+  document.getElementById('digest').textContent = (j.ticktick && (j.ticktick.md || j.ticktick.digestMd))
+    ? (j.ticktick.md || j.ticktick.digestMd)
+    : JSON.stringify(j.ticktick,null,2);
+}
+
+function saveTent(){
+  const payload = {
+    week: document.getElementById('week').value || isoWeekNow(),
+    lessons: document.getElementById('lessons').value,
+    courseCorrection: document.getElementById('courseCorrection').value,
+    newTargets: document.getElementById('newTargets').value
+  };
+  console.log("Tent Save Payload:", payload);
+  alert("Woche gespeichert! (dieses Demo speichert nur lokal; API Integration nötig)");
+}
+
+// prefill week input
+document.getElementById('week').value = isoWeekNow();
+load();
+</script>
+</body>
+</html>

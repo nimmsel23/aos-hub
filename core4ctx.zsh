@@ -17,7 +17,7 @@ CORE4_APP="core4"
 # Source shared library
 CTX_NAME="core4ctx"
 CTX_DEFAULT_SERVICE="aos-core4ctx.service"
-CTX_DEFAULT_URL="http://127.0.0.1:8788/"
+CTX_DEFAULT_URL="http://127.0.0.1:8728/"
 
 _lib="${AOSCTX_LIB:-${0:A:h}/aosctx-lib.zsh}"
 [[ -f "$_lib" ]] && source "$_lib" || { echo "[core4ctx] aosctx-lib.zsh not found at $_lib" >&2; exit 1; }
